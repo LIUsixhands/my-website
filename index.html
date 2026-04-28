@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>房仲影像力課程｜剪輯 × 攝影 × 品牌</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --gold: #C9A84C;
+      --gold-light: #E8C97A;
+      --dark: #1A1A2E;
+      --dark-2: #16213E;
+      --dark-3: #0F3460;
+      --white: #FFFFFF;
+      --gray: #F4F4F4;
+      --text-muted: #888;
+      --radius: 16px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--dark);
+      color: var(--white);
+      line-height: 1.7;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1A1A2E 0%, #16213E 50%, #0F3460 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 80px 24px 60px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(201,168,76,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(201,168,76,0.15);
+      border: 1px solid rgba(201,168,76,0.4);
+      color: var(--gold-light);
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      padding: 6px 18px;
+      border-radius: 100px;
+      margin-bottom: 28px;
+      text-transform: uppercase;
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.8rem);
+      font-weight: 900;
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 span {
+      color: var(--gold);
+    }
+
+    .hero .subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.25rem);
+      color: rgba(255,255,255,0.7);
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+
+    .hero-btns {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      color: #1A1A2E;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 14px 36px;
+      border: none;
+      border-radius: 100px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(201,168,76,0.4);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: rgba(255,255,255,0.8);
+      font-size: 1rem;
+      padding: 14px 36px;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 100px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 48px;
+      margin-top: 60px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .stat { text-align: center; }
+    .stat-num {
+      font-size: 2rem;
+      font-weight: 900;
+      color: var(--gold);
+      display: block;
+    }
+    .stat-label {
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.05em;
+    }
+
+    /* ── SECTIONS ── */
+    section { padding: 96px 24px; }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-size: 0.75rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .section-title {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 900;
+      line-height: 1.25;
+      margin-bottom: 16px;
+    }
+
+    .section-desc {
+      color: rgba(255,255,255,0.6);
+      font-size: 1.05rem;
+      max-width: 580px;
+    }
+
+    .section-header {
+      margin-bottom: 64px;
+    }
+
+    /* ── TARGET AUDIENCE ── */
+    #audience {
+      background: linear-gradient(180deg, #0F1B2D 0%, #0A1628 100%);
+    }
+
+    .audience-intro {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+      margin-bottom: 80px;
+    }
+
+    @media (max-width: 768px) {
+      .audience-intro { grid-template-columns: 1fr; gap: 32px; }
+    }
+
+    .audience-tagline {
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
+    .audience-tagline em {
+      font-style: normal;
+      color: var(--gold);
+    }
+
+    .audience-checks {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 24px;
+    }
+
+    .audience-checks li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 0.95rem;
+      color: rgba(255,255,255,0.75);
+    }
+
+    .check-icon {
+      width: 22px;
+      height: 22px;
+      background: rgba(201,168,76,0.15);
+      border: 1px solid rgba(201,168,76,0.5);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+      color: var(--gold);
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    /* Persona Cards */
+    .persona-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .persona-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+
+    .persona-card:hover {
+      border-color: rgba(201,168,76,0.4);
+      transform: translateY(-4px);
+    }
+
+    .persona-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--gold), var(--gold-light));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .persona-card:hover::before { opacity: 1; }
+
+    .persona-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      margin-bottom: 20px;
+    }
+
+    .persona-card:nth-child(1) .persona-icon { background: rgba(99,102,241,0.15); }
+    .persona-card:nth-child(2) .persona-icon { background: rgba(16,185,129,0.15); }
+    .persona-card:nth-child(3) .persona-icon { background: rgba(245,158,11,0.15); }
+    .persona-card:nth-child(4) .persona-icon { background: rgba(239,68,68,0.15); }
+    .persona-card:nth-child(5) .persona-icon { background: rgba(14,165,233,0.15); }
+
+    .persona-type {
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+
+    .persona-name {
+      font-size: 1.25rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .persona-desc {
+      font-size: 0.88rem;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .persona-pain {
+      background: rgba(255,255,255,0.04);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+
+    .persona-pain-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.35);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .persona-pain p {
+      font-size: 0.875rem;
+      color: rgba(255,255,255,0.7);
+      line-height: 1.5;
+    }
+
+    .persona-gain {
+      background: rgba(201,168,76,0.06);
+      border: 1px solid rgba(201,168,76,0.15);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .persona-gain-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .persona-gain p {
+      font-size: 0.875rem;
+      color: rgba(255,255,255,0.8);
+      line-height: 1.5;
+    }
+
+    .persona-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 16px;
+    }
+
+    .tag {
+      font-size: 0.72rem;
+      padding: 4px 10px;
+      border-radius: 100px;
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.5);
+    }
+
+    /* ── NOT FOR YOU ── */
+    .not-for {
+      margin-top: 72px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px;
+      padding: 40px;
+    }
+
+    .not-for h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .not-for-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .not-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.875rem;
+      color: rgba(255,255,255,0.4);
+    }
+
+    .x-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      color: #ef4444;
+      flex-shrink: 0;
+    }
+
+    /* ── COURSES ── */
+    #courses {
+      background: #0A1628;
+    }
+
+    .courses-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    @media (max-width: 768px) {
+      .courses-grid { grid-template-columns: 1fr; }
+    }
+
+    .course-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    .course-header {
+      padding: 32px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .course-tag {
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 100px;
+      display: inline-block;
+      margin-bottom: 16px;
+    }
+
+    .course-card:first-child .course-tag {
+      background: rgba(99,102,241,0.15);
+      color: #818cf8;
+    }
+
+    .course-card:last-child .course-tag {
+      background: rgba(245,158,11,0.15);
+      color: #fbbf24;
+    }
+
+    .course-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .course-desc {
+      font-size: 0.875rem;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.6;
+    }
+
+    .course-body { padding: 32px; }
+
+    .course-points {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .course-points li {
+      display: flex;
+      gap: 12px;
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.7);
+      align-items: flex-start;
+    }
+
+    .course-points li span.dot {
+      color: var(--gold);
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── CTA ── */
+    #cta {
+      background: linear-gradient(135deg, #0F3460 0%, #1A1A2E 100%);
+      text-align: center;
+    }
+
+    .cta-box {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .cta-box h2 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 900;
+      margin-bottom: 16px;
+    }
+
+    .cta-box p {
+      color: rgba(255,255,255,0.65);
+      margin-bottom: 36px;
+      font-size: 1.05rem;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: #0A0E1A;
+      padding: 32px 24px;
+      text-align: center;
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.25);
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 18px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(10,14,26,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .nav-logo {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--white);
+    }
+
+    .nav-logo span { color: var(--gold); }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: rgba(255,255,255,0.6);
+      text-decoration: none;
+      font-size: 0.875rem;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--gold); }
+
+    @media (max-width: 640px) {
+      nav { padding: 16px 20px; }
+      .nav-links { display: none; }
+    }
+
+    /* divider */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent);
+      margin: 0 auto;
+      max-width: 200px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-logo">房仲<span>影像力</span></div>
+    <ul class="nav-links">
+      <li><a href="#audience">教學客層</a></li>
+      <li><a href="#courses">課程內容</a></li>
+      <li><a href="#cta">立即報名</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <span class="badge">房仲專屬 × 影像行銷</span>
+    <h1>用<span>影像力</span>讓<br>客戶主動找上門</h1>
+    <p class="subtitle">從剪輯到攝影，零基礎也能打造專業房仲品牌，讓每一支影片都幫你成交。</p>
+    <div class="hero-btns">
+      <a href="#cta" class="btn-primary">立即報名課程</a>
+      <a href="#audience" class="btn-ghost">了解適合對象</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat">
+        <span class="stat-num">0</span>
+        <span class="stat-label">基礎要求</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">2</span>
+        <span class="stat-label">核心課程</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">1支</span>
+        <span class="stat-label">手機就夠</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">SOP</span>
+        <span class="stat-label">完整操作流程</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════
+       TARGET AUDIENCE — 教學客層
+  ════════════════════════════════════════════════════ -->
+  <section id="audience">
+    <div class="container">
+
+      <!-- Section Header -->
+      <div class="section-header">
+        <span class="section-label">教學客層</span>
+        <h2 class="section-title">這堂課，是為你<br>量身設計的</h2>
+        <p class="section-desc">不需要任何剪輯或攝影背景，只要你是房仲、想用影像拓展業務，這門課就適合你。</p>
+      </div>
+
+      <!-- Intro Two-Col -->
+      <div class="audience-intro">
+        <div>
+          <p class="audience-tagline">
+            你是否曾想過：<br>
+            <em>「如果我會拍影片，<br>業績會不會更好？」</em>
+          </p>
+          <ul class="audience-checks">
+            <li>
+              <span class="check-icon">✓</span>
+              看到同行的 IG / 抖音做得很好，卻不知從哪裡開始
+            </li>
+            <li>
+              <span class="check-icon">✓</span>
+              拍完照片覺得自己拍得很普通，照片沒辦法打動客戶
+            </li>
+            <li>
+              <span class="check-icon">✓</span>
+              想剪輯影片，但打開軟體就覺得一頭霧水
+            </li>
+            <li>
+              <span class="check-icon">✓</span>
+              想建立個人品牌，卻不知道該如何用影像呈現自己
+            </li>
+            <li>
+              <span class="check-icon">✓</span>
+              沒有預算請攝影師或剪輯師，想靠自己完成
+            </li>
+          </ul>
+        </div>
+        <div>
+          <p style="color:rgba(255,255,255,0.55); font-size:1rem; line-height:1.8;">
+            現在的房仲市場，<strong style="color:white;">影像就是你的名片</strong>。客戶在約帶看之前，往往已經先在網路上看過你。一支有質感的開箱影片、一張讓人想點進去的封面，可能就是成交的關鍵。
+          </p>
+          <p style="color:rgba(255,255,255,0.55); font-size:1rem; line-height:1.8; margin-top:20px;">
+            這門課把複雜的剪輯和攝影技術，<strong style="color:white;">拆解成房仲能馬上用的 SOP</strong>，讓你學完當天就能產出第一支影片。
+          </p>
+        </div>
+      </div>
+
+      <div class="divider" style="margin-bottom:64px;"></div>
+
+      <!-- Persona Cards -->
+      <h3 style="font-size:1.1rem; font-weight:700; color:rgba(255,255,255,0.5); margin-bottom:32px; letter-spacing:0.05em;">五大核心學員樣貌</h3>
+      <div class="persona-grid">
+
+        <!-- Persona 1 -->
+        <div class="persona-card">
+          <div class="persona-icon">🌱</div>
+          <p class="persona-type">學員類型 01</p>
+          <h3 class="persona-name">剛入行的新手房仲</h3>
+          <p class="persona-desc">年資 0–2 年，正在建立客戶基礎，急需找到差異化方式讓自己被看見。</p>
+          <div class="persona-pain">
+            <p class="persona-pain-label">痛點</p>
+            <p>沒有口碑積累、沒有人脈，不知道如何從零開始吸引客戶，又擔心花大錢做行銷卻效果不明。</p>
+          </div>
+          <div class="persona-gain">
+            <p class="persona-gain-label">課程能帶給你</p>
+            <p>用一支手機，從第一天起就能產出專業影片，比同儕更快建立個人品牌形象。</p>
+          </div>
+          <div class="persona-tags">
+            <span class="tag">零基礎</span>
+            <span class="tag">建立曝光</span>
+            <span class="tag">低成本起步</span>
+          </div>
+        </div>
+
+        <!-- Persona 2 -->
+        <div class="persona-card">
+          <div class="persona-icon">🔄</div>
+          <p class="persona-type">學員類型 02</p>
+          <h3 class="persona-name">轉型中的資深業務</h3>
+          <p class="persona-desc">年資 3–10 年，靠傳統人脈經營業務，感受到市場變化，想跨入數位行銷。</p>
+          <div class="persona-pain">
+            <p class="persona-pain-label">痛點</p>
+            <p>有豐富的帶看經驗和口碑，卻不懂得如何用影片呈現，眼睜睜看著較年輕的同行搶走網路流量。</p>
+          </div>
+          <div class="persona-gain">
+            <p class="persona-gain-label">課程能帶給你</p>
+            <p>把多年積累的專業知識轉化成吸睛的影像內容，讓線上流量為既有口碑加乘。</p>
+          </div>
+          <div class="persona-tags">
+            <span class="tag">數位轉型</span>
+            <span class="tag">經驗變現</span>
+            <span class="tag">口碑擴散</span>
+          </div>
+        </div>
+
+        <!-- Persona 3 -->
+        <div class="persona-card">
+          <div class="persona-icon">📱</div>
+          <p class="persona-type">學員類型 03</p>
+          <h3 class="persona-name">想經營自媒體的房仲</h3>
+          <p class="persona-desc">已有 IG 或抖音帳號，但內容品質參差、沒有系統，流量難以持續成長。</p>
+          <div class="persona-pain">
+            <p class="persona-pain-label">痛點</p>
+            <p>拍了很多影片，觀看數卻一直上不去；想做得更好但不知道問題出在哪裡，開始感到倦怠。</p>
+          </div>
+          <div class="persona-gain">
+            <p class="persona-gain-label">課程能帶給你</p>
+            <p>掌握剪輯節奏、字幕設計與封面構圖技巧，讓每一支影片都有機會成為爆款，穩定累積粉絲。</p>
+          </div>
+          <div class="persona-tags">
+            <span class="tag">IG / 抖音</span>
+            <span class="tag">內容升級</span>
+            <span class="tag">系統化產出</span>
+          </div>
+        </div>
+
+        <!-- Persona 4 -->
+        <div class="persona-card">
+          <div class="persona-icon">👥</div>
+          <p class="persona-type">學員類型 04</p>
+          <h3 class="persona-name">房仲團隊主管／店長</h3>
+          <p class="persona-desc">帶領 5–20 人團隊，希望整合團隊的影像形象，同時用影片做有效招募。</p>
+          <div class="persona-pain">
+            <p class="persona-pain-label">痛點</p>
+            <p>每位業務各自為政，影片風格不統一，無法形成品牌合力；招募影片拍起來生硬，難以打動求職者。</p>
+          </div>
+          <div class="persona-gain">
+            <p class="persona-gain-label">課程能帶給你</p>
+            <p>建立團隊統一的拍攝與剪輯 SOP，讓每位成員都能產出一致質感的影片，強化整體品牌識別。</p>
+          </div>
+          <div class="persona-tags">
+            <span class="tag">品牌統一</span>
+            <span class="tag">招募影片</span>
+            <span class="tag">團隊 SOP</span>
+          </div>
+        </div>
+
+        <!-- Persona 5 -->
+        <div class="persona-card">
+          <div class="persona-icon">🏠</div>
+          <p class="persona-type">學員類型 05</p>
+          <h3 class="persona-name">想提升成交率的行動派</h3>
+          <p class="persona-desc">每天帶看量高，但物件照片和影片拍得不夠好，導致詢問量少、帶看前就被篩掉。</p>
+          <div class="persona-pain">
+            <p class="persona-pain-label">痛點</p>
+            <p>物件條件其實不差，卻因為照片昏暗、角度不對，讓客戶在線上就失去興趣，白白錯過成交機會。</p>
+          </div>
+          <div class="persona-gain">
+            <p class="persona-gain-label">課程能帶給你</p>
+            <p>學會光線、取景、構圖技巧，讓房屋照片與影片「自帶帶看欲望」，讓物件在線上就先替你說話。</p>
+          </div>
+          <div class="persona-tags">
+            <span class="tag">物件攝影</span>
+            <span class="tag">詢問率提升</span>
+            <span class="tag">帶看量增加</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Not For You -->
+      <div class="not-for">
+        <h3>這堂課可能不適合你，如果你是⋯⋯</h3>
+        <div class="not-for-grid">
+          <div class="not-item">
+            <span class="x-icon">✕</span>
+            已有專業攝影／剪輯師的大型房仲公司
+          </div>
+          <div class="not-item">
+            <span class="x-icon">✕</span>
+            希望學習電影級後製特效
+          </div>
+          <div class="not-item">
+            <span class="x-icon">✕</span>
+            非房地產相關行業從業者
+          </div>
+          <div class="not-item">
+            <span class="x-icon">✕</span>
+            想用複雜高端設備創作的進階玩家
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════
+       COURSES
+  ════════════════════════════════════════════════════ -->
+  <section id="courses">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">課程內容</span>
+        <h2 class="section-title">兩大核心課程</h2>
+        <p class="section-desc">從剪輯到攝影，完整覆蓋房仲日常所需的影像技能。</p>
+      </div>
+
+      <div class="courses-grid">
+
+        <!-- Course 1: Video Editing -->
+        <div class="course-card">
+          <div class="course-header">
+            <span class="course-tag">課程一</span>
+            <h3 class="course-title">房仲剪映剪輯課</h3>
+            <p class="course-desc">從剪映介面零基礎開始，掌握房仲日常影片所需的完整剪輯能力，學完就能上線發布。</p>
+          </div>
+          <div class="course-body">
+            <ul class="course-points">
+              <li><span class="dot">▸</span> 剪映介面完整導覽，從零開始不卡關</li>
+              <li><span class="dot">▸</span> 快速加字幕技巧，節省大量重複工作</li>
+              <li><span class="dot">▸</span> 配樂選擇與音量調整，打造情緒氛圍</li>
+              <li><span class="dot">▸</span> 吸睛轉場效果，讓影片更有專業感</li>
+              <li><span class="dot">▸</span> 房屋開箱、社區介紹、個人品牌影片製作</li>
+              <li><span class="dot">▸</span> 團隊招募影片完整製作流程</li>
+              <li><span class="dot">▸</span> 完整剪輯 SOP，隨時複製使用</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Course 2: Photography -->
+        <div class="course-card">
+          <div class="course-header">
+            <span class="course-tag">課程二</span>
+            <h3 class="course-title">房仲專屬攝影課</h3>
+            <p class="course-desc">只需一支手機，掌握房仲必備的取景、構圖與光線技巧，讓每張照片都會說故事。</p>
+          </div>
+          <div class="course-body">
+            <ul class="course-points">
+              <li><span class="dot">▸</span> 手機攝影基礎設定，避免照片灰暗失真</li>
+              <li><span class="dot">▸</span> 取景角度與構圖技巧，呈現空間最佳狀態</li>
+              <li><span class="dot">▸</span> 光線運用，讓室內光線自然動人</li>
+              <li><span class="dot">▸</span> 拍出客廳寬敞感、臥室溫馨感</li>
+              <li><span class="dot">▸</span> 社區環境、便利機能的說故事攝影法</li>
+              <li><span class="dot">▸</span> 讓照片自帶帶看欲望的關鍵構圖</li>
+              <li><span class="dot">▸</span> 完整拍攝 SOP，最短時間完成高質感作品</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section id="cta">
+    <div class="container">
+      <div class="cta-box">
+        <span class="section-label" style="display:block; text-align:center;">現在加入</span>
+        <h2>開始用影像<br>打造你的房仲品牌</h2>
+        <p>零基礎也能上手，學完當天就能產出第一支影片。名額有限，立即報名。</p>
+        <a href="#" class="btn-primary" style="font-size:1.1rem; padding:16px 48px;">立即報名課程</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>© 2026 房仲影像力課程｜專為房仲設計的影像行銷訓練</p>
+  </footer>
+
+</body>
+</html>
