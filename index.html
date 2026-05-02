@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>安居房屋 | 找到您的理想家園</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #1a5276;
+      --accent: #e67e22;
+      --light: #f4f6f8;
+      --text: #2c3e50;
+      --muted: #7f8c8d;
+      --white: #ffffff;
+      --shadow: 0 4px 20px rgba(0,0,0,0.1);
+      --radius: 12px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+      color: var(--text);
+      background: var(--white);
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 1000;
+      background: rgba(26, 82, 118, 0.97);
+      backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 5%; height: 64px;
+    }
+    .logo {
+      color: var(--white); font-size: 1.4rem; font-weight: 700;
+      text-decoration: none; letter-spacing: 1px;
+    }
+    .logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 32px; list-style: none; }
+    .nav-links a {
+      color: rgba(255,255,255,0.85); text-decoration: none;
+      font-size: 0.95rem; transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-cta {
+      background: var(--accent); color: var(--white);
+      border: none; padding: 8px 20px; border-radius: 6px;
+      font-size: 0.9rem; cursor: pointer; transition: opacity .2s;
+    }
+    .nav-cta:hover { opacity: 0.85; }
+
+    /* ── Hero ── */
+    .hero {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1a3a5c 0%, #1a5276 60%, #2e86c1 100%);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 100px 5% 60px;
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .hero-badge {
+      background: rgba(230,126,34,0.2); border: 1px solid var(--accent);
+      color: var(--accent); padding: 6px 16px; border-radius: 20px;
+      font-size: 0.85rem; margin-bottom: 20px; display: inline-block;
+    }
+    .hero h1 {
+      color: var(--white); font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800; line-height: 1.2; margin-bottom: 16px;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero p {
+      color: rgba(255,255,255,0.75); font-size: 1.1rem;
+      max-width: 540px; margin: 0 auto 40px;
+    }
+    .hero-stats {
+      display: flex; gap: 40px; margin-bottom: 48px;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .stat { color: var(--white); }
+    .stat-num { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 0.8rem; color: rgba(255,255,255,0.65); }
+
+    /* ── Search Box ── */
+    .search-box {
+      background: var(--white); border-radius: var(--radius);
+      padding: 24px 28px; max-width: 700px; width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      position: relative; z-index: 1;
+    }
+    .search-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .tab-btn {
+      padding: 8px 20px; border-radius: 6px; border: none;
+      font-size: 0.9rem; cursor: pointer; transition: all .2s;
+      background: var(--light); color: var(--muted);
+    }
+    .tab-btn.active { background: var(--primary); color: var(--white); }
+    .search-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .search-row select, .search-row input {
+      flex: 1; min-width: 140px; padding: 12px 14px;
+      border: 1.5px solid #dce1e7; border-radius: 8px;
+      font-size: 0.95rem; color: var(--text); outline: none;
+      transition: border-color .2s;
+    }
+    .search-row select:focus, .search-row input:focus {
+      border-color: var(--primary);
+    }
+    .search-btn {
+      background: var(--accent); color: var(--white);
+      border: none; padding: 12px 28px; border-radius: 8px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      white-space: nowrap; transition: opacity .2s;
+    }
+    .search-btn:hover { opacity: 0.85; }
+
+    /* ── Section commons ── */
+    section { padding: 80px 5%; }
+    .section-header { text-align: center; margin-bottom: 48px; }
+    .section-header .tag {
+      color: var(--accent); font-size: 0.85rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+    }
+    .section-header h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); color: var(--text); }
+    .section-header p { color: var(--muted); margin-top: 10px; max-width: 480px; margin-inline: auto; }
+
+    /* ── Properties Grid ── */
+    #listings { background: var(--light); }
+    .property-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 28px;
+    }
+    .property-card {
+      background: var(--white); border-radius: var(--radius);
+      overflow: hidden; box-shadow: var(--shadow);
+      transition: transform .25s, box-shadow .25s; cursor: pointer;
+    }
+    .property-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.16);
+    }
+    .property-img {
+      width: 100%; height: 200px; object-fit: cover;
+      display: block; position: relative;
+    }
+    .property-img-wrap { position: relative; }
+    .badge-tag {
+      position: absolute; top: 12px; left: 12px;
+      padding: 4px 10px; border-radius: 4px;
+      font-size: 0.75rem; font-weight: 700; color: var(--white);
+    }
+    .badge-new { background: #27ae60; }
+    .badge-hot { background: #e74c3c; }
+    .badge-reduced { background: var(--accent); }
+    .fav-btn {
+      position: absolute; top: 12px; right: 12px;
+      background: rgba(255,255,255,0.9); border: none;
+      width: 34px; height: 34px; border-radius: 50%;
+      font-size: 1rem; cursor: pointer; transition: transform .2s;
+    }
+    .fav-btn:hover { transform: scale(1.2); }
+    .property-info { padding: 20px; }
+    .property-price {
+      font-size: 1.4rem; font-weight: 700; color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .property-title {
+      font-size: 1rem; font-weight: 600; color: var(--text);
+      margin-bottom: 6px;
+    }
+    .property-addr {
+      font-size: 0.85rem; color: var(--muted); margin-bottom: 14px;
+    }
+    .property-addr::before { content: '📍 '; }
+    .property-specs {
+      display: flex; gap: 16px; font-size: 0.83rem; color: var(--muted);
+      padding-top: 14px; border-top: 1px solid var(--light);
+    }
+    .spec { display: flex; align-items: center; gap: 5px; }
+
+    /* ── Features ── */
+    #features { background: var(--white); }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      padding: 32px 24px; border-radius: var(--radius);
+      border: 1.5px solid #e8edf2; text-align: center;
+      transition: border-color .25s, box-shadow .25s;
+    }
+    .feature-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 8px 30px rgba(26,82,118,0.1);
+    }
+    .feature-icon {
+      font-size: 2.4rem; margin-bottom: 16px; display: block;
+    }
+    .feature-card h3 { font-size: 1rem; margin-bottom: 8px; }
+    .feature-card p { font-size: 0.875rem; color: var(--muted); line-height: 1.6; }
+
+    /* ── Agents ── */
+    #agents { background: var(--light); }
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 24px;
+    }
+    .agent-card {
+      background: var(--white); border-radius: var(--radius);
+      padding: 28px 20px; text-align: center; box-shadow: var(--shadow);
+    }
+    .agent-avatar {
+      width: 80px; height: 80px; border-radius: 50%;
+      margin: 0 auto 14px; display: flex; align-items: center;
+      justify-content: center; font-size: 2rem;
+      color: var(--white); font-weight: 700;
+    }
+    .agent-card h3 { font-size: 1rem; margin-bottom: 4px; }
+    .agent-title { font-size: 0.8rem; color: var(--accent); margin-bottom: 10px; }
+    .agent-stats { display: flex; justify-content: center; gap: 16px; margin-bottom: 14px; }
+    .agent-stat { font-size: 0.78rem; color: var(--muted); }
+    .agent-stat strong { color: var(--text); display: block; }
+    .agent-phone {
+      display: inline-block; padding: 8px 18px;
+      border: 1.5px solid var(--primary); border-radius: 6px;
+      color: var(--primary); font-size: 0.85rem; text-decoration: none;
+      transition: all .2s;
+    }
+    .agent-phone:hover { background: var(--primary); color: var(--white); }
+
+    /* ── Contact ── */
+    #contact { background: var(--white); }
+    .contact-wrap {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 48px;
+      max-width: 900px; margin: 0 auto;
+    }
+    .contact-info h3 { font-size: 1.3rem; margin-bottom: 20px; }
+    .info-item {
+      display: flex; align-items: flex-start; gap: 14px;
+      margin-bottom: 20px;
+    }
+    .info-icon {
+      font-size: 1.3rem; margin-top: 2px; flex-shrink: 0;
+    }
+    .info-item strong { display: block; font-size: 0.85rem; color: var(--muted); }
+    .info-item span { font-size: 0.95rem; }
+    .contact-form { display: flex; flex-direction: column; gap: 14px; }
+    .form-row { display: flex; gap: 12px; }
+    .contact-form input,
+    .contact-form select,
+    .contact-form textarea {
+      width: 100%; padding: 12px 14px;
+      border: 1.5px solid #dce1e7; border-radius: 8px;
+      font-size: 0.95rem; color: var(--text); outline: none;
+      font-family: inherit; transition: border-color .2s;
+    }
+    .contact-form input:focus,
+    .contact-form select:focus,
+    .contact-form textarea:focus { border-color: var(--primary); }
+    .contact-form textarea { resize: vertical; min-height: 110px; }
+    .submit-btn {
+      background: var(--primary); color: var(--white);
+      border: none; padding: 14px; border-radius: 8px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      transition: opacity .2s;
+    }
+    .submit-btn:hover { opacity: 0.85; }
+    .form-success {
+      display: none; background: #eafaf1; border: 1px solid #27ae60;
+      color: #1e8449; padding: 14px; border-radius: 8px;
+      text-align: center; font-weight: 600;
+    }
+
+    /* ── Footer ── */
+    footer {
+      background: #0f2a45; color: rgba(255,255,255,0.75);
+      padding: 48px 5% 24px;
+    }
+    .footer-top {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 40px; margin-bottom: 40px;
+    }
+    .footer-brand .logo { font-size: 1.2rem; }
+    .footer-brand p {
+      font-size: 0.875rem; margin-top: 12px; line-height: 1.7;
+    }
+    footer h4 { color: var(--white); font-size: 0.95rem; margin-bottom: 14px; }
+    footer ul { list-style: none; }
+    footer ul li { margin-bottom: 8px; }
+    footer ul li a {
+      color: rgba(255,255,255,0.65); text-decoration: none;
+      font-size: 0.875rem; transition: color .2s;
+    }
+    footer ul li a:hover { color: var(--accent); }
+    .footer-bottom {
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding-top: 20px; text-align: center; font-size: 0.8rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .contact-wrap { grid-template-columns: 1fr; }
+      .footer-top { grid-template-columns: 1fr 1fr; }
+      .form-row { flex-direction: column; }
+    }
+    @media (max-width: 480px) {
+      .footer-top { grid-template-columns: 1fr; }
+      .hero-stats { gap: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav>
+  <a href="#" class="logo">安居<span>房屋</span></a>
+  <ul class="nav-links">
+    <li><a href="#listings">物件列表</a></li>
+    <li><a href="#features">服務特色</a></li>
+    <li><a href="#agents">專業團隊</a></li>
+    <li><a href="#contact">聯絡我們</a></li>
+  </ul>
+  <button class="nav-cta" onclick="document.getElementById('contact').scrollIntoView({behavior:'smooth'})">免費估價</button>
+</nav>
+
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="hero-badge">🏆 台灣最值得信賴的房產平台</div>
+  <h1>找到您的<span>理想家園</span><br>從這裡開始</h1>
+  <p>超過 2,000 筆精選物件，專業仲介全程陪伴，讓買賣房屋變得簡單又安心。</p>
+  <div class="hero-stats">
+    <div class="stat">
+      <div class="stat-num">2,400+</div>
+      <div class="stat-label">精選物件</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">1,800+</div>
+      <div class="stat-label">成交客戶</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">15年</div>
+      <div class="stat-label">專業經驗</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">98%</div>
+      <div class="stat-label">客戶滿意度</div>
+    </div>
+  </div>
+  <div class="search-box">
+    <div class="search-tabs">
+      <button class="tab-btn active">買房</button>
+      <button class="tab-btn">租房</button>
+      <button class="tab-btn">售屋</button>
+    </div>
+    <div class="search-row">
+      <select>
+        <option value="">選擇地區</option>
+        <option>台北市</option>
+        <option>新北市</option>
+        <option>桃園市</option>
+        <option>台中市</option>
+        <option>台南市</option>
+        <option>高雄市</option>
+      </select>
+      <select>
+        <option value="">房屋類型</option>
+        <option>大樓住宅</option>
+        <option>透天厝</option>
+        <option>公寓</option>
+        <option>別墅</option>
+        <option>店面</option>
+      </select>
+      <input type="text" placeholder="預算 (萬元)">
+      <button class="search-btn" onclick="alert('搜尋功能啟動中，請稍後！')">搜尋</button>
+    </div>
+  </div>
+</section>
+
+<!-- ── Listings ── -->
+<section id="listings">
+  <div class="section-header">
+    <div class="tag">精選物件</div>
+    <h2>本月熱門推薦</h2>
+    <p>由專業仲介嚴選，品質保證、透明報價</p>
+  </div>
+  <div class="property-grid">
+
+    <div class="property-card">
+      <div class="property-img-wrap">
+        <img class="property-img" src="https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=600&q=80" alt="台北市大安區三房" onerror="this.style.background='linear-gradient(135deg,#1a5276,#2e86c1)';this.src=''">
+        <span class="badge-tag badge-hot">熱門</span>
+        <button class="fav-btn" onclick="toggleFav(this)">🤍</button>
+      </div>
+      <div class="property-info">
+        <div class="property-price">3,280 萬</div>
+        <div class="property-title">大安精品三房兩廳</div>
+        <div class="property-addr">台北市大安區信義路四段</div>
+        <div class="property-specs">
+          <span class="spec">🛏 3房</span>
+          <span class="spec">🚿 2衛</span>
+          <span class="spec">📐 38坪</span>
+          <span class="spec">🏢 12樓</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="property-card">
+      <div class="property-img-wrap">
+        <img class="property-img" src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=600&q=80" alt="新北市板橋區別墅" onerror="this.style.background='linear-gradient(135deg,#1a5276,#2e86c1)';this.src=''">
+        <span class="badge-tag badge-new">新上架</span>
+        <button class="fav-btn" onclick="toggleFav(this)">🤍</button>
+      </div>
+      <div class="property-info">
+        <div class="property-price">5,680 萬</div>
+        <div class="property-title">板橋獨棟別墅含車庫</div>
+        <div class="property-addr">新北市板橋區文化路二段</div>
+        <div class="property-specs">
+          <span class="spec">🛏 4房</span>
+          <span class="spec">🚿 3衛</span>
+          <span class="spec">📐 62坪</span>
+          <span class="spec">🏡 透天</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="property-card">
+      <div class="property-img-wrap">
+        <img class="property-img" src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80" alt="台中市西屯區" onerror="this.style.background='linear-gradient(135deg,#1a5276,#2e86c1)';this.src=''">
+        <span class="badge-tag badge-reduced">降價</span>
+        <button class="fav-btn" onclick="toggleFav(this)">🤍</button>
+      </div>
+      <div class="property-info">
+        <div class="property-price">1,980 萬</div>
+        <div class="property-title">西屯精緻兩房一廳</div>
+        <div class="property-addr">台中市西屯區台灣大道三段</div>
+        <div class="property-specs">
+          <span class="spec">🛏 2房</span>
+          <span class="spec">🚿 1衛</span>
+          <span class="spec">📐 24坪</span>
+          <span class="spec">🏢 8樓</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="property-card">
+      <div class="property-img-wrap">
+        <img class="property-img" src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&q=80" alt="高雄市苓雅區" onerror="this.style.background='linear-gradient(135deg,#1a5276,#2e86c1)';this.src=''">
+        <span class="badge-tag badge-new">新上架</span>
+        <button class="fav-btn" onclick="toggleFav(this)">🤍</button>
+      </div>
+      <div class="property-info">
+        <div class="property-price">2,450 萬</div>
+        <div class="property-title">苓雅區景觀四房</div>
+        <div class="property-addr">高雄市苓雅區四維三路</div>
+        <div class="property-specs">
+          <span class="spec">🛏 4房</span>
+          <span class="spec">🚿 2衛</span>
+          <span class="spec">📐 45坪</span>
+          <span class="spec">🏢 16樓</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="property-card">
+      <div class="property-img-wrap">
+        <img class="property-img" src="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600&q=80" alt="桃園市中壢區" onerror="this.style.background='linear-gradient(135deg,#1a5276,#2e86c1)';this.src=''">
+        <span class="badge-tag badge-hot">熱門</span>
+        <button class="fav-btn" onclick="toggleFav(this)">🤍</button>
+      </div>
+      <div class="property-info">
+        <div class="property-price">1,580 萬</div>
+        <div class="property-title">中壢捷運旁三房公寓</div>
+        <div class="property-addr">桃園市中壢區中正路</div>
+        <div class="property-specs">
+          <span class="spec">🛏 3房</span>
+          <span class="spec">🚿 2衛</span>
+          <span class="spec">📐 32坪</span>
+          <span class="spec">🏢 5樓</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="property-card">
+      <div class="property-img-wrap">
+        <img class="property-img" src="https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600&q=80" alt="台南市東區" onerror="this.style.background='linear-gradient(135deg,#1a5276,#2e86c1)';this.src=''">
+        <span class="badge-tag badge-reduced">降價</span>
+        <button class="fav-btn" onclick="toggleFav(this)">🤍</button>
+      </div>
+      <div class="property-info">
+        <div class="property-price">890 萬</div>
+        <div class="property-title">台南東區溫馨小宅</div>
+        <div class="property-addr">台南市東區東門路二段</div>
+        <div class="property-specs">
+          <span class="spec">🛏 2房</span>
+          <span class="spec">🚿 1衛</span>
+          <span class="spec">📐 18坪</span>
+          <span class="spec">🏢 3樓</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── Features ── -->
+<section id="features">
+  <div class="section-header">
+    <div class="tag">為何選擇我們</div>
+    <h2>安居房屋的服務承諾</h2>
+    <p>以專業與誠信陪伴您完成人生中最重要的決定</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <span class="feature-icon">🔍</span>
+      <h3>精準物件配對</h3>
+      <p>根據您的需求、預算與生活習慣，智慧推薦最適合的物件，節省搜尋時間。</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">📋</span>
+      <h3>透明房產資訊</h3>
+      <p>完整揭露屋況、產權、謄本資料，讓您放心購買，告別資訊不對等。</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">⚖️</span>
+      <h3>法律契約保障</h3>
+      <p>專業法務團隊審閱合約，確保交易合法合規，保障買賣雙方權益。</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🏦</span>
+      <h3>貸款規劃服務</h3>
+      <p>協助試算房貸、比較各大銀行方案，量身規劃最優惠的融資策略。</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🤝</span>
+      <h3>全程專人陪同</h3>
+      <p>從看屋、議價、簽約到交屋，專業仲介全程服務，讓您安心無虞。</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🏠</span>
+      <h3>售後維護支援</h3>
+      <p>交屋後提供物業管理、裝修推薦等售後服務，長期守護您的居住品質。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Agents ── -->
+<section id="agents">
+  <div class="section-header">
+    <div class="tag">專業團隊</div>
+    <h2>我們的優秀仲介</h2>
+    <p>擁有豐富經驗與專業執照，為您提供最優質的服務</p>
+  </div>
+  <div class="agents-grid">
+    <div class="agent-card">
+      <div class="agent-avatar" style="background:linear-gradient(135deg,#1a5276,#2e86c1)">林</div>
+      <h3>林雅婷</h3>
+      <div class="agent-title">資深不動產顧問</div>
+      <div class="agent-stats">
+        <div class="agent-stat"><strong>156</strong>成交件數</div>
+        <div class="agent-stat"><strong>12年</strong>資歷</div>
+      </div>
+      <a href="tel:0912345678" class="agent-phone">📞 0912-345-678</a>
+    </div>
+    <div class="agent-card">
+      <div class="agent-avatar" style="background:linear-gradient(135deg,#e67e22,#d35400)">陳</div>
+      <h3>陳建宏</h3>
+      <div class="agent-title">豪宅專業顧問</div>
+      <div class="agent-stats">
+        <div class="agent-stat"><strong>98</strong>成交件數</div>
+        <div class="agent-stat"><strong>8年</strong>資歷</div>
+      </div>
+      <a href="tel:0923456789" class="agent-phone">📞 0923-456-789</a>
+    </div>
+    <div class="agent-card">
+      <div class="agent-avatar" style="background:linear-gradient(135deg,#27ae60,#1e8449)">王</div>
+      <h3>王淑芬</h3>
+      <div class="agent-title">首購族專屬顧問</div>
+      <div class="agent-stats">
+        <div class="agent-stat"><strong>203</strong>成交件數</div>
+        <div class="agent-stat"><strong>15年</strong>資歷</div>
+      </div>
+      <a href="tel:0934567890" class="agent-phone">📞 0934-567-890</a>
+    </div>
+    <div class="agent-card">
+      <div class="agent-avatar" style="background:linear-gradient(135deg,#8e44ad,#6c3483)">張</div>
+      <h3>張志明</h3>
+      <div class="agent-title">商業不動產顧問</div>
+      <div class="agent-stats">
+        <div class="agent-stat"><strong>74</strong>成交件數</div>
+        <div class="agent-stat"><strong>6年</strong>資歷</div>
+      </div>
+      <a href="tel:0945678901" class="agent-phone">📞 0945-678-901</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Contact ── -->
+<section id="contact">
+  <div class="section-header">
+    <div class="tag">聯絡我們</div>
+    <h2>預約看房 / 免費諮詢</h2>
+    <p>填寫表單後，我們的專業顧問將在 24 小時內與您聯繫</p>
+  </div>
+  <div class="contact-wrap">
+    <div class="contact-info">
+      <h3>安居房屋</h3>
+      <div class="info-item">
+        <span class="info-icon">📍</span>
+        <div>
+          <strong>公司地址</strong>
+          <span>台北市信義區忠孝東路五段 168 號 8 樓</span>
+        </div>
+      </div>
+      <div class="info-item">
+        <span class="info-icon">📞</span>
+        <div>
+          <strong>客服專線</strong>
+          <span>02-2345-6789</span>
+        </div>
+      </div>
+      <div class="info-item">
+        <span class="info-icon">📧</span>
+        <div>
+          <strong>電子信箱</strong>
+          <span>service@anjuhome.com.tw</span>
+        </div>
+      </div>
+      <div class="info-item">
+        <span class="info-icon">🕐</span>
+        <div>
+          <strong>服務時間</strong>
+          <span>週一至週六 09:00–18:00</span>
+        </div>
+      </div>
+    </div>
+    <form class="contact-form" onsubmit="submitForm(event)">
+      <div class="form-row">
+        <input type="text" placeholder="姓名 *" required>
+        <input type="tel" placeholder="電話 *" required>
+      </div>
+      <input type="email" placeholder="電子信箱">
+      <select>
+        <option value="">諮詢類型</option>
+        <option>買房諮詢</option>
+        <option>賣房委託</option>
+        <option>租房詢問</option>
+        <option>免費估價</option>
+        <option>其他</option>
+      </select>
+      <textarea placeholder="請描述您的需求（地區、坪數、預算等）…"></textarea>
+      <button type="submit" class="submit-btn">送出諮詢</button>
+      <div class="form-success" id="formSuccess">✅ 感謝您的詢問！我們將盡快與您聯繫。</div>
+    </form>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer>
+  <div class="footer-top">
+    <div class="footer-brand">
+      <a href="#" class="logo">安居<span>房屋</span></a>
+      <p>深耕台灣房產市場逾 15 年，以專業、誠信、用心為核心價值，陪伴每一個家庭找到屬於自己的美好角落。</p>
+    </div>
+    <div>
+      <h4>快速連結</h4>
+      <ul>
+        <li><a href="#listings">物件列表</a></li>
+        <li><a href="#features">服務特色</a></li>
+        <li><a href="#agents">專業團隊</a></li>
+        <li><a href="#contact">聯絡我們</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>物件類型</h4>
+      <ul>
+        <li><a href="#">大樓住宅</a></li>
+        <li><a href="#">透天厝</a></li>
+        <li><a href="#">公寓</a></li>
+        <li><a href="#">別墅</a></li>
+        <li><a href="#">商業店面</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>服務區域</h4>
+      <ul>
+        <li><a href="#">台北市</a></li>
+        <li><a href="#">新北市</a></li>
+        <li><a href="#">桃園市</a></li>
+        <li><a href="#">台中市</a></li>
+        <li><a href="#">高雄市</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2026 安居房屋股份有限公司 版權所有｜不動產仲介執照（109）北市不動產字第 001234 號</p>
+  </div>
+</footer>
+
+<script>
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Favourite toggle
+  function toggleFav(btn) {
+    btn.textContent = btn.textContent === '🤍' ? '❤️' : '🤍';
+  }
+
+  // Contact form
+  function submitForm(e) {
+    e.preventDefault();
+    const success = document.getElementById('formSuccess');
+    success.style.display = 'block';
+    e.target.reset();
+    setTimeout(() => { success.style.display = 'none'; }, 5000);
+  }
+
+  // Scroll-in animation
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.style.opacity = '1';
+        entry.target.style.transform = 'translateY(0)';
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.property-card, .feature-card, .agent-card').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+    observer.observe(el);
+  });
+</script>
+</body>
+</html>
