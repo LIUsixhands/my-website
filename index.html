@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>房地產仲介 AI 提示詞包｜28 個專業話術模板</title>
+<meta name="description" content="專為台灣房仲打造的 28 個 AI 提示詞模板，房源文案、客戶開發、社群貼文一次搞定。複製貼上 ChatGPT，秒出專業內容。">
+<meta property="og:title" content="房地產仲介 AI 提示詞包｜28 個專業話術模板">
+<meta property="og:description" content="複製貼上 ChatGPT，30 秒寫出專業房仲文案。每月省下 20 小時。">
+<style>
+  :root {
+    --navy:#1B2A4A; --gold:#C9943A; --teal:#2A7F7F;
+    --red:#B94040; --green:#2D7D4E; --bg:#F8F6F1;
+    --white:#FFFFFF; --gray:#6B7280; --light:#EEF0F5;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Noto Sans TC','PingFang TC',Arial,sans-serif;background:var(--bg);color:#1a1a1a;line-height:1.7;}
+
+  /* Hero */
+  .hero{
+    background:linear-gradient(135deg,var(--navy) 0%,#2E4A7A 60%,var(--teal) 100%);
+    color:var(--white);padding:80px 24px 100px;text-align:center;
+  }
+  .hero .badge{
+    display:inline-block;background:var(--gold);color:var(--white);
+    font-size:0.78rem;font-weight:700;padding:5px 16px;border-radius:20px;
+    letter-spacing:2px;margin-bottom:20px;
+  }
+  .hero h1{font-size:2.6rem;font-weight:900;line-height:1.25;margin-bottom:20px;max-width:880px;margin-left:auto;margin-right:auto;}
+  .hero h1 span{color:var(--gold);}
+  .hero .subtitle{font-size:1.15rem;opacity:.9;max-width:680px;margin:0 auto 36px;}
+  .hero .cta-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;align-items:center;}
+  .btn-primary{
+    display:inline-block;background:var(--gold);color:var(--white);
+    padding:16px 36px;border-radius:50px;font-size:1.1rem;font-weight:800;
+    text-decoration:none;letter-spacing:1px;
+    box-shadow:0 8px 24px rgba(201,148,58,.4);
+    transition:transform .2s;
+  }
+  .btn-primary:hover{transform:translateY(-2px);}
+  .price-tag{color:var(--gold);font-weight:700;font-size:1.1rem;}
+  .price-tag s{opacity:.5;font-size:.95rem;margin-right:8px;}
+  .hero .stats{display:flex;justify-content:center;gap:48px;flex-wrap:wrap;margin-top:48px;}
+  .hero .stat .num{font-size:2rem;font-weight:900;color:var(--gold);}
+  .hero .stat .lbl{font-size:0.78rem;opacity:.75;letter-spacing:1px;}
+
+  /* Container */
+  .container{max-width:1080px;margin:0 auto;padding:0 24px;}
+
+  /* Section */
+  section{padding:72px 0;}
+  .section-title{
+    font-size:2rem;font-weight:900;color:var(--navy);
+    text-align:center;margin-bottom:12px;
+  }
+  .section-sub{
+    font-size:1.05rem;color:var(--gray);
+    text-align:center;margin-bottom:48px;max-width:640px;margin-left:auto;margin-right:auto;
+  }
+
+  /* Pain points */
+  .pain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;}
+  .pain-card{
+    background:var(--white);padding:28px;border-radius:12px;
+    border-left:4px solid var(--red);
+    box-shadow:0 2px 12px rgba(0,0,0,.05);
+  }
+  .pain-card .emoji{font-size:1.8rem;margin-bottom:12px;}
+  .pain-card h3{font-size:1.05rem;color:var(--navy);margin-bottom:8px;}
+  .pain-card p{font-size:0.92rem;color:var(--gray);}
+
+  /* Categories */
+  .bg-light{background:var(--light);}
+  .cat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;}
+  .cat-card{
+    background:var(--white);padding:32px 24px;border-radius:14px;
+    text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.06);
+    transition:transform .2s;
+  }
+  .cat-card:hover{transform:translateY(-4px);}
+  .cat-card .icon{font-size:2.4rem;margin-bottom:12px;}
+  .cat-card h3{color:var(--navy);font-size:1.15rem;margin-bottom:8px;}
+  .cat-card .count{
+    display:inline-block;background:var(--gold);color:var(--white);
+    font-size:0.75rem;font-weight:700;padding:3px 12px;border-radius:12px;margin-bottom:10px;
+  }
+  .cat-card p{font-size:0.9rem;color:var(--gray);line-height:1.6;}
+
+  /* Sample prompt */
+  .sample-box{
+    background:var(--navy);color:var(--white);
+    padding:36px;border-radius:14px;max-width:760px;margin:0 auto;
+    position:relative;
+  }
+  .sample-box .label{
+    position:absolute;top:-14px;left:24px;background:var(--gold);
+    color:var(--white);padding:4px 14px;border-radius:20px;
+    font-size:0.78rem;font-weight:700;letter-spacing:1px;
+  }
+  .sample-box pre{
+    font-family:'Courier New',monospace;font-size:0.9rem;
+    white-space:pre-wrap;line-height:1.8;opacity:.95;
+  }
+  .blur-overlay{
+    background:linear-gradient(to bottom,transparent 0%,var(--navy) 100%);
+    height:80px;margin-top:-80px;position:relative;border-radius:0 0 14px 14px;
+  }
+  .sample-cta{text-align:center;margin-top:24px;font-size:0.95rem;color:var(--gray);}
+
+  /* Benefits */
+  .benefit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;}
+  .benefit-card{padding:24px;text-align:center;}
+  .benefit-card .check{
+    width:48px;height:48px;background:var(--green);color:var(--white);
+    border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:1.4rem;margin:0 auto 14px;font-weight:700;
+  }
+  .benefit-card h3{color:var(--navy);font-size:1rem;margin-bottom:6px;}
+  .benefit-card p{font-size:0.88rem;color:var(--gray);}
+
+  /* Pricing */
+  .price-card{
+    background:var(--white);max-width:480px;margin:0 auto;
+    padding:48px 36px;border-radius:20px;text-align:center;
+    box-shadow:0 12px 40px rgba(27,42,74,.15);
+    border:3px solid var(--gold);
+  }
+  .price-card .label{
+    color:var(--gold);font-weight:700;font-size:0.85rem;
+    letter-spacing:2px;margin-bottom:12px;
+  }
+  .price-card h3{font-size:1.5rem;color:var(--navy);margin-bottom:16px;}
+  .price-card .price-big{
+    font-size:3.2rem;font-weight:900;color:var(--navy);
+    margin:8px 0;
+  }
+  .price-card .price-big small{font-size:1.4rem;color:var(--gray);font-weight:600;}
+  .price-card .price-old{color:var(--gray);text-decoration:line-through;font-size:1.05rem;margin-bottom:24px;display:block;}
+  .price-card ul{
+    text-align:left;margin:24px 0 32px;padding-left:0;list-style:none;
+  }
+  .price-card li{
+    padding:8px 0;font-size:0.95rem;
+    border-bottom:1px solid #eee;
+  }
+  .price-card li:before{
+    content:"✓ ";color:var(--green);font-weight:700;margin-right:8px;
+  }
+
+  /* FAQ */
+  .faq-item{
+    background:var(--white);padding:20px 24px;border-radius:10px;
+    margin-bottom:12px;box-shadow:0 1px 6px rgba(0,0,0,.05);
+  }
+  .faq-item h3{
+    color:var(--navy);font-size:1.05rem;margin-bottom:8px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .faq-item h3:before{content:"❓";font-size:1.1rem;}
+  .faq-item p{font-size:0.92rem;color:var(--gray);padding-left:32px;}
+
+  /* Final CTA */
+  .final-cta{
+    background:linear-gradient(135deg,var(--navy),var(--teal));
+    color:var(--white);padding:80px 24px;text-align:center;
+  }
+  .final-cta h2{font-size:2.2rem;margin-bottom:16px;}
+  .final-cta p{font-size:1.1rem;opacity:.85;margin-bottom:32px;max-width:580px;margin-left:auto;margin-right:auto;}
+
+  /* Footer */
+  footer{
+    background:#0F1828;color:rgba(255,255,255,.6);
+    padding:32px 24px;text-align:center;font-size:0.85rem;
+  }
+
+  /* Mobile */
+  @media (max-width:720px){
+    .hero h1{font-size:1.9rem;}
+    .hero .stats{gap:24px;}
+    section{padding:48px 0;}
+    .section-title{font-size:1.6rem;}
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="badge">AI PROMPT PACK · 2025 EDITION</div>
+    <h1>房仲業績倍增的祕密武器：<br><span>28 個 AI 提示詞模板</span></h1>
+    <p class="subtitle">
+      複製貼上 ChatGPT，30 秒寫出專業房源文案、客戶開發信、社群貼文。<br>
+      平均每月為您省下 20 小時。
+    </p>
+    <div class="cta-row">
+      <a href="https://sixhands.gumroad.com/l/beljzu" class="btn-primary" target="_blank">立即購買 →</a>
+      <span class="price-tag"><s>NT$1,200</s> 限時 NT$790</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="num">28</div><div class="lbl">個專業提示詞</div></div>
+      <div class="stat"><div class="num">6</div><div class="lbl">大核心分類</div></div>
+      <div class="stat"><div class="num">100%</div><div class="lbl">繁體中文</div></div>
+      <div class="stat"><div class="num">∞</div><div class="lbl">終身使用</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- PAIN POINTS -->
+<section>
+  <div class="container">
+    <h2 class="section-title">您是不是也有這些困擾？</h2>
+    <p class="section-sub">如果有 2 個以上點頭，這個提示詞包就是為您準備的</p>
+    <div class="pain-grid">
+      <div class="pain-card">
+        <div class="emoji">😩</div>
+        <h3>房源貼文寫了又刪</h3>
+        <p>每次發文卡住，不知道怎麼吸引買家眼球</p>
+      </div>
+      <div class="pain-card">
+        <div class="emoji">📵</div>
+        <h3>客戶已讀不回</h3>
+        <p>訊息太制式，怕太頻繁被封鎖，怕太冷淡又失聯</p>
+      </div>
+      <div class="pain-card">
+        <div class="emoji">🤐</div>
+        <h3>議價說不出口</h3>
+        <p>面對屋主不敢開口，買方猶豫不知怎麼推一把</p>
+      </div>
+      <div class="pain-card">
+        <div class="emoji">⏰</div>
+        <h3>文書工作吃掉帶看時間</h3>
+        <p>每天花 3 小時寫文案，本該帶看的時間都沒了</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CATEGORIES -->
+<section class="bg-light">
+  <div class="container">
+    <h2 class="section-title">28 個提示詞，6 大實戰分類</h2>
+    <p class="section-sub">從開發客戶到成交議價，每個房仲場景都有對應模板</p>
+    <div class="cat-grid">
+      <div class="cat-card">
+        <div class="icon">🏠</div>
+        <span class="count">5 個 Prompt</span>
+        <h3>房源行銷文案</h3>
+        <p>豪宅、首購、急售、租屋、591 標題，各種物件都有對應文案</p>
+      </div>
+      <div class="cat-card">
+        <div class="icon">👥</div>
+        <span class="count">5 個 Prompt</span>
+        <h3>客戶開發話術</h3>
+        <p>陌生開發、買方接觸、屋主邀約、轉介紹、節慶問候</p>
+      </div>
+      <div class="cat-card">
+        <div class="icon">📱</div>
+        <span class="count">5 個 Prompt</span>
+        <h3>社群媒體貼文</h3>
+        <p>Facebook、Instagram、LINE 推播，建立個人品牌</p>
+      </div>
+      <div class="cat-card">
+        <div class="icon">📧</div>
+        <span class="count">5 個 Prompt</span>
+        <h3>跟進訊息</h3>
+        <p>看屋後跟進、冷客戶喚醒、報價預熱、成交感謝信</p>
+      </div>
+      <div class="cat-card">
+        <div class="icon">🤝</div>
+        <span class="count">4 個 Prompt</span>
+        <h3>議價談判話術</h3>
+        <p>降價建議、出價策略、臨門一腳、屋主心理建設</p>
+      </div>
+      <div class="cat-card">
+        <div class="icon">📊</div>
+        <span class="count">4 個 Prompt</span>
+        <h3>市場分析報告</h3>
+        <p>區域行情、投資報酬、競品比較、貸款試算</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SAMPLE -->
+<section>
+  <div class="container">
+    <h2 class="section-title">看看實際的提示詞長什麼樣</h2>
+    <p class="section-sub">每個提示詞都填好變數即可，貼到 ChatGPT 就能用</p>
+    <div class="sample-box">
+      <span class="label">範例：P-01 豪宅文案</span>
+      <pre>你是一位頂尖房地產文案撰寫師，專精撰寫高端豪宅銷售描述。
+請為以下物件撰寫繁體中文房源介紹：
+
+【物件資訊】
+- 物件名稱：[PROPERTY_NAME]
+- 坪數：[SIZE_PING] 坪
+- 樓層：[FLOOR]
+- 地點：[LOCATION]
+- 特色：[KEY_FEATURES]
+- 售價：[PRICE] 萬元
+- 目標買家：[TARGET_BUYER]
+
+【撰寫要求】
+1. 開頭使用情境式鉤子句（30字內）
+2. 以「生活方式」為核心
+3. 融入地段優勢與稀缺性
+4. 結尾加入行動呼籲（CTA）...</pre>
+    </div>
+    <p class="sample-cta">👆 完整 28 個提示詞，每個都附變數說明 + 示例輸出</p>
+  </div>
+</section>
+
+<!-- BENEFITS -->
+<section class="bg-light">
+  <div class="container">
+    <h2 class="section-title">為什麼房仲都在用？</h2>
+    <div class="benefit-grid">
+      <div class="benefit-card">
+        <div class="check">✓</div>
+        <h3>節省 20 小時/月</h3>
+        <p>每個提示詞省 30–60 分鐘</p>
+      </div>
+      <div class="benefit-card">
+        <div class="check">✓</div>
+        <h3>零學習門檻</h3>
+        <p>填變數即可，不用會 AI</p>
+      </div>
+      <div class="benefit-card">
+        <div class="check">✓</div>
+        <h3>三平台通用</h3>
+        <p>ChatGPT、Claude、Gemini</p>
+      </div>
+      <div class="benefit-card">
+        <div class="check">✓</div>
+        <h3>台灣市場語境</h3>
+        <p>繁體中文、本地用詞</p>
+      </div>
+      <div class="benefit-card">
+        <div class="check">✓</div>
+        <h3>買一次終身用</h3>
+        <p>沒有月費，沒有限制</p>
+      </div>
+      <div class="benefit-card">
+        <div class="check">✓</div>
+        <h3>即買即用</h3>
+        <p>PDF 立即下載</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section>
+  <div class="container">
+    <h2 class="section-title">限時優惠價</h2>
+    <p class="section-sub">您可能花一杯星巴克的價格，買到一年的時間</p>
+    <div class="price-card">
+      <div class="label">FULL ACCESS · 完整版</div>
+      <h3>房地產仲介 AI 提示詞包</h3>
+      <span class="price-old">原價 NT$1,200</span>
+      <div class="price-big">NT$<strong>790</strong></div>
+      <ul>
+        <li>28 個完整提示詞（PDF 格式）</li>
+        <li>每個都附變數說明 + 示例輸出</li>
+        <li>6 大房仲核心分類</li>
+        <li>5 個附贈提示詞</li>
+        <li>3 個工作流程鏈</li>
+        <li>終身使用，沒有月費</li>
+        <li>立即下載，不用等待</li>
+      </ul>
+      <a href="https://sixhands.gumroad.com/l/beljzu" class="btn-primary" target="_blank" style="display:block;">立即購買 →</a>
+      <p style="font-size:0.8rem;color:var(--gray);margin-top:16px;">支援信用卡、PayPal · 30 天退款保證</p>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="bg-light">
+  <div class="container">
+    <h2 class="section-title">常見問題</h2>
+    <div style="max-width:760px;margin:0 auto;">
+      <div class="faq-item">
+        <h3>我不會用 ChatGPT，能用嗎？</h3>
+        <p>絕對可以！您只要把提示詞複製、填入您的物件資料，貼到 ChatGPT 對話框，按下送出，就會自動產出文案。完全不需要學任何技巧。</p>
+      </div>
+      <div class="faq-item">
+        <h3>ChatGPT 要付費嗎？</h3>
+        <p>免費版就完全夠用！如果您想要更高品質的輸出，可以考慮 ChatGPT Plus（每月 USD$20），但用免費版也能寫出專業文案。</p>
+      </div>
+      <div class="faq-item">
+        <h3>檔案格式是什麼？怎麼拿到？</h3>
+        <p>PDF 格式，購買後 Gumroad 會自動寄到您的 Email，也可以直接下載。完全自動化，不用等待。</p>
+      </div>
+      <div class="faq-item">
+        <h3>這跟一般 AI 課程有什麼不同？</h3>
+        <p>不用學，直接用。一般課程教您怎麼下指令，這套是已經幫您寫好最好的指令，您只要填入資料即可。</p>
+      </div>
+      <div class="faq-item">
+        <h3>適合哪種房仲？</h3>
+        <p>新手房仲、資深房仲、店長都適用。特別是每天需要寫房源文案、跟進客戶、發社群貼文的房仲，效果最明顯。</p>
+      </div>
+      <div class="faq-item">
+        <h3>不滿意可以退款嗎？</h3>
+        <p>可以！透過 Gumroad 購買享 30 天退款保證，不滿意全額退款，無風險嘗試。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="final-cta">
+  <div class="container">
+    <h2>讓 AI 成為您的 24 小時業務助理</h2>
+    <p>因為您的競爭對手，可能已經在用了。</p>
+    <a href="https://sixhands.gumroad.com/l/beljzu" class="btn-primary" target="_blank">立即購買 NT$790 →</a>
+  </div>
+</section>
+
+<footer>
+  © 2025 房地產仲介 AI 提示詞包 · 為台灣房仲打造
+</footer>
+
+</body>
+</html>
