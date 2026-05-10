@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>房地產仲介 AI 提示詞包 | Real Estate Prompt Pack</title>
+<style>
+  :root {
+    --navy:    #1B2A4A;
+    --gold:    #C9943A;
+    --teal:    #2A7F7F;
+    --red:     #B94040;
+    --green:   #2D7D4E;
+    --purple:  #5B3FA6;
+    --sky:     #2471A3;
+    --bg:      #F8F6F1;
+    --white:   #FFFFFF;
+    --gray:    #6B7280;
+    --light:   #EEF0F5;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Noto Sans TC',Arial,sans-serif; background:var(--bg); color:#1a1a1a; line-height:1.7; }
+
+  /* ── Cover ── */
+  .cover {
+    background: linear-gradient(135deg, var(--navy) 0%, #2E4A7A 60%, var(--teal) 100%);
+    color:var(--white); padding:80px 40px 60px; text-align:center;
+  }
+  .cover .badge {
+    display:inline-block; background:var(--gold); color:var(--white);
+    font-size:0.8rem; font-weight:700; padding:4px 14px; border-radius:20px;
+    letter-spacing:2px; margin-bottom:20px; text-transform:uppercase;
+  }
+  .cover h1 { font-size:2.8rem; font-weight:900; line-height:1.2; margin-bottom:16px; }
+  .cover h1 span { color:var(--gold); }
+  .cover .subtitle { font-size:1.15rem; opacity:.85; max-width:640px; margin:0 auto 32px; }
+  .cover .stats { display:flex; justify-content:center; gap:48px; flex-wrap:wrap; }
+  .cover .stat { text-align:center; }
+  .cover .stat .num { font-size:2.2rem; font-weight:900; color:var(--gold); }
+  .cover .stat .lbl { font-size:0.8rem; opacity:.75; letter-spacing:1px; }
+
+  /* ── Layout ── */
+  .container { max-width:960px; margin:0 auto; padding:0 24px; }
+
+  /* ── Module Header ── */
+  .module {
+    margin:48px 0 0;
+    border-radius:12px; overflow:hidden;
+    box-shadow:0 2px 16px rgba(0,0,0,.07);
+  }
+  .module-header {
+    padding:20px 28px; display:flex; align-items:center; gap:14px;
+    color:var(--white);
+  }
+  .module-header .mod-num {
+    width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,.2);
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.85rem; font-weight:800; flex-shrink:0;
+  }
+  .module-header h2 { font-size:1.25rem; font-weight:800; }
+  .module-body { background:var(--white); padding:28px; }
+
+  .mod1 .module-header { background:var(--navy); }
+  .mod2 .module-header { background:var(--teal); }
+  .mod3 .module-header { background:var(--purple); }
+  .mod4 .module-header { background:var(--green); }
+  .mod5 .module-header { background:var(--gold); }
+  .mod6 .module-header { background:var(--sky); }
+  .mod7 .module-header { background:var(--red); }
+
+  /* ── Typography ── */
+  h3 { font-size:1.05rem; font-weight:700; margin:20px 0 8px; }
+  h4 { font-size:0.95rem; font-weight:700; margin:14px 0 6px; }
+  p  { margin-bottom:10px; font-size:0.95rem; }
+  ul,ol { padding-left:20px; margin-bottom:10px; }
+  li { margin-bottom:4px; font-size:0.95rem; }
+
+  /* ── Title Options ── */
+  .title-card {
+    border-left:4px solid var(--navy); background:var(--light);
+    border-radius:0 8px 8px 0; padding:14px 18px; margin-bottom:12px;
+  }
+  .title-card .rank { font-size:0.75rem; color:var(--gold); font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px; }
+  .title-card .title-text { font-size:1rem; font-weight:700; color:var(--navy); }
+
+  /* ── SEO Tags ── */
+  .tag-cloud { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .tag {
+    background:var(--navy); color:var(--white);
+    font-size:0.75rem; padding:4px 12px; border-radius:20px;
+  }
+
+  /* ── Category Table ── */
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:0.9rem; }
+  th { background:var(--navy); color:var(--white); padding:10px 14px; text-align:left; }
+  td { padding:10px 14px; border-bottom:1px solid #E5E7EB; vertical-align:top; }
+  tr:nth-child(even) td { background:#F9FAFB; }
+  td:first-child { font-size:1.3rem; text-align:center; width:48px; }
+  .cat-name { font-weight:700; color:var(--navy); }
+  .cat-count { display:inline-block; background:var(--gold); color:var(--white); font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:10px; }
+
+  /* ── Prompt Card ── */
+  .prompt-card {
+    border:1px solid #E0E4EE; border-radius:10px; margin-bottom:28px; overflow:hidden;
+  }
+  .prompt-card-header {
+    background:var(--purple); color:var(--white); padding:12px 18px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .prompt-card-header .pname { font-weight:700; font-size:0.95rem; }
+  .prompt-card-header .pcat  { font-size:0.75rem; background:rgba(255,255,255,.2); padding:2px 10px; border-radius:10px; }
+  .prompt-card-body { padding:18px; }
+  .prompt-box {
+    background:#1E1E2E; color:#E2E8F0; font-family:'Courier New',monospace;
+    font-size:0.85rem; padding:16px; border-radius:8px; line-height:1.6;
+    white-space:pre-wrap; margin:10px 0;
+  }
+  .var-tag { color:#F4A261; font-weight:700; }
+
+  /* ── Variable Table ── */
+  .var-table th { background:var(--purple); }
+
+  /* ── Example Output ── */
+  .example-output {
+    background:#F0FFF4; border-left:4px solid var(--green);
+    border-radius:0 8px 8px 0; padding:12px 16px; font-size:0.88rem;
+    font-style:italic; color:#2D4A35; margin-top:10px;
+  }
+
+  /* ── Info Boxes ── */
+  .box { border-radius:8px; padding:16px 20px; margin:12px 0; }
+  .box-tip    { background:#FFF9E6; border-left:4px solid var(--gold); }
+  .box-warn   { background:#FFF1F1; border-left:4px solid var(--red); }
+  .box-green  { background:#F0FFF4; border-left:4px solid var(--green); }
+  .box-navy   { background:#EEF2FA; border-left:4px solid var(--navy); }
+  .box-teal   { background:#E8F7F7; border-left:4px solid var(--teal); }
+  .box-title  { font-weight:700; font-size:0.85rem; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+
+  /* ── Pricing ── */
+  .pricing-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:16px; }
+  .price-card { border:2px solid #E5E7EB; border-radius:12px; padding:20px; text-align:center; }
+  .price-card.featured { border-color:var(--gold); background:#FFFBF0; }
+  .price-card .plan-name { font-weight:800; font-size:1rem; color:var(--navy); margin-bottom:6px; }
+  .price-card .plan-price { font-size:2rem; font-weight:900; color:var(--gold); }
+  .price-card .plan-price sub { font-size:1rem; }
+  .price-card .plan-features { text-align:left; font-size:0.82rem; margin-top:12px; }
+  .price-card .plan-features li { margin-bottom:4px; }
+  .featured-badge { background:var(--gold); color:var(--white); font-size:0.7rem; font-weight:700; padding:2px 10px; border-radius:10px; display:inline-block; margin-bottom:8px; }
+
+  /* ── Color Swatch ── */
+  .swatch-row { display:flex; gap:12px; margin:10px 0; flex-wrap:wrap; }
+  .swatch { width:80px; text-align:center; }
+  .swatch-color { width:80px; height:48px; border-radius:8px; margin-bottom:4px; border:1px solid rgba(0,0,0,.1); }
+  .swatch-hex { font-size:0.72rem; color:var(--gray); font-family:monospace; }
+
+  /* ── Workflow ── */
+  .workflow { display:flex; gap:0; margin:12px 0; flex-wrap:wrap; }
+  .wf-step {
+    flex:1; min-width:180px; background:var(--light); border-radius:8px;
+    padding:14px; margin:4px; position:relative; text-align:center;
+  }
+  .wf-step .wf-num { width:28px; height:28px; border-radius:50%; background:var(--teal); color:white; font-weight:800; font-size:0.8rem; display:flex; align-items:center; justify-content:center; margin:0 auto 8px; }
+  .wf-step .wf-title { font-weight:700; font-size:0.85rem; color:var(--navy); margin-bottom:4px; }
+  .wf-step .wf-desc { font-size:0.78rem; color:var(--gray); }
+  .wf-arrow { align-self:center; color:var(--gold); font-size:1.4rem; margin:4px 0; }
+
+  /* ── Variant ── */
+  .variant-card { background:#F8F5FF; border:1px dashed var(--purple); border-radius:8px; padding:14px 18px; margin-bottom:10px; }
+  .variant-card .v-label { font-size:0.75rem; font-weight:700; color:var(--purple); letter-spacing:1px; margin-bottom:6px; }
+
+  /* ── Footer ── */
+  .footer { background:var(--navy); color:rgba(255,255,255,.6); text-align:center; padding:32px 20px; margin-top:60px; font-size:0.85rem; }
+  .footer strong { color:var(--gold); }
+
+  /* ── Steps ── */
+  .step-row { display:flex; gap:12px; align-items:flex-start; margin-bottom:14px; }
+  .step-num { width:32px; height:32px; border-radius:50%; background:var(--teal); color:white; font-weight:800; font-size:0.85rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .step-body h4 { margin:0 0 4px; font-size:0.9rem; }
+  .step-body p { margin:0; font-size:0.85rem; color:var(--gray); }
+
+  @media(max-width:640px){
+    .cover h1{ font-size:1.8rem; }
+    .pricing-grid{ grid-template-columns:1fr; }
+    .cover .stats{ gap:24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     COVER
+══════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="container">
+    <div class="badge">AI Prompt Pack · 2025 Edition</div>
+    <h1>房地產仲介<br><span>AI 提示詞包</span></h1>
+    <p class="subtitle">28 個專業提示詞，覆蓋開發客戶、房源文案、社群貼文、議價談判全流程——讓 ChatGPT、Claude、Gemini 成為您最強的成交助理。</p>
+    <div class="stats">
+      <div class="stat"><div class="num">28</div><div class="lbl">個專業提示詞</div></div>
+      <div class="stat"><div class="num">6</div><div class="lbl">大核心分類</div></div>
+      <div class="stat"><div class="num">3</div><div class="lbl">個工作流程鏈</div></div>
+      <div class="stat"><div class="num">100%</div><div class="lbl">房仲場景專屬</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ══════════════════════════════════════════════
+     MODULE 1 — 產品標題與銷售文案
+══════════════════════════════════════════════ -->
+<div class="module mod1">
+  <div class="module-header">
+    <div class="mod-num">1</div>
+    <h2>模組一｜產品標題與銷售文案</h2>
+  </div>
+  <div class="module-body">
+
+    <h3>▌ SEO 最佳化產品標題（3 選 1）</h3>
+
+    <div class="title-card">
+      <div class="rank">標題 A — 痛點導向</div>
+      <div class="title-text">房地產仲介必備 AI 提示詞包｜28 個專業話術模板，開發客戶 × 成交議價一包搞定</div>
+    </div>
+    <div class="title-card">
+      <div class="rank">標題 B — 結果導向</div>
+      <div class="title-text">【房仲業績倍增】AI 寫作提示詞大全｜房源文案 × 客戶跟進 × 社群貼文，每月省下 20 小時</div>
+    </div>
+    <div class="title-card">
+      <div class="rank">標題 C — 身份認同導向</div>
+      <div class="title-text">頂尖房仲才用的 AI 提示詞包｜28 個實戰模板，從帶看到成交全程 AI 輔助</div>
+    </div>
+
+    <h3>▌ 簡短描述（150–200 字元）</h3>
+    <div class="box box-navy">
+      <p>還在為寫房源文案、跟進客戶信件、社群貼文發愁？28 個房仲專屬 AI 提示詞，複製貼上，秒出專業內容。立刻讓 AI 成為您的 24 小時業務助理！</p>
+    </div>
+
+    <h3>▌ 詳細描述（Hook → 痛點 → 解決方案 → 包含內容 → 好處 → CTA）</h3>
+    <div class="box box-tip">
+      <div class="box-title" style="color:var(--gold)">🪝 Hook</div>
+      <p>「同樣是做房仲，為什麼有人每月成交 10 件，有人卻在寫貼文上浪費 3 個小時？」</p>
+    </div>
+    <div class="box box-warn">
+      <div class="box-title" style="color:var(--red)">😩 痛點</div>
+      <p>您是否也面臨這些困境：<br>
+      • 房源貼文寫了又刪，不知怎樣吸引眼球？<br>
+      • 客戶沉默不回，不知道怎麼跟進才不顯得急切？<br>
+      • 議價時說不出打動屋主的理由，談判氣場輸一半？<br>
+      • 每天重複性文書工作佔掉了本該帶看的黃金時間？</p>
+    </div>
+    <div class="box box-green">
+      <div class="box-title" style="color:var(--green)">💡 解決方案</div>
+      <p>這套《房地產仲介 AI 提示詞包》是專為台灣及華語市場房仲打造的 AI 工作指令系統。每一條提示詞都經過「房仲情境 × AI 指令工程」雙重優化，讓 ChatGPT、Claude、Gemini 直接輸出您可以發布或傳送的專業文字，不再需要反覆修改。</p>
+    </div>
+    <div class="box box-navy">
+      <div class="box-title" style="color:var(--navy)">📦 包含內容</div>
+      <ul>
+        <li>🏠 房源行銷文案提示詞 × 5（售屋貼文、租屋描述、豪宅版、首購族版、急售版）</li>
+        <li>👥 客戶開發話術提示詞 × 5（陌生開發短信、Line 問候、屋主委託邀約、老客戶轉介紹、買方第一次接觸）</li>
+        <li>📱 社群媒體貼文提示詞 × 5（Facebook、Instagram、LINE 官方帳號、市場行情解析、成交分享）</li>
+        <li>📧 電子郵件 & 訊息跟進提示詞 × 5（看屋後跟進、報價前預熱、成交感謝信、冷客戶喚醒、節慶關懷）</li>
+        <li>🤝 議價談判話術提示詞 × 4（降價切入、屋主心理建設、買方出價策略、最後一哩成交話術）</li>
+        <li>📊 市場分析報告提示詞 × 4（區域行情摘要、投資報酬分析、競品屋比較、首購貸款試算說明）</li>
+        <li>🎁 附贈提示詞 × 5 + 3 個組合工作流程鏈</li>
+      </ul>
+    </div>
+    <div class="box box-teal">
+      <div class="box-title" style="color:var(--teal)">✅ 好處</div>
+      <ul>
+        <li>平均每條提示詞節省 30–60 分鐘文書時間</li>
+        <li>無需 AI 寫作經驗，填入變數即可使用</li>
+        <li>相容 ChatGPT、Claude、Gemini 三大平台</li>
+        <li>繁體中文輸出，符合台灣市場語境</li>
+        <li>買一次，終身使用，定期更新</li>
+      </ul>
+    </div>
+    <div class="box box-tip">
+      <div class="box-title" style="color:var(--gold)">🚀 CTA</div>
+      <p>立即取得這套提示詞包，讓 AI 從今天開始為您工作——<strong>因為您的競爭對手，可能已經在用了。</strong></p>
+    </div>
+
+    <h3>▌ SEO 標籤（10 個）</h3>
+    <div class="tag-cloud">
+      <span class="tag">房地產AI</span>
+      <span class="tag">房仲提示詞</span>
+      <span class="tag">ChatGPT房仲</span>
+      <span class="tag">房源文案</span>
+      <span class="tag">AI寫作模板</span>
+      <span class="tag">房仲話術</span>
+      <span class="tag">議價技巧</span>
+      <span class="tag">客戶開發</span>
+      <span class="tag">社群貼文模板</span>
+      <span class="tag">繁體中文Prompt</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODULE 2 — PROMPT 分類
+══════════════════════════════════════════════ -->
+<div class="module mod2">
+  <div class="module-header">
+    <div class="mod-num">2</div>
+    <h2>模組二｜Prompt 分類總覽</h2>
+  </div>
+  <div class="module-body">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>分類名稱</th>
+          <th>描述</th>
+          <th>數量</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>🏠</td>
+          <td><span class="cat-name">房源行銷文案</span></td>
+          <td>撰寫吸引買方/租客的房源描述，針對不同物件類型（豪宅、首購、急售）及平台（591、FB、IG）客製化輸出</td>
+          <td><span class="cat-count">5 個</span></td>
+        </tr>
+        <tr>
+          <td>👥</td>
+          <td><span class="cat-name">客戶開發話術</span></td>
+          <td>從陌生開發到老客戶轉介紹的完整溝通腳本，適合 Line、簡訊、電話前準備，提高接觸成功率</td>
+          <td><span class="cat-count">5 個</span></td>
+        </tr>
+        <tr>
+          <td>📱</td>
+          <td><span class="cat-name">社群媒體貼文</span></td>
+          <td>Facebook／Instagram／LINE 頻道專屬貼文模板，涵蓋市場行情、成交分享、知識型內容，建立個人品牌</td>
+          <td><span class="cat-count">5 個</span></td>
+        </tr>
+        <tr>
+          <td>📧</td>
+          <td><span class="cat-name">電子郵件 & 訊息跟進</span></td>
+          <td>帶看後跟進、冷客戶喚醒、節慶關懷、感謝信等 7 大跟進情境，維持客戶溫度不失聯</td>
+          <td><span class="cat-count">5 個</span></td>
+        </tr>
+        <tr>
+          <td>🤝</td>
+          <td><span class="cat-name">議價談判話術</span></td>
+          <td>從買方出價策略到屋主心理建設，AI 生成有依據的談判腳本，讓您在談判桌上更有氣場</td>
+          <td><span class="cat-count">4 個</span></td>
+        </tr>
+        <tr>
+          <td>📊</td>
+          <td><span class="cat-name">市場分析報告</span></td>
+          <td>快速生成區域行情摘要、投資報酬試算、競品比較表，用數據說服客戶、建立專業信任</td>
+          <td><span class="cat-count">4 個</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="text-align:right;font-size:0.85rem;color:var(--gray)">核心提示詞共 <strong>28 個</strong>，附贈提示詞另計 +5 個</p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODULE 3 — 單個 PROMPT（核心內容）
+══════════════════════════════════════════════ -->
+<div class="module mod3">
+  <div class="module-header">
+    <div class="mod-num">3</div>
+    <h2>模組三｜單個 Prompt 核心內容（精選 10 個完整示範）</h2>
+  </div>
+  <div class="module-body">
+
+    <!-- P-01 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-01｜豪宅房源描述文案</span>
+        <span class="pcat">🏠 房源行銷文案</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位頂尖房地產文案撰寫師，專精於撰寫高端豪宅的銷售描述。
+
+請為以下物件撰寫一篇繁體中文房源介紹：
+
+【物件資訊】
+- 物件名稱：[PROPERTY_NAME]
+- 坪數：[SIZE_PING] 坪
+- 樓層：[FLOOR]
+- 地點：[LOCATION]
+- 特色：[KEY_FEATURES]
+- 售價：[PRICE] 萬元
+- 目標買家：[TARGET_BUYER]
+
+【撰寫要求】
+1. 開頭使用情境式鉤子句（30字內），喚起讀者的生活嚮往
+2. 以「生活方式」為核心，而非只列規格
+3. 融入地段優勢與稀缺性
+4. 結尾加入一句行動呼籲（CTA）
+5. 字數控制在 200–300 字之間
+6. 語氣：優雅、有質感，帶有輕微緊迫感
+
+請直接輸出文案，不需要加說明。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[PROPERTY_NAME]</td><td>物件或社區名稱</td><td>帝寶、文華苑、仁愛大廈</td></tr>
+            <tr><td>[SIZE_PING]</td><td>主建物坪數（數字）</td><td>85、120、200</td></tr>
+            <tr><td>[FLOOR]</td><td>樓層資訊</td><td>18F、頂樓、3–5F</td></tr>
+            <tr><td>[LOCATION]</td><td>行政區或街道</td><td>台北市大安區仁愛路四段</td></tr>
+            <tr><td>[KEY_FEATURES]</td><td>3–5 個物件亮點</td><td>雙車位、270度景觀、義大利大理石</td></tr>
+            <tr><td>[PRICE]</td><td>售價（萬元）</td><td>8,500、12,000</td></tr>
+            <tr><td>[TARGET_BUYER]</td><td>主要客群描述</td><td>企業主、高資產家庭、外商主管</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出：</strong><br>
+          「清晨拉開落地窗，大安森林公園的綠意直送眼前，這才是你該有的週一早晨。帝寶 18F 角間，200 坪純粹奢華，義大利白色大理石地坪、雙車位、270 度無遮蔽景觀，從設計到格局無一不是身份的低語。市場上同規格物件不足三戶，稀缺性不言而喻。聯繫專屬顧問，安排私人帶看——體驗過才知道，有些生活無法妥協。」
+        </div>
+      </div>
+    </div>
+
+    <!-- P-02 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-02｜首購族房源說明</span>
+        <span class="pcat">🏠 房源行銷文案</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位親切、專業的房仲助理，擅長用平易近人的語氣幫助首購族理解物件優勢。
+
+請為以下物件撰寫一篇面向首購族的房源介紹：
+
+【物件資訊】
+- 物件類型：[PROPERTY_TYPE]
+- 地點：[LOCATION]
+- 坪數：[SIZE_PING] 坪
+- 總價：[PRICE] 萬元
+- 交通優勢：[TRANSPORT]
+- 生活機能：[AMENITIES]
+- 貸款成數：可貸 [LOAN_RATIO]%
+
+【撰寫要求】
+1. 語氣溫暖親切，像朋友推薦而非推銷員
+2. 消除首購族常見疑慮（貸款、通勤、未來增值）
+3. 強調 CP 值與生活便利性
+4. 字數 180–250 字
+5. 加入「立刻預約看屋」行動呼籲
+
+請直接輸出文案。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[PROPERTY_TYPE]</td><td>物件種類</td><td>電梯大樓、公寓、套房</td></tr>
+            <tr><td>[LOCATION]</td><td>地點</td><td>新北市板橋區文化路</td></tr>
+            <tr><td>[SIZE_PING]</td><td>坪數</td><td>28、35、42</td></tr>
+            <tr><td>[PRICE]</td><td>總價萬元</td><td>1,200、1,800</td></tr>
+            <tr><td>[TRANSPORT]</td><td>交通說明</td><td>步行5分鐘到捷運府中站</td></tr>
+            <tr><td>[AMENITIES]</td><td>周邊機能</td><td>全聯、學校、公園、醫院</td></tr>
+            <tr><td>[LOAN_RATIO]</td><td>可貸成數</td><td>八、七、85</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出：</strong><br>
+          「第一次買房，不用想太複雜。這間板橋 28 坪電梯大樓，走路 5 分鐘到府中站，樓下有全聯、公園就在轉角，生活機能一次到位。總價 1,200 萬，可貸八成，月繳約 XX 元，比租金還划算。格局方正採光好，是很多首購族直接下訂的原因。想先來看看嗎？預約看屋完全沒有壓力！」
+        </div>
+      </div>
+    </div>
+
+    <!-- P-03 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-03｜陌生屋主委託開發短信</span>
+        <span class="pcat">👥 客戶開發話術</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位經驗豐富的房仲，需要撰寫一則開發陌生屋主的 Line 或簡訊訊息。
+
+【背景資訊】
+- 目標屋主地址或社區：[TARGET_COMMUNITY]
+- 近期成交行情：[RECENT_DEAL_PRICE] 萬（每坪 [PRICE_PER_PING] 萬）
+- 我的服務特色：[MY_SERVICE_FEATURE]
+- 我的名字：[MY_NAME]
+- 我的電話：[MY_PHONE]
+
+【撰寫要求】
+1. 長度控制在 100 字以內（手機閱讀友善）
+2. 開頭點出行情資訊，勾起屋主好奇
+3. 語氣自然，不像制式廣告
+4. 不給壓力，邀請「聊聊」而非「委託」
+5. 輸出 2 個版本：A 版（直接型）/ B 版（好奇型）
+
+請直接輸出兩個版本。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[TARGET_COMMUNITY]</td><td>目標社區或街道</td><td>信義聯勤、遠雄富都</td></tr>
+            <tr><td>[RECENT_DEAL_PRICE]</td><td>近期成交總價</td><td>3,200</td></tr>
+            <tr><td>[PRICE_PER_PING]</td><td>每坪單價</td><td>85</td></tr>
+            <tr><td>[MY_SERVICE_FEATURE]</td><td>個人服務亮點</td><td>專注大安區10年、行銷費自付</td></tr>
+            <tr><td>[MY_NAME]</td><td>仲介姓名</td><td>王小明</td></tr>
+            <tr><td>[MY_PHONE]</td><td>聯絡電話</td><td>0912-345-678</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出 A（直接型）：</strong><br>
+          「您好，我是信義房屋王小明。您社區上週剛成交一戶 85 萬/坪，比去年漲了 12%，若您有出售規劃，現在時機相當不錯。不打擾，只是想讓您掌握最新行情。歡迎 Line 我聊聊：0912-345-678」
+        </div>
+      </div>
+    </div>
+
+    <!-- P-04 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-04｜Instagram 市場行情貼文</span>
+        <span class="pcat">📱 社群媒體貼文</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位精通社群行銷的房仲，需要為 Instagram 撰寫一篇市場行情貼文，目標是建立專業形象並吸引潛在買賣方追蹤。
+
+【內容資訊】
+- 區域：[AREA]
+- 統計期間：[PERIOD]
+- 成交件數：[DEAL_COUNT] 件
+- 平均成交單價：[AVG_PRICE] 萬/坪
+- 與上期相比：[TREND]（上漲/下跌/持平 X%）
+- 重要觀察：[KEY_INSIGHT]
+- 我的 IG 帳號：[MY_IG]
+
+【撰寫要求】
+1. 開頭用數字或問句製造好奇
+2. 用條列或表情符號提升可讀性
+3. 加入 1 句個人觀點（顯示專業）
+4. 結尾呼籲互動：留言或私訊
+5. 附上 10 個繁中 + 英文混合的 Hashtag
+6. 總長 150–200 字（不含 hashtag）
+
+請直接輸出貼文內容。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[AREA]</td><td>分析地區</td><td>台北市大安區、新竹竹北</td></tr>
+            <tr><td>[PERIOD]</td><td>統計時間</td><td>2025年Q1、2025年4月</td></tr>
+            <tr><td>[DEAL_COUNT]</td><td>成交件數</td><td>127、48</td></tr>
+            <tr><td>[AVG_PRICE]</td><td>平均每坪單價</td><td>92、58</td></tr>
+            <tr><td>[TREND]</td><td>與前期比較</td><td>上漲 3.2%、下跌 1.5%</td></tr>
+            <tr><td>[KEY_INSIGHT]</td><td>一句重要觀察</td><td>預售屋量縮，中古屋議價空間擴大</td></tr>
+            <tr><td>[MY_IG]</td><td>IG 帳號名稱</td><td>@realtor_mingming</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出：</strong><br>
+          「📊 大安區最新行情出爐！2025 Q1 成交 127 件，平均單價 92 萬/坪，季增 3.2%。🔑 重點：中古屋議價空間悄悄擴大，這個訊號值得注意。身為在大安區深耕 10 年的仲介，我認為現在是換屋族的好時機——賣在高點，買在有彈性的時候。你對大安區行情有疑問嗎？留言或私訊我 @realtor_mingming，免費幫你分析！」
+        </div>
+      </div>
+    </div>
+
+    <!-- P-05 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-05｜看屋後跟進訊息</span>
+        <span class="pcat">📧 電子郵件 & 訊息跟進</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位細心、不過度推銷的專業房仲，需要在帶看後 24 小時內發送跟進訊息給買方。
+
+【情境資訊】
+- 客戶姓名：[CLIENT_NAME]
+- 看屋物件：[PROPERTY_NAME]，位於 [LOCATION]
+- 看屋日期：[VIEWING_DATE]
+- 客戶當天反應：[CLIENT_REACTION]（正面/中性/有疑慮）
+- 客戶主要疑慮（若有）：[MAIN_CONCERN]
+- 替代推薦物件（若有）：[ALT_PROPERTY]
+
+【撰寫要求】
+1. 字數 120–180 字
+2. 開頭感謝對方抽空，不顯得急切
+3. 針對客戶反應調整語氣
+4. 若有疑慮，提供 1 句化解說明
+5. 結尾開放式問句，邀請回應
+6. 語氣：誠懇、有溫度，像朋友而非業務
+
+請直接輸出訊息。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[CLIENT_NAME]</td><td>客戶稱呼</td><td>陳大哥、林小姐</td></tr>
+            <tr><td>[PROPERTY_NAME]</td><td>物件名稱或地址</td><td>仁愛路三段XX號</td></tr>
+            <tr><td>[LOCATION]</td><td>物件地點</td><td>大安區、中山區</td></tr>
+            <tr><td>[VIEWING_DATE]</td><td>看屋日期</td><td>今天下午、昨天</td></tr>
+            <tr><td>[CLIENT_REACTION]</td><td>客戶看屋反應</td><td>正面、有疑慮</td></tr>
+            <tr><td>[MAIN_CONCERN]</td><td>客戶主要疑慮</td><td>樓層偏低、停車位問題</td></tr>
+            <tr><td>[ALT_PROPERTY]</td><td>備選物件（可空白）</td><td>同社區5F另一戶</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出：</strong><br>
+          「陳大哥您好，謝謝今天撥空來看仁愛路那間，希望沒有打擾到您的行程 😊 您提到對樓層有點疑慮，我特別查了一下，同棟 5 樓另有一戶剛釋出，採光比 2 樓好很多，總價差距不大。您方便哪天再去看一眼嗎？或是有任何問題，隨時傳訊給我，不用客氣！」
+        </div>
+      </div>
+    </div>
+
+    <!-- P-06 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-06｜屋主降價心理建設話術</span>
+        <span class="pcat">🤝 議價談判話術</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位有 10 年經驗的房仲談判顧問，需要幫助仲介撰寫一段說服屋主接受降價建議的談話腳本。
+
+【談判情境】
+- 物件地點：[LOCATION]
+- 目前開價：[ASKING_PRICE] 萬
+- 建議成交價：[SUGGESTED_PRICE] 萬（降幅 [DISCOUNT]%）
+- 物件已委託天數：[DAYS_LISTED] 天
+- 市場比較物件：[COMP_PROPERTY]，成交 [COMP_PRICE] 萬
+- 屋主的核心顧慮：[OWNER_CONCERN]
+
+【撰寫要求】
+1. 以數據說話，不憑感覺
+2. 站在屋主立場理解情緒，再帶出理性判斷
+3. 強調「時間成本」的概念
+4. 提供 2 個選項讓屋主選擇（而非逼他/她只有一條路）
+5. 語氣：有底氣、溫和，帶有引導性
+6. 腳本長度：250–350 字
+
+請直接輸出談話腳本。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[LOCATION]</td><td>物件位置</td><td>台中西屯區、高雄左營區</td></tr>
+            <tr><td>[ASKING_PRICE]</td><td>目前開價</td><td>2,800</td></tr>
+            <tr><td>[SUGGESTED_PRICE]</td><td>建議成交價</td><td>2,600</td></tr>
+            <tr><td>[DISCOUNT]</td><td>降幅百分比</td><td>7.1</td></tr>
+            <tr><td>[DAYS_LISTED]</td><td>委託天數</td><td>90</td></tr>
+            <tr><td>[COMP_PROPERTY]</td><td>比較物件描述</td><td>同社區 8F、同樓層鄰棟</td></tr>
+            <tr><td>[COMP_PRICE]</td><td>比較物件成交價</td><td>2,550</td></tr>
+            <tr><td>[OWNER_CONCERN]</td><td>屋主顧慮</td><td>不想賣太便宜、有貸款壓力</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出節錄：</strong><br>
+          「王先生，我完全理解您不希望賣太便宜的心情，這間房子承載了很多回憶。但我們一起看一下市場數字——同社區 8 樓上個月成交是 2,550 萬，您這間 3 樓，即使格局更好，買方參考的還是那個數字…委託已經 90 天，這段時間貸款利息加管理費大概就是 XX 萬。所以我給您兩個選擇：一，我們試著在 2,650 萬談看看，至少保留一點空間；二，維持現價，但我建議把行銷策略換一換…」
+        </div>
+      </div>
+    </div>
+
+    <!-- P-07 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-07｜區域行情分析報告</span>
+        <span class="pcat">📊 市場分析報告</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位房地產市場分析師，需要為房仲客戶生成一份簡明的區域行情分析報告，讓客戶在 5 分鐘內掌握核心資訊。
+
+【報告參數】
+- 分析區域：[AREA]
+- 物件類型：[PROPERTY_TYPE]
+- 分析期間：[PERIOD]
+- 提供數據：[RAW_DATA]（可貼入成交資訊或描述）
+- 報告用途：[PURPOSE]（給買方/給賣方/給投資人）
+- 閱讀對象背景：[READER_BACKGROUND]
+
+【報告結構】
+請依以下架構生成報告：
+1. 📍 區域概覽（2–3 句）
+2. 📈 近期成交趨勢（用數字呈現，3–4 點）
+3. 🏆 本區優勢（3 點）
+4. ⚠️ 注意事項（2 點）
+5. 🔮 短期展望（1 段，帶個人觀點）
+6. 💡 給[PURPOSE]的行動建議（2–3 點）
+
+語氣：專業、客觀，加入少量個人分析讓報告有溫度。
+總字數：350–500 字。
+
+請直接輸出報告。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[AREA]</td><td>分析區域</td><td>桃園市中壢區、新北板橋</td></tr>
+            <tr><td>[PROPERTY_TYPE]</td><td>物件類型</td><td>30–45 坪電梯大樓</td></tr>
+            <tr><td>[PERIOD]</td><td>分析期間</td><td>2025 年 Q1</td></tr>
+            <tr><td>[RAW_DATA]</td><td>原始數據或描述</td><td>成交 XX 筆，均價 YY 萬/坪</td></tr>
+            <tr><td>[PURPOSE]</td><td>報告用途</td><td>給買方、給賣方、給投資人</td></tr>
+            <tr><td>[READER_BACKGROUND]</td><td>閱讀者背景</td><td>首購族、換屋族、法人投資者</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出節錄：</strong><br>
+          「📍 區域概覽：中壢區作為桃園核心商業區，近年受益於捷運通車效應，住宅需求持續穩健。2025 Q1 共成交 89 件，以 30–45 坪中古電梯大樓為主力。📈 近期成交趨勢：平均單價 28–32 萬/坪，較去年同期微升 2.8%；成交天數平均約 55 天，顯示市場流動性尚可…」
+        </div>
+      </div>
+    </div>
+
+    <!-- P-08 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-08｜老客戶轉介紹邀約訊息</span>
+        <span class="pcat">👥 客戶開發話術</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位重視長期客戶關係的房仲，需要撰寫一則向舊客戶請求轉介紹的 Line 訊息，訴求是讓對方願意主動推薦，而不是感到被打擾。
+
+【情境設定】
+- 舊客戶姓名：[OLD_CLIENT_NAME]
+- 合作時間：[COOPERATION_DATE]（幾年前/哪一年）
+- 當時服務內容：[SERVICE_TYPE]（買方/賣方/租賃）
+- 目前特別擅長的區域/類型：[MY_SPECIALTY]
+- 是否提供轉介紹回饋：[REFERRAL_REWARD]（有/無，若有說明內容）
+- 我的名字：[MY_NAME]
+
+【撰寫要求】
+1. 先問候、喚起美好合作記憶
+2. 自然帶出「有沒有親友有需求」
+3. 不強迫，給對方選擇空間
+4. 若有回饋機制，輕描淡寫提一句
+5. 語氣：像老朋友聯絡，不像業務追單
+6. 字數：100–150 字
+7. 輸出 2 個版本（長版/短版）
+
+請直接輸出兩個版本。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[OLD_CLIENT_NAME]</td><td>舊客戶稱呼</td><td>張姐、李先生</td></tr>
+            <tr><td>[COOPERATION_DATE]</td><td>合作時間點</td><td>三年前、2022年</td></tr>
+            <tr><td>[SERVICE_TYPE]</td><td>當時服務類型</td><td>幫您買到永和那間、協助出租</td></tr>
+            <tr><td>[MY_SPECIALTY]</td><td>目前專精領域</td><td>新北市中和/永和區中古屋</td></tr>
+            <tr><td>[REFERRAL_REWARD]</td><td>轉介紹回饋</td><td>有，星巴克禮品卡</td></tr>
+            <tr><td>[MY_NAME]</td><td>仲介姓名</td><td>小陳</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出（長版節錄）：</strong><br>
+          「張姐您好，好久不見！我是小陳，三年前幫您找到永和那間房子的那個 😄 不知道住得習不習慣？最近有空都在想，當初合作那麼愉快，如果您身邊有朋友在找中和或永和的房子，記得跟他們說一聲，讓我來幫忙！有介紹成功的話，也準備了小心意感謝您 ☕ 不打擾了，有需要隨時找我！」
+        </div>
+      </div>
+    </div>
+
+    <!-- P-09 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-09｜急售房源緊迫感文案</span>
+        <span class="pcat">🏠 房源行銷文案</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位擅長製造稀缺感的房地產行銷專家，需要為一個急售物件撰寫帶有緊迫感的房源文案，吸引買方盡快行動。
+
+【物件資訊】
+- 物件地點：[LOCATION]
+- 坪數：[SIZE_PING] 坪
+- 現售價：[CURRENT_PRICE] 萬（市場行情約 [MARKET_PRICE] 萬）
+- 急售原因（可選擇是否揭露）：[URGENT_REASON]
+- 屋況：[CONDITION]
+- 截止時間或特殊條件：[DEADLINE]
+
+【撰寫要求】
+1. 開頭直接點出「急售」和「低於行情」的數字
+2. 用事實建立可信度（不誇大）
+3. 製造稀缺感：說明為何這個機會稍縱即逝
+4. 清楚說明看屋或詢問的下一步
+5. 字數：150–200 字
+6. 語氣：直接、有力，不油膩
+
+請直接輸出文案。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[LOCATION]</td><td>物件位置</td><td>台南市東區、高雄楠梓</td></tr>
+            <tr><td>[SIZE_PING]</td><td>坪數</td><td>38、55</td></tr>
+            <tr><td>[CURRENT_PRICE]</td><td>急售開價</td><td>1,580</td></tr>
+            <tr><td>[MARKET_PRICE]</td><td>市場行情價</td><td>1,750</td></tr>
+            <tr><td>[URGENT_REASON]</td><td>急售原因（可填「屋主移民」等）</td><td>屋主移民、資金需求</td></tr>
+            <tr><td>[CONDITION]</td><td>屋況說明</td><td>裝潢保持良好、格局方正</td></tr>
+            <tr><td>[DEADLINE]</td><td>截止或特殊條件</td><td>本月底前需完成點交</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出：</strong><br>
+          「【低於行情 10%｜急售物件】台南東區 38 坪，市場行情 1,750 萬，屋主因移民規劃，開價 1,580 萬，本月底前需完成點交。屋況保持良好，格局方正，是難得的讓利機會。這類物件通常 2 週內就被鎖定，建議盡快安排看屋。有意願者請立即聯繫，名額有限，先看先贏。」
+        </div>
+      </div>
+    </div>
+
+    <!-- P-10 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header">
+        <span class="pname">P-10｜投資報酬率分析說明</span>
+        <span class="pcat">📊 市場分析報告</span>
+      </div>
+      <div class="prompt-card-body">
+        <div class="prompt-box">你是一位專業的房地產投資顧問，需要為有意投資的客戶生成一份清晰的投資報酬率分析說明，幫助他們做出理性決策。
+
+【物件數據】
+- 物件地點：[LOCATION]
+- 總價：[TOTAL_PRICE] 萬
+- 預估月租金：[MONTHLY_RENT] 元
+- 管理費：[MGMT_FEE] 元/月
+- 貸款條件：貸 [LOAN_RATIO]%，利率 [INTEREST_RATE]%，[LOAN_YEARS] 年期
+- 其他年費用：[OTHER_ANNUAL_COST] 萬（地價稅、房屋稅等）
+- 客戶背景：[CLIENT_TYPE]（自備款投資/全現金/法人）
+
+【報告內容】
+請計算並說明：
+1. 租金報酬率（年租金 ÷ 總價）
+2. 實質報酬率（扣除所有成本後）
+3. 月現金流分析（若有貸款）
+4. 損益兩平租金
+5. 投資建議（1 段，客觀說明優缺點）
+
+格式清楚，適合直接給客戶閱讀。
+語氣：客觀、數字為主，不過度樂觀。
+
+請直接輸出分析。</div>
+        <h4>變數定義</h4>
+        <table class="var-table">
+          <thead><tr><th>變數名</th><th>說明</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>[LOCATION]</td><td>物件位置</td><td>台北信義區、台中七期</td></tr>
+            <tr><td>[TOTAL_PRICE]</td><td>總價（萬元）</td><td>2,400</td></tr>
+            <tr><td>[MONTHLY_RENT]</td><td>預估月租（元）</td><td>55,000</td></tr>
+            <tr><td>[MGMT_FEE]</td><td>每月管理費（元）</td><td>3,500</td></tr>
+            <tr><td>[LOAN_RATIO]</td><td>貸款成數（%）</td><td>七成</td></tr>
+            <tr><td>[INTEREST_RATE]</td><td>貸款利率（%）</td><td>2.3</td></tr>
+            <tr><td>[LOAN_YEARS]</td><td>貸款年期</td><td>30</td></tr>
+            <tr><td>[OTHER_ANNUAL_COST]</td><td>其他年費用（萬）</td><td>3</td></tr>
+            <tr><td>[CLIENT_TYPE]</td><td>客戶投資型態</td><td>自備款投資者</td></tr>
+          </tbody>
+        </table>
+        <div class="example-output">
+          <strong>示例輸出節錄：</strong><br>
+          「【投資報酬試算｜台中七期 2,400 萬物件】租金報酬率：月租 55,000 × 12 = 66 萬/年 ÷ 2,400 萬 = 約 2.75%。扣除管理費、稅費後，實質報酬率約 2.2%。若貸七成（1,680 萬），年利率 2.3%，30 年期，月繳約 64,800 元，月現金流約 -12,800 元（倒貼）。損益兩平租金約需 70,000 元/月。建議：此物件以資產保值與增值邏輯為主，短期現金流偏弱，適合長期持有且具充裕自備款的投資人。」
+        </div>
+      </div>
+    </div>
+
+    <div class="box box-navy">
+      <div class="box-title">📝 完整 28 個提示詞清單（含 P-11 至 P-28）</div>
+      <ul>
+        <li>P-11｜租屋房源描述（適合 591 平台）</li>
+        <li>P-12｜Facebook 成交分享慶祝貼文</li>
+        <li>P-13｜LINE 官方帳號週報推播訊息</li>
+        <li>P-14｜買方首次接觸需求確認話術</li>
+        <li>P-15｜節慶關懷（過年/中秋）客戶訊息</li>
+        <li>P-16｜冷客戶喚醒訊息（3 個月未回覆）</li>
+        <li>P-17｜成交感謝信（買方版）</li>
+        <li>P-18｜成交感謝信（賣方版）</li>
+        <li>P-19｜買方出價策略建議腳本</li>
+        <li>P-20｜最後一哩成交話術</li>
+        <li>P-21｜競品物件比較分析表</li>
+        <li>P-22｜首購貸款試算說明文件</li>
+        <li>P-23｜Line 群組市場快訊推播</li>
+        <li>P-24｜IG Stories 房仲日常內容腳本</li>
+        <li>P-25｜屋主委託邀約電話話術腳本</li>
+        <li>P-26｜報價前行情預熱信</li>
+        <li>P-27｜換屋客戶諮詢回應模板</li>
+        <li>P-28｜房仲個人品牌自我介紹（多版本）</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODULE 4 — 使用說明
+══════════════════════════════════════════════ -->
+<div class="module mod4">
+  <div class="module-header">
+    <div class="mod-num">4</div>
+    <h2>模組四｜使用說明</h2>
+  </div>
+  <div class="module-body">
+
+    <h3>▌ 快速開始（3 步驟）</h3>
+    <div class="step-row">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h4>選擇提示詞 & 填入變數</h4>
+        <p>找到對應情境的提示詞，將所有 [VARIABLE] 替換成您的真實資訊。例如將 [MY_NAME] 改成「王小明」，[LOCATION] 改成「台北市中山區」。</p>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h4>貼入 AI 工具並發送</h4>
+        <p>將填好的提示詞複製，貼入 ChatGPT（chat.openai.com）、Claude（claude.ai）或 Gemini（gemini.google.com），直接按送出即可。</p>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h4>微調輸出並使用</h4>
+        <p>AI 輸出後，快速瀏覽一遍，加入您的個人語氣或在地用語，即可直接發布貼文、傳送給客戶，或用作談判備忘。</p>
+      </div>
+    </div>
+
+    <h3>▌ 高手技巧（3 個建議）</h3>
+    <div class="box box-tip">
+      <div class="box-title" style="color:var(--gold)">💡 技巧 1：加入「角色設定」讓輸出更準確</div>
+      <p>在提示詞開頭加上您的個人風格指令，例如：「請以台灣房仲的口語習慣，帶有親切感但不失專業的語氣…」，每次輸出會更貼近您的說話方式。</p>
+    </div>
+    <div class="box box-tip">
+      <div class="box-title" style="color:var(--gold)">💡 技巧 2：要求「多個版本」增加選擇</div>
+      <p>在提示詞結尾加上「請給我 3 個版本，分別是：正式版、親切版、簡短版」，AI 會提供多種風格，您再挑選最適合當下情境的一版。</p>
+    </div>
+    <div class="box box-tip">
+      <div class="box-title" style="color:var(--gold)">💡 技巧 3：建立您的「個人提示詞資料庫」</div>
+      <p>將常用的物件資訊（地點、坪數、特色）存成一份文字模板，每次只需貼入 AI，大幅縮短填寫變數的時間，讓整個流程在 3 分鐘內完成。</p>
+    </div>
+
+    <h3>▌ 避坑指南（3 個警告）</h3>
+    <div class="box box-warn">
+      <div class="box-title" style="color:var(--red)">⚠️ 警告 1：數字資料請自行核實</div>
+      <p>AI 無法自動抓取即時市場數據。請務必用實價登錄或內部系統確認成交價格，再填入提示詞，切勿直接問 AI「這個地區的行情是多少」並直接使用。</p>
+    </div>
+    <div class="box box-warn">
+      <div class="box-title" style="color:var(--red)">⚠️ 警告 2：客戶私資訊不要貼入公共 AI</div>
+      <p>使用 ChatGPT 免費版時，不要輸入客戶姓名、電話、身份證字號等個人資料。可用「林先生」「陳小姐」等通稱替代，保護客戶隱私。</p>
+    </div>
+    <div class="box box-warn">
+      <div class="box-title" style="color:var(--red)">⚠️ 警告 3：輸出內容需要人工審閱</div>
+      <p>AI 生成的文案有時措辭略顯制式，直接使用可能被客戶察覺是「AI 寫的」。建議至少修改 2–3 句，加入您個人的口頭禪或在地用語，效果更自然。</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODULE 5 — 變體與附贈
+══════════════════════════════════════════════ -->
+<div class="module mod5">
+  <div class="module-header">
+    <div class="mod-num">5</div>
+    <h2>模組五｜變體與附贈</h2>
+  </div>
+  <div class="module-body">
+
+    <h3>▌ Top 5 Prompt 變體版本</h3>
+
+    <h4>P-01 豪宅文案 — 變體</h4>
+    <div class="variant-card">
+      <div class="v-label">變體 A｜英文雙語版（針對外商客群）</div>
+      <p>在提示詞末尾加入：「請同時提供中文版與英文版，英文採用美式房地產行銷語氣。」</p>
+    </div>
+    <div class="variant-card">
+      <div class="v-label">變體 B｜影音腳本版（適合 YT Shorts / IG Reels）</div>
+      <p>在提示詞末尾加入：「請將文案改寫為 30 秒口語化影片腳本，包含開場白、中段賣點、結尾 CTA，每段標注秒數。」</p>
+    </div>
+    <div class="variant-card">
+      <div class="v-label">變體 C｜廣告標題版（Google/Meta 廣告）</div>
+      <p>在提示詞末尾加入：「請額外輸出 5 個廣告標題（各 30 字內）和 2 個廣告描述（各 90 字內），符合 Google 廣告格式。」</p>
+    </div>
+
+    <h4 style="margin-top:20px">P-03 陌生開發訊息 — 變體</h4>
+    <div class="variant-card">
+      <div class="v-label">變體 A｜電話話術版</div>
+      <p>將「撰寫 Line 訊息」改為「撰寫 30 秒電話開場白腳本，包括自我介紹、說明目的、邀請下一步，結尾預留對方回應空間。」</p>
+    </div>
+    <div class="variant-card">
+      <div class="v-label">變體 B｜信封夾報版（紙本傳單）</div>
+      <p>將「撰寫 Line 訊息」改為「撰寫一份 A5 大小的紙本開發信，包含標題、主文、聯絡資訊區塊，語氣像鄰居友善問候。」</p>
+    </div>
+
+    <h4 style="margin-top:20px">P-06 屋主降價話術 — 變體</h4>
+    <div class="variant-card">
+      <div class="v-label">變體 A｜買方砍價版（立場對調）</div>
+      <p>將「說服屋主降價」改為「協助買方提出低於開價的出價，給買方一份理由充分的出價邏輯腳本。」</p>
+    </div>
+
+    <h3>▌ 附贈提示詞（5 個）</h3>
+    <div class="box box-green">
+      <div class="box-title" style="color:var(--green)">🎁 附贈 1｜房仲年終感謝卡文案</div>
+      <p>撰寫年末感謝訊息，適合批量發送給所有過去一年有合作的客戶，溫暖不制式。</p>
+    </div>
+    <div class="box box-green">
+      <div class="box-title" style="color:var(--green)">🎁 附贈 2｜屋主委託書重點說明話術</div>
+      <p>協助仲介用簡單易懂的語言向屋主解釋專任委託的好處，降低屋主對「簽約」的抗拒。</p>
+    </div>
+    <div class="box box-green">
+      <div class="box-title" style="color:var(--green)">🎁 附贈 3｜房仲 Google 評論回覆模板</div>
+      <p>針對正評、中性評、負評，各提供 2 個回覆模板，維護線上口碑。</p>
+    </div>
+    <div class="box box-green">
+      <div class="box-title" style="color:var(--green)">🎁 附贈 4｜買賣雙方常見 Q&A 解答文件</div>
+      <p>生成 20 個買方/賣方常見問題的標準回答，可直接放入 LINE 官方帳號自動回覆。</p>
+    </div>
+    <div class="box box-green">
+      <div class="box-title" style="color:var(--green)">🎁 附贈 5｜個人品牌 Bio 多版本</div>
+      <p>為 IG 頁面、名片、591 仲介頁面生成 3 個不同長度的個人品牌介紹文案。</p>
+    </div>
+
+    <h3>▌ 組合工作流程鏈（Prompt Chain）</h3>
+
+    <h4>🔗 工作流 A：「從陌生到委託」完整開發鏈</h4>
+    <div class="workflow">
+      <div class="wf-step">
+        <div class="wf-num">1</div>
+        <div class="wf-title">P-03 陌生開發</div>
+        <div class="wf-desc">發送第一則開發訊息</div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-step">
+        <div class="wf-num">2</div>
+        <div class="wf-title">P-07 行情分析</div>
+        <div class="wf-desc">屋主有興趣後提供市場報告</div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-step">
+        <div class="wf-num">3</div>
+        <div class="wf-title">P-25 委託邀約</div>
+        <div class="wf-desc">正式邀約簽委託書</div>
+      </div>
+    </div>
+
+    <h4>🔗 工作流 B：「帶看到成交」買方全程鏈</h4>
+    <div class="workflow">
+      <div class="wf-step">
+        <div class="wf-num">1</div>
+        <div class="wf-title">P-14 需求確認</div>
+        <div class="wf-desc">初次接觸，了解買方需求</div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-step">
+        <div class="wf-num">2</div>
+        <div class="wf-title">P-05 帶看跟進</div>
+        <div class="wf-desc">看屋後 24 小時發送</div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-step">
+        <div class="wf-num">3</div>
+        <div class="wf-title">P-19 出價策略</div>
+        <div class="wf-desc">協助買方制定出價邏輯</div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-step">
+        <div class="wf-num">4</div>
+        <div class="wf-title">P-20 成交話術</div>
+        <div class="wf-desc">最後臨門一腳</div>
+      </div>
+    </div>
+
+    <h4>🔗 工作流 C：「社群內容月計劃」行銷鏈</h4>
+    <div class="workflow">
+      <div class="wf-step">
+        <div class="wf-num">1</div>
+        <div class="wf-title">P-07 行情分析</div>
+        <div class="wf-desc">月初發布市場報告</div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-step">
+        <div class="wf-num">2</div>
+        <div class="wf-title">P-04 IG 行情貼文</div>
+        <div class="wf-desc">中旬發布社群版本</div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-step">
+        <div class="wf-num">3</div>
+        <div class="wf-title">P-12 成交分享</div>
+        <div class="wf-desc">月底發布成交慶祝貼文</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODULE 6 — 封面圖 PROMPT
+══════════════════════════════════════════════ -->
+<div class="module mod6">
+  <div class="module-header">
+    <div class="mod-num">6</div>
+    <h2>模組六｜封面圖設計 Prompt</h2>
+  </div>
+  <div class="module-body">
+
+    <h3>▌ Midjourney Prompt（主要推薦）</h3>
+    <div class="prompt-box" style="background:#0D1117;color:#E6EDF3">professional digital product mockup for a real estate AI prompt pack, dark navy and gold color scheme, floating A4 document pages showing Chinese text and house icons, luxury real estate photography in background with blurred cityscape at golden hour, clean minimal design, product photography style, soft shadows, 3D perspective angle, high-end lifestyle aesthetic --ar 4:3 --style raw --v 6 --q 2</div>
+
+    <h3>▌ DALL-E Prompt（備選）</h3>
+    <div class="prompt-box" style="background:#0D1117;color:#E6EDF3">A sleek professional mockup of a digital product bundle, dark navy blue background with gold accent colors, showing multiple floating PDF document pages with Traditional Chinese text about real estate, small house and building icons visible on the pages, luxury real estate skyline in soft focus background, golden hour lighting, minimalist design aesthetic, product showcase photography style, subtle drop shadows</div>
+
+    <h3>▌ 配色方案</h3>
+    <div class="swatch-row">
+      <div class="swatch">
+        <div class="swatch-color" style="background:#1B2A4A"></div>
+        <div class="swatch-hex">#1B2A4A</div>
+        <div style="font-size:0.7rem;color:#888">深海軍藍<br>主色</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#C9943A"></div>
+        <div class="swatch-hex">#C9943A</div>
+        <div style="font-size:0.7rem;color:#888">金色<br>強調</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#2A7F7F"></div>
+        <div class="swatch-hex">#2A7F7F</div>
+        <div style="font-size:0.7rem;color:#888">青綠<br>輔助</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#F8F6F1"></div>
+        <div class="swatch-hex">#F8F6F1</div>
+        <div style="font-size:0.7rem;color:#888">米白<br>背景</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#FFFFFF; border:1px solid #ddd;"></div>
+        <div class="swatch-hex">#FFFFFF</div>
+        <div style="font-size:0.7rem;color:#888">純白<br>卡片</div>
+      </div>
+    </div>
+
+    <h3>▌ Mockup 建議</h3>
+    <div class="box box-navy">
+      <ul>
+        <li><strong>主圖：</strong>3D 立體 iPad + PDF 文件展示，背景為模糊的台北或豪宅景觀</li>
+        <li><strong>副圖 1：</strong>手機螢幕顯示 ChatGPT 對話介面，輸入房仲提示詞的截圖</li>
+        <li><strong>副圖 2：</strong>平鋪式 flatlay，多頁 A4 文件展示提示詞內容</li>
+        <li><strong>縮圖（Thumbnail）：</strong>深藍背景、金色大標題「28個房仲AI提示詞」，左下角放房屋圖示</li>
+        <li><strong>推薦工具：</strong>Canva Pro、Adobe Firefly、Placeit.net</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODULE 7 — 定價建議
+══════════════════════════════════════════════ -->
+<div class="module mod7">
+  <div class="module-header">
+    <div class="mod-num">7</div>
+    <h2>模組七｜定價建議</h2>
+  </div>
+  <div class="module-body">
+
+    <div class="pricing-grid">
+      <div class="price-card">
+        <div class="plan-name">基礎版</div>
+        <div class="plan-price"><sub>NT$</sub>490</div>
+        <div class="plan-features">
+          <ul>
+            <li>✅ 10 個核心提示詞</li>
+            <li>✅ 2 個分類（房源文案 + 客戶開發）</li>
+            <li>✅ 變數定義表</li>
+            <li>✅ PDF 格式</li>
+            <li>❌ 無附贈提示詞</li>
+            <li>❌ 無工作流程鏈</li>
+          </ul>
+        </div>
+      </div>
+      <div class="price-card featured">
+        <div class="featured-badge">最暢銷</div>
+        <div class="plan-name">標準版</div>
+        <div class="plan-price"><sub>NT$</sub>990</div>
+        <div class="plan-features">
+          <ul>
+            <li>✅ 28 個核心提示詞</li>
+            <li>✅ 全部 6 大分類</li>
+            <li>✅ 變數定義表 + 示例輸出</li>
+            <li>✅ 5 個附贈提示詞</li>
+            <li>✅ 3 個工作流程鏈</li>
+            <li>✅ Top 5 變體版本</li>
+            <li>✅ PDF + Notion 版本</li>
+          </ul>
+        </div>
+      </div>
+      <div class="price-card">
+        <div class="plan-name">高階版</div>
+        <div class="plan-price"><sub>NT$</sub>1,980</div>
+        <div class="plan-features">
+          <ul>
+            <li>✅ 標準版全部內容</li>
+            <li>✅ 30 分鐘線上 Q&A 諮詢</li>
+            <li>✅ 個人化提示詞客製（2 條）</li>
+            <li>✅ 封面圖 Canva 模板</li>
+            <li>✅ 3 個月更新通知</li>
+            <li>✅ 私人 Line 群組支援</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <h3>▌ 定價理由</h3>
+    <div class="box box-tip">
+      <div class="box-title" style="color:var(--gold)">📊 市場對比</div>
+      <ul>
+        <li>國際 Etsy 平台房地產 Prompt Pack：USD $15–45（約 NT$480–1,450），此包定價具競爭力</li>
+        <li>台灣本土 Notion 模板售價：NT$300–800，此包加入 AI 專業度，溢價合理</li>
+        <li>房仲一次成交仲介費約 NT$30,000–100,000，此工具包投資回報率極高</li>
+      </ul>
+    </div>
+    <div class="box box-green">
+      <div class="box-title" style="color:var(--green)">💰 價值說明</div>
+      <ul>
+        <li>每個提示詞平均節省 30–60 分鐘 → 28 個合計省下 14–28 小時</li>
+        <li>以房仲平均時薪 NT$300 計算，此包創造 NT$4,200–8,400 的時間價值</li>
+        <li>標準版 NT$990 = 投資回報率 324%–749%</li>
+      </ul>
+    </div>
+
+    <h3>▌ 追加銷售機會（Upsell）</h3>
+    <div class="box box-navy">
+      <ul>
+        <li><strong>🔼 Upsell 1：</strong>「房仲 AI 全年行銷月曆」—— 52 週社群貼文計劃，NT$1,480</li>
+        <li><strong>🔼 Upsell 2：</strong>「豪宅專屬行銷提示詞包」—— 高端客群深化版，NT$1,280</li>
+        <li><strong>🔼 Upsell 3：</strong>「房仲 AI 工作坊線上課程」—— 2 小時實作教學，NT$2,980</li>
+        <li><strong>📦 Bundle 組合：</strong>標準版 + 月曆 + 豪宅版，NT$2,980（省 NT$970）</li>
+        <li><strong>🔄 訂閱制：</strong>每月新增 4 個提示詞 + 市場分析模板，NT$299/月</li>
+      </ul>
+    </div>
+
+    <h3>▌ 建議銷售平台</h3>
+    <div class="box box-teal">
+      <ul>
+        <li><strong>台灣優先：</strong>Gumroad（支援信用卡/PayPal）、蝦皮賣場數位商品、綠界金流</li>
+        <li><strong>國際拓展：</strong>Etsy Digital Downloads、Payhip、Lemon Squeezy</li>
+        <li><strong>社群銷售：</strong>Facebook 房仲社群、Instagram DM 連結、LINE 官方帳號商城</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<div class="footer">
+  <p>🏠 <strong>房地產仲介 AI 提示詞包</strong> · Real Estate Agent Prompt Pack</p>
+  <p style="margin-top:8px">相容 ChatGPT · Claude · Gemini｜繁體中文輸出｜2025 Edition</p>
+  <p style="margin-top:8px;font-size:0.75rem;opacity:.5">本文件由 AI 輔助生成，所有提示詞均為原創設計，僅供購買者個人或商業使用。</p>
+</div>
+
+</body>
+</html>
