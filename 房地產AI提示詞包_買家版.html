@@ -1483,102 +1483,102 @@ C 版（開發電話開場白，30秒內說完）：自然流暢，不像背稿
     </div>
 
     <h3>▌ 附贈提示詞（5 個）</h3>
-    <div class="box box-green">
-      <div class="box-title" style="color:var(--green)">🎁 附贈 1｜房仲年終感謝卡文案</div>
-      <p>撰寫年末感謝訊息，適合批量發送給所有過去一年有合作的客戶，溫暖不制式。</p>
-    </div>
-    <div class="box box-green">
-      <div class="box-title" style="color:var(--green)">🎁 附贈 2｜屋主委託書重點說明話術</div>
-      <p>協助仲介用簡單易懂的語言向屋主解釋專任委託的好處，降低屋主對「簽約」的抗拒。</p>
-    </div>
-    <div class="box box-green">
-      <div class="box-title" style="color:var(--green)">🎁 附贈 3｜房仲 Google 評論回覆模板</div>
-      <p>針對正評、中性評、負評，各提供 2 個回覆模板，維護線上口碑。</p>
-    </div>
-    <div class="box box-green">
-      <div class="box-title" style="color:var(--green)">🎁 附贈 4｜買賣雙方常見 Q&A 解答文件</div>
-      <p>生成 20 個買方/賣方常見問題的標準回答，可直接放入 LINE 官方帳號自動回覆。</p>
-    </div>
-    <div class="box box-green">
-      <div class="box-title" style="color:var(--green)">🎁 附贈 5｜個人品牌 Bio 多版本</div>
-      <p>為 IG 頁面、名片、591 仲介頁面生成 3 個不同長度的個人品牌介紹文案。</p>
-    </div>
 
-    <h3>▌ 組合工作流程鏈（Prompt Chain）</h3>
+    <!-- BONUS 1 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header" style="background:var(--green)">
+        <span class="pname">🎁 附贈 1｜房仲年終感謝卡文案</span>
+        <span class="pcat">客戶維繫</span>
+      </div>
+      <div class="prompt-card-body">
+        <p>撰寫年末感謝訊息，適合批量發送給所有過去一年有合作的客戶，溫暖不制式。</p>
+        <div class="prompt-box">你是一位擅長維繫客戶關係的資深房仲。
+請為我撰寫一則年終感謝訊息，發送給過去一年有合作的客戶。
 
-    <h4>🔗 工作流 A：「從陌生到委託」完整開發鏈</h4>
-    <div class="workflow">
-      <div class="wf-step">
-        <div class="wf-num">1</div>
-        <div class="wf-title">P-03 陌生開發</div>
-        <div class="wf-desc">發送第一則開發訊息</div>
-      </div>
-      <div class="wf-arrow">→</div>
-      <div class="wf-step">
-        <div class="wf-num">2</div>
-        <div class="wf-title">P-07 行情分析</div>
-        <div class="wf-desc">屋主有興趣後提供市場報告</div>
-      </div>
-      <div class="wf-arrow">→</div>
-      <div class="wf-step">
-        <div class="wf-num">3</div>
-        <div class="wf-title">P-25 委託邀約</div>
-        <div class="wf-desc">正式邀約簽委託書</div>
+客戶稱呼：<span class="var-tag">[CLIENT_NAME]</span>
+合作內容：<span class="var-tag">[COOPERATION]</span>（例如：購屋成交、物件帶看、諮詢服務）
+我的姓名：<span class="var-tag">[MY_NAME]</span>
+個人風格：<span class="var-tag">[STYLE]</span>（例如：溫暖親切、簡潔專業）
+
+撰寫規範：
+1. 開頭感謝今年的信任與合作
+2. 用一句話回顧合作的意義（不要太制式）
+3. 表達新年祝福（溫暖真誠）
+4. 結尾留下聯繫方式與期待再合作
+5. 字數 80–120 字，適合 LINE 或簡訊發送
+6. 同時提供 A/B 兩個版本</div>
+        <h4>📋 填入變數：</h4>
+        <table class="var-table">
+          <tr><th>變數</th><th>說明</th><th>範例</th></tr>
+          <tr><td><span class="var-tag">[CLIENT_NAME]</span></td><td>客戶稱呼</td><td>王大哥、陳小姐</td></tr>
+          <tr><td><span class="var-tag">[COOPERATION]</span></td><td>合作內容</td><td>購屋成交、帶看服務</td></tr>
+          <tr><td><span class="var-tag">[MY_NAME]</span></td><td>你的名字</td><td>小劉、Kevin</td></tr>
+          <tr><td><span class="var-tag">[STYLE]</span></td><td>語氣風格</td><td>溫暖親切</td></tr>
+        </table>
+        <div class="example-output">
+          <strong>輸出範例：</strong><br>
+          王大哥您好，今年很榮幸能陪您找到理想的家，看到您入住後的笑容是我最大的成就感。感謝您的信任，新的一年祝您闔家平安、萬事如意！有任何房產需求歡迎隨時找我 😊 — 小劉 0912-XXX-XXX
+        </div>
       </div>
     </div>
 
-    <h4>🔗 工作流 B：「帶看到成交」買方全程鏈</h4>
-    <div class="workflow">
-      <div class="wf-step">
-        <div class="wf-num">1</div>
-        <div class="wf-title">P-14 需求確認</div>
-        <div class="wf-desc">初次接觸，了解買方需求</div>
+    <!-- BONUS 2 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header" style="background:var(--green)">
+        <span class="pname">🎁 附贈 2｜屋主委託書重點說明話術</span>
+        <span class="pcat">屋主開發</span>
       </div>
-      <div class="wf-arrow">→</div>
-      <div class="wf-step">
-        <div class="wf-num">2</div>
-        <div class="wf-title">P-05 帶看跟進</div>
-        <div class="wf-desc">看屋後 24 小時發送</div>
-      </div>
-      <div class="wf-arrow">→</div>
-      <div class="wf-step">
-        <div class="wf-num">3</div>
-        <div class="wf-title">P-19 出價策略</div>
-        <div class="wf-desc">協助買方制定出價邏輯</div>
-      </div>
-      <div class="wf-arrow">→</div>
-      <div class="wf-step">
-        <div class="wf-num">4</div>
-        <div class="wf-title">P-20 成交話術</div>
-        <div class="wf-desc">最後臨門一腳</div>
+      <div class="prompt-card-body">
+        <p>協助仲介用簡單易懂的語言向屋主解釋專任委託的好處，降低屋主對「簽約」的抗拒。</p>
+        <div class="prompt-box">你是一位擅長簽委託的資深房仲顧問。
+請幫我撰寫一段向屋主解釋「專任委託」好處的說明話術。
+
+屋主姓名：<span class="var-tag">[OWNER_NAME]</span>
+屋主顧慮：<span class="var-tag">[CONCERN]</span>（例如：怕被綁死、怕賣不掉、怕仲介不努力）
+物件類型：<span class="var-tag">[PROPERTY_TYPE]</span>
+委託期間：<span class="var-tag">[PERIOD]</span>（例如：3個月）
+
+撰寫規範：
+1. 先同理屋主的顧慮，不急著反駁
+2. 用「對屋主的好處」角度說明專任委託的 3 個優勢
+3. 消除「被綁死」的心理障礙
+4. 說明若未達成結果的保障機制
+5. 結尾用一句話邀請簽約
+6. 語氣像朋友建議，非業務推銷，字數 180–220 字</div>
+        <h4>📋 填入變數：</h4>
+        <table class="var-table">
+          <tr><th>變數</th><th>說明</th><th>範例</th></tr>
+          <tr><td><span class="var-tag">[OWNER_NAME]</span></td><td>屋主稱呼</td><td>張先生</td></tr>
+          <tr><td><span class="var-tag">[CONCERN]</span></td><td>屋主顧慮</td><td>怕被綁死、怕賣不掉</td></tr>
+          <tr><td><span class="var-tag">[PROPERTY_TYPE]</span></td><td>物件類型</td><td>三房公寓、透天厝</td></tr>
+          <tr><td><span class="var-tag">[PERIOD]</span></td><td>委託期間</td><td>3個月</td></tr>
+        </table>
+        <div class="example-output">
+          <strong>輸出範例：</strong><br>
+          張先生，我完全理解您擔心「被綁住」的感覺，這是很多屋主的第一個反應。其實專任委託反而是保護您的，因為我們會全力投入行銷預算……（完整輸出由 AI 生成）
+        </div>
       </div>
     </div>
 
-    <h4>🔗 工作流 C：「社群內容月計劃」行銷鏈</h4>
-    <div class="workflow">
-      <div class="wf-step">
-        <div class="wf-num">1</div>
-        <div class="wf-title">P-07 行情分析</div>
-        <div class="wf-desc">月初發布市場報告</div>
+    <!-- BONUS 3 -->
+    <div class="prompt-card">
+      <div class="prompt-card-header" style="background:var(--green)">
+        <span class="pname">🎁 附贈 3｜房仲 Google 評論回覆模板</span>
+        <span class="pcat">口碑管理</span>
       </div>
-      <div class="wf-arrow">→</div>
-      <div class="wf-step">
-        <div class="wf-num">2</div>
-        <div class="wf-title">P-04 IG 行情貼文</div>
-        <div class="wf-desc">中旬發布社群版本</div>
-      </div>
-      <div class="wf-arrow">→</div>
-      <div class="wf-step">
-        <div class="wf-num">3</div>
-        <div class="wf-title">P-12 成交分享</div>
-        <div class="wf-desc">月底發布成交慶祝貼文</div>
-      </div>
-    </div>
+      <div class="prompt-card-body">
+        <p>針對正評、中性評、負評，各提供 2 個回覆模板，維護線上口碑。</p>
+        <div class="prompt-box">你是一位重視線上口碑的房仲品牌顧問。
+請幫我撰寫 Google 評論回覆模板。
 
-  </div>
-</div>
+評論類型：<span class="var-tag">[REVIEW_TYPE]</span>（正評 / 中性評 / 負評）
+評論內容摘要：<span class="var-tag">[REVIEW_CONTENT]</span>
+我的姓名/店名：<span class="var-tag">[MY_NAME]</span>
+特殊情況說明：<span class="var-tag">[SPECIAL_NOTE]</span>（選填，負評時說明原因）
 
-<!-- ══════════════════════════════════════════════
+撰寫規範：
+1. 正評：感謝 + 呼應評論亮點 + 邀請再合作，60字內
+2. 中性評：感謝 + 承認不足 + 說明改善，80字內
 
 </div><!-- /container -->
 
