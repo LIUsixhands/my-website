@@ -633,7 +633,7 @@
         <li>3 張效果圖品質審閱</li>
         <li>個人化發布策略建議</li>
       </ul>
-      <a href="#" class="vip-btn">諮詢 VIP 方案</a>
+      <a href="https://sixhands.gumroad.com/l/ldgwmc" target="_blank" class="vip-btn">諮詢 VIP 方案</a>
     </div>
 
     <!-- Cross-sell Banner -->
@@ -719,6 +719,8 @@ function updatePrice() {
   priceDesc.textContent = '【' + plan.label + '】' + plan.desc;
   priceFeatures.innerHTML = plan.features.map(f => '<li><span class="ck">✓</span>' + f + '</li>').join('');
   buyBtn.className = 'pd-btn';
+  buyBtn.href = 'https://sixhands.gumroad.com/l/ldgwmc';
+  buyBtn.target = '_blank';
   buyBtn.textContent = '立即購買 ' + plan.label + ' →';
 }
 </script>
