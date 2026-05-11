@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>房仲AI影片模板包｜不露臉也能做自媒體，讓AI幫你講房產知識</title>
+<meta name="description" content="專為怕出鏡的房仲設計。30個即套即用的AI影片腳本模板，搭配AI工具直接產出專業短影音，穩定曝光、自動獲客。">
+<meta property="og:title" content="房仲AI影片模板包｜不露臉也能做自媒體">
+<meta property="og:description" content="30個腳本模板 × AI影片工具 = 不用出鏡，每週穩定發佈房產知識影片">
+<style>
+  :root {
+    --navy:  #1B2A4A;
+    --gold:  #C9943A;
+    --teal:  #2A7F7F;
+    --red:   #B94040;
+    --green: #2D7D4E;
+    --bg:    #F8F6F1;
+    --white: #FFFFFF;
+    --gray:  #6B7280;
+    --light: #EEF0F5;
+    --dark:  #111827;
+  }
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Noto Sans TC','PingFang TC',Arial,sans-serif; background:var(--bg); color:#1a1a1a; line-height:1.75; }
+
+  /* ── Announcement Bar ── */
+  .topbar {
+    background:var(--gold); color:var(--white);
+    text-align:center; font-size:0.82rem; font-weight:700;
+    padding:8px 16px; letter-spacing:1px;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background:linear-gradient(140deg, var(--navy) 0%, #1e3a6e 55%, var(--teal) 100%);
+    color:var(--white); padding:80px 24px 96px; text-align:center; position:relative; overflow:hidden;
+  }
+  .hero::before {
+    content:''; position:absolute; inset:0;
+    background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+  .hero-inner { position:relative; max-width:860px; margin:0 auto; }
+  .badge {
+    display:inline-block; background:var(--gold); color:var(--white);
+    font-size:0.75rem; font-weight:800; padding:5px 18px; border-radius:20px;
+    letter-spacing:2px; margin-bottom:24px; text-transform:uppercase;
+  }
+  .hero h1 {
+    font-size:clamp(1.9rem, 5vw, 3rem); font-weight:900; line-height:1.2;
+    margin-bottom:20px;
+  }
+  .hero h1 em { color:var(--gold); font-style:normal; }
+  .hero .subtitle {
+    font-size:1.12rem; opacity:.88; max-width:640px;
+    margin:0 auto 36px; line-height:1.8;
+  }
+  .hero .cta-row { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; align-items:center; margin-bottom:48px; }
+
+  .btn-gold {
+    display:inline-block; background:var(--gold); color:var(--white);
+    padding:16px 40px; border-radius:50px; font-size:1.05rem; font-weight:800;
+    text-decoration:none; letter-spacing:1px;
+    box-shadow:0 8px 28px rgba(201,148,58,.5);
+    transition:transform .2s, box-shadow .2s;
+  }
+  .btn-gold:hover { transform:translateY(-3px); box-shadow:0 12px 36px rgba(201,148,58,.6); }
+  .btn-ghost {
+    display:inline-block; border:2px solid rgba(255,255,255,.5); color:var(--white);
+    padding:14px 32px; border-radius:50px; font-size:1rem; font-weight:700;
+    text-decoration:none; transition:border-color .2s, background .2s;
+  }
+  .btn-ghost:hover { border-color:var(--white); background:rgba(255,255,255,.08); }
+
+  .hero-stats { display:flex; justify-content:center; gap:40px; flex-wrap:wrap; }
+  .hero-stats .st .n { font-size:2.2rem; font-weight:900; color:var(--gold); }
+  .hero-stats .st .l { font-size:0.78rem; opacity:.7; letter-spacing:1px; margin-top:2px; }
+
+  /* ── Container ── */
+  .container { max-width:1040px; margin:0 auto; padding:0 24px; }
+
+  /* ── Section ── */
+  section { padding:80px 0; }
+  .s-title { font-size:clamp(1.6rem,3.5vw,2.1rem); font-weight:900; color:var(--navy); text-align:center; margin-bottom:12px; }
+  .s-sub { font-size:1.02rem; color:var(--gray); text-align:center; margin-bottom:52px; max-width:600px; margin-left:auto; margin-right:auto; }
+
+  /* ── Pain Points ── */
+  .pain-section { background:#fff; }
+  .pain-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:24px; }
+  .pain-card {
+    border:1.5px solid #e5e7eb; border-radius:14px; padding:28px 24px;
+    background:var(--bg); position:relative;
+  }
+  .pain-card .emoji { font-size:2rem; margin-bottom:12px; }
+  .pain-card h3 { font-size:1.05rem; font-weight:800; color:var(--navy); margin-bottom:8px; }
+  .pain-card p { font-size:0.92rem; color:var(--gray); line-height:1.7; }
+  .pain-card.solved { border-color:var(--teal); background:#f0fafa; }
+  .pain-card.solved::after {
+    content:'已解決 ✓'; position:absolute; top:14px; right:14px;
+    background:var(--teal); color:#fff; font-size:0.7rem; font-weight:800;
+    padding:2px 10px; border-radius:20px; letter-spacing:1px;
+  }
+
+  /* ── How It Works ── */
+  .how-section { background:linear-gradient(135deg,var(--navy) 0%,#1e3a6e 100%); color:var(--white); }
+  .how-section .s-title { color:var(--white); }
+  .how-section .s-sub { color:rgba(255,255,255,.72); }
+  .steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:32px; }
+  .step { text-align:center; }
+  .step .num {
+    width:56px; height:56px; border-radius:50%;
+    background:var(--gold); color:var(--white);
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.4rem; font-weight:900; margin:0 auto 18px;
+    box-shadow:0 4px 16px rgba(201,148,58,.4);
+  }
+  .step h3 { font-size:1.1rem; font-weight:800; margin-bottom:10px; color:var(--gold); }
+  .step p { font-size:0.92rem; opacity:.82; line-height:1.75; }
+  .step .tool-tag {
+    display:inline-block; margin-top:12px; background:rgba(255,255,255,.1);
+    padding:4px 14px; border-radius:20px; font-size:0.78rem;
+    border:1px solid rgba(255,255,255,.2);
+  }
+
+  /* ── Templates Included ── */
+  .tmpl-section { background:var(--bg); }
+  .tmpl-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:20px; }
+  .tmpl-card {
+    background:#fff; border-radius:14px; padding:24px;
+    box-shadow:0 2px 12px rgba(0,0,0,.06);
+    border-top:4px solid var(--teal);
+  }
+  .tmpl-card.gold-top { border-top-color:var(--gold); }
+  .tmpl-card.navy-top { border-top-color:var(--navy); }
+  .tmpl-card.green-top { border-top-color:var(--green); }
+  .tmpl-card.red-top { border-top-color:var(--red); }
+  .tmpl-card .cat { font-size:0.75rem; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:var(--gray); margin-bottom:10px; }
+  .tmpl-card h3 { font-size:1.05rem; font-weight:800; color:var(--navy); margin-bottom:12px; }
+  .tmpl-list { list-style:none; }
+  .tmpl-list li { font-size:0.9rem; color:#374151; padding:5px 0; border-bottom:1px solid #f3f4f6; display:flex; gap:8px; }
+  .tmpl-list li:last-child { border-bottom:none; }
+  .tmpl-list li::before { content:'▶'; color:var(--teal); font-size:0.65rem; margin-top:4px; flex-shrink:0; }
+
+  /* ── Script Preview ── */
+  .preview-section { background:#fff; }
+  .preview-box {
+    background:var(--navy); color:var(--white); border-radius:16px;
+    padding:36px; max-width:780px; margin:0 auto;
+    box-shadow:0 12px 40px rgba(27,42,74,.25);
+  }
+  .preview-box .tag {
+    display:inline-block; background:var(--gold); color:#fff;
+    font-size:0.72rem; font-weight:800; padding:3px 12px; border-radius:20px;
+    letter-spacing:2px; margin-bottom:20px;
+  }
+  .preview-box h3 { font-size:1.1rem; font-weight:800; color:var(--gold); margin-bottom:18px; }
+  .script-line { display:flex; gap:14px; margin-bottom:14px; align-items:flex-start; }
+  .script-line .label {
+    flex-shrink:0; font-size:0.72rem; font-weight:800; padding:3px 10px;
+    border-radius:20px; letter-spacing:1px; margin-top:2px;
+  }
+  .lbl-hook { background:var(--red); color:#fff; }
+  .lbl-body { background:var(--teal); color:#fff; }
+  .lbl-cta  { background:var(--gold); color:#fff; }
+  .script-line p { font-size:0.93rem; opacity:.9; line-height:1.7; }
+  .preview-note { font-size:0.8rem; opacity:.55; text-align:center; margin-top:20px; }
+
+  /* ── Dual Track ── */
+  .dual-section { background:linear-gradient(135deg,#f0fafa,var(--bg)); }
+  .dual-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media(max-width:640px){ .dual-grid { grid-template-columns:1fr; } }
+  .dual-card { border-radius:16px; padding:32px; }
+  .dual-card.ai-track { background:var(--navy); color:#fff; }
+  .dual-card.human-track { background:#fff; border:2px solid var(--gold); }
+  .dual-card .track-icon { font-size:2.5rem; margin-bottom:16px; }
+  .dual-card h3 { font-size:1.15rem; font-weight:900; margin-bottom:8px; }
+  .dual-card.ai-track h3 { color:var(--gold); }
+  .dual-card.human-track h3 { color:var(--navy); }
+  .dual-card p { font-size:0.9rem; line-height:1.75; }
+  .dual-card.ai-track p { opacity:.82; }
+  .dual-card ul { list-style:none; margin-top:16px; }
+  .dual-card ul li { font-size:0.88rem; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); }
+  .dual-card.human-track ul li { border-bottom-color:#f3f4f6; color:#374151; }
+  .dual-card ul li::before { content:'✓  '; font-weight:700; }
+  .dual-card.ai-track ul li::before { color:var(--teal); }
+  .dual-card.human-track ul li::before { color:var(--green); }
+  .dual-arrow {
+    display:flex; align-items:center; justify-content:center;
+    font-size:2rem; color:var(--gold); grid-column:1/-1; margin:-8px 0;
+  }
+  @media(max-width:640px){ .dual-arrow { display:none; } }
+
+  /* ── Pricing ── */
+  .pricing-section { background:var(--bg); }
+  .pricing-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:24px; align-items:start; }
+  .price-card {
+    background:#fff; border-radius:18px; padding:36px 28px;
+    box-shadow:0 2px 16px rgba(0,0,0,.07);
+    border:2px solid #e5e7eb;
+    transition:transform .2s, box-shadow .2s;
+    position:relative;
+  }
+  .price-card:hover { transform:translateY(-4px); box-shadow:0 12px 36px rgba(0,0,0,.12); }
+  .price-card.featured {
+    border-color:var(--gold);
+    box-shadow:0 8px 32px rgba(201,148,58,.25);
+    transform:scale(1.03);
+  }
+  .price-card.featured:hover { transform:scale(1.03) translateY(-4px); }
+  .popular-badge {
+    position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+    background:var(--gold); color:#fff; font-size:0.72rem; font-weight:800;
+    padding:4px 18px; border-radius:20px; letter-spacing:2px; white-space:nowrap;
+  }
+  .price-card .plan-name { font-size:1.1rem; font-weight:900; color:var(--navy); margin-bottom:6px; }
+  .price-card .plan-desc { font-size:0.85rem; color:var(--gray); margin-bottom:20px; min-height:48px; }
+  .price-card .price { font-size:2.4rem; font-weight:900; color:var(--navy); margin-bottom:4px; }
+  .price-card .price span { font-size:1rem; font-weight:400; color:var(--gray); }
+  .price-card .orig { font-size:0.88rem; color:var(--gray); text-decoration:line-through; margin-bottom:20px; }
+  .price-divider { border:none; border-top:1px solid #f3f4f6; margin:20px 0; }
+  .price-features { list-style:none; }
+  .price-features li { font-size:0.88rem; color:#374151; padding:7px 0; display:flex; gap:10px; align-items:flex-start; }
+  .price-features li .ck { color:var(--green); font-weight:700; flex-shrink:0; }
+  .price-features li .na { color:#d1d5db; flex-shrink:0; }
+  .price-card .btn-plan {
+    display:block; text-align:center; margin-top:24px;
+    padding:14px; border-radius:50px; font-size:1rem; font-weight:800;
+    text-decoration:none; transition:transform .2s;
+  }
+  .btn-plan-primary { background:var(--gold); color:#fff; box-shadow:0 4px 16px rgba(201,148,58,.35); }
+  .btn-plan-primary:hover { transform:translateY(-2px); }
+  .btn-plan-outline { border:2px solid var(--navy); color:var(--navy); }
+  .btn-plan-outline:hover { background:var(--navy); color:#fff; }
+  .btn-plan-dark { background:var(--navy); color:#fff; }
+  .btn-plan-dark:hover { transform:translateY(-2px); }
+
+  /* ── Money Logic Box ── */
+  .money-section { background:#fff; }
+  .money-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
+  .money-card {
+    border-radius:14px; padding:24px 20px; text-align:center;
+    background:linear-gradient(135deg,var(--navy),#1e3a6e);
+    color:#fff;
+  }
+  .money-card .icon { font-size:2rem; margin-bottom:12px; }
+  .money-card h3 { font-size:1rem; font-weight:800; color:var(--gold); margin-bottom:8px; }
+  .money-card p { font-size:0.85rem; opacity:.82; line-height:1.65; }
+  .money-card .rev { font-size:1.4rem; font-weight:900; color:var(--gold); margin-top:10px; }
+
+  /* ── FAQ ── */
+  .faq-section { background:var(--bg); }
+  .faq-list { max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  details {
+    background:#fff; border-radius:12px; border:1px solid #e5e7eb;
+    overflow:hidden; cursor:pointer;
+  }
+  summary {
+    padding:18px 24px; font-weight:700; color:var(--navy); list-style:none;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:0.98rem;
+  }
+  summary::-webkit-details-marker { display:none; }
+  summary::after { content:'+'; font-size:1.4rem; color:var(--gold); transition:transform .2s; }
+  details[open] summary::after { transform:rotate(45deg); }
+  details .ans { padding:0 24px 20px; font-size:0.91rem; color:#4b5563; line-height:1.8; }
+
+  /* ── Final CTA ── */
+  .cta-section {
+    background:linear-gradient(135deg,var(--navy),#1e3a6e,var(--teal));
+    color:#fff; text-align:center; padding:96px 24px;
+  }
+  .cta-section h2 { font-size:clamp(1.8rem,4vw,2.4rem); font-weight:900; margin-bottom:16px; }
+  .cta-section h2 em { color:var(--gold); font-style:normal; }
+  .cta-section p { font-size:1.05rem; opacity:.85; max-width:560px; margin:0 auto 36px; }
+  .cta-guarantee {
+    display:inline-flex; align-items:center; gap:10px;
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.2);
+    border-radius:50px; padding:10px 24px; margin-top:24px;
+    font-size:0.85rem; opacity:.85;
+  }
+
+  /* ── Footer ── */
+  footer { background:var(--dark); color:rgba(255,255,255,.55); text-align:center; padding:28px 24px; font-size:0.82rem; }
+
+  /* ── Responsive ── */
+  @media(max-width:768px){
+    .hero { padding:60px 20px 72px; }
+    .hero-stats { gap:24px; }
+    section { padding:60px 0; }
+    .price-card.featured { transform:none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Announcement Bar -->
+<div class="topbar">🔥 限時早鳥優惠 — 完整版 NT$697（原價 NT$1,497）</div>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="badge">房仲 AI 影片模板包</div>
+    <h1>不露臉、不剪片<br>讓 <em>AI 替你</em> 做房產影片<br>自動曝光、持續獲客</h1>
+    <p class="subtitle">
+      30 個即套即用腳本模板 × AI 影片工具<br>
+      每週穩定發佈，讓潛客記住你，後續再搭配真人帶看、建立信任
+    </p>
+    <div class="cta-row">
+      <a href="#pricing" class="btn-gold">立即取得模板包 →</a>
+      <a href="#preview" class="btn-ghost">先看腳本範例</a>
+    </div>
+    <div class="hero-stats">
+      <div class="st"><div class="n">30</div><div class="l">腳本模板</div></div>
+      <div class="st"><div class="n">5</div><div class="l">影片主題類型</div></div>
+      <div class="st"><div class="n">3步</div><div class="l">AI出片流程</div></div>
+      <div class="st"><div class="n">0</div><div class="l">出鏡需求</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Pain Points -->
+<section class="pain-section">
+  <div class="container">
+    <h2 class="s-title">你是不是也有這些困擾？</h2>
+    <p class="s-sub">9成的房仲都想做自媒體，卻被這幾件事卡住</p>
+    <div class="pain-grid">
+      <div class="pain-card solved">
+        <div class="emoji">😰</div>
+        <h3>不敢出鏡，怕鏡頭</h3>
+        <p>不習慣對著鏡頭說話，怕自己看起來很尷尬，一直拖著不拍。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">🤯</div>
+        <h3>不知道要說什麼</h3>
+        <p>腦子裡有很多房產知識，卻不知道怎麼整理成吸引人的影片內容。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">⏰</div>
+        <h3>剪片太花時間</h3>
+        <p>每天跑案場、接客戶，根本沒有時間學剪輯、做字幕、排版。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">📉</div>
+        <h3>發了也沒流量</h3>
+        <p>偶爾發幾篇沒有人看，很快就放棄了，無法持續穩定經營。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">💸</div>
+        <h3>請人拍片太貴</h3>
+        <p>外包一支影片動輒數千元，成本太高、不知道回報怎麼計算。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">🔄</div>
+        <h3>沒有系統、靠感覺</h3>
+        <p>想到什麼發什麼，缺乏主題規劃，粉絲根本不知道你是做什麼的。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works -->
+<section class="how-section">
+  <div class="container">
+    <h2 class="s-title">三步驟，讓 AI 替你出片</h2>
+    <p class="s-sub" style="color:rgba(255,255,255,.72)">從腳本到成品，最快 30 分鐘搞定一週的影片素材</p>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <h3>選腳本模板</h3>
+        <p>從 30 個模板中選一個主題，填入你的區域、案型、個人觀點，30秒完成客製化。</p>
+        <span class="tool-tag">📄 腳本模板</span>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h3>丟進 AI 影片工具</h3>
+        <p>將腳本貼入 HeyGen、Pictory 或 CapCut AI，選好虛擬主播或簡報風格，一鍵生成影片。</p>
+        <span class="tool-tag">🎬 HeyGen / Pictory / CapCut</span>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h3>發布、等潛客來找你</h3>
+        <p>貼上你的 LINE / 電話，發佈到 IG Reels、YouTube Shorts、Facebook，讓影片 24 小時持續曝光。</p>
+        <span class="tool-tag">📱 IG / YT / FB</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Templates Included -->
+<section class="tmpl-section">
+  <div class="container">
+    <h2 class="s-title">30 個模板，5 大主題分類</h2>
+    <p class="s-sub">每個模板都有固定結構：開場鉤子 + 知識主體 + 行動呼籲，直接套用就能出片</p>
+    <div class="tmpl-grid">
+
+      <div class="tmpl-card gold-top">
+        <div class="cat">主題一・共 7 個</div>
+        <h3>買房知識 ／ 首購觀念</h3>
+        <ul class="tmpl-list">
+          <li>買房前必懂的 5 個貸款眉角</li>
+          <li>首購族最常踩的 3 大地雷</li>
+          <li>預售屋 vs 成屋，哪個適合你？</li>
+          <li>房屋總價怎麼算？一次搞懂</li>
+          <li>買房選南北向有差嗎？</li>
+          <li>公設比超過幾%要注意</li>
+          <li>開工前要做哪些準備？</li>
+        </ul>
+      </div>
+
+      <div class="tmpl-card">
+        <div class="cat">主題二・共 6 個</div>
+        <h3>區域市場 ／ 行情分析</h3>
+        <ul class="tmpl-list">
+          <li>【XX區】近期成交行情解析</li>
+          <li>這條路線捷運站，哪站CP值最高</li>
+          <li>新重劃區值不值得買？</li>
+          <li>學區房真的比較保值嗎？</li>
+          <li>這個社區為什麼比周邊貴？</li>
+          <li>投資套房，租金報酬怎麼算</li>
+        </ul>
+      </div>
+
+      <div class="tmpl-card navy-top">
+        <div class="cat">主題三・共 6 個</div>
+        <h3>避坑指南 ／ 注意事項</h3>
+        <ul class="tmpl-list">
+          <li>看屋時絕對不能忽略的 5 件事</li>
+          <li>這種格局千萬不要買</li>
+          <li>簽約前一定要確認的 3 個細節</li>
+          <li>網路上的房價資訊可以信嗎？</li>
+          <li>中古屋驗屋要注意什麼</li>
+          <li>屋主自售 vs 透過仲介的差別</li>
+        </ul>
+      </div>
+
+      <div class="tmpl-card green-top">
+        <div class="cat">主題四・共 6 個</div>
+        <h3>個人品牌 ／ 自我介紹</h3>
+        <ul class="tmpl-list">
+          <li>我為什麼選擇做房仲？（故事版）</li>
+          <li>我的服務流程是什麼</li>
+          <li>我如何幫買家找到對的房子</li>
+          <li>成交故事分享（匿名客戶版）</li>
+          <li>我的專業服務區域介紹</li>
+          <li>為什麼要選擇我幫你買房</li>
+        </ul>
+      </div>
+
+      <div class="tmpl-card red-top">
+        <div class="cat">主題五・共 5 個</div>
+        <h3>互動問答 ／ 時事話題</h3>
+        <ul class="tmpl-list">
+          <li>粉絲問：現在是買房好時機嗎？</li>
+          <li>升息之後，買房策略要調整嗎</li>
+          <li>政府打房，對自住族有影響嗎？</li>
+          <li>年終獎金要拿去付頭期款嗎？</li>
+          <li>租房 vs 買房，一次算給你看</li>
+        </ul>
+      </div>
+
+      <div class="tmpl-card" style="border-top:4px solid #8B5CF6; background:linear-gradient(135deg,#faf7ff,#fff);">
+        <div class="cat" style="color:#8B5CF6;">加贈・共 5 個</div>
+        <h3 style="color:#5B3FA6;">完整版限定贈品</h3>
+        <ul class="tmpl-list">
+          <li>Canva 短影音投影片框架（5 種風格）</li>
+          <li>AI 影片工具選擇指南（比較表）</li>
+          <li>每週影片排程規劃表（Excel）</li>
+          <li>IG / YT 標題公式套組（30個）</li>
+          <li>自媒體獲客 SOP 流程圖</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Script Preview -->
+<section class="preview-section" id="preview">
+  <div class="container">
+    <h2 class="s-title">腳本模板長這樣</h2>
+    <p class="s-sub">每個模板都有明確結構，填空式操作，不需要寫作能力</p>
+    <div class="preview-box">
+      <div class="tag">範例腳本 P-07</div>
+      <h3>「首購族最常踩的 3 大地雷」</h3>
+      <div class="script-line">
+        <span class="label lbl-hook">HOOK<br>0-3秒</span>
+        <p>「你知道嗎，有 7 成首購族在買房之後，都後悔了一件事⋯⋯」</p>
+      </div>
+      <div class="script-line">
+        <span class="label lbl-body">主體<br>15秒</span>
+        <p>「地雷一：只看總價，沒算每月還款壓力。地雷二：沒有先了解社區管委會。地雷三：忽略了格局採光，只看裝潢。這三件事，我在帶客戶看屋時都會先確認⋯⋯」</p>
+      </div>
+      <div class="script-line">
+        <span class="label lbl-cta">行動<br>3秒</span>
+        <p>「想知道如何避開這些地雷？LINE 我，我免費幫你把關」</p>
+      </div>
+      <p class="preview-note">★ 模板內的 [區域] [案型] [數字] 填入你的資料即完成客製化</p>
+    </div>
+  </div>
+</section>
+
+<!-- Dual Track Strategy -->
+<section class="dual-section">
+  <div class="container">
+    <h2 class="s-title">雙軌經營，才是自媒體長久獲客的關鍵</h2>
+    <p class="s-sub">AI 影片負責曝光與信任熱身，真人接觸負責轉換與帶看</p>
+    <div class="dual-grid">
+      <div class="dual-card ai-track">
+        <div class="track-icon">🤖</div>
+        <h3>第一軌：AI 影片（穩定曝光）</h3>
+        <p>不需出鏡，每週 2-3 支影片，讓潛客持續看到你的臉（虛擬主播）和你的觀點</p>
+        <ul>
+          <li>建立「知識型房仲」品牌形象</li>
+          <li>讓陌生人認識你、記住你</li>
+          <li>24小時曝光，即使你在帶看</li>
+          <li>低成本，可規模化產出</li>
+        </ul>
+      </div>
+      <div class="dual-card human-track">
+        <div class="track-icon">🤝</div>
+        <h3>第二軌：真人接觸（建立信任）</h3>
+        <p>當潛客已經看過你 5-10 支影片，他們主動來找你時，再用真人互動深化信任</p>
+        <ul>
+          <li>LINE 一對一回覆問題</li>
+          <li>安排看屋，真人帶看</li>
+          <li>偶爾錄製真人出鏡影片</li>
+          <li>舉辦買房說明會或直播</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Monetization Logic (for seller) -->
+<section class="money-section">
+  <div class="container">
+    <h2 class="s-title">這套模板包的商業邏輯</h2>
+    <p class="s-sub">房仲用 AI 影片獲客，你販售這套系統，形成三贏</p>
+    <div class="money-grid">
+      <div class="money-card">
+        <div class="icon">🎯</div>
+        <h3>精準受眾</h3>
+        <p>台灣 6 萬名房仲，至少 1 萬人有自媒體需求，精準受眾規模大</p>
+        <div class="rev">市場夠大</div>
+      </div>
+      <div class="money-card">
+        <div class="icon">📦</div>
+        <h3>數位商品</h3>
+        <p>一次製作，無限複製販售。無庫存、無物流、自動交付下載</p>
+        <div class="rev">邊際成本 = 0</div>
+      </div>
+      <div class="money-card">
+        <div class="icon">🔼</div>
+        <h3>清晰升單路徑</h3>
+        <p>基礎版 → 完整版 → VIP 諮詢，每個層級都有對應服務</p>
+        <div class="rev">LTV 可達 3倍</div>
+      </div>
+      <div class="money-card">
+        <div class="icon">📣</div>
+        <h3>社群裂變</h3>
+        <p>「留：房仲模板」話術設計，讓買家主動幫你傳播，降低獲客成本</p>
+        <div class="rev">自帶病毒傳播</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="pricing-section" id="pricing">
+  <div class="container">
+    <h2 class="s-title">選擇最適合你的方案</h2>
+    <p class="s-sub">一次購買，永久使用。比請一次攝影師還便宜</p>
+    <div class="pricing-grid">
+
+      <!-- Starter -->
+      <div class="price-card">
+        <div class="plan-name">入門版</div>
+        <div class="plan-desc">剛開始做自媒體，想先試試 AI 影片的房仲</div>
+        <div class="price">NT$297 <span>/ 一次性</span></div>
+        <div class="orig">原價 NT$497</div>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><span class="ck">✓</span> 10 個腳本模板（買房知識類）</li>
+          <li><span class="ck">✓</span> AI 影片工具入門指南 PDF</li>
+          <li><span class="ck">✓</span> 3 種 Canva 投影片框架</li>
+          <li><span class="na">✗</span> 完整 30 個模板</li>
+          <li><span class="na">✗</span> 標題公式套組</li>
+          <li><span class="na">✗</span> 社群支援</li>
+        </ul>
+        <a href="#" class="btn-plan btn-plan-outline">取得入門版</a>
+      </div>
+
+      <!-- Complete (Featured) -->
+      <div class="price-card featured">
+        <div class="popular-badge">最多人選擇</div>
+        <div class="plan-name">完整版</div>
+        <div class="plan-desc">認真經營自媒體，想要一套完整系統的房仲</div>
+        <div class="price">NT$697 <span>/ 一次性</span></div>
+        <div class="orig">原價 NT$1,497</div>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><span class="ck">✓</span> <strong>全部 30 個腳本模板</strong></li>
+          <li><span class="ck">✓</span> AI 影片工具完整操作教學</li>
+          <li><span class="ck">✓</span> 5 種 Canva 投影片框架</li>
+          <li><span class="ck">✓</span> 30 個 IG / YT 標題公式</li>
+          <li><span class="ck">✓</span> 每週排程規劃表（Excel）</li>
+          <li><span class="ck">✓</span> 自媒體獲客 SOP 流程圖</li>
+        </ul>
+        <a href="#" class="btn-plan btn-plan-primary">立即取得完整版 →</a>
+      </div>
+
+      <!-- VIP -->
+      <div class="price-card">
+        <div class="plan-name">VIP 諮詢版</div>
+        <div class="plan-desc">想要快速上手、有專人帶著做的房仲</div>
+        <div class="price">NT$1,997 <span>/ 一次性</span></div>
+        <div class="orig">原價 NT$3,500</div>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><span class="ck">✓</span> 完整版所有內容</li>
+          <li><span class="ck">✓</span> 1 對 1 設定諮詢（45分鐘）</li>
+          <li><span class="ck">✓</span> 30 天 LINE 問題支援</li>
+          <li><span class="ck">✓</span> 個人化腳本審閱（3支）</li>
+          <li><span class="ck">✓</span> 專屬發布策略規劃</li>
+          <li><span class="ck">✓</span> 優先取得新增模板</li>
+        </ul>
+        <a href="#" class="btn-plan btn-plan-dark">諮詢 VIP 方案</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section">
+  <div class="container">
+    <h2 class="s-title">常見問題</h2>
+    <p class="s-sub">購買前的疑惑，這裡都有答案</p>
+    <div class="faq-list">
+      <details>
+        <summary>完全不懂 AI 工具也能使用嗎？</summary>
+        <div class="ans">可以。模板包內附有 AI 影片工具的圖文操作教學，從申請帳號到匯出影片都有步驟說明。HeyGen 有免費版本，可以先試用看看效果再決定是否付費升級。</div>
+      </details>
+      <details>
+        <summary>腳本可以修改成自己的風格嗎？</summary>
+        <div class="ans">當然可以，而且強烈建議這樣做。模板是讓你有個出發點，你可以加入自己的觀點、案例、口頭禪，讓影片更有個人特色。我們也附上「如何讓 AI 影片更像你」的指南。</div>
+      </details>
+      <details>
+        <summary>AI 影片會讓潛客覺得不真實嗎？</summary>
+        <div class="ans">這是雙軌策略的核心。AI 影片的目的是「熱身曝光」，讓對方認識你的觀點和專業。後續的 LINE 溝通和看屋帶看，才是建立真實信任的環節。事實上，很多人看了 5-10 支 AI 影片後，已經對你有足夠信任，主動來詢問。</div>
+      </details>
+      <details>
+        <summary>購買後如何取得檔案？</summary>
+        <div class="ans">付款完成後，系統會自動寄送下載連結到你的電子信箱，通常在 5 分鐘內收到。檔案為 PDF + Excel 格式，永久有效，可多裝置使用。</div>
+      </details>
+      <details>
+        <summary>這套模板可以用在哪些平台？</summary>
+        <div class="ans">腳本模板適用於所有短影音平台：Instagram Reels、YouTube Shorts、Facebook Reels、TikTok。模板長度設計在 30-60 秒，最適合短影音演算法。</div>
+      </details>
+      <details>
+        <summary>VIP 版的 1 對 1 諮詢是線上還是實體？</summary>
+        <div class="ans">透過 Google Meet 進行線上諮詢，不受地區限制。購買後我們會用 LINE 聯繫你，協商方便的時間。</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section class="cta-section">
+  <div class="container">
+    <h2>現在就開始，<em>讓 AI 替你做影片</em></h2>
+    <p>每週花 2 小時套用模板，讓潛客在睡覺的時候認識你。不用等到「準備好」再開始。</p>
+    <a href="#pricing" class="btn-gold">立即取得模板包 →</a>
+    <br>
+    <div class="cta-guarantee">
+      🔒 &nbsp; 數位商品特性，不提供退款，購買前請確認適合需求
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>© 2025 房仲AI影片模板包 &nbsp;｜&nbsp; 台灣房地產自媒體資源</p>
+</footer>
+
+</body>
+</html>
