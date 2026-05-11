@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 空屋改造模板包｜一鍵複製內容</title>
+<style>
+  body { font-family: 'Noto Sans TC', Arial, sans-serif; background: #f8f6f1; color: #1a1a1a; line-height: 1.8; padding: 24px; max-width: 900px; margin: 0 auto; }
+  h1 { color: #1B2A4A; font-size: 1.6rem; margin-bottom: 8px; }
+  .subtitle { color: #6B7280; margin-bottom: 32px; font-size: 0.95rem; }
+
+  .copy-bar {
+    position: sticky; top: 16px; z-index: 100;
+    display: flex; gap: 12px; align-items: center;
+    background: #1B2A4A; padding: 16px 24px; border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(27,42,74,.35); margin-bottom: 36px;
+  }
+  .copy-bar p { color: rgba(255,255,255,.75); font-size: 0.88rem; margin: 0; flex: 1; }
+  #copyBtn {
+    background: #C9943A; color: #fff; border: none; cursor: pointer;
+    padding: 12px 28px; border-radius: 50px; font-size: 1rem; font-weight: 800;
+    letter-spacing: 1px; transition: transform .15s, background .2s; white-space: nowrap;
+    font-family: inherit;
+  }
+  #copyBtn:hover { transform: translateY(-2px); }
+  #copyBtn.done { background: #2D7D4E; }
+
+  h2 { color: #1B2A4A; font-size: 1.3rem; border-left: 5px solid #C9943A; padding-left: 14px; margin: 52px 0 20px; }
+  h3 { color: #2A7F7F; font-size: 1.05rem; margin: 28px 0 12px; }
+  .card { background: #fff; border-radius: 14px; padding: 28px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+  .card.t1 { border-top: 4px solid #1B2A4A; }
+  .card.t2 { border-top: 4px solid #2A7F7F; }
+  .card.t3 { border-top: 4px solid #6D28D9; }
+  .card.prompt { border-top: 4px solid #C9943A; }
+  .card.script { border-top: 4px solid #2D7D4E; }
+  .card.pitch { border-top: 4px solid #B94040; }
+
+  .step { display: flex; gap: 14px; margin-bottom: 14px; align-items: flex-start; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; background: #C9943A; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+  .step p { margin: 0; font-size: 0.92rem; }
+  .step .tip { font-size: 0.8rem; color: #6B7280; margin-top: 4px; }
+
+  .tag { display: inline-block; font-size: 0.72rem; font-weight: 800; padding: 2px 10px; border-radius: 20px; margin-bottom: 10px; }
+  .tag-tool { background: #1B2A4A; color: #fff; }
+  .tag-free { background: #2D7D4E; color: #fff; }
+  .tag-paid { background: #C9943A; color: #fff; }
+
+  .prompt-box { background: #1B2A4A; color: #fff; border-radius: 10px; padding: 16px 20px; margin: 10px 0; font-size: 0.88rem; line-height: 1.75; }
+  .prompt-box .zh { opacity: .65; font-size: 0.78rem; margin-top: 8px; }
+
+  .script-box { background: #f8f6f1; border-radius: 10px; padding: 16px 20px; margin: 10px 0; }
+  .script-box .lbl { font-size: 0.72rem; font-weight: 800; letter-spacing: 2px; margin-bottom: 6px; }
+  .lbl-post { color: #2A7F7F; }
+  .lbl-hash { color: #6B7280; }
+  .script-box p { font-size: 0.9rem; margin: 0 0 8px; }
+  .script-box .hash { font-size: 0.8rem; color: #6B7280; }
+
+  .fill { color: #C9943A; font-weight: 700; }
+  .note { background: #fffbf0; border-left: 3px solid #C9943A; padding: 10px 16px; border-radius: 0 8px 8px 0; font-size: 0.85rem; color: #4b5563; margin: 12px 0; }
+</style>
+</head>
+<body>
+
+<h1>AI 空屋改造模板包</h1>
+<p class="subtitle">三種改造類型完整內容｜SOP × Prompt × 發文腳本 × 提案話術</p>
+
+<div class="copy-bar">
+  <p>點右邊按鈕，複製全部內容，貼入 Google 文件匯出 PDF</p>
+  <button id="copyBtn" onclick="copyAll()">📋 一鍵全部複製</button>
+</div>
+
+<div id="blob" style="display:none;">AI 空屋改造模板包
+三種改造類型完整內容｜SOP × Prompt × 發文腳本 × 提案話術
+
+════════════════════════════════════════
+第一部分：操作 SOP 手冊
+════════════════════════════════════════
+
+────────────────────────────────────────
+【類型 01】舊家具移除 + 放入新家具
+工具：REimagineHome（免費方案可用）/ Virtual Staging AI
+────────────────────────────────────────
+
+▌拍攝技巧（關鍵！）
+• 使用橫向構圖（16:9），解析度越高越好
+• 選擇自然採光最好的時段（上午 9-11 點或下午 2-4 點）
+• 站在房間角落或門口往內拍，讓空間感最大化
+• 避免鏡頭歪斜，保持水平
+• 同一個空間多拍幾張，選最清晰、最有空間感的
+
+▌步驟 1：上傳到 REimagineHome
+1. 打開 reimaginehome.ai，點「Try for free」
+2. 點「Upload Photo」上傳你的房間照片
+3. 等待上傳完成（通常 5-10 秒）
+
+▌步驟 2：選擇功能模式
+1. 選擇「Furnish empty room」（空房放家具）
+   → 適合：家具已移除或原本空屋的情況
+2. 或選擇「Redesign」（重新設計）
+   → 適合：有舊家具、想直接替換的情況
+3. 建議先用「Redesign」，勾選「Remove existing furniture」
+
+▌步驟 3：選風格
+• 從下拉選單選擇風格（Modern / Scandinavian / Japanese / Contemporary）
+• 選擇空間類型（Living room / Bedroom / Kitchen / Dining room）
+• 點「Reimagine」開始生成（約 15-30 秒）
+
+▌步驟 4：評估結果
+好的效果圖標準：
+✓ 家具比例符合實際空間大小
+✓ 光線方向自然，不怪異
+✓ 地板、牆面看起來和原始照片一致
+✓ 整體風格統一，不雜亂
+如果不滿意：點「Generate again」重新生成，通常第 2-3 次會更好
+
+▌步驟 5：下載和製作影片
+1. 點「Download」儲存高解析度圖片
+2. 同時儲存原始照片（Before）
+3. 打開 CapCut → 新增專案 → 匯入兩張照片
+4. 套用「Before After」模板（搜尋「before after reveal」）
+5. 加上字幕：「AI 改造前 → 改造後」
+6. 加背景音樂（CapCut 免費素材庫）
+7. 匯出 1080P，發布到社群
+
+
+────────────────────────────────────────
+【類型 02】空間風格改造（同房換裝潢）
+工具：REimagineHome + Midjourney
+────────────────────────────────────────
+
+▌概念說明
+同一個空間照片，生成 5 種不同裝潢風格的效果圖，讓買家看到各種可能性。這類內容在社群互動率極高，因為大家都喜歡滑「你最喜歡哪一種？」。
+
+▌步驟 1：拍攝同一空間的「乾淨版」照片
+• 清空不必要的雜物
+• 確保空間整潔，光線充足
+• 同一角度拍一張，作為所有風格的基底
+
+▌步驟 2：用 REimagineHome 生成 5 種風格
+依序選擇以下風格各生成一張：
+- 風格 A：Modern（現代簡約）
+- 風格 B：Scandinavian（北歐清爽）
+- 風格 C：Japanese Wabi-sabi（日系侘寂）
+- 風格 D：Contemporary Luxe（輕奢金屬）
+- 風格 E：American Classic（美式鄉村）
+
+▌步驟 3：用 Midjourney 進一步精修（選做）
+如果 REimagineHome 效果不夠理想，可以把生成的圖片再傳到 Midjourney 用 /describe 指令生成更精緻的版本。（詳見 Prompt 模板庫）
+
+▌步驟 4：製作輪播貼文或影片
+輪播格式（IG 最佳）：
+第 1 張：原始空間照片（加字幕「你覺得這個空間適合哪種風格？」）
+第 2-6 張：5 種風格效果圖（各加風格名稱）
+最後一張：加上你的聯絡方式
+
+影片格式（Reels / YT Shorts 最佳）：
+用 CapCut 製作快速切換效果，每 1-2 秒換一個風格，配上轉場音效
+
+
+────────────────────────────────────────
+【類型 03】毛胚屋模擬完工效果
+工具：REimagineHome + Midjourney（搭配使用）
+────────────────────────────────────────
+
+▌適用情境
+• 預售屋樣品屋還未完成
+• 建商毛胚屋尚未裝修
+• 屋主想讓買家想像完工樣貌
+• 老屋改建前的模擬
+
+▌拍攝注意事項
+• 拍攝時確保空間有足夠光線（毛胚屋通常較暗，帶手電筒）
+• 多角度拍攝，特別是客廳和主臥
+• 記錄實際尺寸（長 × 寬 × 高），方便後續說明
+
+▌步驟 1：上傳毛胚照片到 REimagineHome
+1. 選擇「Redesign」模式
+2. 空間類型選對應類型
+3. 風格選「Modern」先試試看
+4. 生成後評估效果
+
+▌步驟 2：搭配 Midjourney 生成高品質效果圖
+1. 在 Midjourney 輸入以下格式的 Prompt（參見 Prompt 模板庫第五章節）
+2. 上傳毛胚照片作為參考圖（--cref）
+3. 生成 4 個版本後選最佳的
+
+▌步驟 3：製作說明影片
+這類影片建議搭配旁白說明：
+• 先展示毛胚現況
+• 再展示 AI 模擬完工效果
+• 說明實際坪數、格局特色
+• 最後說明如何預約看屋
+
+▌步驟 4：加上實際說明文字
+在影片或圖片上加：
+「以上為 AI 效果示意圖，實際裝修效果因設計師與建材而異」
+→ 誠實標示，建立信任感
+
+
+════════════════════════════════════════
+第二部分：AI Prompt 模板庫（25 個）
+════════════════════════════════════════
+
+使用說明：以下 Prompt 主要用於 Midjourney 和 ChatGPT 輔助優化。
+Midjourney 使用方式：在 Discord 輸入 /imagine 後貼上英文 Prompt。
+REimagineHome 直接用介面選風格，不需要輸入 Prompt。
+
+────────────────────────────────────────
+【章節一】現代簡約風格（3 個）
+────────────────────────────────────────
+
+Prompt M-01（客廳）
+A bright modern minimalist living room interior, white walls, light oak wood flooring, low-profile gray sofa, natural linen cushions, simple coffee table, large window with sheer curtains, indoor plants, soft afternoon sunlight, clean and airy atmosphere, 4K photorealistic --ar 16:9 --v 6
+中文說明：明亮現代簡約客廳，白牆、淺橡木地板、低矮灰色沙發、自然光
+
+Prompt M-02（主臥）
+A serene modern minimalist bedroom, white walls, platform bed with light gray linen bedding, wooden nightstands, blackout curtains in warm beige, no clutter, soft morning light, photorealistic interior design --ar 16:9 --v 6
+中文說明：寧靜現代簡約主臥，白牆、床台、淺灰亞麻寢具、暖米色遮光簾
+
+Prompt M-03（廚房）
+A clean modern minimalist kitchen, white cabinetry with handleless doors, light quartz countertop, stainless steel appliances, under-cabinet lighting, small herb plants on windowsill, bright and functional, photorealistic --ar 16:9 --v 6
+中文說明：簡潔現代廚房，白色無把手櫥櫃、淺色石英石台面、不鏽鋼家電
+
+────────────────────────────────────────
+【章節二】北歐清爽風格（3 個）
+────────────────────────────────────────
+
+Prompt S-01（客廳）
+A cozy Scandinavian living room, warm white walls, natural birch wood furniture, wool throw blanket in mustard yellow, sheepskin rug, simple pendant lighting, hygge atmosphere, large window, indoor plants, soft warm light --ar 16:9 --v 6
+中文說明：舒適北歐客廳，溫白牆、白樺木家具、芥末黃羊毛毯、暖燈
+
+Prompt S-02（主臥）
+A calm Scandinavian bedroom, white walls, light pine wood bed frame, white and off-white bedding with subtle texture, knitted blanket, simple bedside lamp, potted plant, large window, peaceful and minimal --ar 16:9 --v 6
+中文說明：寧靜北歐主臥，白牆、松木床架、白色質感寢具、針織毯
+
+Prompt S-03（餐廳）
+A bright Scandinavian dining room, long white dining table, mix of wooden chairs and bench, pendant light above table, simple centerpiece with dried flowers, whitewashed walls, natural daylight --ar 16:9 --v 6
+中文說明：明亮北歐餐廳、長型白色餐桌、木椅混搭長凳、乾燥花中心
+
+────────────────────────────────────────
+【章節三】日系侘寂風格（3 個）
+────────────────────────────────────────
+
+Prompt J-01（客廳）
+A tranquil Japanese wabi-sabi living room, low furniture, natural linen sofa in earthy tones, rough textured walls in warm greige, rattan coffee table, handmade pottery, dried pampas grass, soft diffused light, meditative atmosphere --ar 16:9 --v 6
+中文說明：侘寂客廳、低矮家具、大地色亞麻沙發、粗糙質感牆面、蒲葦草
+
+Prompt J-02（主臥）
+A minimalist Japanese bedroom, floor-level bed with natural cotton bedding, woven tatami mat, shoji screen partition, bamboo plant, warm amber light, natural wood accents, peaceful and grounded --ar 16:9 --v 6
+中文說明：日式簡約主臥、榻榻米床、障子門、竹子、琥珀暖光
+
+Prompt J-03（書房）
+A serene Japanese study room, low wooden desk, zabuton cushion, simple bookshelf with ceramic objects, rice paper lamp, natural light from sliding door, neutral earthy palette, wabi-sabi aesthetic --ar 16:9 --v 6
+中文說明：侘寂書房、低木桌、坐墊、陶器、和紙燈、自然光
+
+────────────────────────────────────────
+【章節四】輕奢金屬風格（3 個）
+────────────────────────────────────────
+
+Prompt L-01（客廳）
+A sophisticated contemporary luxe living room, deep navy velvet sofa, gold brass accent coffee table, marble floors, abstract art on wall, large pendant chandelier, tall indoor palm, moody yet elegant ambiance --ar 16:9 --v 6
+中文說明：輕奢客廳、深藍絲絨沙發、金色茶几、大理石地板、抽象藝術畫
+
+Prompt L-02（主臥）
+A glamorous contemporary bedroom, tufted upholstered bed in deep charcoal, gold accent lighting, mirrored furniture, plush area rug, floor-to-ceiling curtains in champagne, sophisticated and opulent --ar 16:9 --v 6
+中文說明：輕奢主臥、深炭色絨布床、金色燈飾、鏡面傢具、香檳色落地窗簾
+
+Prompt L-03（衛浴）
+A luxurious contemporary bathroom, floor-to-ceiling marble tiles, freestanding bathtub in matte white, gold fixtures, large vanity mirror with backlit lighting, spa-like atmosphere --ar 16:9 --v 6
+中文說明：輕奢浴室、全身大理石磚、獨立浴缸、金色水龍頭、背光化妝鏡
+
+────────────────────────────────────────
+【章節五】毛胚屋模擬完工（5 個）
+────────────────────────────────────────
+
+Prompt R-01（毛胚客廳 → 現代）
+Transform this bare concrete shell living room into a fully furnished modern Taiwanese apartment interior. Add: laminate wood flooring, white walls with paint, modular sofa in light gray, glass coffee table, built-in TV cabinet, recessed ceiling lighting, sheer curtains. Photorealistic. --ar 16:9 --v 6
+中文說明：水泥毛胚客廳→現代台灣公寓，加木地板、白牆、組合沙發、玻璃茶几
+
+Prompt R-02（毛胚主臥 → 現代）
+Transform this empty concrete bedroom into a complete modern bedroom. Add: engineered wood flooring, painted white walls, queen-size platform bed with white bedding, built-in wardrobe on one wall, pendant lights on both sides, air conditioning unit, window with curtains. Realistic rendering. --ar 16:9 --v 6
+中文說明：水泥毛胚主臥→現代主臥，加木地板、床台、衣櫃、吊燈
+
+Prompt R-03（毛胚廚房 → 現代）
+Transform this unfinished kitchen space into a complete modern kitchen. Add: L-shaped kitchen cabinets in white, quartz countertop, stainless steel sink and appliances, tiled backsplash, recessed lighting, kitchen island if space allows. Photorealistic interior. --ar 16:9 --v 6
+中文說明：毛胚廚房→現代廚房，加L型白色廚櫃、石英石台面、廚具
+
+Prompt R-04（毛胚衛浴 → 現代）
+Transform this bare bathroom into a modern Taiwanese bathroom. Add: large format tile flooring in warm gray, wall tiles, vanity with mirror, shower area with glass partition, toilet, proper lighting. Clean and functional. --ar 16:9 --v 6
+中文說明：毛胚衛浴→現代浴室，加大板磚、洗手台、玻璃淋浴隔間
+
+Prompt R-05（毛胚全室 → 北歐）
+Transform this entire bare concrete apartment into a cozy Scandinavian-style completed home. Light wood flooring throughout, white walls, Scandinavian furniture in living room, bedroom, dining area, warm pendant lighting. Complete home interior. Photorealistic. --ar 16:9 --v 6
+中文說明：整屋毛胚→北歐風完工，淺木地板、白牆、北歐傢具全室
+
+────────────────────────────────────────
+【章節六】家具移除 & 採光優化（4 個）
+────────────────────────────────────────
+
+Prompt E-01（移除老舊家具，保留空間）
+Remove all existing furniture and clutter from this room. Keep the original flooring, walls, windows, and ceiling. Result should be a clean, empty room ready for virtual staging. Maintain original room proportions and lighting. --ar 16:9
+中文說明：移除所有家具雜物，保留地板牆面窗戶，呈現乾淨空屋狀態
+
+Prompt E-02（增加採光感）
+Enhance the natural lighting in this room. Increase brightness near windows, add warm soft light effect, make the space feel airier and more spacious without changing furniture or layout. Subtle enhancement only. --ar 16:9
+中文說明：增強自然採光，提亮窗戶附近，增加空間感，不改變佈局
+
+Prompt E-03（移除雜物保留家具）
+Clean up this room by removing all clutter, boxes, unnecessary items, and personal belongings. Keep the main furniture pieces in place. Result should look like a staged, market-ready property. --ar 16:9
+中文說明：清除雜物，保留主要家具，讓空間呈現上市就緒的整潔狀態
+
+Prompt E-04（修正照片角度）
+Fix the perspective distortion in this interior photo. Straighten vertical lines, correct wide-angle lens distortion, make walls appear straight, maintain natural room proportions. --ar 16:9
+中文說明：修正室內照片的透視變形，讓牆面垂直、廣角鏡頭變形修正
+
+
+════════════════════════════════════════
+第三部分：社群發文腳本（15 篇）
+════════════════════════════════════════
+
+────────────────────────────────────────
+【類型 01】舊家具移除換新（5 篇）
+────────────────────────────────────────
+
+【發文 01-A】IG / FB Reels 影片說明文
+
+你有沒有看過這種操作？
+
+舊公寓裡的老舊家具，一鍵 AI 移除，換上現代感的新佈置。
+
+整個過程我只花了 20 分鐘👇
+
+Before → After 完整改造，這就是為什麼我說 AI 已經改變房仲的工作方式了。
+
+想知道這間房子的詳細資訊嗎？
+👉 留言「想看」或私訊我 [填入你的名字]
+
+#房仲日常 #AI空屋改造 #空屋改造 #房產自媒體 #台灣房仲
+
+---
+
+【發文 01-B】Threads 純文字版
+
+今天試了一個讓我很驚喜的功能——
+
+把屋主家裡的老舊家具，用 AI 直接「換掉」，放入現代感的新傢具。
+
+不是 P 圖，不是 3D 建模，就是上傳照片→選風格→30 秒出圖。
+
+買家看完圖之後問我：「這間這樣多少錢？」
+
+AI 已經在改變房仲的工作了，你還沒開始用嗎？
+
+（有興趣學的留言，我分享工具）
+
+---
+
+【發文 01-C】知識型貼文（教學感）
+
+你知道為什麼有些房子的網路照片讓你「想去看」，有些讓你「滑過去」嗎？
+
+差別在：有沒有幫買家「想像住進去的感覺」
+
+現在我用 AI 幫每一個物件做虛擬改造：
+舊家具移除 → 放入符合現代審美的軟裝
+整個流程不到 30 分鐘，不需要請攝影師，不需要真的裝潢
+
+對賣屋效率的影響？
+⬆️ 詢問量明顯增加
+⬆️ 看屋預約更快
+⬇️ 物件在市場上的停留時間
+
+這就是 AI 在房仲業的實際應用，不是噱頭。
+
+---
+
+【發文 01-D】互動型貼文
+
+左邊 vs 右邊，你比較喜歡哪一個？
+
+（左圖：舊家具照片）（右圖：AI 改造後）
+
+同一個空間，AI 改造前後的差距，就是買家願不願意來看屋的差距。
+
+你覺得哪個更吸引你？留言告訴我 👇
+
+---
+
+【發文 01-E】問題導向
+
+房子賣不掉，很多時候不是價格問題——是「第一印象」的問題。
+
+買家在手機上滑過你的物件，如果照片不吸引人，他根本不會點進來看。
+
+我現在做的事情很簡單：
+把每一間物件的照片，用 AI 做一次虛擬改造
+讓買家一眼就能「感受到住進去的樣子」
+
+詢問率有沒有提升？你自己猜猜看。
+
+有在賣房子、或有物件想試試這個效果的，私訊我 [填入聯絡方式]
+
+
+────────────────────────────────────────
+【類型 02】風格改造對比（5 篇）
+────────────────────────────────────────
+
+【發文 02-A】輪播互動版
+
+這個空間，你最喜歡哪一種風格？👇
+
+➡️ 往右滑，看 5 種不同裝潢風格
+
+1️⃣ 現代簡約
+2️⃣ 北歐清爽
+3️⃣ 日系侘寂
+4️⃣ 輕奢金屬
+5️⃣ 美式鄉村
+
+全部都是 AI 生成，同一個空間，完全不同的感覺。
+
+留言告訴我你最喜歡哪一種？我猜最多人選___
+
+---
+
+【發文 02-B】故事型
+
+有一個買家跟我說：
+
+「我不知道這間房子裝修之後會是什麼樣子，所以不敢下手。」
+
+我花了 30 分鐘，把同一個空間做成 5 種不同裝潢風格的效果圖，傳給她看。
+
+她回我：「第三種，日系那個，就是我想要的家。」
+
+隔天她來看屋，看完當場決定出價。
+
+AI 改造圖，解決的不是房子的問題，是買家的想像力問題。
+
+---
+
+【發文 02-C】教學型
+
+買家看屋最大的障礙是什麼？
+
+不是價格，不是位置——是「想像不出來住進去的樣子」。
+
+我的解法：AI 風格改造圖
+
+同一個空間，生成 5 種不同裝潢風格：
+• 北歐 / 現代 / 日系 / 輕奢 / 美式
+
+讓買家自己選最喜歡的風格，然後告訴我：
+「就這個感覺，這間我想去看看。」
+
+工具：REimagineHome（免費版就夠用）
+時間：每種風格約 30 秒生成
+
+這是我現在每個物件都會做的事。
+
+---
+
+【發文 02-D】比較型
+
+同樣一個空間，裝不同風格，感覺完全不一樣⬇️
+
+你會因為風格選擇一間房子嗎？
+
+這是 AI 改造圖的最大優勢：讓買家提前「住進去」，感受不同風格的生活方式。
+
+我在每一間物件上市前都會先做這個。
+
+---
+
+【發文 02-E】個人品牌型
+
+很多房仲用「物件特色」吸引買家
+我用「生活方式」吸引買家
+
+差別在哪裡？
+
+物件特色：「三房兩廳、採光好、近捷運」
+生活方式：「早上從臥室看到陽光、週末在開放式廚房做早餐、客廳夠大能有一個舒適的閱讀角落」
+
+AI 改造圖幫我把「生活方式」視覺化。
+
+這就是我的差異化。[填入你的名字] ，台中 [填入區域] 專屬房仲。
+
+
+────────────────────────────────────────
+【類型 03】毛胚屋模擬完工（5 篇）
+────────────────────────────────────────
+
+【發文 03-A】震驚型開場
+
+你能相信左邊和右邊是同一個空間嗎？
+
+（左：水泥毛胚）（右：AI 模擬完工）
+
+這就是預售屋買家最需要看到的東西——
+不是水泥牆，而是「住進去的樣子」
+
+AI 改造圖，30 分鐘完成，比 3D 建模便宜 100 倍。
+
+有預售案的房仲，這是你現在就應該開始做的事。
+
+---
+
+【發文 03-B】首購族痛點
+
+首購族看預售屋最大的問題是什麼？
+
+看不到實際的樣子。
+
+水泥地、裸露鋼筋、沒有裝修，很難想像住進去之後是什麼感覺，所以很多人猶豫很久不敢下手。
+
+我現在做的事情是：
+把毛胚屋的照片，用 AI 模擬成裝修完工的樣子，讓首購族「提前住進去」。
+
+效果怎麼樣？看屋之後的詢問率明顯提升。
+
+正在考慮預售屋的你，想先看 AI 模擬效果嗎？私訊我。
+
+---
+
+【發文 03-C】教育市場型
+
+為什麼很多預售屋賣的是「樣品屋」？
+
+因為大家都知道：「看到實際的樣子」比「聽說很好」更有說服力。
+
+但樣品屋要花幾百萬建，不是每個案子都負擔得起。
+
+現在有一個更好的解法：AI 模擬完工效果圖。
+
+上傳毛胚照片 → 選風格 → 30 秒出圖
+成本：每張圖不到 10 元
+
+這個工具，正在改變預售屋的行銷方式。
+
+---
+
+【發文 03-D】對比震撼型
+
+你花了多少時間才決定買你現在住的家？
+
+很多人說：「看了很久，因為想像不出來裝修後的樣子。」
+
+現在，這個問題有解了。
+
+AI 能把水泥毛胚變成你夢想中的家，在你決定之前，讓你先「看見它」。
+
+正在考慮 [填入你的物件區域] 的預售案嗎？私訊我，我幫你做 AI 完工模擬圖。
+
+---
+
+【發文 03-E】服務差異化型
+
+我幫每一個預售屋客戶做的一件事——
+
+在他們看屋之前，先把毛胚照片用 AI 做成裝修完工的效果圖，讓他們帶著「已經住進去」的感覺去看屋。
+
+結果：
+• 看屋的猶豫時間明顯縮短
+• 買家更容易具體描述他們想要的格局
+• 成交討論更快進入實質階段
+
+不是每個房仲都在做這件事，但它確實有效。
+
+[填入你的名字]，[填入區域] 預售屋專家，歡迎私訊討論。
+
+
+════════════════════════════════════════
+第四部分：屋主提案話術
+════════════════════════════════════════
+
+────────────────────────────────────────
+【話術 01】初次向屋主介紹 AI 改造服務
+────────────────────────────────────────
+
+「[屋主稱謂]，我最近在幫每一個委託物件做一個新的服務，想跟您分享一下。
+
+我們現在可以用 AI 把您家的照片做虛擬改造——比如說，把原本的家具換成更現代的風格，或者把空間模擬成不同的裝潢效果，讓買家在看屋之前就能想像住進去的感覺。
+
+效果大概是這樣的——」（展示手機上的 Before/After 圖）
+
+「這樣做有兩個好處：第一，買家更容易對物件產生情感連結，詢問率會提升；第二，有時候物件因為裝潢風格比較老舊，讓買家覺得維修成本高，AI 改造圖能幫他們看到潛力，降低這個疑慮。
+
+這個服務我是免費幫委託客戶做的，您覺得我們可以試試看嗎？」
+
+────────────────────────────────────────
+【話術 02】屋主問「AI 改造圖是真的嗎？會不會誤導買家？」
+────────────────────────────────────────
+
+「這個問題問得很好，我也想跟您說清楚。
+
+AI 改造圖的定位是『效果示意圖』，我們在發布的時候都會標注說明，讓買家知道這是 AI 模擬，實際屋況以看屋為準。
+
+重點是，這張圖的目的不是讓買家『以為房子長這樣』，而是幫他們『想像潛力』——看到這個空間可以變成什麼樣子。
+
+這跟樣品屋的概念是一樣的，建商也不會把樣品屋說成是實際交屋的樣子，但它確實幫助買家做決定。
+
+我們誠實標示、透明溝通，反而能讓買家覺得我們更專業、更有信任感。」
+
+────────────────────────────────────────
+【話術 03】屋主猶豫：「我的房子不需要吧？」
+────────────────────────────────────────
+
+「我理解您的想法，您的房子條件本來就不錯。
+
+但我分享一個觀察：現在買家平均在網路上看物件的時間大概是 3 到 5 秒，如果第一張照片沒有吸引到他，他就滑走了。
+
+AI 改造圖不是為了掩蓋什麼問題，而是為了在那 3 秒內，讓您的物件比旁邊的物件更吸引人多停留一下。
+
+而且現在很多買家都習慣先在網路上看，只有真正有感覺的才會來預約看屋。我們幫您把這個『有感覺』的機率提高，對您只有好處，對吧？」
+
+────────────────────────────────────────
+【話術 04】成交臨門一腳：「AI 改造圖已經幫您吸引到買家，現在買家要出價了」
+────────────────────────────────────────
+
+「[屋主稱謂]，好消息是，我們的 AI 改造圖發出去之後，確實有吸引到認真的買家來看屋。
+
+[買家描述：例如——這對夫妻，他們看完很喜歡，昨天我給他們看了 AI 效果圖，他們說這個風格就是他們想要的家。]
+
+他們現在準備出價討論了。您最近有沒有時間我們來聊一下議價的部分？」
+
+
+════════════════════════════════════════
+第五部分：CapCut Before/After 影片製作指南
+════════════════════════════════════════
+
+────────────────────────────────────────
+【基礎版】最快 10 分鐘完成一支影片
+────────────────────────────────────────
+
+步驟 1：準備素材
+• Before 照片：原始空間（1 張）
+• After 照片：AI 改造後（1 張）
+• 建議尺寸：1080 × 1920（直式，適合 Reels / Shorts）
+
+步驟 2：打開 CapCut
+• 點「+ 新增專案」
+• 匯入 Before 照片，設定時長 2 秒
+• 再匯入 After 照片，設定時長 3 秒
+
+步驟 3：加轉場效果
+• 點兩張照片中間的轉場圖示
+• 選「Reveal」或「Wipe」效果（推薦「水平滑動」）
+• 時長設定 0.5 秒
+
+步驟 4：加字幕
+• Before 照片上加字幕：「改造前」（字體建議：粗黑體，白色）
+• After 照片上加字幕：「AI 改造後 ✨」
+
+步驟 5：加背景音樂
+• 點「音樂」→「推薦」→ 搜尋「uplifting」或「reveal」
+• 選擇有「免費商用」標示的音樂
+
+步驟 6：加 Logo 或文字水印
+• 在影片結尾加上你的名字 + LINE ID / 電話
+• 建議放在右下角，半透明白色字
+
+步驟 7：匯出
+• 解析度選 1080P
+• 格式選 MP4
+• 直接分享到 IG Reels / YT Shorts / FB
+
+────────────────────────────────────────
+【進階版】5 種風格輪播影片（約 20 分鐘）
+────────────────────────────────────────
+
+準備素材：
+• 原始照片 × 1
+• 5 種風格 AI 改造圖 × 5
+
+影片結構：
+0-2 秒：原始空間照片（字幕：「這個空間，你想住哪一種風格？」）
+2-4 秒：風格 1 現代簡約（字幕：「① 現代簡約」）
+4-6 秒：風格 2 北歐清爽（字幕：「② 北歐清爽」）
+6-8 秒：風格 3 日系侘寂（字幕：「③ 日系侘寂」）
+8-10 秒：風格 4 輕奢金屬（字幕：「④ 輕奢金屬」）
+10-12 秒：風格 5 美式鄉村（字幕：「⑤ 美式鄉村」）
+12-15 秒：結尾畫面（字幕：「你最喜歡哪一種？留言告訴我」+ 聯絡資訊）
+
+轉場：每張圖用「快速切換」+ 音效轉場（選擇 CapCut 內建的「whoosh」音效）
+
+────────────────────────────────────────
+【發布規格建議】
+────────────────────────────────────────
+
+IG Reels：直式 9:16，1080×1920，最長 90 秒，建議 30-45 秒
+YouTube Shorts：直式 9:16，1080×1920，最長 60 秒
+Facebook Reels：直式 9:16，1080×1920，最長 60 秒
+Threads：可貼靜態圖（Before/After 並排）+ 說明文字
+
+
+════════════════════════════════════════
+附錄：工具費用對照表
+════════════════════════════════════════
+
+工具名稱         免費方案          付費方案
+REimagineHome    每月 3 張免費      $15/月（無限次）
+Midjourney       無免費方案         $10/月（基本）
+Virtual Staging AI 無免費方案      按張計費，約 $1-3/張
+CapCut           完全免費           Pro $179/年（進階功能）
+ChatGPT          每日限制           Plus $20/月（GPT-4）
+
+建議入門組合（每月約 NT$500）：
+• REimagineHome 基本版 $15/月 ≈ NT$480
+• CapCut 免費版
+→ 每月可生成無限次改造圖 + 免費剪輯影片
+
+升級組合（每月約 NT$1,300）：
+• REimagineHome Pro $15/月
+• Midjourney Basic $10/月
+• CapCut 免費版
+→ 高品質 AI 效果圖 + 更多創意風格選擇
+</div>
+
+<!-- Visible Content -->
+
+<h2>第一部分：操作 SOP 手冊</h2>
+
+<div class="card t1">
+  <h3>🛋️ 類型 01：舊家具移除 + 放入新家具</h3>
+  <div style="margin-bottom:12px;"><span class="tag tag-tool">REimagineHome</span> <span class="tag tag-free">免費版可用</span></div>
+
+  <h4 style="color:#C9943A;margin-bottom:8px;">📸 拍攝技巧（關鍵！）</h4>
+  <div class="note">使用橫向構圖（16:9）・選上午 9-11 點或下午 2-4 點自然採光・從房間角落或門口往內拍・保持鏡頭水平・同一空間多拍幾張取最佳</div>
+
+  <h4 style="color:#C9943A;margin:16px 0 8px;">操作步驟</h4>
+  <div class="step"><div class="step-num">1</div><div><p><b>上傳到 REimagineHome</b><br>打開 reimaginehome.ai → 點「Try for free」→ 點「Upload Photo」上傳照片</p></div></div>
+  <div class="step"><div class="step-num">2</div><div><p><b>選擇功能模式</b><br>選「Redesign」→ 勾選「Remove existing furniture」</p></div></div>
+  <div class="step"><div class="step-num">3</div><div><p><b>選風格</b><br>Modern / Scandinavian / Japanese / Contemporary → 選空間類型 → 點「Reimagine」（約 15-30 秒）</p></div></div>
+  <div class="step"><div class="step-num">4</div><div><p><b>評估效果圖</b><br>✓ 家具比例正確 ✓ 光線方向自然 ✓ 地板牆面一致 ✓ 風格統一<br>不滿意就點「Generate again」，通常第 2-3 次更好</p></div></div>
+  <div class="step"><div class="step-num">5</div><div><p><b>下載 + CapCut 製作 Before/After 影片</b><br>下載改造圖 + 原始照片 → CapCut 套「before after reveal」模板 → 加字幕 + 音樂 → 匯出 1080P</p></div></div>
+</div>
+
+<div class="card t2">
+  <h3>🎨 類型 02：空間風格改造（同房換裝潢）</h3>
+  <div style="margin-bottom:12px;"><span class="tag tag-tool">REimagineHome</span> <span class="tag tag-paid">Midjourney 選做</span></div>
+
+  <div class="note">同一個空間，生成 5 種不同裝潢風格，讓買家選最喜歡的。這類貼文互動率最高。</div>
+  <div class="step"><div class="step-num">1</div><div><p>拍攝同一空間「乾淨版」照片（清除雜物，充足光線）</p></div></div>
+  <div class="step"><div class="step-num">2</div><div><p>用 REimagineHome 依序生成 5 種風格：<br>A 現代簡約 / B 北歐清爽 / C 日系侘寂 / D 輕奢金屬 / E 美式鄉村</p></div></div>
+  <div class="step"><div class="step-num">3</div><div><p>IG 輪播格式：第 1 張原始 → 第 2-6 張各風格 → 最後一張加聯絡方式</p></div></div>
+  <div class="step"><div class="step-num">4</div><div><p>Reels 格式：CapCut 快速切換效果，每 1-2 秒換一個風格，配轉場音效</p></div></div>
+</div>
+
+<div class="card t3">
+  <h3>🏗️ 類型 03：毛胚屋模擬完工效果</h3>
+  <div style="margin-bottom:12px;"><span class="tag tag-tool">REimagineHome</span> <span class="tag tag-tool">Midjourney</span></div>
+
+  <div class="note">拍毛胚屋時記得帶手電筒補光，記錄實際尺寸（長×寬×高）。發布時務必標注「AI 效果示意圖」。</div>
+  <div class="step"><div class="step-num">1</div><div><p>上傳毛胚照片到 REimagineHome → 選「Redesign」→ 選風格 → 先試看效果</p></div></div>
+  <div class="step"><div class="step-num">2</div><div><p>效果不夠理想 → 改用 Midjourney Prompt（見第二部分 R-01 至 R-05）</p></div></div>
+  <div class="step"><div class="step-num">3</div><div><p>製作影片：先展示毛胚 → 展示 AI 模擬完工 → 說明格局特色 → 預約看屋 CTA</p></div></div>
+  <div class="step"><div class="step-num">4</div><div><p>在圖片或影片上標注：「以上為 AI 效果示意圖，實際裝修效果因設計師與建材而異」</p></div></div>
+</div>
+
+<h2>第二部分：AI Prompt 模板庫（25 個）</h2>
+
+<div class="card prompt">
+  <h3>章節一 現代簡約風格</h3>
+  <div class="prompt-box"><b>M-01 客廳</b><br>A bright modern minimalist living room interior, white walls, light oak wood flooring, low-profile gray sofa, natural linen cushions, simple coffee table, large window with sheer curtains, indoor plants, soft afternoon sunlight, clean and airy atmosphere, 4K photorealistic --ar 16:9 --v 6<div class="zh">明亮現代簡約客廳，白牆、淺橡木地板、低矮灰色沙發、自然光</div></div>
+  <div class="prompt-box"><b>M-02 主臥</b><br>A serene modern minimalist bedroom, white walls, platform bed with light gray linen bedding, wooden nightstands, blackout curtains in warm beige, no clutter, soft morning light, photorealistic interior design --ar 16:9 --v 6<div class="zh">寧靜現代簡約主臥，白牆、床台、淺灰亞麻寢具、暖米色遮光簾</div></div>
+  <div class="prompt-box"><b>M-03 廚房</b><br>A clean modern minimalist kitchen, white cabinetry with handleless doors, light quartz countertop, stainless steel appliances, under-cabinet lighting, small herb plants on windowsill, bright and functional, photorealistic --ar 16:9 --v 6<div class="zh">簡潔現代廚房，白色無把手櫥櫃、淺色石英石台面、不鏽鋼家電</div></div>
+
+  <h3>章節二 北歐清爽風格</h3>
+  <div class="prompt-box"><b>S-01 客廳</b><br>A cozy Scandinavian living room, warm white walls, natural birch wood furniture, wool throw blanket in mustard yellow, sheepskin rug, simple pendant lighting, hygge atmosphere, large window, indoor plants, soft warm light --ar 16:9 --v 6<div class="zh">舒適北歐客廳，溫白牆、白樺木家具、芥末黃羊毛毯、暖燈</div></div>
+  <div class="prompt-box"><b>S-02 主臥</b><br>A calm Scandinavian bedroom, white walls, light pine wood bed frame, white and off-white bedding with subtle texture, knitted blanket, simple bedside lamp, potted plant, large window, peaceful and minimal --ar 16:9 --v 6<div class="zh">寧靜北歐主臥，白牆、松木床架、白色質感寢具、針織毯</div></div>
+  <div class="prompt-box"><b>S-03 餐廳</b><br>A bright Scandinavian dining room, long white dining table, mix of wooden chairs and bench, pendant light above table, simple centerpiece with dried flowers, whitewashed walls, natural daylight --ar 16:9 --v 6<div class="zh">明亮北歐餐廳、長型白色餐桌、木椅混搭長凳、乾燥花中心</div></div>
+
+  <h3>章節三 日系侘寂風格</h3>
+  <div class="prompt-box"><b>J-01 客廳</b><br>A tranquil Japanese wabi-sabi living room, low furniture, natural linen sofa in earthy tones, rough textured walls in warm greige, rattan coffee table, handmade pottery, dried pampas grass, soft diffused light, meditative atmosphere --ar 16:9 --v 6<div class="zh">侘寂客廳、低矮家具、大地色亞麻沙發、粗糙質感牆面、蒲葦草</div></div>
+  <div class="prompt-box"><b>J-02 主臥</b><br>A minimalist Japanese bedroom, floor-level bed with natural cotton bedding, woven tatami mat, shoji screen partition, bamboo plant, warm amber light, natural wood accents, peaceful and grounded --ar 16:9 --v 6<div class="zh">日式簡約主臥、榻榻米床、障子門、竹子、琥珀暖光</div></div>
+  <div class="prompt-box"><b>J-03 書房</b><br>A serene Japanese study room, low wooden desk, zabuton cushion, simple bookshelf with ceramic objects, rice paper lamp, natural light from sliding door, neutral earthy palette, wabi-sabi aesthetic --ar 16:9 --v 6<div class="zh">侘寂書房、低木桌、坐墊、陶器、和紙燈、自然光</div></div>
+
+  <h3>章節四 輕奢金屬風格</h3>
+  <div class="prompt-box"><b>L-01 客廳</b><br>A sophisticated contemporary luxe living room, deep navy velvet sofa, gold brass accent coffee table, marble floors, abstract art on wall, large pendant chandelier, tall indoor palm, moody yet elegant ambiance --ar 16:9 --v 6<div class="zh">輕奢客廳、深藍絲絨沙發、金色茶几、大理石地板、抽象藝術畫</div></div>
+  <div class="prompt-box"><b>L-02 主臥</b><br>A glamorous contemporary bedroom, tufted upholstered bed in deep charcoal, gold accent lighting, mirrored furniture, plush area rug, floor-to-ceiling curtains in champagne, sophisticated and opulent --ar 16:9 --v 6<div class="zh">輕奢主臥、深炭色絨布床、金色燈飾、鏡面傢具、香檳色落地窗簾</div></div>
+  <div class="prompt-box"><b>L-03 衛浴</b><br>A luxurious contemporary bathroom, floor-to-ceiling marble tiles, freestanding bathtub in matte white, gold fixtures, large vanity mirror with backlit lighting, spa-like atmosphere --ar 16:9 --v 6<div class="zh">輕奢浴室、全身大理石磚、獨立浴缸、金色水龍頭、背光化妝鏡</div></div>
+
+  <h3>章節五 毛胚屋模擬完工（5 個）</h3>
+  <div class="prompt-box"><b>R-01 毛胚客廳→現代</b><br>Transform this bare concrete shell living room into a fully furnished modern Taiwanese apartment interior. Add: laminate wood flooring, white walls with paint, modular sofa in light gray, glass coffee table, built-in TV cabinet, recessed ceiling lighting, sheer curtains. Photorealistic. --ar 16:9 --v 6<div class="zh">水泥毛胚客廳→現代台灣公寓，加木地板、白牆、組合沙發、玻璃茶几</div></div>
+  <div class="prompt-box"><b>R-02 毛胚主臥→現代</b><br>Transform this empty concrete bedroom into a complete modern bedroom. Add: engineered wood flooring, painted white walls, queen-size platform bed with white bedding, built-in wardrobe on one wall, pendant lights on both sides, air conditioning unit, window with curtains. Realistic rendering. --ar 16:9 --v 6<div class="zh">水泥毛胚主臥→現代主臥，加木地板、床台、衣櫃、吊燈</div></div>
+  <div class="prompt-box"><b>R-03 毛胚廚房→現代</b><br>Transform this unfinished kitchen space into a complete modern kitchen. Add: L-shaped kitchen cabinets in white, quartz countertop, stainless steel sink and appliances, tiled backsplash, recessed lighting. Photorealistic interior. --ar 16:9 --v 6<div class="zh">毛胚廚房→現代廚房，加L型白色廚櫃、石英石台面、廚具</div></div>
+  <div class="prompt-box"><b>R-04 毛胚衛浴→現代</b><br>Transform this bare bathroom into a modern Taiwanese bathroom. Add: large format tile flooring in warm gray, wall tiles, vanity with mirror, shower area with glass partition, toilet, proper lighting. Clean and functional. --ar 16:9 --v 6<div class="zh">毛胚衛浴→現代浴室，加大板磚、洗手台、玻璃淋浴隔間</div></div>
+  <div class="prompt-box"><b>R-05 整屋毛胚→北歐</b><br>Transform this entire bare concrete apartment into a cozy Scandinavian-style completed home. Light wood flooring throughout, white walls, Scandinavian furniture in living room, bedroom, dining area, warm pendant lighting. Complete home interior. Photorealistic. --ar 16:9 --v 6<div class="zh">整屋毛胚→北歐風完工，淺木地板、白牆、北歐傢具全室</div></div>
+
+  <h3>章節六 家具移除 & 採光優化（4 個）</h3>
+  <div class="prompt-box"><b>E-01 移除老舊家具</b><br>Remove all existing furniture and clutter from this room. Keep the original flooring, walls, windows, and ceiling. Result should be a clean, empty room ready for virtual staging. Maintain original room proportions and lighting. --ar 16:9<div class="zh">移除所有家具雜物，保留地板牆面窗戶，呈現乾淨空屋狀態</div></div>
+  <div class="prompt-box"><b>E-02 增加採光感</b><br>Enhance the natural lighting in this room. Increase brightness near windows, add warm soft light effect, make the space feel airier and more spacious without changing furniture or layout. Subtle enhancement only. --ar 16:9<div class="zh">增強自然採光，提亮窗戶附近，增加空間感，不改變佈局</div></div>
+  <div class="prompt-box"><b>E-03 移除雜物保留家具</b><br>Clean up this room by removing all clutter, boxes, unnecessary items, and personal belongings. Keep the main furniture pieces in place. Result should look like a staged, market-ready property. --ar 16:9<div class="zh">清除雜物，保留主要家具，呈現上市就緒的整潔狀態</div></div>
+  <div class="prompt-box"><b>E-04 修正照片角度</b><br>Fix the perspective distortion in this interior photo. Straighten vertical lines, correct wide-angle lens distortion, make walls appear straight, maintain natural room proportions. --ar 16:9<div class="zh">修正室內照片的透視變形，讓牆面垂直、廣角鏡頭變形修正</div></div>
+</div>
+
+<h2>第三部分：社群發文腳本（15 篇）</h2>
+
+<div class="card script">
+  <h3>🛋️ 類型 01 — 舊家具換新（5 篇）</h3>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 01-A｜IG Reels 說明文</div>
+  <p>你有沒有看過這種操作？</p>
+  <p>舊公寓裡的老舊家具，一鍵 AI 移除，換上現代感的新佈置。整個過程我只花了 20 分鐘👇</p>
+  <p>Before → After 完整改造，這就是為什麼我說 AI 已經改變房仲的工作方式了。</p>
+  <p>想知道這間房子的詳細資訊嗎？👉 留言「想看」或私訊我 <span class="fill">[填入你的名字]</span></p>
+  <div class="hash">#房仲日常 #AI空屋改造 #空屋改造 #房產自媒體 #台灣房仲</div></div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 01-B｜Threads 純文字</div>
+  <p>今天試了一個讓我很驚喜的功能——</p>
+  <p>把屋主家裡的老舊家具，用 AI 直接「換掉」，放入現代感的新傢具。不是 P 圖，不是 3D 建模，就是上傳照片→選風格→30 秒出圖。</p>
+  <p>買家看完圖之後問我：「這間這樣多少錢？」</p>
+  <p>AI 已經在改變房仲的工作了，你還沒開始用嗎？（有興趣學的留言，我分享工具）</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 01-C｜知識型教學</div>
+  <p>你知道為什麼有些房子的網路照片讓你「想去看」，有些讓你「滑過去」嗎？差別在：有沒有幫買家「想像住進去的感覺」</p>
+  <p>現在我用 AI 幫每一個物件做虛擬改造：舊家具移除 → 放入現代軟裝，整個流程不到 30 分鐘，不需要請攝影師，不需要真的裝潢。</p>
+  <p>對賣屋效率的影響？⬆️ 詢問量增加 ⬆️ 看屋預約更快 ⬇️ 物件停留市場時間縮短</p>
+  <div class="hash">#AI房仲 #空屋改造 #房產行銷 #台灣房仲</div></div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 01-D｜互動型</div>
+  <p>左邊 vs 右邊，你比較喜歡哪一個？（左圖：舊家具照片）（右圖：AI 改造後）</p>
+  <p>同一個空間，AI 改造前後的差距，就是買家願不願意來看屋的差距。你覺得哪個更吸引你？留言告訴我 👇</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 01-E｜問題導向</div>
+  <p>房子賣不掉，很多時候不是價格問題——是「第一印象」的問題。</p>
+  <p>買家在手機上滑過你的物件，如果照片不吸引人，他根本不會點進來看。</p>
+  <p>我現在做的事：把每一間物件的照片，用 AI 做一次虛擬改造，讓買家一眼就能「感受到住進去的樣子」。</p>
+  <p>有在賣房子、或有物件想試試這個效果的，私訊我 <span class="fill">[填入聯絡方式]</span></div>
+
+  <h3>🎨 類型 02 — 風格改造對比（5 篇）</h3>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 02-A｜輪播互動</div>
+  <p>這個空間，你最喜歡哪一種風格？👇 ➡️ 往右滑，看 5 種不同裝潢風格</p>
+  <p>1️⃣ 現代簡約 ・ 2️⃣ 北歐清爽 ・ 3️⃣ 日系侘寂 ・ 4️⃣ 輕奢金屬 ・ 5️⃣ 美式鄉村</p>
+  <p>全部都是 AI 生成，同一個空間，完全不同的感覺。留言告訴我你最喜歡哪一種？我猜最多人選___</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 02-B｜故事型</div>
+  <p>有一個買家跟我說：「我不知道這間房子裝修之後會是什麼樣子，所以不敢下手。」</p>
+  <p>我花了 30 分鐘，把同一個空間做成 5 種不同裝潢風格的效果圖，傳給她看。她回我：「第三種，日系那個，就是我想要的家。」</p>
+  <p>隔天她來看屋，看完當場決定出價。AI 改造圖，解決的不是房子的問題，是買家的想像力問題。</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 02-C｜教學型</div>
+  <p>買家看屋最大的障礙是什麼？不是價格，不是位置——是「想像不出來住進去的樣子」。</p>
+  <p>我的解法：AI 風格改造圖。同一個空間，生成 5 種不同裝潢風格，讓買家自己選最喜歡的，然後告訴我：「就這個感覺，這間我想去看看。」</p>
+  <p>工具：REimagineHome（免費版就夠用），每種風格約 30 秒生成。</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 02-D｜比較型</div>
+  <p>同樣一個空間，裝不同風格，感覺完全不一樣⬇️ 你會因為風格選擇一間房子嗎？</p>
+  <p>這是 AI 改造圖的最大優勢：讓買家提前「住進去」，感受不同風格的生活方式。我在每一間物件上市前都會先做這個。</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 02-E｜個人品牌型</div>
+  <p>很多房仲用「物件特色」吸引買家，我用「生活方式」吸引買家。</p>
+  <p>物件特色：「三房兩廳、採光好、近捷運」 ／ 生活方式：「早上從臥室看到陽光、週末在開放式廚房做早餐」</p>
+  <p>AI 改造圖幫我把「生活方式」視覺化。這就是我的差異化。<span class="fill">[填入你的名字]</span>，<span class="fill">[填入區域]</span> 專屬房仲。</div>
+
+  <h3>🏗️ 類型 03 — 毛胚屋模擬（5 篇）</h3>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 03-A｜震驚開場</div>
+  <p>你能相信左邊和右邊是同一個空間嗎？（左：水泥毛胚）（右：AI 模擬完工）</p>
+  <p>這就是預售屋買家最需要看到的東西——不是水泥牆，而是「住進去的樣子」。AI 改造圖，30 分鐘完成，比 3D 建模便宜 100 倍。</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 03-B｜首購族痛點</div>
+  <p>首購族看預售屋最大的問題是什麼？看不到實際的樣子。</p>
+  <p>水泥地、裸露鋼筋、沒有裝修，很難想像住進去之後是什麼感覺，所以很多人猶豫很久不敢下手。</p>
+  <p>我現在做的事情是：把毛胚屋的照片，用 AI 模擬成裝修完工的樣子，讓首購族「提前住進去」。正在考慮預售屋的你，想先看 AI 模擬效果嗎？私訊我。</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 03-C｜教育市場型</div>
+  <p>為什麼很多預售屋賣的是「樣品屋」？因為大家都知道：「看到實際的樣子」比「聽說很好」更有說服力。</p>
+  <p>但樣品屋要花幾百萬建，不是每個案子都負擔得起。現在有一個更好的解法：AI 模擬完工效果圖。</p>
+  <p>上傳毛胚照片 → 選風格 → 30 秒出圖。成本：每張圖不到 10 元。</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 03-D｜對比震撼型</div>
+  <p>你花了多少時間才決定買你現在住的家？很多人說：「看了很久，因為想像不出來裝修後的樣子。」</p>
+  <p>現在，這個問題有解了。AI 能把水泥毛胚變成你夢想中的家，在你決定之前，讓你先「看見它」。</p>
+  <p>正在考慮 <span class="fill">[填入區域]</span> 的預售案嗎？私訊我，我幫你做 AI 完工模擬圖。</div>
+
+  <div class="script-box"><div class="lbl lbl-post">發文 03-E｜服務差異化型</div>
+  <p>我幫每一個預售屋客戶做的一件事——在他們看屋之前，先把毛胚照片用 AI 做成裝修完工的效果圖，讓他們帶著「已經住進去」的感覺去看屋。</p>
+  <p>結果：看屋猶豫時間縮短・買家更容易具體描述需求・成交討論更快進入實質階段。</p>
+  <p><span class="fill">[填入你的名字]</span>，<span class="fill">[填入區域]</span> 預售屋專家，歡迎私訊討論。</div>
+</div>
+
+<h2>第四部分：屋主提案話術</h2>
+
+<div class="card pitch">
+  <h3>話術 01：初次介紹 AI 改造服務</h3>
+  <div class="script-box"><p>「<span class="fill">[屋主稱謂]</span>，我最近在幫每一個委託物件做一個新的服務，想跟您分享一下。</p>
+  <p>我們現在可以用 AI 把您家的照片做虛擬改造——比如說，把原本的家具換成更現代的風格，或者把空間模擬成不同的裝潢效果，讓買家在看屋之前就能想像住進去的感覺。」</p>
+  <p>（展示手機上的 Before/After 圖）</p>
+  <p>「這樣做有兩個好處：第一，買家更容易對物件產生情感連結，詢問率會提升；第二，有時候物件因為裝潢風格比較老舊，AI 改造圖能幫他們看到潛力，降低維修成本的疑慮。</p>
+  <p>這個服務我是免費幫委託客戶做的，您覺得我們可以試試看嗎？」</p></div>
+
+  <h3>話術 02：屋主問「會不會誤導買家？」</h3>
+  <div class="script-box"><p>「這個問題問得很好，我也想跟您說清楚。</p>
+  <p>AI 改造圖的定位是『效果示意圖』，我們在發布的時候都會標注說明，讓買家知道這是 AI 模擬，實際屋況以看屋為準。</p>
+  <p>重點是，這張圖的目的不是讓買家『以為房子長這樣』，而是幫他們『想像潛力』——跟樣品屋的概念是一樣的。</p>
+  <p>我們誠實標示、透明溝通，反而能讓買家覺得我們更專業、更有信任感。」</p></div>
+
+  <h3>話術 03：屋主說「我的房子不需要吧？」</h3>
+  <div class="script-box"><p>「我理解您的想法，您的房子條件本來就不錯。</p>
+  <p>但現在買家平均在網路上看物件的時間大概是 3 到 5 秒，如果第一張照片沒有吸引到他，他就滑走了。</p>
+  <p>AI 改造圖不是為了掩蓋什麼問題，而是為了在那 3 秒內，讓您的物件比旁邊的物件更吸引人停留一下。</p>
+  <p>這個服務免費幫您做，對您只有好處，對吧？」</p></div>
+</div>
+
+<h2>第五部分：CapCut 影片製作指南</h2>
+
+<div class="card t2">
+  <h3>基礎版：10 分鐘完成一支 Before/After 影片</h3>
+  <div class="step"><div class="step-num">1</div><div><p>準備 Before 照片（原始空間）+ After 照片（AI 改造後），建議尺寸 1080×1920</p></div></div>
+  <div class="step"><div class="step-num">2</div><div><p>CapCut → 新增專案 → 匯入 Before（設 2 秒）→ 匯入 After（設 3 秒）</p></div></div>
+  <div class="step"><div class="step-num">3</div><div><p>點兩張照片中間轉場圖示 → 選「Reveal」或「Wipe」（水平滑動）→ 時長 0.5 秒</p></div></div>
+  <div class="step"><div class="step-num">4</div><div><p>加字幕：Before 上寫「改造前」，After 上寫「AI 改造後 ✨」（粗黑體，白色）</p></div></div>
+  <div class="step"><div class="step-num">5</div><div><p>加音樂：點「音樂」→ 搜尋「uplifting」→ 選有「免費商用」標示的</p></div></div>
+  <div class="step"><div class="step-num">6</div><div><p>結尾加水印：右下角放你的名字 + LINE ID，半透明白色字</p></div></div>
+  <div class="step"><div class="step-num">7</div><div><p>匯出 1080P MP4 → 發 IG Reels / YT Shorts / FB</p></div></div>
+
+  <h3 style="margin-top:24px;">發布規格速查</h3>
+  <div class="note">IG Reels / YouTube Shorts / Facebook Reels：直式 9:16，1080×1920，建議長度 30-45 秒<br>Threads：靜態 Before/After 並排圖 + 說明文字效果最佳</div>
+</div>
+
+<script>
+function copyAll() {
+  const blob = document.getElementById('blob').innerText;
+  navigator.clipboard.writeText(blob).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✅ 已複製！去貼入 Google 文件';
+    btn.classList.add('done');
+    setTimeout(() => {
+      btn.textContent = '📋 一鍵全部複製';
+      btn.classList.remove('done');
+    }, 4000);
+  }).catch(() => {
+    alert('請手動選取頁面文字後複製（Ctrl+A → Ctrl+C）');
+  });
+}
+</script>
+</body>
+</html>
