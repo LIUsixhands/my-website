@@ -173,12 +173,44 @@
     padding:32px 24px;text-align:center;font-size:0.85rem;
   }
 
+  /* Product Family */
+  .product-family{background:var(--navy);padding:80px 24px;}
+  .product-family .section-title{color:#fff;margin-bottom:8px;}
+  .product-family .section-sub{color:rgba(255,255,255,.65);}
+  .prod-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;max-width:1080px;margin:0 auto;}
+  .prod-card{
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
+    border-radius:18px;padding:32px 28px;transition:background .2s,transform .2s;
+  }
+  .prod-card:hover{background:rgba(255,255,255,.09);transform:translateY(-4px);}
+  .prod-card .prod-icon{font-size:2.4rem;margin-bottom:14px;}
+  .prod-card .prod-tag{
+    display:inline-block;font-size:0.7rem;font-weight:800;letter-spacing:2px;
+    padding:3px 12px;border-radius:20px;margin-bottom:12px;
+  }
+  .prod-card.tag-video .prod-tag{background:rgba(42,127,127,.35);color:#5eead4;}
+  .prod-card.tag-makeover .prod-tag{background:rgba(109,40,217,.35);color:#c4b5fd;}
+  .prod-card h3{font-size:1.1rem;font-weight:800;color:#fff;margin-bottom:8px;line-height:1.35;}
+  .prod-card p{font-size:0.88rem;color:rgba(255,255,255,.65);line-height:1.7;margin-bottom:20px;}
+  .prod-card .prod-price{font-size:1.4rem;font-weight:900;color:var(--gold);margin-bottom:4px;}
+  .prod-card .prod-price-sub{font-size:0.78rem;color:rgba(255,255,255,.45);margin-bottom:18px;}
+  .prod-card .prod-feats{list-style:none;margin-bottom:22px;}
+  .prod-card .prod-feats li{font-size:0.82rem;color:rgba(255,255,255,.7);padding:4px 0;display:flex;gap:8px;}
+  .prod-card .prod-feats li::before{content:'✓';color:var(--gold);font-weight:700;flex-shrink:0;}
+  .btn-prod{
+    display:block;text-align:center;border:2px solid var(--gold);color:var(--gold);
+    padding:12px;border-radius:50px;font-size:0.95rem;font-weight:800;
+    text-decoration:none;transition:background .2s,color .2s;
+  }
+  .btn-prod:hover{background:var(--gold);color:#fff;}
+
   /* Mobile */
   @media (max-width:720px){
     .hero h1{font-size:1.9rem;}
     .hero .stats{gap:24px;}
     section{padding:48px 0;}
     .section-title{font-size:1.6rem;}
+    .product-family{padding:56px 20px;}
   }
 </style>
 </head>
@@ -405,6 +437,47 @@
         <p>可以！透過 Gumroad 購買享 30 天退款保證，不滿意全額退款，無風險嘗試。</p>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- PRODUCT FAMILY -->
+<section class="product-family">
+  <h2 class="section-title">房仲 AI 工具全系列</h2>
+  <p class="section-sub" style="color:rgba(255,255,255,.65);margin-bottom:40px;">提示詞包讓你寫文案更快，這兩套工具讓你做影片、做改造圖更快</p>
+  <div class="prod-grid">
+
+    <div class="prod-card tag-video">
+      <div class="prod-icon">🎬</div>
+      <div class="prod-tag">AI 影片模板</div>
+      <h3>房仲 AI 影片腳本模板包</h3>
+      <p>不露臉、不剪片，30 個腳本模板讓 AI 替你講房產知識。每週穩定出片，讓潛客記住你。</p>
+      <div class="prod-price">NT$297 起</div>
+      <div class="prod-price-sub">入門版 / 完整版 NT$697 / VIP NT$1,997</div>
+      <ul class="prod-feats">
+        <li>30 個即套即用影片腳本模板</li>
+        <li>5 大主題：知識、行情、避坑、品牌、問答</li>
+        <li>HeyGen / Pictory / CapCut 操作教學</li>
+        <li>IG / YT 標題公式套組 × 30 個</li>
+      </ul>
+      <a href="ai-video-template.html" class="btn-prod">查看 AI 影片模板包 →</a>
+    </div>
+
+    <div class="prod-card tag-makeover">
+      <div class="prod-icon">🏠</div>
+      <div class="prod-tag">AI 空屋改造</div>
+      <h3>AI 空屋改造模板包（三合一）</h3>
+      <p>舊家具移除換新、風格改造對比、毛胚屋模擬完工，三種類型自選搭配，30 分鐘出一組 Before/After。</p>
+      <div class="prod-price">NT$297 起</div>
+      <div class="prod-price-sub">單類型 / 雙類型 NT$497 / 三合一 NT$697 / VIP NT$2,497</div>
+      <ul class="prod-feats">
+        <li>類型 01：舊家具移除 + 放入新家具</li>
+        <li>類型 02：空間風格改造（5 種風格）</li>
+        <li>類型 03：毛胚屋模擬完工效果</li>
+        <li>AI Prompt 模板庫 + CapCut 影片模板</li>
+      </ul>
+      <a href="ai-room-makeover.html" class="btn-prod">查看 AI 空屋改造包 →</a>
+    </div>
+
   </div>
 </section>
 
