@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五行系列｜YouTube 國風水墨動畫製作包｜五集完整腳本＋AI生圖提示詞＋製作流程</title>
+<meta name="description" content="國風水墨風格的五集 YouTube 動畫系列完整製作包：木火土金水五位擬人角色、分集腳本分鏡、Midjourney AI 生圖提示詞、剪輯配樂指南，開箱即用。">
+<meta property="og:title" content="五行系列｜YouTube 國風水墨動畫製作包">
+<meta property="og:description" content="五集完整腳本分鏡 × 五角色提示詞 × 製作 SOP，讓 AI 幫你生出整套國風動畫頻道">
+<style>
+  :root {
+    --navy:   #1B2A4A;
+    --ink:    #0D1A2E;
+    --gold:   #C9943A;
+    --wood:   #2D7D4E;
+    --fire:   #B94040;
+    --earth:  #B07B2A;
+    --metal:  #8B9BA8;
+    --water:  #1B3A5C;
+    --bg:     #F7F4EE;
+    --parchment: #F2EDE3;
+    --white:  #FFFFFF;
+    --gray:   #6B7280;
+    --dark:   #111827;
+  }
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Noto Sans TC','PingFang TC',Arial,sans-serif; background:var(--bg); color:#1a1a1a; line-height:1.75; }
+
+  /* ── Topbar ── */
+  .topbar {
+    background:var(--ink); color:var(--gold);
+    text-align:center; font-size:0.82rem; font-weight:700;
+    padding:9px 16px; letter-spacing:2px;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background:var(--ink);
+    color:var(--white); padding:80px 24px 96px; text-align:center;
+    position:relative; overflow:hidden;
+  }
+  .hero::before {
+    content:'';
+    position:absolute; inset:0;
+    background:
+      radial-gradient(ellipse 60% 50% at 20% 50%, rgba(45,125,78,.18) 0%, transparent 70%),
+      radial-gradient(ellipse 60% 50% at 80% 50%, rgba(27,58,92,.35) 0%, transparent 70%);
+  }
+  .ink-stripe {
+    position:absolute; bottom:0; left:0; right:0; height:6px;
+    background:linear-gradient(90deg, var(--wood), var(--fire), var(--earth), var(--metal), var(--water));
+  }
+  .hero-inner { position:relative; max-width:860px; margin:0 auto; }
+  .badge {
+    display:inline-block; background:rgba(201,148,58,.15);
+    border:1px solid var(--gold); color:var(--gold);
+    font-size:0.76rem; font-weight:800; padding:5px 18px; border-radius:20px;
+    letter-spacing:3px; margin-bottom:28px; text-transform:uppercase;
+  }
+  .hero h1 {
+    font-size:clamp(2rem,5.5vw,3.2rem); font-weight:900; line-height:1.2;
+    margin-bottom:18px; letter-spacing:-0.5px;
+  }
+  .hero h1 em { color:var(--gold); font-style:normal; }
+  .hero .subtitle {
+    font-size:1.1rem; opacity:.85; max-width:640px;
+    margin:0 auto 36px; line-height:1.85;
+  }
+  .cta-row { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; align-items:center; margin-bottom:52px; }
+  .btn-gold {
+    display:inline-block; background:var(--gold); color:var(--white);
+    padding:16px 40px; border-radius:50px; font-size:1.05rem; font-weight:800;
+    text-decoration:none; letter-spacing:1px;
+    box-shadow:0 8px 28px rgba(201,148,58,.4);
+    transition:transform .2s, box-shadow .2s;
+  }
+  .btn-gold:hover { transform:translateY(-3px); box-shadow:0 14px 36px rgba(201,148,58,.55); }
+  .btn-ghost {
+    display:inline-block; border:2px solid rgba(255,255,255,.4); color:var(--white);
+    padding:14px 32px; border-radius:50px; font-size:1rem; font-weight:700;
+    text-decoration:none; transition:border-color .2s, background .2s;
+  }
+  .btn-ghost:hover { border-color:var(--white); background:rgba(255,255,255,.08); }
+  .hero-stats { display:flex; justify-content:center; gap:40px; flex-wrap:wrap; }
+  .hero-stats .st .n { font-size:2.2rem; font-weight:900; color:var(--gold); }
+  .hero-stats .st .l { font-size:0.76rem; opacity:.65; letter-spacing:1px; margin-top:2px; }
+
+  /* ── Container / Section ── */
+  .container { max-width:1060px; margin:0 auto; padding:0 24px; }
+  section { padding:80px 0; }
+  .s-title { font-size:clamp(1.6rem,3.5vw,2.1rem); font-weight:900; color:var(--navy); text-align:center; margin-bottom:12px; }
+  .s-sub { font-size:1.02rem; color:var(--gray); text-align:center; margin-bottom:52px; max-width:600px; margin-left:auto; margin-right:auto; line-height:1.8; }
+
+  /* ── Five Elements Strip ── */
+  .elements-strip {
+    background:var(--ink); padding:32px 24px;
+  }
+  .elements-row { display:flex; justify-content:center; gap:0; max-width:800px; margin:0 auto; }
+  .el-item {
+    flex:1; text-align:center; padding:20px 12px;
+    border-right:1px solid rgba(255,255,255,.08);
+    position:relative;
+  }
+  .el-item:last-child { border-right:none; }
+  .el-char { font-size:2.8rem; font-weight:900; line-height:1; margin-bottom:6px; }
+  .el-name { font-size:0.72rem; letter-spacing:3px; opacity:.5; color:#fff; text-transform:uppercase; }
+  .el-wood  .el-char { color:#4CAF6E; }
+  .el-fire  .el-char { color:#E05252; }
+  .el-earth .el-char { color:#D49A3A; }
+  .el-metal .el-char { color:#B0BEC5; }
+  .el-water .el-char { color:#5B9BD5; }
+
+  /* ── Character Cards ── */
+  .char-section { background:var(--parchment); }
+  .char-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:20px; }
+  .char-card {
+    background:var(--white); border-radius:16px; padding:28px 20px 24px;
+    text-align:center; box-shadow:0 4px 20px rgba(0,0,0,.07);
+    border-top:4px solid var(--navy); position:relative; overflow:hidden;
+  }
+  .char-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:4px;
+  }
+  .char-wood::before  { background:var(--wood); }
+  .char-fire::before  { background:var(--fire); }
+  .char-earth::before { background:var(--earth); }
+  .char-metal::before { background:var(--metal); }
+  .char-water::before { background:var(--water); }
+  .char-glyph {
+    width:72px; height:72px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:2rem; font-weight:900; margin:0 auto 14px;
+    color:#fff;
+  }
+  .char-wood  .char-glyph { background:var(--wood); }
+  .char-fire  .char-glyph { background:var(--fire); }
+  .char-earth .char-glyph { background:var(--earth); }
+  .char-metal .char-glyph { background:var(--metal); }
+  .char-water .char-glyph { background:var(--water); }
+  .char-card h3 { font-size:1.05rem; font-weight:900; color:var(--navy); margin-bottom:4px; }
+  .char-card .role { font-size:0.78rem; color:var(--gray); letter-spacing:1px; margin-bottom:12px; }
+  .char-card .trait { font-size:0.85rem; color:#374151; line-height:1.65; margin-bottom:12px; }
+  .char-item { font-size:0.78rem; color:var(--gray); }
+
+  /* ── Episode Cards ── */
+  .ep-section { background:#fff; }
+  .ep-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:24px; }
+  .ep-card {
+    border-radius:16px; padding:28px 24px;
+    background:var(--bg); border-left:5px solid var(--navy);
+    box-shadow:0 2px 12px rgba(0,0,0,.05);
+  }
+  .ep-card.ep1 { border-left-color:var(--wood); }
+  .ep-card.ep2 { border-left-color:var(--fire); }
+  .ep-card.ep3 { border-left-color:var(--earth); }
+  .ep-card.ep4 { border-left-color:var(--metal); }
+  .ep-card.ep5 { border-left-color:var(--water); }
+  .ep-num { font-size:0.72rem; font-weight:800; letter-spacing:3px; color:var(--gray); text-transform:uppercase; margin-bottom:8px; }
+  .ep-card h3 { font-size:1.1rem; font-weight:900; color:var(--navy); margin-bottom:8px; }
+  .ep-card .ep-tag {
+    display:inline-block; font-size:0.72rem; font-weight:700; padding:3px 10px;
+    border-radius:20px; margin-bottom:14px; letter-spacing:1px;
+  }
+  .ep1 .ep-tag { background:#e8f5ed; color:var(--wood); }
+  .ep2 .ep-tag { background:#fdf0f0; color:var(--fire); }
+  .ep3 .ep-tag { background:#fdf5e6; color:var(--earth); }
+  .ep4 .ep-tag { background:#f0f2f4; color:var(--metal); }
+  .ep5 .ep-tag { background:#e8f0f8; color:var(--water); }
+  .ep-card .ep-hook { font-size:0.9rem; font-style:italic; color:#555; line-height:1.7; margin-bottom:14px; border-left:2px solid rgba(0,0,0,.1); padding-left:10px; }
+  .ep-scenes { list-style:none; }
+  .ep-scenes li { font-size:0.85rem; color:#374151; padding:4px 0; display:flex; gap:8px; }
+  .ep-scenes li::before { content:'▸'; opacity:.5; flex-shrink:0; margin-top:2px; }
+
+  /* ── Structure Table ── */
+  .structure-section { background:var(--parchment); }
+  .struct-table { width:100%; border-collapse:collapse; max-width:780px; margin:0 auto; }
+  .struct-table th {
+    background:var(--navy); color:var(--gold); font-size:0.8rem;
+    font-weight:800; letter-spacing:2px; padding:12px 16px; text-align:left;
+  }
+  .struct-table td {
+    padding:13px 16px; font-size:0.9rem; border-bottom:1px solid #e5e0d8;
+    background:#fff; color:#374151;
+  }
+  .struct-table tr:last-child td { border-bottom:none; }
+  .struct-table .time { font-weight:700; color:var(--navy); font-size:0.82rem; white-space:nowrap; }
+  .struct-table .seg { font-weight:700; color:var(--gold); }
+
+  /* ── Prompts Section ── */
+  .prompt-section { background:var(--ink); }
+  .prompt-section .s-title { color:var(--white); }
+  .prompt-section .s-sub { color:rgba(255,255,255,.6); }
+  .prompt-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:20px; }
+  .prompt-card {
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+    border-radius:14px; padding:22px 20px;
+  }
+  .prompt-card .pt-head {
+    display:flex; align-items:center; gap:10px; margin-bottom:12px;
+  }
+  .pt-dot {
+    width:36px; height:36px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.1rem; font-weight:900; color:#fff; flex-shrink:0;
+  }
+  .pt-wood  { background:var(--wood); }
+  .pt-fire  { background:var(--fire); }
+  .pt-earth { background:var(--earth); }
+  .pt-metal { background:var(--metal); }
+  .pt-water { background:var(--water); }
+  .prompt-card .pt-name { font-size:1rem; font-weight:800; color:var(--gold); }
+  .prompt-card .pt-role { font-size:0.75rem; color:rgba(255,255,255,.5); margin-top:1px; }
+  .prompt-card pre {
+    font-family:'Courier New', monospace; font-size:0.76rem;
+    color:rgba(255,255,255,.78); line-height:1.7; white-space:pre-wrap;
+    word-break:break-word;
+    border-top:1px solid rgba(255,255,255,.08);
+    padding-top:12px;
+  }
+  .suffix-box {
+    max-width:760px; margin:32px auto 0;
+    background:rgba(201,148,58,.1); border:1px solid rgba(201,148,58,.3);
+    border-radius:12px; padding:20px 24px;
+  }
+  .suffix-box .sb-title { font-size:0.78rem; font-weight:800; color:var(--gold); letter-spacing:2px; margin-bottom:10px; text-transform:uppercase; }
+  .suffix-box pre { font-family:'Courier New', monospace; font-size:0.8rem; color:rgba(255,255,255,.72); white-space:pre-wrap; line-height:1.75; }
+
+  /* ── Workflow Section ── */
+  .workflow-section { background:var(--bg); }
+  .flow-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0; max-width:980px; margin:0 auto; position:relative; }
+  .flow-step {
+    text-align:center; padding:24px 16px; position:relative;
+  }
+  .flow-step::after {
+    content:'→'; position:absolute; right:-12px; top:50%;
+    transform:translateY(-50%); font-size:1.4rem; color:var(--gold);
+    font-weight:900; z-index:1;
+  }
+  .flow-step:last-child::after { display:none; }
+  .flow-num {
+    width:52px; height:52px; border-radius:50%;
+    background:var(--navy); color:var(--white);
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.3rem; font-weight:900; margin:0 auto 14px;
+  }
+  .flow-step h3 { font-size:0.95rem; font-weight:800; color:var(--navy); margin-bottom:6px; }
+  .flow-step p { font-size:0.82rem; color:var(--gray); line-height:1.65; }
+  .flow-step .tool { display:inline-block; margin-top:8px; background:var(--parchment); border:1px solid #d8d0c4; border-radius:20px; padding:3px 12px; font-size:0.73rem; color:var(--gray); }
+  @media(max-width:640px){
+    .flow-grid { grid-template-columns:1fr 1fr; }
+    .flow-step::after { display:none; }
+  }
+
+  /* ── Included Contents ── */
+  .includes-section { background:#fff; }
+  .inc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; }
+  .inc-card {
+    border-radius:14px; padding:26px 22px;
+    border:1.5px solid #e5e7eb; background:var(--bg);
+  }
+  .inc-card .ic-icon { font-size:2rem; margin-bottom:12px; }
+  .inc-card h3 { font-size:1rem; font-weight:800; color:var(--navy); margin-bottom:10px; }
+  .inc-list { list-style:none; }
+  .inc-list li { font-size:0.87rem; color:#374151; padding:5px 0; border-bottom:1px solid #f0ebe3; display:flex; gap:8px; }
+  .inc-list li:last-child { border-bottom:none; }
+  .inc-list li::before { content:'✓'; color:var(--wood); font-weight:800; flex-shrink:0; }
+
+  /* ── Pricing ── */
+  .pricing-section { background:var(--parchment); }
+  .pricing-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:24px; align-items:start; }
+  .price-card {
+    background:var(--white); border-radius:18px; padding:36px 28px;
+    box-shadow:0 2px 16px rgba(0,0,0,.07);
+    border:2px solid #e5e7eb; position:relative;
+    transition:transform .2s, box-shadow .2s;
+  }
+  .price-card:hover { transform:translateY(-4px); box-shadow:0 12px 36px rgba(0,0,0,.12); }
+  .price-card.featured {
+    border-color:var(--gold);
+    box-shadow:0 8px 32px rgba(201,148,58,.25);
+    transform:scale(1.03);
+  }
+  .price-card.featured:hover { transform:scale(1.03) translateY(-4px); }
+  .popular-badge {
+    position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+    background:var(--gold); color:#fff; font-size:0.72rem; font-weight:800;
+    padding:4px 18px; border-radius:20px; letter-spacing:2px; white-space:nowrap;
+  }
+  .price-card .plan-name { font-size:1.1rem; font-weight:900; color:var(--navy); margin-bottom:6px; }
+  .price-card .plan-desc { font-size:0.85rem; color:var(--gray); margin-bottom:20px; min-height:44px; }
+  .price-card .price { font-size:2.4rem; font-weight:900; color:var(--navy); margin-bottom:4px; }
+  .price-card .price span { font-size:1rem; font-weight:400; color:var(--gray); }
+  .price-card .orig { font-size:0.88rem; color:var(--gray); text-decoration:line-through; margin-bottom:20px; }
+  .price-divider { border:none; border-top:1px solid #f3f4f6; margin:20px 0; }
+  .price-features { list-style:none; }
+  .price-features li { font-size:0.87rem; color:#374151; padding:7px 0; display:flex; gap:10px; align-items:flex-start; }
+  .price-features li .ck { color:var(--wood); font-weight:700; flex-shrink:0; }
+  .price-features li .na { color:#d1d5db; flex-shrink:0; }
+  .btn-plan {
+    display:block; text-align:center; margin-top:24px;
+    padding:14px; border-radius:50px; font-size:1rem; font-weight:800;
+    text-decoration:none; transition:transform .2s;
+  }
+  .btn-plan-primary { background:var(--gold); color:#fff; box-shadow:0 4px 16px rgba(201,148,58,.35); }
+  .btn-plan-primary:hover { transform:translateY(-2px); }
+  .btn-plan-outline { border:2px solid var(--navy); color:var(--navy); }
+  .btn-plan-outline:hover { background:var(--navy); color:#fff; }
+  .btn-plan-dark { background:var(--navy); color:#fff; }
+  .btn-plan-dark:hover { transform:translateY(-2px); }
+
+  /* ── FAQ ── */
+  .faq-section { background:var(--bg); }
+  .faq-list { max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  details { background:#fff; border-radius:12px; border:1px solid #e5e7eb; overflow:hidden; cursor:pointer; }
+  summary { padding:18px 24px; font-weight:700; color:var(--navy); list-style:none; display:flex; justify-content:space-between; align-items:center; font-size:0.98rem; }
+  summary::-webkit-details-marker { display:none; }
+  summary::after { content:'+'; font-size:1.4rem; color:var(--gold); transition:transform .2s; }
+  details[open] summary::after { transform:rotate(45deg); }
+  details .ans { padding:0 24px 20px; font-size:0.91rem; color:#4b5563; line-height:1.8; }
+
+  /* ── CTA Final ── */
+  .cta-section {
+    background:var(--ink); color:var(--white);
+    text-align:center; padding:96px 24px; position:relative; overflow:hidden;
+  }
+  .cta-section::before {
+    content:''; position:absolute; inset:0;
+    background:
+      radial-gradient(ellipse 70% 60% at 50% 50%, rgba(45,125,78,.12) 0%, transparent 70%);
+  }
+  .cta-inner { position:relative; }
+  .cta-section h2 { font-size:clamp(1.8rem,4vw,2.5rem); font-weight:900; margin-bottom:16px; line-height:1.25; }
+  .cta-section h2 em { color:var(--gold); font-style:normal; }
+  .cta-section p { font-size:1.05rem; opacity:.82; max-width:560px; margin:0 auto 36px; line-height:1.85; }
+  .five-cycle {
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    margin-bottom:36px; flex-wrap:wrap;
+  }
+  .cycle-el {
+    font-size:0.82rem; font-weight:800; padding:6px 14px; border-radius:20px;
+    letter-spacing:1px;
+  }
+  .cy-wood  { background:rgba(45,125,78,.25);  color:#6BC97E; }
+  .cy-arr   { color:var(--gold); font-size:1rem; }
+  .cy-fire  { background:rgba(185,64,64,.25);  color:#E88080; }
+  .cy-earth { background:rgba(176,123,42,.25); color:#DDB96A; }
+  .cy-metal { background:rgba(139,155,168,.25);color:#B8C8D4; }
+  .cy-water { background:rgba(27,58,92,.4);    color:#7AAFD4; }
+  .cta-guarantee {
+    display:inline-flex; align-items:center; gap:10px;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15);
+    border-radius:50px; padding:10px 24px; margin-top:24px;
+    font-size:0.83rem; opacity:.8;
+  }
+
+  /* ── Footer ── */
+  footer { background:var(--dark); color:rgba(255,255,255,.45); text-align:center; padding:28px 24px; font-size:0.82rem; }
+
+  /* ── Responsive ── */
+  @media(max-width:768px){
+    .hero { padding:60px 20px 72px; }
+    section { padding:60px 0; }
+    .price-card.featured { transform:none; }
+    .elements-row { gap:0; }
+    .el-char { font-size:2rem; }
+    .char-grid { grid-template-columns:repeat(2,1fr); }
+  }
+  @media(max-width:480px){
+    .char-grid { grid-template-columns:1fr; }
+    .elements-row { flex-wrap:wrap; }
+    .el-item { flex:0 0 33.3%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Announcement Bar -->
+<div class="topbar">🖌️ 早鳥限時優惠 — 完整製作包 NT$897（原價 NT$1,997）</div>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="badge">YouTube 國風動畫製作包</div>
+    <h1>木・火・土・金・水<br><em>五行擬人化</em>系列動畫<br>完整腳本＋AI生圖包</h1>
+    <p class="subtitle">
+      五集國風水墨動畫，從角色設定、分鏡腳本到 Midjourney 提示詞、剪輯 SOP<br>
+      全套製作資源，開箱即用，讓 AI 幫你生出整個系列頻道
+    </p>
+    <div class="cta-row">
+      <a href="#pricing" class="btn-gold">立即取得製作包 →</a>
+      <a href="#episodes" class="btn-ghost">先看集數腳本</a>
+    </div>
+    <div class="hero-stats">
+      <div class="st"><div class="n">5</div><div class="l">完整集數腳本</div></div>
+      <div class="st"><div class="n">5</div><div class="l">角色設定＋提示詞</div></div>
+      <div class="st"><div class="n">7</div><div class="l">製作步驟 SOP</div></div>
+      <div class="st"><div class="n">3.5分</div><div class="l">每集時長設計</div></div>
+    </div>
+  </div>
+  <div class="ink-stripe"></div>
+</section>
+
+<!-- Five Elements Strip -->
+<div class="elements-strip">
+  <div class="elements-row">
+    <div class="el-item el-wood"><div class="el-char">木</div><div class="el-name">Wood</div></div>
+    <div class="el-item el-fire"><div class="el-char">火</div><div class="el-name">Fire</div></div>
+    <div class="el-item el-earth"><div class="el-char">土</div><div class="el-name">Earth</div></div>
+    <div class="el-item el-metal"><div class="el-char">金</div><div class="el-name">Metal</div></div>
+    <div class="el-item el-water"><div class="el-char">水</div><div class="el-name">Water</div></div>
+  </div>
+</div>
+
+<!-- Characters -->
+<section class="char-section">
+  <div class="container">
+    <h2 class="s-title">五位擬人化角色設定</h2>
+    <p class="s-sub">每位角色都有完整的視覺設定、性格描述與標誌物，搭配 AI 生圖提示詞即可直接出圖</p>
+    <div class="char-grid">
+
+      <div class="char-card char-wood">
+        <div class="char-glyph">木</div>
+        <h3>木青</h3>
+        <div class="role">木行・少年</div>
+        <div class="trait">衝勁、倔強、不服管。眉飛揚、嘴角帶笑卻不馴，腳下開出青草。</div>
+        <div class="char-item">標誌物：嫩枝化劍</div>
+      </div>
+
+      <div class="char-card char-fire">
+        <div class="char-glyph">火</div>
+        <h3>火朱</h3>
+        <div class="role">火行・少女</div>
+        <div class="trait">熱情、外放、感染力強。髮如赤焰，眼如星，回眸一笑朱雀盤旋。</div>
+        <div class="char-item">標誌物：朱雀羽扇</div>
+      </div>
+
+      <div class="char-card char-earth">
+        <div class="char-glyph">土</div>
+        <h3>土黃</h3>
+        <div class="role">土行・壯年</div>
+        <div class="trait">沉穩、居中、不動如山。盤膝而坐，山風吹不動衣角，兩側紛爭自然平息。</div>
+        <div class="char-item">標誌物：玉璧、陶罐</div>
+      </div>
+
+      <div class="char-card char-metal">
+        <div class="char-glyph">金</div>
+        <h3>金白</h3>
+        <div class="role">金行・武者</div>
+        <div class="trait">冷峻、果決、講規矩。立於秋風落葉中，長劍出鞘半寸，鳥獸退避。</div>
+        <div class="char-item">標誌物：長劍出鞘</div>
+      </div>
+
+      <div class="char-card char-water">
+        <div class="char-glyph">水</div>
+        <h3>水玄</h3>
+        <div class="role">水行・隱士</div>
+        <div class="trait">靜默、深沉、城府深厚。端坐潭邊，水面如鏡，倒影映出四位前輩。</div>
+        <div class="char-item">標誌物：黑玉珮、卷軸</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Episode Structure -->
+<section class="ep-section" id="episodes">
+  <div class="container">
+    <h2 class="s-title">五集完整腳本分鏡</h2>
+    <p class="s-sub">每集約 3.5–4 分鐘，每集都含完整七段分鏡、旁白文案、畫面描述，AI 工具直接套用</p>
+    <div class="ep-grid">
+
+      <div class="ep-card ep1">
+        <div class="ep-num">第一集・木行</div>
+        <h3>衝出來的那股勁</h3>
+        <span class="ep-tag">木主疏通・肝膽・生發之力</span>
+        <div class="ep-hook">「這不是木——這才是木。」<br>種子破土，嫩芽頂裂石塊</div>
+        <ul class="ep-scenes">
+          <li>木青縱身一躍，腳下開出青草</li>
+          <li>竹林鏡頭＋肝膽水墨輪廓圖</li>
+          <li>教室、設計工作室、林間三幕</li>
+          <li>木太過：雙眼通紅，太陽穴青筋</li>
+          <li>木不足：蜷坐角落，枝葉枯萎</li>
+          <li>預告：燃起火苗，火朱剪影浮現</li>
+        </ul>
+      </div>
+
+      <div class="ep-card ep2">
+        <div class="ep-num">第二集・火行</div>
+        <h3>藏不住的那道光</h3>
+        <span class="ep-tag">火主血脈・心臟・發散之力</span>
+        <div class="ep-hook">「這不是火——這才是火。」<br>熄滅蠟燭 → 燎原烈火</div>
+        <ul class="ep-scenes">
+          <li>火朱從火中走出，朱雀虛影盤旋</li>
+          <li>心跳節拍＋心臟脈動水墨圖</li>
+          <li>舞台聚光燈、攝影棚、霓虹城市</li>
+          <li>火太過：領獎台上，眼神空洞</li>
+          <li>火不足：蜷縮成灰燼，黯淡</li>
+          <li>預告：火焰落地化土，土黃睜眼</li>
+        </ul>
+      </div>
+
+      <div class="ep-card ep3">
+        <div class="ep-num">第三集・土行</div>
+        <h3>不動的那塊地</h3>
+        <span class="ep-tag">土主生化・脾胃・承載之力</span>
+        <div class="ep-hook">「這不是土——這才是土。」<br>泥土特寫 → 鏡頭拉遠成整片大地</div>
+        <ul class="ep-scenes">
+          <li>土黃盤膝坐於山巔，山風不動</li>
+          <li>食物入腹剖面圖，脾胃緩緩運化</li>
+          <li>木青火朱爭執，土黃端坐平息</li>
+          <li>土太過：被泥土包裹，動彈不得</li>
+          <li>土不足：形體鬆散如流沙</li>
+          <li>預告：大地礦脈浮現，金白立劍</li>
+        </ul>
+      </div>
+
+      <div class="ep-card ep4">
+        <div class="ep-num">第四集・金行</div>
+        <h3>該砍就砍的那把刀</h3>
+        <span class="ep-tag">金主肅降・肺腑・收斂之力</span>
+        <div class="ep-hook">「這不是金——這才是金。」<br>礦石 → 鍛打淬火磨成劍鋒</div>
+        <ul class="ep-scenes">
+          <li>金白立秋風落葉中，鳥獸退避</li>
+          <li>深呼吸特寫，肺部擴張收縮</li>
+          <li>法庭、軍營、銀行、儀器工坊</li>
+          <li>金太過：劍鋒所指，焦土一片</li>
+          <li>金不足：劍鋒卷刃，護不住自己</li>
+          <li>預告：劍尖滴水珠，水玄浮現</li>
+        </ul>
+      </div>
+
+      <div class="ep-card ep5">
+        <div class="ep-num">第五集・水行</div>
+        <h3>看不見的那道深</h3>
+        <span class="ep-tag">水主封藏・腎命・潤下之力</span>
+        <div class="ep-hook">「這不是水——這才是水。」<br>一杯水 → 深淵幽潭，黑而不見底</div>
+        <ul class="ep-scenes">
+          <li>水玄端坐潭邊，倒影映出四位前輩</li>
+          <li>命門之火剖面圖，腎輪廓緩緩發光</li>
+          <li>商船、酒罈陳釀、靜室打坐者</li>
+          <li>水太過：沉入水底，眼神空洞</li>
+          <li>水不足：形體乾枯如紙</li>
+          <li>系列總結：五人圍圓，木火土金水循環</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Unified Episode Structure -->
+<section class="structure-section">
+  <div class="container">
+    <h2 class="s-title">每集通用七段架構</h2>
+    <p class="s-sub">每集遵循相同結構，讓觀眾建立期待感，算法也更容易識別系列性內容</p>
+    <table class="struct-table">
+      <thead>
+        <tr>
+          <th>段落</th>
+          <th>時間點</th>
+          <th>內容說明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="seg">冷開場 Hook</td><td class="time">0:00–0:15</td><td>「這不是 X，這才是 X」反差畫面，前三秒決定是否繼續看</td></tr>
+        <tr><td class="seg">角色登場</td><td class="time">0:15–0:40</td><td>擬人化角色亮相，氣場展示，建立角色記憶點</td></tr>
+        <tr><td class="seg">本質定義</td><td class="time">0:40–1:10</td><td>解釋這股「力」的核心本質，搭配水墨器官圖</td></tr>
+        <tr><td class="seg">三大顯現</td><td class="time">1:10–2:10</td><td>對應器官、性格特徵、行業類型三個維度展開</td></tr>
+        <tr><td class="seg">失衡狀態</td><td class="time">2:10–3:00</td><td>太過＋不足兩種失衡病態，引發觀眾自我對照</td></tr>
+        <tr><td class="seg">點題金句</td><td class="time">3:00–3:30</td><td>一句話精煉收束，可剪成短影音單獨傳播</td></tr>
+        <tr><td class="seg">下集預告</td><td class="time">3:30–3:50</td><td>五行相生邏輯做銜接，鉤住觀眾追下一集</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- AI Prompts -->
+<section class="prompt-section">
+  <div class="container">
+    <h2 class="s-title">AI 生圖提示詞（全五角色）</h2>
+    <p class="s-sub">適用 Midjourney、即夢 AI、可靈等主流工具，直接複製使用</p>
+    <div class="prompt-grid">
+
+      <div class="prompt-card">
+        <div class="pt-head">
+          <div class="pt-dot pt-wood">木</div>
+          <div><div class="pt-name">木青</div><div class="pt-role">Wood · 少年 · 青綠</div></div>
+        </div>
+        <pre>Young man in flowing green robe, willow-leaf hair, sharp brows, defiant smirk, bamboo sword in hand, standing on cliff edge with sprouting saplings, Chinese ink wash painting</pre>
+      </div>
+
+      <div class="prompt-card">
+        <div class="pt-head">
+          <div class="pt-dot pt-fire">火</div>
+          <div><div class="pt-name">火朱</div><div class="pt-role">Fire · 少女 · 朱紅</div></div>
+        </div>
+        <pre>Young woman in crimson silk robes flowing upward, hair like red flames, glowing eyes, vermilion phoenix feather fan, surrounded by sparks, Chinese ink wash painting</pre>
+      </div>
+
+      <div class="prompt-card">
+        <div class="pt-head">
+          <div class="pt-dot pt-earth">土</div>
+          <div><div class="pt-name">土黃</div><div class="pt-role">Earth · 壯年 · 土黃</div></div>
+        </div>
+        <pre>Sturdy middle-aged man in ochre yellow robe, seated lotus position on mountaintop, calm closed eyes, jade disc in lap, mountain mist swirling but his clothes unmoved, Chinese ink wash painting</pre>
+      </div>
+
+      <div class="prompt-card">
+        <div class="pt-head">
+          <div class="pt-dot pt-metal">金</div>
+          <div><div class="pt-name">金白</div><div class="pt-role">Metal · 武者 · 素白</div></div>
+        </div>
+        <pre>Stern warrior in white robe and silver armor, cold piercing gaze, long sword half-drawn, autumn leaves falling around him, sharp angular composition, Chinese ink wash painting</pre>
+      </div>
+
+      <div class="prompt-card">
+        <div class="pt-head">
+          <div class="pt-dot pt-water">水</div>
+          <div><div class="pt-name">水玄</div><div class="pt-role">Water · 隱士 · 玄黑</div></div>
+        </div>
+        <pre>Hermit in deep black robe, face partially hidden, seated by still black pond, reflection shows all four other characters, unreadable expression, Chinese ink wash painting</pre>
+      </div>
+
+    </div>
+    <div class="suffix-box">
+      <div class="sb-title">通用後綴（貼在任何提示詞後面）</div>
+      <pre>Chinese ink wash painting, traditional xieyi style, minimal lines, soft ink gradients, rice paper texture, negative space composition, cinematic lighting, --ar 16:9 --style raw</pre>
+    </div>
+  </div>
+</section>
+
+<!-- Production Workflow -->
+<section class="workflow-section">
+  <div class="container">
+    <h2 class="s-title">七步製作流程</h2>
+    <p class="s-sub">從 AI 生圖到剪輯發片，完整 SOP 照著做就能完成</p>
+    <div class="flow-grid">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <h3>角色設計稿</h3>
+        <p>每角色出 4–6 張定稿，確認視覺一致性</p>
+        <span class="tool">即夢 / Midjourney</span>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <h3>分鏡圖</h3>
+        <p>每集約 20–25 個鏡頭，逐格生成</p>
+        <span class="tool">即夢 / Midjourney</span>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <h3>圖生影片</h3>
+        <p>每段 5–10 秒，靜止鏡頭加細節飄動</p>
+        <span class="tool">可靈 / Runway</span>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <h3>配音</h3>
+        <p>沉穩男聲讀旁白，語速穩、停頓長</p>
+        <span class="tool">11Labs / 微軟 TTS</span>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">5</div>
+        <h3>配樂</h3>
+        <p>國風古箏、琵琶為底，音量低於旁白</p>
+        <span class="tool">Suno / YT 音樂庫</span>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">6</div>
+        <h3>剪輯</h3>
+        <p>加水墨轉場特效，保持節奏克制</p>
+        <span class="tool">剪映專業版</span>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">7</div>
+        <h3>字幕發布</h3>
+        <p>中英雙語，可拓海外流量</p>
+        <span class="tool">剪映自動字幕</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- What's Included -->
+<section class="includes-section">
+  <div class="container">
+    <h2 class="s-title">製作包完整內容</h2>
+    <p class="s-sub">一包入手，從零開始建立整個系列頻道所需的全部資源</p>
+    <div class="inc-grid">
+
+      <div class="inc-card">
+        <div class="ic-icon">📜</div>
+        <h3>五集完整腳本</h3>
+        <ul class="inc-list">
+          <li>每集七段分鏡全文</li>
+          <li>旁白文案字字可用</li>
+          <li>畫面描述＋鏡頭說明</li>
+          <li>時間軸標記（精確到秒）</li>
+          <li>下集預告串接文案</li>
+        </ul>
+      </div>
+
+      <div class="inc-card">
+        <div class="ic-icon">🎭</div>
+        <h3>五角色完整設定</h3>
+        <ul class="inc-list">
+          <li>外型視覺描述規格</li>
+          <li>性格特徵與行為邏輯</li>
+          <li>標誌物與主色設定</li>
+          <li>Midjourney AI 提示詞</li>
+          <li>通用後綴詞（即夢/可靈適用）</li>
+        </ul>
+      </div>
+
+      <div class="inc-card">
+        <div class="ic-icon">🗂️</div>
+        <h3>頻道營運規劃</h3>
+        <ul class="inc-list">
+          <li>五週發片節奏建議</li>
+          <li>標題公式（五集示範）</li>
+          <li>縮圖設計邏輯說明</li>
+          <li>片頭片尾統一設計建議</li>
+          <li>合集剪輯節點標記</li>
+        </ul>
+      </div>
+
+      <div class="inc-card">
+        <div class="ic-icon">🛠️</div>
+        <h3>製作 SOP 指南</h3>
+        <ul class="inc-list">
+          <li>七步驟完整工具推薦</li>
+          <li>AI 生圖風格校正技巧</li>
+          <li>圖生影片鏡頭設定建議</li>
+          <li>配音語速與停頓指南</li>
+          <li>水墨轉場特效素材來源</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="pricing-section" id="pricing">
+  <div class="container">
+    <h2 class="s-title">選擇方案</h2>
+    <p class="s-sub">一次購買，永久使用。比外包一集動畫便宜百倍，資源永遠是你的</p>
+    <div class="pricing-grid">
+
+      <div class="price-card">
+        <div class="plan-name">入門版</div>
+        <div class="plan-desc">想先試試國風動畫方向的創作者</div>
+        <div class="price">NT$397 <span>/ 一次性</span></div>
+        <div class="orig">原價 NT$797</div>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><span class="ck">✓</span> 2 集腳本（木行＋火行）</li>
+          <li><span class="ck">✓</span> 2 角色 AI 提示詞</li>
+          <li><span class="ck">✓</span> 通用後綴詞</li>
+          <li><span class="ck">✓</span> 基礎製作 SOP</li>
+          <li><span class="na">✗</span> 全五集腳本</li>
+          <li><span class="na">✗</span> 頻道營運規劃</li>
+        </ul>
+        <a href="#" class="btn-plan btn-plan-outline">取得入門版</a>
+      </div>
+
+      <div class="price-card featured">
+        <div class="popular-badge">最完整・最推薦</div>
+        <div class="plan-name">完整製作包</div>
+        <div class="plan-desc">認真打造國風動畫頻道的創作者</div>
+        <div class="price">NT$897 <span>/ 一次性</span></div>
+        <div class="orig">原價 NT$1,997</div>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><span class="ck">✓</span> <strong>五集完整腳本分鏡</strong></li>
+          <li><span class="ck">✓</span> <strong>五角色 AI 提示詞（含後綴）</strong></li>
+          <li><span class="ck">✓</span> 七步製作 SOP 指南</li>
+          <li><span class="ck">✓</span> 頻道營運規劃</li>
+          <li><span class="ck">✓</span> 標題公式＋縮圖邏輯</li>
+          <li><span class="ck">✓</span> 五行相生銜接文案</li>
+        </ul>
+        <a href="#" class="btn-plan btn-plan-primary">立即取得完整版 →</a>
+      </div>
+
+      <div class="price-card">
+        <div class="plan-name">VIP 協作版</div>
+        <div class="plan-desc">需要個人化調整與製作協助的創作者</div>
+        <div class="price">NT$2,497 <span>/ 一次性</span></div>
+        <div class="orig">原價 NT$4,200</div>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><span class="ck">✓</span> 完整製作包所有內容</li>
+          <li><span class="ck">✓</span> 1 對 1 製作諮詢（60分鐘）</li>
+          <li><span class="ck">✓</span> 角色視覺風格客製調整</li>
+          <li><span class="ck">✓</span> 30 天 LINE 問題支援</li>
+          <li><span class="ck">✓</span> 頻道定位策略規劃</li>
+          <li><span class="ck">✓</span> 優先取得後續系列包</li>
+        </ul>
+        <a href="#" class="btn-plan btn-plan-dark">諮詢 VIP 方案</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section">
+  <div class="container">
+    <h2 class="s-title">常見問題</h2>
+    <p class="s-sub">購買前的疑惑，這裡都有答案</p>
+    <div class="faq-list">
+      <details>
+        <summary>完全沒做過動畫，可以用這套製作包嗎？</summary>
+        <div class="ans">可以。製作包的設計邏輯是「用 AI 工具逐步組合」，不需要會畫畫或剪輯動畫。你只需要會用 Midjourney 或即夢生圖（有圖文教學輔助），然後用可靈或 Runway 讓圖片動起來，最後在剪映拼成影片。腳本和提示詞都已準備好，照流程走即可。</div>
+      </details>
+      <details>
+        <summary>AI 生圖提示詞可以用在哪些工具？</summary>
+        <div class="ans">提示詞以英文撰寫，通用性最佳，可直接用於 Midjourney、Stable Diffusion、Adobe Firefly。中文工具（即夢 AI、可靈）也適用，建議搭配通用後綴詞一起使用，效果更接近國風水墨風格。</div>
+      </details>
+      <details>
+        <summary>腳本可以修改成自己的風格嗎？</summary>
+        <div class="ans">完全可以，也鼓勵這樣做。腳本提供了框架和完整文案，你可以修改旁白語氣、調整例子、加入自己對五行的詮釋。角色設定也可以根據你的頻道定位做調整，例如將角色性格對應到現代職場或親子關係。</div>
+      </details>
+      <details>
+        <summary>這套製作包版權歸誰？可以商業使用嗎？</summary>
+        <div class="ans">購買後，腳本文案、角色設定、提示詞的使用權授予你個人頻道商業使用，包括 YouTube 廣告收益、品牌合作等。不可轉售製作包本身或再授權他人。</div>
+      </details>
+      <details>
+        <summary>做完五集之後呢？有後續系列嗎？</summary>
+        <div class="ans">五行系列完結後建議出「合集精華版」（約 18–20 分鐘），作為長影片引流。後續計劃推出「五行應用篇」（職場、感情、養生各五集），VIP 版用戶可優先取得。</div>
+      </details>
+      <details>
+        <summary>購買後如何取得檔案？</summary>
+        <div class="ans">付款完成後，系統自動寄送下載連結到你的電子信箱，通常 5 分鐘內收到。檔案格式為 PDF，永久有效，可在多裝置開啟使用。</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section class="cta-section">
+  <div class="cta-inner">
+    <h2>讓 <em>五行的力量</em><br>成為你的頻道系列</h2>
+    <p>腳本、角色、提示詞、製作 SOP，全套準備好了<br>你只需要打開 AI 工具，開始生圖</p>
+    <div class="five-cycle">
+      <span class="cycle-el cy-wood">木</span>
+      <span class="cy-arr">→</span>
+      <span class="cycle-el cy-fire">火</span>
+      <span class="cy-arr">→</span>
+      <span class="cycle-el cy-earth">土</span>
+      <span class="cy-arr">→</span>
+      <span class="cycle-el cy-metal">金</span>
+      <span class="cy-arr">→</span>
+      <span class="cycle-el cy-water">水</span>
+      <span class="cy-arr">→</span>
+      <span class="cycle-el cy-wood">木</span>
+    </div>
+    <a href="#pricing" class="btn-gold">立即取得製作包 →</a>
+    <br>
+    <div class="cta-guarantee">
+      🔒 &nbsp; 數位商品特性，不提供退款，購買前請確認適合需求
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>© 2025 五行系列 YouTube 國風水墨動畫製作包 &nbsp;｜&nbsp; 國風創作資源</p>
+</footer>
+
+</body>
+</html>
