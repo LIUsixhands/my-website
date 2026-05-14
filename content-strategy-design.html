@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>內容策略設計提示詞包｜視覺設計・影片規劃・社群文案・30天發文計畫</title>
+<meta name="description" content="5 大核心 AI 提示詞，搞定視覺設計概念、影片剪輯規劃、社群文案優化、30天發文計畫。複製貼上 ChatGPT，秒出專業內容策略。">
+<meta property="og:title" content="內容策略設計提示詞包｜5 大 AI 提示詞一次搞定">
+<meta property="og:description" content="視覺設計・影片規劃・社群文案・30天發文計畫，複製貼上 ChatGPT 即可使用。">
+<style>
+  :root {
+    --navy:  #1B2A4A;
+    --gold:  #C9943A;
+    --teal:  #2A7F7F;
+    --red:   #B94040;
+    --green: #2D7D4E;
+    --purple:#6B3FA0;
+    --bg:    #F8F6F1;
+    --white: #FFFFFF;
+    --gray:  #6B7280;
+    --light: #EEF0F5;
+    --dark:  #111827;
+  }
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Noto Sans TC','PingFang TC',Arial,sans-serif; background:var(--bg); color:#1a1a1a; line-height:1.75; }
+
+  /* ── Announcement Bar ── */
+  .topbar {
+    background:var(--gold); color:var(--white);
+    text-align:center; font-size:0.82rem; font-weight:700;
+    padding:8px 16px; letter-spacing:1px;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background:linear-gradient(140deg, var(--navy) 0%, #1e3a6e 50%, var(--purple) 100%);
+    color:var(--white); padding:80px 24px 96px; text-align:center; position:relative; overflow:hidden;
+  }
+  .hero::before {
+    content:''; position:absolute; inset:0;
+    background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+  .hero-inner { position:relative; max-width:860px; margin:0 auto; }
+  .badge {
+    display:inline-block; background:var(--gold); color:var(--white);
+    font-size:0.75rem; font-weight:800; padding:5px 18px; border-radius:20px;
+    letter-spacing:2px; margin-bottom:24px; text-transform:uppercase;
+  }
+  .hero h1 {
+    font-size:clamp(1.9rem, 5vw, 3rem); font-weight:900; line-height:1.2;
+    margin-bottom:20px;
+  }
+  .hero h1 em { color:var(--gold); font-style:normal; }
+  .hero .subtitle {
+    font-size:1.12rem; opacity:.88; max-width:640px;
+    margin:0 auto 36px; line-height:1.8;
+  }
+  .hero .cta-row { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; align-items:center; margin-bottom:48px; }
+
+  .btn-gold {
+    display:inline-block; background:var(--gold); color:var(--white);
+    padding:16px 40px; border-radius:50px; font-size:1.05rem; font-weight:800;
+    text-decoration:none; letter-spacing:1px;
+    box-shadow:0 8px 28px rgba(201,148,58,.5);
+    transition:transform .2s, box-shadow .2s;
+  }
+  .btn-gold:hover { transform:translateY(-3px); box-shadow:0 12px 36px rgba(201,148,58,.6); }
+  .btn-ghost {
+    display:inline-block; border:2px solid rgba(255,255,255,.5); color:var(--white);
+    padding:14px 32px; border-radius:50px; font-size:1rem; font-weight:700;
+    text-decoration:none; transition:border-color .2s, background .2s;
+  }
+  .btn-ghost:hover { border-color:var(--white); background:rgba(255,255,255,.08); }
+
+  .hero-stats { display:flex; justify-content:center; gap:40px; flex-wrap:wrap; }
+  .hero-stats .st .n { font-size:2.2rem; font-weight:900; color:var(--gold); }
+  .hero-stats .st .l { font-size:0.78rem; opacity:.7; letter-spacing:1px; margin-top:2px; }
+
+  /* ── Container ── */
+  .container { max-width:1040px; margin:0 auto; padding:0 24px; }
+
+  /* ── Section ── */
+  section { padding:80px 0; }
+  .s-title { font-size:clamp(1.6rem,3.5vw,2.1rem); font-weight:900; color:var(--navy); text-align:center; margin-bottom:12px; }
+  .s-sub { font-size:1.02rem; color:var(--gray); text-align:center; margin-bottom:52px; max-width:600px; margin-left:auto; margin-right:auto; }
+
+  /* ── Pain Points ── */
+  .pain-section { background:#fff; }
+  .pain-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:24px; }
+  .pain-card {
+    border:1.5px solid #e5e7eb; border-radius:14px; padding:28px 24px;
+    background:var(--bg); position:relative;
+  }
+  .pain-card .emoji { font-size:2rem; margin-bottom:12px; }
+  .pain-card h3 { font-size:1.05rem; font-weight:800; color:var(--navy); margin-bottom:8px; }
+  .pain-card p { font-size:0.92rem; color:var(--gray); line-height:1.7; }
+  .pain-card.solved { border-color:var(--teal); background:#f0fafa; }
+  .pain-card.solved::after {
+    content:'已解決 ✓'; position:absolute; top:14px; right:14px;
+    background:var(--teal); color:#fff; font-size:0.7rem; font-weight:800;
+    padding:2px 10px; border-radius:20px; letter-spacing:1px;
+  }
+
+  /* ── How It Works ── */
+  .how-section { background:linear-gradient(135deg,var(--navy) 0%,#1e3a6e 100%); color:var(--white); }
+  .how-section .s-title { color:var(--white); }
+  .how-section .s-sub { color:rgba(255,255,255,.72); }
+  .steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:32px; }
+  .step { text-align:center; }
+  .step .num {
+    width:56px; height:56px; border-radius:50%;
+    background:var(--gold); color:var(--white);
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.4rem; font-weight:900; margin:0 auto 18px;
+    box-shadow:0 4px 16px rgba(201,148,58,.4);
+  }
+  .step h3 { font-size:1.05rem; font-weight:800; margin-bottom:10px; color:var(--gold); }
+  .step p { font-size:0.9rem; opacity:.82; line-height:1.75; }
+
+  /* ── Prompt Cards ── */
+  .prompts-section { background:var(--bg); }
+  .prompts-grid { display:flex; flex-direction:column; gap:32px; max-width:900px; margin:0 auto; }
+  .prompt-card {
+    background:#fff; border-radius:18px; overflow:hidden;
+    box-shadow:0 4px 20px rgba(0,0,0,.07);
+  }
+  .prompt-header {
+    padding:20px 28px; display:flex; align-items:center; gap:16px;
+  }
+  .ph-navy  { background:linear-gradient(135deg,var(--navy),#1e3a6e); }
+  .ph-teal  { background:linear-gradient(135deg,var(--teal),#1e6b6b); }
+  .ph-red   { background:linear-gradient(135deg,var(--red),#952e2e); }
+  .ph-green { background:linear-gradient(135deg,var(--green),#1e5e38); }
+  .ph-purple{ background:linear-gradient(135deg,var(--purple),#4e2b78); }
+  .prompt-header .p-icon { font-size:2rem; flex-shrink:0; }
+  .prompt-header .p-info { flex:1; }
+  .prompt-header .p-num { font-size:0.72rem; font-weight:800; color:rgba(255,255,255,.65); letter-spacing:2px; margin-bottom:4px; }
+  .prompt-header h3 { font-size:1.1rem; font-weight:900; color:#fff; line-height:1.3; }
+  .prompt-header .p-tag {
+    font-size:0.72rem; font-weight:800; padding:3px 12px; border-radius:20px;
+    background:rgba(255,255,255,.15); color:#fff; letter-spacing:1px; margin-top:6px; display:inline-block;
+  }
+  .prompt-body { padding:28px; }
+  .prompt-desc { font-size:0.95rem; color:var(--gray); margin-bottom:20px; line-height:1.7; }
+  .prompt-features { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+  .feat-tag {
+    font-size:0.78rem; font-weight:700; padding:4px 14px; border-radius:20px;
+    background:var(--light); color:var(--navy);
+  }
+  .prompt-text-box {
+    background:#f9fafb; border:1.5px solid #e5e7eb; border-radius:12px;
+    padding:20px 22px; font-size:0.875rem; color:#374151; line-height:1.8;
+    font-family:'Noto Sans TC',monospace; white-space:pre-wrap; word-break:break-word;
+    position:relative;
+  }
+  .prompt-text-box .fill-hint { color:var(--gold); font-weight:700; }
+  .copy-btn {
+    display:flex; align-items:center; gap:8px; margin-top:14px;
+    background:var(--navy); color:#fff; border:none; cursor:pointer;
+    padding:10px 22px; border-radius:50px; font-size:0.88rem; font-weight:700;
+    font-family:inherit; transition:background .2s, transform .15s;
+  }
+  .copy-btn:hover { background:#1e3a6e; transform:translateY(-1px); }
+  .copy-btn.done { background:var(--green); }
+
+  /* ── Design Guide ── */
+  .design-section { background:#fff; }
+  .design-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:24px; }
+  .design-card {
+    border-radius:16px; padding:28px 24px;
+    border:2px solid #e5e7eb;
+    transition:border-color .2s, transform .2s;
+  }
+  .design-card:hover { border-color:var(--gold); transform:translateY(-3px); }
+  .design-card .d-icon { font-size:2rem; margin-bottom:14px; }
+  .design-card h3 { font-size:1rem; font-weight:800; color:var(--navy); margin-bottom:10px; }
+  .design-card ul { list-style:none; }
+  .design-card ul li { font-size:0.88rem; color:#374151; padding:5px 0; border-bottom:1px solid #f3f4f6; display:flex; gap:8px; }
+  .design-card ul li:last-child { border-bottom:none; }
+  .design-card ul li::before { content:'▸'; color:var(--gold); font-weight:700; flex-shrink:0; }
+
+  /* ── 30-day Preview ── */
+  .preview-section { background:linear-gradient(135deg,var(--navy),#1e3a6e); }
+  .preview-section .s-title { color:#fff; }
+  .preview-section .s-sub { color:rgba(255,255,255,.7); }
+  .calendar-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px; max-width:960px; margin:0 auto; }
+  .cal-day {
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12);
+    border-radius:10px; padding:14px 12px; text-align:center;
+  }
+  .cal-day .day-num { font-size:0.72rem; font-weight:800; color:rgba(255,255,255,.45); letter-spacing:1px; margin-bottom:6px; }
+  .cal-day .day-type { font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:20px; margin-bottom:6px; display:inline-block; }
+  .type-visual { background:var(--teal); color:#fff; }
+  .type-video { background:var(--red); color:#fff; }
+  .type-copy { background:var(--gold); color:#fff; }
+  .type-design { background:var(--purple); color:#fff; }
+  .type-engage { background:var(--green); color:#fff; }
+  .cal-day .day-title { font-size:0.8rem; color:rgba(255,255,255,.82); line-height:1.4; }
+
+  /* ── Pricing ── */
+  .pricing-section { background:var(--bg); }
+  .pricing-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:24px; align-items:start; max-width:900px; margin:0 auto; }
+  .price-card {
+    background:#fff; border-radius:18px; padding:36px 28px;
+    box-shadow:0 2px 16px rgba(0,0,0,.07);
+    border:2px solid #e5e7eb;
+    transition:transform .2s, box-shadow .2s;
+    position:relative;
+  }
+  .price-card:hover { transform:translateY(-4px); box-shadow:0 12px 36px rgba(0,0,0,.12); }
+  .price-card.featured {
+    border-color:var(--gold);
+    box-shadow:0 8px 32px rgba(201,148,58,.25);
+    transform:scale(1.03);
+  }
+  .price-card.featured:hover { transform:scale(1.03) translateY(-4px); }
+  .popular-badge {
+    position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+    background:var(--gold); color:#fff; font-size:0.72rem; font-weight:800;
+    padding:4px 18px; border-radius:20px; letter-spacing:2px; white-space:nowrap;
+  }
+  .price-card .plan-name { font-size:1.1rem; font-weight:900; color:var(--navy); margin-bottom:6px; }
+  .price-card .plan-desc { font-size:0.85rem; color:var(--gray); margin-bottom:20px; min-height:48px; }
+  .price-card .price { font-size:2.4rem; font-weight:900; color:var(--navy); margin-bottom:4px; }
+  .price-card .price span { font-size:1rem; font-weight:400; color:var(--gray); }
+  .price-card .orig { font-size:0.88rem; color:var(--gray); text-decoration:line-through; margin-bottom:20px; }
+  .price-divider { border:none; border-top:1px solid #f3f4f6; margin:20px 0; }
+  .price-features { list-style:none; }
+  .price-features li { font-size:0.88rem; color:#374151; padding:7px 0; display:flex; gap:10px; align-items:flex-start; }
+  .price-features li .ck { color:var(--green); font-weight:700; flex-shrink:0; }
+  .price-features li .na { color:#d1d5db; flex-shrink:0; }
+  .price-card .btn-plan {
+    display:block; text-align:center; margin-top:24px;
+    padding:14px; border-radius:50px; font-size:1rem; font-weight:800;
+    text-decoration:none; transition:transform .2s;
+  }
+  .btn-plan-primary { background:var(--gold); color:#fff; box-shadow:0 4px 16px rgba(201,148,58,.35); }
+  .btn-plan-primary:hover { transform:translateY(-2px); }
+  .btn-plan-outline { border:2px solid var(--navy); color:var(--navy); }
+  .btn-plan-outline:hover { background:var(--navy); color:#fff; }
+
+  /* ── FAQ ── */
+  .faq-section { background:#fff; }
+  .faq-list { max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  details {
+    background:var(--bg); border-radius:12px; border:1px solid #e5e7eb;
+    overflow:hidden; cursor:pointer;
+  }
+  summary {
+    padding:18px 24px; font-weight:700; color:var(--navy); list-style:none;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:0.98rem;
+  }
+  summary::-webkit-details-marker { display:none; }
+  summary::after { content:'+'; font-size:1.4rem; color:var(--gold); transition:transform .2s; }
+  details[open] summary::after { transform:rotate(45deg); }
+  details .ans { padding:0 24px 20px; font-size:0.91rem; color:#4b5563; line-height:1.8; }
+
+  /* ── Final CTA ── */
+  .cta-section {
+    background:linear-gradient(135deg,var(--navy),#1e3a6e,var(--purple));
+    color:#fff; text-align:center; padding:96px 24px;
+  }
+  .cta-section h2 { font-size:clamp(1.8rem,4vw,2.4rem); font-weight:900; margin-bottom:16px; }
+  .cta-section h2 em { color:var(--gold); font-style:normal; }
+  .cta-section p { font-size:1.05rem; opacity:.85; max-width:560px; margin:0 auto 36px; }
+  .cta-guarantee {
+    display:inline-flex; align-items:center; gap:10px;
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.2);
+    border-radius:50px; padding:10px 24px; margin-top:24px;
+    font-size:0.85rem; opacity:.85;
+  }
+
+  /* ── Footer ── */
+  footer { background:var(--dark); color:rgba(255,255,255,.55); text-align:center; padding:28px 24px; font-size:0.82rem; }
+
+  /* ── Responsive ── */
+  @media(max-width:768px){
+    .hero { padding:60px 20px 72px; }
+    .hero-stats { gap:24px; }
+    section { padding:60px 0; }
+    .price-card.featured { transform:none; }
+    .prompt-body { padding:20px; }
+    .prompt-header { padding:18px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Announcement Bar -->
+<div class="topbar">限時優惠 — 完整版 NT$497（原價 NT$1,197）| 5 大提示詞即套即用</div>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="badge">內容策略設計提示詞包</div>
+    <h1>一套 AI 提示詞<br>搞定<em>視覺・影片・文案・計畫</em><br>內容策略全自動</h1>
+    <p class="subtitle">
+      5 大核心提示詞 × 複製貼上即用<br>
+      從視覺設計概念到 30 天發文計畫，Claude / ChatGPT 幫你一次規劃完
+    </p>
+    <div class="cta-row">
+      <a href="#pricing" class="btn-gold">立即取得提示詞包 →</a>
+      <a href="#prompts" class="btn-ghost">先看提示詞範例</a>
+    </div>
+    <div class="hero-stats">
+      <div class="st"><div class="n">5</div><div class="l">核心提示詞</div></div>
+      <div class="st"><div class="n">10</div><div class="l">視覺設計概念</div></div>
+      <div class="st"><div class="n">30</div><div class="l">天發文計畫</div></div>
+      <div class="st"><div class="n">0</div><div class="l">設計師需求</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Pain Points -->
+<section class="pain-section">
+  <div class="container">
+    <h2 class="s-title">你是不是也有這些困擾？</h2>
+    <p class="s-sub">想做內容行銷，卻被這幾件事卡住</p>
+    <div class="pain-grid">
+      <div class="pain-card solved">
+        <div class="emoji">🎨</div>
+        <h3>不懂設計，視覺沒質感</h3>
+        <p>貼文圖片很隨便，排版亂，品牌感不一致，看起來不專業。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">🎬</div>
+        <h3>影片拍了不知怎麼剪</h3>
+        <p>有畫面有腳本，但鏡頭怎麼排、轉場怎麼設計、時間怎麼控制——完全沒方向。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">✍️</div>
+        <h3>社群文案寫不出吸引力</h3>
+        <p>發文沒有互動，Hook 不夠強，CTA 沒人點，Hashtag 亂加一通。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">📅</div>
+        <h3>發文沒有計畫、三分鐘熱度</h3>
+        <p>不知道發什麼、何時發、發多少，常常一週爆發然後消失一個月。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">⏰</div>
+        <h3>每次策略會議耗掉半天</h3>
+        <p>光是討論視覺方向、影片概念、文案風格，就要花好幾小時。</p>
+      </div>
+      <div class="pain-card solved">
+        <div class="emoji">💸</div>
+        <h3>外包設計師、剪輯師太貴</h3>
+        <p>每個月光是內容製作費就吃掉大筆預算，卻不一定出得快。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works -->
+<section class="how-section">
+  <div class="container">
+    <h2 class="s-title">3 步驟，讓 AI 幫你搞定內容策略</h2>
+    <p class="s-sub">不需要設計背景、不需要剪輯技巧，複製提示詞就能用</p>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <h3>選提示詞</h3>
+        <p>從 5 大核心提示詞中選你需要的——視覺設計、圖文概念、影片規劃、社群文案或發文計畫。</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h3>填入你的主題</h3>
+        <p>把 <strong style="color:var(--gold)">[填入你的主題]</strong> 換成你的品牌、產品或內容領域，30 秒完成客製化。</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h3>貼入 AI，取得成果</h3>
+        <p>貼入 Claude 或 ChatGPT，立即獲得完整的設計概念、剪輯規劃或 30 天發文計畫。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Prompt Cards -->
+<section class="prompts-section" id="prompts">
+  <div class="container">
+    <h2 class="s-title">5 大核心提示詞</h2>
+    <p class="s-sub">每個提示詞都是即套即用，填入主題就能直接輸出專業成果</p>
+    <div class="prompts-grid">
+
+      <!-- P-01 -->
+      <div class="prompt-card">
+        <div class="prompt-header ph-navy">
+          <div class="p-icon">🎨</div>
+          <div class="p-info">
+            <div class="p-num">P-01</div>
+            <h3>10 個視覺內容設計概念</h3>
+            <span class="p-tag">視覺設計</span>
+          </div>
+        </div>
+        <div class="prompt-body">
+          <p class="prompt-desc">為你的內容領域產出 10 個完整的視覺設計概念，每個概念包含版面結構、色彩方向、字體選擇、留白間距與視覺層級安排，並附上可直接輸出的設計指示。</p>
+          <div class="prompt-features">
+            <span class="feat-tag">版面配置結構</span>
+            <span class="feat-tag">色彩方向</span>
+            <span class="feat-tag">字體選擇</span>
+            <span class="feat-tag">留白與間距</span>
+            <span class="feat-tag">視覺層級安排</span>
+            <span class="feat-tag">設計輸出指示</span>
+          </div>
+          <div class="prompt-text-box" id="p01-text">為我的內容領域 <span class="fill-hint">[填入你的主題]</span> 設計 10 個視覺內容設計概念。
+
+請為每個設計概念說明：
+- 版面配置結構
+- 色彩方向
+- 字體選擇
+- 留白與間距
+- 視覺層級安排
+
+同時提供可直接輸出的設計指示，讓 Claude 能夠生成最終的設計成果。</div>
+          <button class="copy-btn" onclick="copyPrompt('p01-text', this)">
+            <span>複製提示詞</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- P-02 -->
+      <div class="prompt-card">
+        <div class="prompt-header ph-teal">
+          <div class="p-icon">🖼️</div>
+          <div class="p-info">
+            <div class="p-num">P-02</div>
+            <h3>現代精緻視覺圖文設計概念</h3>
+            <span class="p-tag">圖文設計</span>
+          </div>
+        </div>
+        <div class="prompt-body">
+          <p class="prompt-desc">將你的文字內容轉化為一個完整的現代視覺圖文設計概念，定義主標題、輔助文字、版面架構、元素間距與品牌一致的視覺風格。</p>
+          <div class="prompt-features">
+            <span class="feat-tag">主標題定義</span>
+            <span class="feat-tag">輔助文字規劃</span>
+            <span class="feat-tag">版面架構</span>
+            <span class="feat-tag">元素間距</span>
+            <span class="feat-tag">品牌視覺風格</span>
+          </div>
+          <div class="prompt-text-box" id="p02-text">根據這個想法 <span class="fill-hint">[貼上文字內容]</span>，產出一個現代、精緻的視覺圖文設計概念。
+
+請定義：
+- 主標題
+- 輔助文字
+- 版面架構
+- 元素間距
+- 與我的品牌識別一致的視覺風格</div>
+          <button class="copy-btn" onclick="copyPrompt('p02-text', this)">
+            <span>複製提示詞</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- P-03 -->
+      <div class="prompt-card">
+        <div class="prompt-header ph-red">
+          <div class="p-icon">🎬</div>
+          <div class="p-info">
+            <div class="p-num">P-03</div>
+            <h3>完整影片剪輯規劃</h3>
+            <span class="p-tag">影片製作</span>
+          </div>
+        </div>
+        <div class="prompt-body">
+          <p class="prompt-desc">將腳本文字轉換為逐鏡頭的完整影片剪輯規劃，包含畫面內容、時間長度、轉場方式、字幕設計、影片節奏與畫面元素安排，針對 15–30 秒短影音格式最佳化。</p>
+          <div class="prompt-features">
+            <span class="feat-tag">逐鏡頭說明</span>
+            <span class="feat-tag">畫面時間長度</span>
+            <span class="feat-tag">轉場方式</span>
+            <span class="feat-tag">字幕設計</span>
+            <span class="feat-tag">影片節奏</span>
+            <span class="feat-tag">短影音格式</span>
+          </div>
+          <div class="prompt-text-box" id="p03-text">將這段腳本 <span class="fill-hint">[貼上內容]</span> 轉換成完整的影片剪輯規劃。
+
+請逐鏡頭說明：
+- 畫面內容
+- 時間長度
+- 轉場方式
+- 字幕設計
+- 影片節奏
+- 畫面元素安排
+
+影片長度設定為 15–30 秒的短影音格式。</div>
+          <button class="copy-btn" onclick="copyPrompt('p03-text', this)">
+            <span>複製提示詞</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- P-04 -->
+      <div class="prompt-card">
+        <div class="prompt-header ph-green">
+          <div class="p-icon">✍️</div>
+          <div class="p-info">
+            <div class="p-num">P-04</div>
+            <h3>社群文案優化</h3>
+            <span class="p-tag">社群行銷</span>
+          </div>
+        </div>
+        <div class="prompt-body">
+          <p class="prompt-desc">為你的貼文內容撰寫完整優化後的社群文案，包含強力 Hook 開頭、主要內容段落、行動呼籲（CTA）與精準 Hashtags，語氣自然且容易讓受眾閱讀。</p>
+          <div class="prompt-features">
+            <span class="feat-tag">吸引人的 Hook</span>
+            <span class="feat-tag">主要內容段落</span>
+            <span class="feat-tag">行動呼籲 CTA</span>
+            <span class="feat-tag">Hashtags</span>
+            <span class="feat-tag">自訂語氣風格</span>
+          </div>
+          <div class="prompt-text-box" id="p04-text">為這篇貼文 <span class="fill-hint">[貼上內容]</span> 撰寫優化後的社群文案。
+
+請包含：
+- 吸引人的開頭 Hook
+- 主要內容段落
+- 行動呼籲（CTA）
+- 相關 Hashtags
+
+語氣風格：<span class="fill-hint">[填入你的風格]</span>
+
+文字要簡潔自然，並且容易讓受眾閱讀。</div>
+          <button class="copy-btn" onclick="copyPrompt('p04-text', this)">
+            <span>複製提示詞</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- P-05 -->
+      <div class="prompt-card">
+        <div class="prompt-header ph-purple">
+          <div class="p-icon">📅</div>
+          <div class="p-info">
+            <div class="p-num">P-05</div>
+            <h3>30 天完整發文計畫</h3>
+            <span class="p-tag">內容策略</span>
+          </div>
+        </div>
+        <div class="prompt-body">
+          <p class="prompt-desc">為你的內容領域建立一份完整的 30 天發文計畫，每天包含內容形式、視覺設計提示、影片方向、文案撰寫提示與建議發文時間，兼顧穩定發布、受眾互動率與內容多樣性。</p>
+          <div class="prompt-features">
+            <span class="feat-tag">內容形式／類型</span>
+            <span class="feat-tag">視覺設計提示</span>
+            <span class="feat-tag">影片剪輯方向</span>
+            <span class="feat-tag">文案撰寫提示</span>
+            <span class="feat-tag">建議發文時間</span>
+            <span class="feat-tag">30 天完整規劃</span>
+          </div>
+          <div class="prompt-text-box" id="p05-text">為我的內容領域建立一份完整的 30 天發文計畫。
+
+每一天請包含：
+- 內容形式 / 類型
+- 視覺設計提示
+- 影片或剪輯方向
+- 文案撰寫提示
+- 建議發文時間
+
+整體規劃需要優先考慮：
+內容穩定發布、受眾互動率，以及內容多樣性。</div>
+          <button class="copy-btn" onclick="copyPrompt('p05-text', this)">
+            <span>複製提示詞</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Design Principles Guide -->
+<section class="design-section">
+  <div class="container">
+    <h2 class="s-title">AI 給你的設計概念，長什麼樣？</h2>
+    <p class="s-sub">P-01 提示詞輸出的視覺設計概念，涵蓋以下 5 大維度</p>
+    <div class="design-grid">
+      <div class="design-card">
+        <div class="d-icon">🏗️</div>
+        <h3>版面配置結構</h3>
+        <ul>
+          <li>Z 型 / F 型閱讀動線配置</li>
+          <li>黃金比例分割建議</li>
+          <li>主視覺 vs 文字區塊比例</li>
+          <li>行動裝置適配版型</li>
+        </ul>
+      </div>
+      <div class="design-card">
+        <div class="d-icon">🎨</div>
+        <h3>色彩方向</h3>
+        <ul>
+          <li>主色 / 輔色 / 強調色配置</li>
+          <li>品牌調性對應色票</li>
+          <li>色彩心理學說明</li>
+          <li>深色 / 淺色版本建議</li>
+        </ul>
+      </div>
+      <div class="design-card">
+        <div class="d-icon">🔤</div>
+        <h3>字體選擇</h3>
+        <ul>
+          <li>標題字體推薦（含免費替代方案）</li>
+          <li>內文字體與行距建議</li>
+          <li>繁體中文字體組合</li>
+          <li>字重對比策略</li>
+        </ul>
+      </div>
+      <div class="design-card">
+        <div class="d-icon">⬜</div>
+        <h3>留白與間距</h3>
+        <ul>
+          <li>外邊距與內邊距數值建議</li>
+          <li>元素間的呼吸感規則</li>
+          <li>安全區域設定</li>
+          <li>視覺重量平衡原則</li>
+        </ul>
+      </div>
+      <div class="design-card">
+        <div class="d-icon">📊</div>
+        <h3>視覺層級安排</h3>
+        <ul>
+          <li>一二三級標題大小比例</li>
+          <li>閱讀順序引導策略</li>
+          <li>重點強調元素配置</li>
+          <li>品牌識別元素位置</li>
+        </ul>
+      </div>
+      <div class="design-card">
+        <div class="d-icon">📋</div>
+        <h3>設計輸出指示</h3>
+        <ul>
+          <li>可直接給 AI 生成設計的 Prompt</li>
+          <li>Canva / Figma 操作建議</li>
+          <li>尺寸規格（IG / FB / YT）</li>
+          <li>輸出格式說明</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 30-day Calendar Preview -->
+<section class="preview-section">
+  <div class="container">
+    <h2 class="s-title">30 天發文計畫長這樣</h2>
+    <p class="s-sub">P-05 提示詞輸出：每天都有明確的內容類型與行動方向</p>
+    <div class="calendar-grid">
+      <div class="cal-day"><div class="day-num">DAY 01</div><div class="day-type type-visual">視覺設計</div><div class="day-title">品牌介紹圖文</div></div>
+      <div class="cal-day"><div class="day-num">DAY 02</div><div class="day-type type-video">短影音</div><div class="day-title">核心價值 30 秒</div></div>
+      <div class="cal-day"><div class="day-num">DAY 03</div><div class="day-type type-copy">社群文案</div><div class="day-title">痛點共鳴貼文</div></div>
+      <div class="cal-day"><div class="day-num">DAY 04</div><div class="day-type type-design">圖文設計</div><div class="day-title">知識型輪播圖</div></div>
+      <div class="cal-day"><div class="day-num">DAY 05</div><div class="day-type type-engage">互動貼文</div><div class="day-title">投票 / 問答</div></div>
+      <div class="cal-day"><div class="day-num">DAY 06</div><div class="day-type type-video">短影音</div><div class="day-title">幕後花絮</div></div>
+      <div class="cal-day"><div class="day-num">DAY 07</div><div class="day-type type-visual">視覺設計</div><div class="day-title">每週回顧圖</div></div>
+      <div class="cal-day"><div class="day-num">DAY 08</div><div class="day-type type-copy">社群文案</div><div class="day-title">客戶見證故事</div></div>
+      <div class="cal-day"><div class="day-num">DAY 09</div><div class="day-type type-design">圖文設計</div><div class="day-title">產品特色海報</div></div>
+      <div class="cal-day"><div class="day-num">DAY 10</div><div class="day-type type-video">短影音</div><div class="day-title">常見問題解答</div></div>
+      <div class="cal-day"><div class="day-num">DAY 11</div><div class="day-type type-engage">互動貼文</div><div class="day-title">填空挑戰</div></div>
+      <div class="cal-day"><div class="day-num">DAY 12</div><div class="day-type type-copy">社群文案</div><div class="day-title">限時優惠文案</div></div>
+      <div class="cal-day"><div class="day-num">DAY 13</div><div class="day-type type-visual">視覺設計</div><div class="day-title">數據圖表貼文</div></div>
+      <div class="cal-day"><div class="day-num">DAY 14</div><div class="day-type type-video">短影音</div><div class="day-title">操作教學影片</div></div>
+      <div class="cal-day"><div class="day-num">DAY 15</div><div class="day-type type-design">圖文設計</div><div class="day-title">中場回顧圖文</div></div>
+      <div class="cal-day" style="opacity:.5"><div class="day-num">DAY 16–30</div><div class="day-type type-copy">完整版</div><div class="day-title">購買後解鎖</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="pricing-section" id="pricing">
+  <div class="container">
+    <h2 class="s-title">選擇適合你的方案</h2>
+    <p class="s-sub">一次購買，終身使用，無月費</p>
+    <div class="pricing-grid">
+
+      <div class="price-card">
+        <div class="plan-name">入門版</div>
+        <div class="plan-desc">適合剛開始做內容行銷，需要快速上手的創作者</div>
+        <div class="price">NT$197 <span>/ 一次性</span></div>
+        <div class="orig">原價 NT$497</div>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><span class="ck">✓</span> P-01 視覺設計概念提示詞</li>
+          <li><span class="ck">✓</span> P-04 社群文案優化提示詞</li>
+          <li><span class="ck">✓</span> 使用教學 PDF</li>
+          <li><span class="na">✗</span> <span style="color:#9ca3af">P-02 圖文設計概念提示詞</span></li>
+          <li><span class="na">✗</span> <span style="color:#9ca3af">P-03 影片剪輯規劃提示詞</span></li>
+          <li><span class="na">✗</span> <span style="color:#9ca3af">P-05 30天發文計畫提示詞</span></li>
+        </ul>
+        <a href="https://sixhands.gumroad.com/l/content-strategy-starter" class="btn-plan btn-plan-outline" target="_blank">取得入門版</a>
+      </div>
+
+      <div class="price-card featured">
+        <div class="popular-badge">最受歡迎</div>
+        <div class="plan-name">完整版</div>
+        <div class="plan-desc">5 大核心提示詞 + 範例輸出 + 使用手冊，一次全拿</div>
+        <div class="price">NT$497 <span>/ 一次性</span></div>
+        <div class="orig">原價 NT$1,197</div>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><span class="ck">✓</span> P-01 視覺設計概念提示詞</li>
+          <li><span class="ck">✓</span> P-02 圖文設計概念提示詞</li>
+          <li><span class="ck">✓</span> P-03 影片剪輯規劃提示詞</li>
+          <li><span class="ck">✓</span> P-04 社群文案優化提示詞</li>
+          <li><span class="ck">✓</span> P-05 30天發文計畫提示詞</li>
+          <li><span class="ck">✓</span> 10 個 AI 輸出範例</li>
+          <li><span class="ck">✓</span> 完整使用手冊 PDF</li>
+        </ul>
+        <a href="https://sixhands.gumroad.com/l/content-strategy-full" class="btn-plan btn-plan-primary" target="_blank">立即取得完整版 →</a>
+      </div>
+
+      <div class="price-card">
+        <div class="plan-name">VIP 全系列</div>
+        <div class="plan-desc">本包 + 房仲 AI 影片模板包 + AI 空屋改造包，全系列最高 CP 值</div>
+        <div class="price">NT$1,197 <span>/ 一次性</span></div>
+        <div class="orig">原價 NT$2,991</div>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><span class="ck">✓</span> 內容策略設計提示詞包（完整版）</li>
+          <li><span class="ck">✓</span> 房仲 AI 影片模板包（完整版）</li>
+          <li><span class="ck">✓</span> AI 空屋改造模板包（完整版）</li>
+          <li><span class="ck">✓</span> 優先客服支援</li>
+          <li><span class="ck">✓</span> 未來更新版本免費升級</li>
+        </ul>
+        <a href="https://sixhands.gumroad.com/l/content-strategy-vip" class="btn-plan btn-plan-outline" target="_blank">取得 VIP 全系列</a>
+      </div>
+
+    </div>
+    <p style="text-align:center;margin-top:24px;font-size:0.85rem;color:var(--gray);">支援信用卡、PayPal · 30 天退款保證 · 無風險嘗試</p>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section">
+  <div class="container">
+    <h2 class="s-title">常見問題</h2>
+    <p class="s-sub"></p>
+    <div class="faq-list">
+      <details>
+        <summary>這些提示詞要用哪個 AI 工具？</summary>
+        <div class="ans">Claude 和 ChatGPT 都完全適用，免費版即可使用。建議使用 Claude（claude.ai）或 ChatGPT 免費版，貼入提示詞後填入你的主題就能立即輸出。如果使用付費版效果會更精準，但免費版已經非常夠用。</div>
+      </details>
+      <details>
+        <summary>我沒有設計背景，P-01 輸出的設計概念我看得懂嗎？</summary>
+        <div class="ans">完全可以。AI 輸出的設計概念會以白話說明每個要素，並附上可以直接複製給 Canva 或 AI 圖像工具的操作指示。不需要設計專業，照著說明執行即可。</div>
+      </details>
+      <details>
+        <summary>P-05 的 30 天計畫，適合哪些平台？</summary>
+        <div class="ans">提示詞預設產出適合 Instagram、Facebook、TikTok、YouTube Shorts 的內容規劃。你也可以在提示詞中指定你主力經營的平台，AI 會調整成該平台最適合的內容策略與發文時間。</div>
+      </details>
+      <details>
+        <summary>購買後怎麼取得檔案？</summary>
+        <div class="ans">透過 Gumroad 購買後，系統會自動寄送下載連結到你的 Email，同時也可以登入 Gumroad 帳號隨時下載。完全自動化，不需要等待。</div>
+      </details>
+      <details>
+        <summary>可以用在非房地產的內容領域嗎？</summary>
+        <div class="ans">完全可以。這套提示詞是通用型內容策略工具，只要把 [填入你的主題] 換成任何行業或主題——餐廳、美妝、教育、健身、電商——都能直接使用，不局限於房地產。</div>
+      </details>
+      <details>
+        <summary>不滿意可以退款嗎？</summary>
+        <div class="ans">可以！透過 Gumroad 購買享 30 天退款保證，不滿意全額退款，無風險嘗試。</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section class="cta-section">
+  <div class="container">
+    <h2>停止每次都從零開始<br>讓 <em>AI 幫你規劃</em>，你只需要執行</h2>
+    <p>5 大核心提示詞，視覺設計 × 影片規劃 × 社群文案 × 30 天計畫，複製貼上就能用</p>
+    <div>
+      <a href="#pricing" class="btn-gold" style="font-size:1.1rem;padding:18px 48px;">立即取得提示詞包 →</a>
+    </div>
+    <div class="cta-guarantee">
+      <span>🛡️</span>
+      <span>30 天退款保證 · 無風險嘗試 · 終身使用無月費</span>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <p>© 2025 SixHands AI 創作工具系列 · <a href="index.html" style="color:rgba(255,255,255,.55)">返回首頁</a></p>
+</footer>
+
+<script>
+function copyPrompt(id, btn) {
+  const el = document.getElementById(id);
+  const text = el.innerText || el.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const span = btn.querySelector('span');
+    span.textContent = '已複製！';
+    btn.classList.add('done');
+    setTimeout(() => {
+      span.textContent = '複製提示詞';
+      btn.classList.remove('done');
+    }, 2000);
+  });
+}
+</script>
+
+</body>
+</html>
