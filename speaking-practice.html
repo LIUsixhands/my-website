@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5大說話公式｜互動式表達力練習模組</title>
+<meta name="description" content="5 大說話公式練習：先說結論、把話接住、觀點清楚、說服他人、讓人記住。每個公式都有情境練習、語音輸入與即時改進建議。">
+<style>
+  :root {
+    --navy:#1B2A4A; --gold:#C9943A; --teal:#2A7F7F;
+    --red:#B94040; --green:#2D7D4E; --bg:#F8F6F1;
+    --white:#FFFFFF; --gray:#6B7280; --light:#EEF0F5;
+    --purple:#6D28D9; --orange:#E07A1F;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Noto Sans TC','PingFang TC',Arial,sans-serif;background:var(--bg);color:#1a1a1a;line-height:1.7;}
+
+  a{color:var(--teal);}
+
+  /* HERO */
+  .hero{
+    background:linear-gradient(135deg,var(--navy) 0%,#2E4A7A 60%,var(--teal) 100%);
+    color:var(--white);padding:72px 24px 60px;text-align:center;
+  }
+  .hero .badge{
+    display:inline-block;background:var(--gold);color:var(--white);
+    font-size:0.78rem;font-weight:700;padding:5px 16px;border-radius:20px;
+    letter-spacing:2px;margin-bottom:18px;
+  }
+  .hero h1{font-size:2.4rem;font-weight:900;line-height:1.25;margin-bottom:16px;max-width:820px;margin-left:auto;margin-right:auto;}
+  .hero h1 span{color:var(--gold);}
+  .hero .subtitle{font-size:1.08rem;opacity:.92;max-width:640px;margin:0 auto 28px;}
+  .progress-wrap{max-width:520px;margin:24px auto 0;}
+  .progress-bar{height:8px;background:rgba(255,255,255,.18);border-radius:50px;overflow:hidden;}
+  .progress-fill{height:100%;background:var(--gold);width:0%;transition:width .4s;}
+  .progress-text{font-size:0.85rem;opacity:.8;margin-top:8px;}
+
+  /* Container */
+  .container{max-width:980px;margin:0 auto;padding:0 24px;}
+
+  /* Formula Nav */
+  .nav-wrap{background:var(--white);padding:18px 0;position:sticky;top:0;z-index:50;
+    box-shadow:0 2px 12px rgba(0,0,0,.06);}
+  .nav-tabs{display:flex;gap:8px;overflow-x:auto;padding:0 24px;max-width:980px;margin:0 auto;}
+  .nav-tab{
+    flex:0 0 auto;padding:10px 18px;border-radius:50px;background:var(--light);
+    color:var(--gray);font-size:0.92rem;font-weight:700;cursor:pointer;
+    border:2px solid transparent;transition:all .2s;white-space:nowrap;
+  }
+  .nav-tab:hover{background:#dde2ed;}
+  .nav-tab.active{background:var(--navy);color:var(--white);}
+  .nav-tab.done{border-color:var(--green);}
+  .nav-tab.done::after{content:" ✓";color:var(--green);}
+  .nav-tab.active.done::after{color:#9eff9e;}
+
+  /* Module Sections */
+  .module{padding:56px 0 32px;display:none;}
+  .module.active{display:block;}
+
+  .module-head{
+    display:flex;align-items:flex-start;gap:18px;margin-bottom:24px;
+    padding-bottom:24px;border-bottom:2px dashed #d8d3c4;
+  }
+  .module-num{
+    flex:0 0 auto;width:56px;height:56px;border-radius:14px;
+    background:var(--navy);color:var(--gold);display:flex;
+    align-items:center;justify-content:center;font-size:1.8rem;font-weight:900;
+  }
+  .module-head h2{font-size:1.6rem;color:var(--navy);margin-bottom:4px;}
+  .module-head .formula{font-size:0.98rem;color:var(--gold);font-weight:700;}
+
+  /* Formula Card */
+  .formula-card{
+    background:linear-gradient(135deg,#fff,#fcf8ee);
+    border:1px solid #e8dfc8;border-radius:14px;
+    padding:24px 26px;margin-bottom:28px;
+  }
+  .formula-card .label{
+    display:inline-block;background:var(--gold);color:#fff;
+    font-size:0.72rem;font-weight:800;letter-spacing:2px;
+    padding:3px 12px;border-radius:20px;margin-bottom:12px;
+  }
+  .formula-card h3{font-size:1.1rem;color:var(--navy);margin-bottom:12px;}
+  .formula-pieces{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
+  .piece{
+    background:var(--white);border:2px solid var(--teal);color:var(--teal);
+    padding:6px 14px;border-radius:8px;font-weight:700;font-size:0.92rem;
+  }
+  .piece-plus{color:var(--gray);font-weight:700;align-self:center;}
+  .formula-card .example{
+    background:#1a1a1a;color:#fff;border-radius:10px;
+    padding:14px 18px;font-size:0.95rem;line-height:1.75;
+    border-left:4px solid var(--gold);
+  }
+  .formula-card .example::before{
+    content:"💬 範例 ";color:var(--gold);font-weight:700;font-size:0.85rem;
+  }
+
+  /* Practice block */
+  .practice{
+    background:var(--white);border-radius:14px;
+    padding:28px 26px;box-shadow:0 4px 18px rgba(27,42,74,.07);
+    margin-bottom:24px;
+  }
+  .practice-head{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:14px;flex-wrap:wrap;gap:8px;
+  }
+  .practice-head h3{font-size:1.1rem;color:var(--navy);}
+  .scenario-num{
+    font-size:0.78rem;color:var(--gray);background:var(--light);
+    padding:4px 12px;border-radius:50px;font-weight:700;
+  }
+  .scenario-box{
+    background:#fff7ec;border-left:4px solid var(--orange);
+    padding:14px 18px;border-radius:8px;margin-bottom:16px;
+    font-size:0.98rem;line-height:1.75;
+  }
+  .scenario-box strong{color:var(--orange);}
+
+  /* Input area */
+  .input-area{margin-bottom:14px;}
+  .input-area label{
+    display:block;font-size:0.85rem;color:var(--gray);
+    font-weight:700;margin-bottom:6px;
+  }
+  textarea{
+    width:100%;min-height:110px;padding:14px;font-size:1rem;
+    font-family:inherit;border:2px solid #e0ddd2;border-radius:10px;
+    resize:vertical;line-height:1.7;background:#fafaf7;
+  }
+  textarea:focus{outline:none;border-color:var(--teal);background:#fff;}
+
+  .input-tools{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
+  .tool-btn{
+    background:var(--light);border:none;color:var(--navy);
+    padding:8px 16px;border-radius:50px;font-size:0.88rem;font-weight:700;
+    cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+    transition:background .2s;
+  }
+  .tool-btn:hover{background:#dde2ed;}
+  .tool-btn.recording{background:var(--red);color:#fff;animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
+  .mic-status{font-size:0.82rem;color:var(--gray);align-self:center;}
+
+  /* Action buttons */
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;}
+  .btn{
+    padding:12px 22px;border-radius:50px;font-size:0.95rem;font-weight:800;
+    cursor:pointer;border:none;transition:transform .15s,box-shadow .15s;
+  }
+  .btn:hover{transform:translateY(-1px);}
+  .btn-primary{background:var(--gold);color:#fff;box-shadow:0 4px 14px rgba(201,148,58,.35);}
+  .btn-ghost{background:transparent;border:2px solid var(--navy);color:var(--navy);}
+  .btn-teal{background:var(--teal);color:#fff;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+
+  /* Feedback */
+  .feedback{
+    margin-top:18px;padding:20px;border-radius:12px;
+    background:linear-gradient(135deg,#f4f9f7,#eaf3ef);
+    border-left:5px solid var(--green);display:none;
+  }
+  .feedback.show{display:block;animation:slideDown .3s;}
+  @keyframes slideDown{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:none;}}
+  .feedback h4{color:var(--green);font-size:1rem;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+  .check-list{list-style:none;margin-bottom:14px;}
+  .check-list li{
+    padding:6px 0 6px 28px;position:relative;font-size:0.94rem;
+  }
+  .check-list li.pass::before{content:"✓";position:absolute;left:0;color:var(--green);font-weight:900;font-size:1.1rem;}
+  .check-list li.fail::before{content:"✗";position:absolute;left:0;color:var(--red);font-weight:900;font-size:1.1rem;}
+  .check-list li.warn::before{content:"!";position:absolute;left:6px;color:var(--orange);font-weight:900;font-size:1.1rem;}
+  .score-bar{
+    display:inline-block;background:var(--navy);color:var(--gold);
+    padding:5px 16px;border-radius:50px;font-weight:800;font-size:0.95rem;
+    margin-bottom:10px;
+  }
+  .sample-answer{
+    background:#fff;border-radius:8px;padding:14px 16px;
+    border:1px dashed #c8c2b1;margin-top:12px;
+  }
+  .sample-answer .lbl{
+    font-size:0.78rem;color:var(--gold);font-weight:800;letter-spacing:1px;
+    margin-bottom:6px;
+  }
+  .sample-answer p{font-size:0.96rem;color:#333;line-height:1.75;}
+
+  .tips{
+    margin-top:14px;background:#fff8e8;padding:12px 14px;
+    border-radius:8px;font-size:0.9rem;color:#7a5a18;
+  }
+  .tips::before{content:"💡 ";}
+
+  /* Module Footer Nav */
+  .module-foot{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-top:20px;padding-top:24px;border-top:1px solid #e6e2d5;
+    flex-wrap:wrap;gap:10px;
+  }
+
+  /* Overview / Final */
+  .intro,.outro{padding:56px 0;}
+  .intro-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-top:28px;}
+  .intro-card{
+    background:var(--white);padding:18px;border-radius:12px;
+    box-shadow:0 2px 10px rgba(0,0,0,.05);text-align:center;
+    cursor:pointer;transition:transform .2s,box-shadow .2s;
+    border-top:4px solid var(--gold);
+  }
+  .intro-card:hover{transform:translateY(-4px);box-shadow:0 6px 20px rgba(0,0,0,.1);}
+  .intro-card .num{
+    width:38px;height:38px;border-radius:50%;background:var(--navy);
+    color:var(--gold);display:flex;align-items:center;justify-content:center;
+    font-weight:900;margin:0 auto 10px;
+  }
+  .intro-card h3{font-size:1rem;color:var(--navy);margin-bottom:4px;}
+  .intro-card p{font-size:0.82rem;color:var(--gray);}
+
+  .outro-card{
+    background:linear-gradient(135deg,var(--navy),var(--teal));
+    color:#fff;border-radius:18px;padding:40px;text-align:center;
+    display:none;
+  }
+  .outro-card.show{display:block;}
+  .outro-card h2{font-size:1.8rem;margin-bottom:12px;}
+  .outro-card .stats-mini{
+    display:flex;justify-content:center;gap:32px;margin:24px 0;
+    flex-wrap:wrap;
+  }
+  .stat-mini .num{font-size:2rem;font-weight:900;color:var(--gold);}
+  .stat-mini .lbl{font-size:0.82rem;opacity:.85;}
+
+  footer{
+    background:#0F1828;color:rgba(255,255,255,.55);
+    padding:28px 24px;text-align:center;font-size:0.85rem;
+  }
+  footer a{color:rgba(255,255,255,.75);}
+
+  @media (max-width:720px){
+    .hero h1{font-size:1.7rem;}
+    .hero{padding:48px 20px 40px;}
+    .module-head{flex-direction:column;}
+    .module-num{width:48px;height:48px;font-size:1.5rem;}
+    .practice{padding:20px 18px;}
+    .formula-card{padding:18px;}
+    .outro-card{padding:28px 20px;}
+    .nav-tabs{padding:0 16px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="badge">SPEAKING PRACTICE · 表達力訓練</div>
+    <h1>5 大說話公式<br><span>互動式練習模組</span></h1>
+    <p class="subtitle">
+      用 5 個簡單公式，提升你的表達力、情商與溝通技巧。<br>
+      每個公式都有多個情境練習，可文字或語音輸入，系統會給你即時改進建議。
+    </p>
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-text"><span id="progressDone">0</span> / 5 公式已完成練習</div>
+    </div>
+  </div>
+</section>
+
+<!-- NAV -->
+<div class="nav-wrap">
+  <div class="nav-tabs" id="navTabs"></div>
+</div>
+
+<div class="container">
+
+<!-- INTRO -->
+<section class="intro" id="intro">
+  <h2 style="font-size:1.5rem;color:var(--navy);text-align:center;margin-bottom:8px;">先來認識 5 大公式</h2>
+  <p style="text-align:center;color:var(--gray);">點任一張卡片，開始該公式的情境練習</p>
+  <div class="intro-grid" id="introGrid"></div>
+</section>
+
+<!-- MODULES (Generated by JS) -->
+<div id="modules"></div>
+
+<!-- OUTRO -->
+<section class="outro">
+  <div class="outro-card" id="outroCard">
+    <h2>🎉 恭喜！五個公式都練習過了</h2>
+    <p>記住：說話公式不是劇本，是肌肉記憶。<br>每天用一次，30 天後你的表達會變不一樣。</p>
+    <div class="stats-mini">
+      <div class="stat-mini"><div class="num" id="finalRounds">0</div><div class="lbl">總練習回合</div></div>
+      <div class="stat-mini"><div class="num" id="finalWords">0</div><div class="lbl">總字數</div></div>
+      <div class="stat-mini"><div class="num" id="finalAvg">0</div><div class="lbl">平均分數</div></div>
+    </div>
+    <button class="btn btn-primary" onclick="resetAll()">🔄 重新練習</button>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  © 2025 · 5 大說話公式練習模組｜<a href="index.html">回首頁</a>
+</footer>
+
+<script>
+/* ============================================================
+   5 公式定義 + 每個公式多個情境
+   ============================================================ */
+const FORMULAS = [
+  {
+    id:1,
+    title:"先說結論",
+    pieces:["結論","原因","行動"],
+    color:"var(--teal)",
+    desc:"開頭直接給答案，再補原因，最後落地成下一步動作。讓對方不用猜你要表達什麼。",
+    sample:"建議選這個方案，因為更省時間，我們現在就開始執行。",
+    scenarios:[
+      {
+        question:"<strong>情境：</strong>主管在會議上問你「下週上線、下下週上線、延後一個月，三個方案哪個比較好？」你怎麼回？",
+        sample:"我建議下下週上線，因為下週測試時間太緊容易出包，我今天就把詳細排程寄給您確認。",
+        keywords:["建議","因為","今天","我們"]
+      },
+      {
+        question:"<strong>情境：</strong>同事問你「中午要不要一起去那間新開的咖啡廳？」你想去，但今天工作很多。",
+        sample:"今天先不去，因為我下午有個 deadline，明天中午我訂位帶你去。",
+        keywords:["因為","明天","今天"]
+      },
+      {
+        question:"<strong>情境：</strong>客戶問你「A 方案還是 B 方案比較適合我們？」（兩個都可以但 B 更省）",
+        sample:"我建議您選 B，因為長期成本可以省 20%，我這週把合約版本寄給您。",
+        keywords:["建議","因為","這週","寄"]
+      },
+      {
+        question:"<strong>情境：</strong>朋友邀你週末爬山，你不太想去。",
+        sample:"這週末不行，因為我已經安排陪家人，下個月找一天我們一起去陽明山。",
+        keywords:["因為","下個月","一起"]
+      }
+    ]
+  },
+  {
+    id:2,
+    title:"把話接住",
+    pieces:["回應","感受","追問"],
+    color:"var(--purple)",
+    desc:"先承接對方說的話、點出他的感受，再用問題往下挖。讓對方覺得「你真的有在聽」。",
+    sample:"聽起來你最近真挺累的，是不是一直在趕進度？",
+    scenarios:[
+      {
+        question:"<strong>朋友說：</strong>「我最近不知道為什麼一直睡不好。」請接住這句話。",
+        sample:"聽起來你最近壓力滿大的，是不是有事情一直在想？",
+        keywords:["聽起來","是不是","壓力","累","煩"]
+      },
+      {
+        question:"<strong>同事說：</strong>「今天又被主管唸了，超不爽。」請接住這句話。",
+        sample:"被唸真的會悶一整天耶，是哪件事情他特別在意？",
+        keywords:["聽起來","真的","是不是","悶","氣","煩"]
+      },
+      {
+        question:"<strong>家人說：</strong>「最近工作好像不太順。」請接住這句話。",
+        sample:"感覺你最近滿低潮的，是有遇到什麼讓你卡住的事情嗎？",
+        keywords:["感覺","聽起來","是不是","低潮","卡","煩"]
+      },
+      {
+        question:"<strong>伴侶說：</strong>「我覺得你最近都沒在聽我講話。」請接住這句話。",
+        sample:"聽你這樣說我也覺得有點難過，是不是這幾天我太累了讓你覺得被忽略？",
+        keywords:["聽","難過","是不是","抱歉","感覺"]
+      }
+    ]
+  },
+  {
+    id:3,
+    title:"觀點講清楚",
+    pieces:["觀點","原因","例子"],
+    color:"var(--orange)",
+    desc:"先說立場、再給理由、最後用具體例子收尾。讓抽象的想法變得可信、可記。",
+    sample:"早起很有幫助，因為干擾少，例如我早上寫作效率比晚上高三倍。",
+    scenarios:[
+      {
+        question:"<strong>題目：</strong>分享你對「運動」的看法（請完整講出觀點、原因、例子）。",
+        sample:"運動是最划算的投資，因為它同時改善身體跟心情，像我每週跑三次後，連睡眠品質都變好。",
+        keywords:["因為","例如","像","所以"]
+      },
+      {
+        question:"<strong>題目：</strong>分享你對「閱讀」的看法。",
+        sample:"閱讀比追劇有用，因為它讓你借別人的經驗思考，例如我看完一本理財書後，半年就存到第一桶金。",
+        keywords:["因為","例如","像","所以"]
+      },
+      {
+        question:"<strong>題目：</strong>分享你對「斜槓」的看法。",
+        sample:"我覺得斜槓不是分心，是抗風險，因為單一收入很脆弱，像疫情那幾年，副業反而救了我。",
+        keywords:["因為","例如","像","所以"]
+      },
+      {
+        question:"<strong>題目：</strong>分享你對「冥想」的看法。",
+        sample:"冥想是最便宜的腦袋休息，因為它讓注意力重置，例如我每天早上靜坐 10 分鐘，整天效率明顯變高。",
+        keywords:["因為","例如","像","所以"]
+      }
+    ]
+  },
+  {
+    id:4,
+    title:"說服他人",
+    pieces:["對方在意點","建議","變化"],
+    color:"var(--red)",
+    desc:"不要講你想講的，要講對方想聽的。先點出他在意什麼，再給建議，最後畫出「改變後的畫面」。",
+    sample:"你不是想更有精神嗎？試試早點睡，明天起床會輕鬆很多。",
+    scenarios:[
+      {
+        question:"<strong>情境：</strong>你想說服一個總喊累的朋友開始運動。",
+        sample:"你不是常說身體很沉嗎？我們週末先走 30 分鐘就好，走完那種輕快感你會上癮。",
+        keywords:["你不是","試試","就會","開始"]
+      },
+      {
+        question:"<strong>情境：</strong>你想說服同事改用一個更省時的工具。",
+        sample:"你之前不是抱怨報表做到很晚？這個工具一鍵生成，下班可以早一個小時走。",
+        keywords:["你不是","試試","就會","可以"]
+      },
+      {
+        question:"<strong>情境：</strong>你想說服家人少喝含糖飲料。",
+        sample:"你不是想瘦回去年那個尺寸嗎？先從一天一杯變兩天一杯，一個月就能看出差別。",
+        keywords:["你不是","試試","就會","會"]
+      },
+      {
+        question:"<strong>情境：</strong>你想說服客戶選比較貴但更划算的方案。",
+        sample:"您不是最在意長期穩定嗎？選這個雖然多花一點，三年後省下來的維護成本超過兩倍。",
+        keywords:["您不是","選","就會","會"]
+      }
+    ]
+  },
+  {
+    id:5,
+    title:"讓人記住",
+    pieces:["鮮明判斷","對比","短句收尾"],
+    color:"var(--gold)",
+    desc:"金句怎麼來？先丟一個刺耳的判斷，再用對比放大張力，最後用 10 字以內的短句收尾。",
+    sample:"消耗你的不是事情，是沒開始。早做是減壓，晚做是加壓。",
+    scenarios:[
+      {
+        question:"<strong>題目：</strong>請用「鮮明判斷 + 對比 + 短句」談「拖延」。",
+        sample:"拖延從來不省時間。早做花十分鐘，晚做花一整天。先動，就贏一半。",
+        keywords:["不是","是","早","晚"]
+      },
+      {
+        question:"<strong>題目：</strong>請用「鮮明判斷 + 對比 + 短句」談「人際關係」。",
+        sample:"消耗你的不是別人，是回應。少解釋，多沉默。能量留給對的人。",
+        keywords:["不是","是","少","多"]
+      },
+      {
+        question:"<strong>題目：</strong>請用「鮮明判斷 + 對比 + 短句」談「學習」。",
+        sample:"沒進步不是不夠努力，是方向錯。瞎忙是消耗，慢學是複利。慢，才是快。",
+        keywords:["不是","是","慢","快"]
+      },
+      {
+        question:"<strong>題目：</strong>請用「鮮明判斷 + 對比 + 短句」談「金錢」。",
+        sample:"你不是賺得太少，是花得太快。會省的人贏起點，會投的人贏終點。先存，再賺。",
+        keywords:["不是","是","先","再"]
+      }
+    ]
+  }
+];
+
+/* ============================================================
+   狀態管理
+   ============================================================ */
+const STORE_KEY = "speakingPracticeState";
+let state = loadState();
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {
+    current: 0,
+    scenarioIdx: FORMULAS.map(()=>0),
+    done: FORMULAS.map(()=>false),
+    rounds: 0,
+    totalWords: 0,
+    scoreSum: 0,
+    scoreCount: 0
+  };
+}
+function saveState(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+/* ============================================================
+   渲染：Nav + Intro 卡片 + Modules
+   ============================================================ */
+const navTabs = document.getElementById("navTabs");
+const introGrid = document.getElementById("introGrid");
+const modulesEl = document.getElementById("modules");
+
+FORMULAS.forEach((f, i)=>{
+  // Nav tab
+  const tab = document.createElement("div");
+  tab.className = "nav-tab";
+  tab.textContent = `${i+1}. ${f.title}`;
+  tab.onclick = ()=> showModule(i+1);
+  tab.dataset.idx = i;
+  navTabs.appendChild(tab);
+
+  // Intro card
+  const card = document.createElement("div");
+  card.className = "intro-card";
+  card.onclick = ()=> showModule(i+1);
+  card.innerHTML = `
+    <div class="num">${i+1}</div>
+    <h3>${f.title}</h3>
+    <p>${f.pieces.join(" + ")}</p>
+  `;
+  introGrid.appendChild(card);
+
+  // Module section
+  const mod = document.createElement("section");
+  mod.className = "module";
+  mod.id = `module-${i+1}`;
+  mod.innerHTML = renderModule(f, i);
+  modulesEl.appendChild(mod);
+});
+
+// Intro nav tab (放最前面)
+const introTab = document.createElement("div");
+introTab.className = "nav-tab active";
+introTab.textContent = "📖 總覽";
+introTab.onclick = ()=> showModule(0);
+navTabs.insertBefore(introTab, navTabs.firstChild);
+
+function renderModule(f, idx){
+  return `
+    <div class="module-head">
+      <div class="module-num">${f.id}</div>
+      <div>
+        <h2>${f.title}</h2>
+        <div class="formula">公式：${f.pieces.join(" + ")}</div>
+      </div>
+    </div>
+
+    <div class="formula-card">
+      <span class="label">FORMULA</span>
+      <h3>${f.desc}</h3>
+      <div class="formula-pieces">
+        ${f.pieces.map((p,i)=>`<span class="piece">${p}</span>${i<f.pieces.length-1?'<span class="piece-plus">+</span>':''}`).join("")}
+      </div>
+      <div class="example">${f.sample}</div>
+    </div>
+
+    <div class="practice" id="practice-${f.id}">
+      <div class="practice-head">
+        <h3>🎯 換你練習</h3>
+        <span class="scenario-num" id="snum-${f.id}">第 1 / ${f.scenarios.length} 題</span>
+      </div>
+      <div class="scenario-box" id="scenario-${f.id}"></div>
+
+      <div class="input-area">
+        <label for="ans-${f.id}">寫下或說出你的回答（用上面公式的順序）</label>
+        <textarea id="ans-${f.id}" placeholder="開始打字，或按下「🎤 開始語音」用說的..."></textarea>
+        <div class="input-tools">
+          <button class="tool-btn" id="mic-${f.id}" onclick="toggleMic(${f.id})">🎤 開始語音</button>
+          <button class="tool-btn" onclick="clearAns(${f.id})">🗑 清空</button>
+          <span class="mic-status" id="micStatus-${f.id}"></span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" onclick="checkAnswer(${f.id})">✅ 提交並看建議</button>
+        <button class="btn btn-ghost" onclick="nextScenario(${f.id})">🔁 換一題範例</button>
+      </div>
+
+      <div class="feedback" id="feedback-${f.id}"></div>
+    </div>
+
+    <div class="module-foot">
+      <button class="btn btn-ghost" onclick="showModule(${f.id-1})">← 上一個公式</button>
+      <button class="btn btn-teal" onclick="showModule(${f.id+1})">${f.id===5?"完成 →":"下一個公式 →"}</button>
+    </div>
+  `;
+}
+
+/* ============================================================
+   控制：切換模組、換題、清空、檢查答案、語音輸入
+   ============================================================ */
+function showModule(num){
+  document.querySelectorAll(".module").forEach(m=>m.classList.remove("active"));
+  document.getElementById("intro").style.display = "none";
+  document.querySelectorAll(".nav-tab").forEach(t=>t.classList.remove("active"));
+
+  if(num === 0){
+    document.getElementById("intro").style.display = "block";
+    introTab.classList.add("active");
+    document.getElementById("outroCard").classList.remove("show");
+  } else if (num > FORMULAS.length){
+    // 完成頁
+    document.getElementById("intro").style.display = "none";
+    document.getElementById("outroCard").classList.add("show");
+    document.getElementById("finalRounds").textContent = state.rounds;
+    document.getElementById("finalWords").textContent = state.totalWords;
+    document.getElementById("finalAvg").textContent = state.scoreCount ? Math.round(state.scoreSum/state.scoreCount) : 0;
+    window.scrollTo({top:document.getElementById("outroCard").offsetTop-60,behavior:"smooth"});
+    return;
+  } else {
+    document.getElementById(`module-${num}`).classList.add("active");
+    document.querySelectorAll(".nav-tab")[num].classList.add("active");
+    state.current = num;
+    saveState();
+    renderScenario(num);
+  }
+  window.scrollTo({top:0,behavior:"smooth"});
+  refreshDoneMarks();
+}
+
+function renderScenario(fid){
+  const f = FORMULAS[fid-1];
+  const idx = state.scenarioIdx[fid-1] % f.scenarios.length;
+  document.getElementById(`scenario-${fid}`).innerHTML = f.scenarios[idx].question;
+  document.getElementById(`snum-${fid}`).textContent = `第 ${idx+1} / ${f.scenarios.length} 題`;
+  document.getElementById(`feedback-${fid}`).classList.remove("show");
+  document.getElementById(`feedback-${fid}`).innerHTML = "";
+}
+
+function nextScenario(fid){
+  state.scenarioIdx[fid-1] = (state.scenarioIdx[fid-1] + 1) % FORMULAS[fid-1].scenarios.length;
+  saveState();
+  renderScenario(fid);
+  document.getElementById(`ans-${fid}`).value = "";
+  document.getElementById(`ans-${fid}`).focus();
+}
+
+function clearAns(fid){
+  document.getElementById(`ans-${fid}`).value = "";
+  document.getElementById(`feedback-${fid}`).classList.remove("show");
+}
+
+/* ====== 檢查回答 ====== */
+function checkAnswer(fid){
+  const f = FORMULAS[fid-1];
+  const idx = state.scenarioIdx[fid-1] % f.scenarios.length;
+  const s = f.scenarios[idx];
+  const ans = document.getElementById(`ans-${fid}`).value.trim();
+  const fb = document.getElementById(`feedback-${fid}`);
+
+  if(!ans){
+    fb.innerHTML = `<h4>⚠️ 等等</h4><p>先寫一句你的回答，再讓我看看怎麼幫你調整。</p>`;
+    fb.classList.add("show");
+    return;
+  }
+
+  const result = analyze(ans, f, s);
+
+  fb.innerHTML = `
+    <h4>🔍 即時建議</h4>
+    <div class="score-bar">分數：${result.score} / 100</div>
+    <ul class="check-list">
+      ${result.checks.map(c=>`<li class="${c.type}">${c.text}</li>`).join("")}
+    </ul>
+    ${result.tip ? `<div class="tips">${result.tip}</div>` : ""}
+    <div class="sample-answer">
+      <div class="lbl">★ 參考答案</div>
+      <p>${s.sample}</p>
+    </div>
+  `;
+  fb.classList.add("show");
+
+  // 更新統計
+  state.rounds++;
+  state.totalWords += ans.length;
+  state.scoreSum += result.score;
+  state.scoreCount++;
+  if(result.score >= 70) state.done[fid-1] = true;
+  saveState();
+  refreshDoneMarks();
+}
+
+/* 分析：根據公式區塊長度、關鍵詞、句長給建議 */
+function analyze(ans, f, scenario){
+  const checks = [];
+  let score = 50;
+
+  // 1. 長度
+  if(ans.length < 12){
+    checks.push({type:"fail",text:"太短了：一個完整公式至少 20–40 字才有結構感。"});
+  } else if(ans.length > 120){
+    checks.push({type:"warn",text:"有點長：說話公式要的是「短而準」，試著精簡到 60 字以內。"});
+    score += 5;
+  } else {
+    checks.push({type:"pass",text:"長度剛好，節奏不會太散。"});
+    score += 15;
+  }
+
+  // 2. 關鍵字（依公式不同檢查不同連接詞 / 結構）
+  const hit = (scenario.keywords||[]).filter(k => ans.includes(k));
+  if(hit.length === 0){
+    checks.push({type:"fail",text:`沒看到結構詞（例如 ${scenario.keywords.slice(0,3).join("、")}），讀起來像散裝句子。`});
+  } else if(hit.length === 1){
+    checks.push({type:"warn",text:`只用了「${hit[0]}」一個結構詞，再加一個會更有公式感。`});
+    score += 10;
+  } else {
+    checks.push({type:"pass",text:`公式結構出現：${hit.join("、")}，很穩。`});
+    score += 25;
+  }
+
+  // 3. 區塊數（用標點切）
+  const segs = ans.split(/[，。！？,.!?\n]/).filter(s=>s.trim().length>0);
+  const need = f.pieces.length;
+  if(segs.length < need){
+    checks.push({type:"warn",text:`只有 ${segs.length} 段，公式需要 ${need} 段：${f.pieces.join(" / ")}。`});
+  } else {
+    checks.push({type:"pass",text:`段落夠：${segs.length} 段，可以對到 ${f.pieces.join(" / ")}。`});
+    score += 10;
+  }
+
+  // 4. 公式特定建議
+  let tip = "";
+  if(f.id === 1){
+    if(!/^(我建議|建議|我認為|我覺得|先|今天|現在|不|這|那)/.test(ans)){
+      tip = "「先說結論」最忌諱開頭鋪陳。第一個字就是答案最強。";
+    } else { tip = "👍 結論放最前面，下次試著把「行動」也加上時間點（例如「今天就」、「下週前」）。"; score += 5; }
+  } else if(f.id === 2){
+    if(!/[？?]/.test(ans)){
+      tip = "「把話接住」結尾一定要一個問號。沒問號 = 沒在邀請對方繼續說。";
+    } else { tip = "👍 有追問，對方會願意繼續講。試著在「感受」那一段更具體（不是「很累」，是「壓力大到睡不好」）。"; score += 5; }
+  } else if(f.id === 3){
+    if(!/(例如|像|比如|舉例)/.test(ans)){
+      tip = "「觀點」最怕只有觀點沒例子。一句「例如我自己⋯」會讓你瞬間可信。";
+    } else { tip = "👍 有具體例子。下次例子可以再「縮小」——用一個時間點、一個數字會更有畫面。"; score += 5; }
+  } else if(f.id === 4){
+    if(!/(你不是|您不是|你之前|你說過|您一直)/.test(ans)){
+      tip = "「說服」失敗最常見原因：講自己想講的。先回到對方說過的話，他才會聽。";
+    } else { tip = "👍 你有先點對方在意的事。最後那句「變化」要畫得更具體——他能看見的畫面才會動心。"; score += 5; }
+  } else if(f.id === 5){
+    if(!/(不是.*是|早.*晚|多.*少|先.*再|快.*慢)/.test(ans)){
+      tip = "「讓人記住」核心是對比。試試「不是 X，是 Y」、「早 X 晚 Y」的對偶句型。";
+    } else { tip = "👍 對比有出來。最後那句收尾再壓到 10 字以內，就是金句。"; score += 10; }
+  }
+
+  score = Math.max(10, Math.min(100, score));
+  return {score, checks, tip};
+}
+
+/* ====== 語音輸入 (Web Speech API) ====== */
+const recognizers = {};
+function toggleMic(fid){
+  const btn = document.getElementById(`mic-${fid}`);
+  const status = document.getElementById(`micStatus-${fid}`);
+  const ta = document.getElementById(`ans-${fid}`);
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    status.textContent = "❌ 此瀏覽器不支援語音輸入（建議用 Chrome / Edge）";
+    return;
+  }
+  if(recognizers[fid] && recognizers[fid].active){
+    recognizers[fid].stop();
+    return;
+  }
+  const r = new SR();
+  r.lang = "zh-TW";
+  r.continuous = true;
+  r.interimResults = true;
+  let finalText = ta.value ? ta.value + " " : "";
+  r.onstart = ()=>{
+    btn.classList.add("recording");
+    btn.textContent = "⏸ 停止錄音";
+    status.textContent = "錄音中… 請說話";
+    r.active = true;
+  };
+  r.onresult = (e)=>{
+    let interim = "";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t = e.results[i][0].transcript;
+      if(e.results[i].isFinal) finalText += t;
+      else interim += t;
+    }
+    ta.value = finalText + interim;
+  };
+  r.onerror = (e)=>{
+    status.textContent = `⚠️ ${e.error}`;
+    btn.classList.remove("recording");
+    btn.textContent = "🎤 開始語音";
+    r.active = false;
+  };
+  r.onend = ()=>{
+    btn.classList.remove("recording");
+    btn.textContent = "🎤 開始語音";
+    status.textContent = "已停止";
+    r.active = false;
+  };
+  recognizers[fid] = r;
+  r.start();
+}
+
+/* ====== 完成度標記 ====== */
+function refreshDoneMarks(){
+  const tabs = document.querySelectorAll(".nav-tab");
+  let doneCount = 0;
+  state.done.forEach((d,i)=>{
+    if(d){ tabs[i+1].classList.add("done"); doneCount++; }
+  });
+  document.getElementById("progressDone").textContent = doneCount;
+  document.getElementById("progressFill").style.width = (doneCount/5*100)+"%";
+}
+
+/* ====== 重置 ====== */
+function resetAll(){
+  if(!confirm("確定要清掉所有練習紀錄重新開始嗎？")) return;
+  localStorage.removeItem(STORE_KEY);
+  state = loadState();
+  document.querySelectorAll(".nav-tab.done").forEach(t=>t.classList.remove("done"));
+  document.getElementById("outroCard").classList.remove("show");
+  for(let i=1;i<=FORMULAS.length;i++) renderScenario(i);
+  refreshDoneMarks();
+  showModule(0);
+}
+
+/* ====== 啟動 ====== */
+for(let i=1;i<=FORMULAS.length;i++) renderScenario(i);
+refreshDoneMarks();
+showModule(0);
+</script>
+
+</body>
+</html>
