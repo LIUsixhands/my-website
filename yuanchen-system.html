@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>助哥元辰宮｜命格解析系統</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #E8C96B;
+    --gold-dark: #8B6914;
+    --black: #0A0A0A;
+    --dark: #111111;
+    --dark2: #1A1A1A;
+    --text: #F0E6CC;
+    --text-dim: #A89060;
+    --red: #C04040;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans TC', 'PingFang TC', Arial, sans-serif;
+    background: var(--black);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ════════════════ STEP INDICATOR ════════════════ */
+  .step-bar {
+    background: var(--dark);
+    border-bottom: 1px solid rgba(201,168,76,.15);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .step-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: .35;
+    transition: opacity .3s;
+  }
+
+  .step-item.active { opacity: 1; }
+  .step-item.done { opacity: .6; }
+
+  .step-num {
+    width: 28px; height: 28px;
+    border: 1px solid var(--gold);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65rem;
+    color: var(--gold);
+    font-weight: 700;
+    background: rgba(201,168,76,.08);
+  }
+
+  .step-item.active .step-num {
+    background: var(--gold);
+    color: var(--black);
+  }
+
+  .step-item.done .step-num {
+    background: rgba(201,168,76,.2);
+  }
+
+  .step-label { font-size: .68rem; color: var(--text-dim); letter-spacing: 1px; }
+  .step-item.active .step-label { color: var(--gold-light); }
+
+  .step-divider {
+    width: 40px;
+    height: 1px;
+    background: rgba(201,168,76,.2);
+    margin: 0 6px;
+  }
+
+  /* ════════════════ HEADER ════════════════ */
+  .app-header {
+    text-align: center;
+    padding: 32px 24px 20px;
+    border-bottom: 1px solid rgba(201,168,76,.1);
+  }
+
+  .brand {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: var(--gold);
+    letter-spacing: 4px;
+    text-shadow: 0 0 30px rgba(201,168,76,.4);
+  }
+
+  .brand-sub {
+    font-size: .68rem;
+    color: var(--text-dim);
+    letter-spacing: 5px;
+    margin-top: 4px;
+  }
+
+  /* ════════════════ SCREENS ════════════════ */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  .container {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* ════════════════ SCREEN 0 — API KEY ════════════════ */
+  .api-card {
+    background: var(--dark);
+    border: 1px solid rgba(201,168,76,.2);
+    border-radius: 8px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .api-card h2 {
+    font-family: 'Noto Serif TC', serif;
+    color: var(--gold);
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+
+  .api-card p {
+    font-size: .75rem;
+    color: var(--text-dim);
+    line-height: 1.7;
+    margin-bottom: 16px;
+  }
+
+  /* ════════════════ FORM ELEMENTS ════════════════ */
+  .form-group { margin-bottom: 18px; }
+
+  label {
+    display: block;
+    font-size: .72rem;
+    color: var(--gold-light);
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  label .req { color: var(--red); margin-left: 2px; }
+
+  input[type="text"],
+  input[type="date"],
+  input[type="password"],
+  select,
+  textarea {
+    width: 100%;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(201,168,76,.25);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: .8rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+    appearance: none;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 2px rgba(201,168,76,.15);
+  }
+
+  select option { background: #1a1a1a; color: var(--text); }
+
+  textarea { resize: vertical; min-height: 72px; }
+
+  .form-hint {
+    font-size: .63rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  /* ════════════════ SECTION TITLE ════════════════ */
+  .section-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: .9rem;
+    color: var(--gold);
+    letter-spacing: 3px;
+    padding: 10px 0 10px;
+    border-bottom: 1px solid rgba(201,168,76,.15);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title::before {
+    content: '';
+    width: 3px; height: 14px;
+    background: var(--gold);
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  /* ════════════════ BUTTONS ════════════════ */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 28px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: .82rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border: none;
+    transition: all .2s;
+  }
+
+  .btn-gold {
+    background: var(--gold);
+    color: var(--black);
+    box-shadow: 0 4px 20px rgba(201,168,76,.3);
+  }
+  .btn-gold:hover { background: var(--gold-light); transform: translateY(-1px); }
+  .btn-gold:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--gold);
+    border: 1px solid rgba(201,168,76,.4);
+  }
+  .btn-outline:hover { border-color: var(--gold); background: rgba(201,168,76,.08); }
+
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+  }
+
+  /* ════════════════ SCREEN 2 — LOADING ════════════════ */
+  .loading-screen {
+    text-align: center;
+    padding: 60px 24px;
+  }
+
+  .loader-ring {
+    width: 80px; height: 80px;
+    border: 2px solid rgba(201,168,76,.15);
+    border-top: 2px solid var(--gold);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 28px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.1rem;
+    color: var(--gold);
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+  }
+
+  .loading-steps { list-style: none; margin: 20px auto; max-width: 280px; text-align: left; }
+
+  .loading-steps li {
+    font-size: .72rem;
+    color: var(--text-dim);
+    padding: 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .loading-steps li.done { color: var(--gold-light); }
+  .loading-steps li::before { content: '○'; color: var(--text-dim); font-size: .7rem; }
+  .loading-steps li.done::before { content: '✓'; color: var(--gold); }
+  .loading-steps li.current::before { content: '◉'; color: var(--gold-light); animation: pulse 1s ease-in-out infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ════════════════ SCREEN 3 — REPORT ════════════════ */
+  .report-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid rgba(201,168,76,.1);
+    flex-wrap: wrap;
+  }
+
+  #report-container {
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+    background: #222;
+  }
+
+  /* ════════════════ REPORT PAGE (same as template) ════════════════ */
+  .report-page {
+    width: 794px;
+    min-height: 1123px;
+    background: var(--black);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 80px rgba(0,0,0,.8);
+  }
+
+  .report-page::before {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    border: 1px solid rgba(201,168,76,.25);
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .report-page::after {
+    content: '';
+    position: absolute;
+    inset: 12px;
+    border: 1px solid rgba(201,168,76,.1);
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .bg-glow {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 25% 30%, rgba(180,130,30,.08) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 60% at 75% 70%, rgba(100,70,10,.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .r-header {
+    position: relative; z-index: 5;
+    padding: 22px 28px 16px;
+    border-bottom: 1px solid rgba(201,168,76,.2);
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(180deg, rgba(201,168,76,.06) 0%, transparent 100%);
+  }
+
+  .r-brand-name {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 2rem; font-weight: 900;
+    color: var(--gold); letter-spacing: 4px;
+    text-shadow: 0 0 30px rgba(201,168,76,.5);
+  }
+
+  .r-brand-sub { font-size: .68rem; color: var(--text-dim); letter-spacing: 6px; }
+
+  .r-report-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1rem; color: var(--gold-light);
+    letter-spacing: 3px; margin-bottom: 3px; text-align: right;
+  }
+
+  .r-report-sub { font-size: .65rem; color: var(--text-dim); letter-spacing: 2px; text-align: right; }
+
+  .r-main { flex: 1; display: flex; position: relative; z-index: 5; }
+
+  /* LEFT */
+  .r-left {
+    width: 230px; flex-shrink: 0;
+    background: linear-gradient(180deg, rgba(201,168,76,.05) 0%, transparent 100%);
+    border-right: 1px solid rgba(201,168,76,.15);
+    display: flex; flex-direction: column;
+    align-items: center; padding: 20px 16px; gap: 14px;
+  }
+
+  .r-seal {
+    width: 88px; height: 88px;
+    border: 2px solid var(--gold); border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(201,168,76,.05);
+    box-shadow: 0 0 20px rgba(201,168,76,.2), inset 0 0 20px rgba(201,168,76,.05);
+    position: relative;
+  }
+
+  .r-seal::before {
+    content: ''; position: absolute; inset: 4px;
+    border: 1px solid rgba(201,168,76,.3); border-radius: 50%;
+  }
+
+  .r-seal-icon { font-size: 1.9rem; }
+  .r-seal-type { font-size: .52rem; color: var(--gold); letter-spacing: 1px; margin-top: 2px; }
+
+  .r-client-card {
+    width: 100%;
+    background: rgba(201,168,76,.05);
+    border: 1px solid rgba(201,168,76,.2);
+    border-radius: 4px; padding: 12px;
+  }
+
+  .r-client-name {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.25rem; font-weight: 700;
+    color: var(--gold-light); text-align: center; letter-spacing: 3px;
+    margin-bottom: 8px; padding-bottom: 8px;
+    border-bottom: 1px solid rgba(201,168,76,.2);
+  }
+
+  .r-info-row {
+    display: flex; justify-content: space-between; align-items: center; padding: 3px 0;
+  }
+
+  .r-info-label { font-size: .58rem; color: var(--text-dim); letter-spacing: 1px; }
+  .r-info-value { font-size: .63rem; color: var(--text); font-weight: 500; }
+
+  .r-type-badge {
+    width: 100%; text-align: center; padding: 9px;
+    background: linear-gradient(135deg, rgba(201,168,76,.15), rgba(201,168,76,.05));
+    border: 1px solid rgba(201,168,76,.3); border-radius: 4px;
+  }
+
+  .r-badge-label { font-size: .58rem; color: var(--text-dim); letter-spacing: 2px; display: block; margin-bottom: 3px; }
+  .r-badge-type { font-family: 'Noto Serif TC', serif; font-size: .95rem; color: var(--gold); font-weight: 700; letter-spacing: 2px; display: block; }
+
+  .r-insight {
+    width: 100%; padding: 9px;
+    border-left: 2px solid var(--gold); background: rgba(201,168,76,.04);
+  }
+
+  .r-insight-label { font-size: .56rem; color: var(--gold); letter-spacing: 2px; margin-bottom: 4px; display: block; }
+  .r-insight-text { font-size: .67rem; color: var(--text); line-height: 1.7; font-style: italic; }
+
+  .r-tags {
+    width: 100%; margin-top: auto;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  }
+
+  .r-tag {
+    background: rgba(201,168,76,.08);
+    border: 1px solid rgba(201,168,76,.2);
+    border-radius: 3px; padding: 6px 4px; text-align: center;
+  }
+
+  .r-tag-icon { font-size: .88rem; display: block; margin-bottom: 2px; }
+  .r-tag-label { font-size: .53rem; color: var(--text-dim); letter-spacing: .5px; display: block; }
+  .r-tag-value { font-size: .58rem; color: var(--gold-light); font-weight: 500; display: block; margin-top: 1px; }
+
+  /* RIGHT */
+  .r-right { flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+
+  .r-section {
+    border: 1px solid rgba(201,168,76,.15); border-radius: 4px;
+    padding: 10px 13px; background: rgba(255,255,255,.01);
+    position: relative; overflow: hidden;
+  }
+
+  .r-section::before {
+    content: ''; position: absolute;
+    left: 0; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--gold), var(--gold-dark));
+  }
+
+  .r-sec-header { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+
+  .r-sec-num {
+    width: 20px; height: 20px;
+    border: 1px solid var(--gold); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .58rem; color: var(--gold); font-weight: 700;
+    background: rgba(201,168,76,.08); flex-shrink: 0;
+  }
+
+  .r-sec-icon { font-size: .95rem; }
+
+  .r-sec-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: .8rem; color: var(--gold-light); font-weight: 700; letter-spacing: 2px; flex: 1;
+  }
+
+  .r-sec-body { font-size: .65rem; color: var(--text); line-height: 1.8; opacity: .9; }
+  .r-sec-body ul { list-style: none; display: flex; flex-direction: column; gap: 1px; }
+  .r-sec-body ul li::before { content: '·'; color: var(--gold); margin-right: 5px; font-size: .95rem; vertical-align: middle; }
+
+  /* FOOTER */
+  .r-footer {
+    position: relative; z-index: 5;
+    padding: 12px 26px 16px;
+    border-top: 1px solid rgba(201,168,76,.2);
+    background: linear-gradient(0deg, rgba(201,168,76,.06) 0%, transparent 100%);
+  }
+
+  .r-footer-quote { text-align: center; margin-bottom: 12px; }
+  .r-quote-main {
+    font-family: 'Noto Serif TC', serif;
+    font-size: .84rem; color: var(--gold-light); letter-spacing: 3px; font-weight: 600;
+    display: block; margin-bottom: 2px;
+  }
+
+  .r-quote-sub { font-size: .58rem; color: var(--text-dim); letter-spacing: 4px; }
+
+  .r-footer-icons {
+    display: flex; border: 1px solid rgba(201,168,76,.2); border-radius: 4px; overflow: hidden;
+  }
+
+  .r-fi {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    padding: 7px 5px; border-right: 1px solid rgba(201,168,76,.2); gap: 3px;
+  }
+
+  .r-fi:last-child { border-right: none; }
+  .r-fi-icon { font-size: 1.1rem; }
+  .r-fi-label { font-size: .58rem; color: var(--text-dim); letter-spacing: 1px; }
+  .r-fi-value { font-size: .62rem; color: var(--gold-light); font-weight: 500; text-align: center; }
+
+  .r-corner {
+    position: absolute; width: 18px; height: 18px; z-index: 11;
+  }
+
+  .r-corner-tl { top: 16px; left: 16px; border-top: 1px solid var(--gold); border-left: 1px solid var(--gold); opacity: .5; }
+  .r-corner-tr { top: 16px; right: 16px; border-top: 1px solid var(--gold); border-right: 1px solid var(--gold); opacity: .5; }
+  .r-corner-bl { bottom: 16px; left: 16px; border-bottom: 1px solid var(--gold); border-left: 1px solid var(--gold); opacity: .5; }
+  .r-corner-br { bottom: 16px; right: 16px; border-bottom: 1px solid var(--gold); border-right: 1px solid var(--gold); opacity: .5; }
+
+  /* ════════════════ ERROR ════════════════ */
+  .error-box {
+    background: rgba(192,64,64,.12);
+    border: 1px solid rgba(192,64,64,.4);
+    border-radius: 4px; padding: 14px 16px;
+    font-size: .75rem; color: #E88; line-height: 1.6;
+    margin-top: 16px; display: none;
+  }
+
+  /* ════════════════ PRINT ════════════════ */
+  @media print {
+    body, .report-actions, .step-bar, .app-header { display: none; }
+    #report-container { display: block; padding: 0; background: none; }
+    .report-page { box-shadow: none; width: 210mm; min-height: 297mm; }
+    @page { margin: 0; size: A4 portrait; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── STEP BAR ── -->
+<div class="step-bar" id="step-bar">
+  <div class="step-item active" id="step0">
+    <div class="step-num">0</div>
+    <div class="step-label">API設定</div>
+  </div>
+  <div class="step-divider"></div>
+  <div class="step-item" id="step1">
+    <div class="step-num">1</div>
+    <div class="step-label">基本資料</div>
+  </div>
+  <div class="step-divider"></div>
+  <div class="step-item" id="step2">
+    <div class="step-num">2</div>
+    <div class="step-label">深度問題</div>
+  </div>
+  <div class="step-divider"></div>
+  <div class="step-item" id="step3">
+    <div class="step-num">3</div>
+    <div class="step-label">生成中</div>
+  </div>
+  <div class="step-divider"></div>
+  <div class="step-item" id="step4">
+    <div class="step-num">4</div>
+    <div class="step-label">命格報告</div>
+  </div>
+</div>
+
+<!-- ── HEADER ── -->
+<div class="app-header" id="app-header">
+  <div class="brand">助哥元辰宮</div>
+  <div class="brand-sub">命運 × 策略 × 財富</div>
+</div>
+
+<!-- ════ SCREEN 0 — API KEY ════ -->
+<div class="screen active" id="screen-0">
+  <div class="container">
+    <div class="api-card">
+      <h2>🔑 設定 Groq API Key（免費）</h2>
+      <p>
+        本系統使用 Groq Llama 生成個人化命格分析，<strong style="color:var(--gold-light)">完全免費</strong>。<br>
+        API Key 僅存在您的瀏覽器中，不會傳送至任何第三方伺服器。<br><br>
+        申請免費 Key：<strong style="color:var(--gold-light)">console.groq.com → API Keys → Create API Key</strong><br>
+        <span style="font-size:.68rem;opacity:.7">（用 Google 帳號登入即可，不需信用卡）</span>
+      </p>
+      <div class="form-group">
+        <label>Groq API Key <span class="req">*</span></label>
+        <input type="password" id="api-key" placeholder="gsk_..." autocomplete="off">
+      </div>
+      <div id="api-error" class="error-box"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="saveApiKey()">確認，開始填寫 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ SCREEN 1 — 基本資料 ════ -->
+<div class="screen" id="screen-1">
+  <div class="container">
+
+    <div class="section-title">基本資料</div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>姓名 <span class="req">*</span></label>
+        <input type="text" id="f-name" placeholder="請輸入姓名">
+      </div>
+      <div class="form-group">
+        <label>性別 <span class="req">*</span></label>
+        <select id="f-gender">
+          <option value="">請選擇</option>
+          <option value="男">男</option>
+          <option value="女">女</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>出生日期（西元）<span class="req">*</span></label>
+        <input type="date" id="f-birth-date">
+      </div>
+      <div class="form-group">
+        <label>出生時間</label>
+        <select id="f-birth-time">
+          <option value="不確定">不確定</option>
+          <option value="子時（23:00-01:00）">子時（23:00-01:00）</option>
+          <option value="丑時（01:00-03:00）">丑時（01:00-03:00）</option>
+          <option value="寅時（03:00-05:00）">寅時（03:00-05:00）</option>
+          <option value="卯時（05:00-07:00）">卯時（05:00-07:00）</option>
+          <option value="辰時（07:00-09:00）">辰時（07:00-09:00）</option>
+          <option value="巳時（09:00-11:00）">巳時（09:00-11:00）</option>
+          <option value="午時（11:00-13:00）">午時（11:00-13:00）</option>
+          <option value="未時（13:00-15:00）">未時（13:00-15:00）</option>
+          <option value="申時（15:00-17:00）">申時（15:00-17:00）</option>
+          <option value="酉時（17:00-19:00）">酉時（17:00-19:00）</option>
+          <option value="戌時（19:00-21:00）">戌時（19:00-21:00）</option>
+          <option value="亥時（21:00-23:00）">亥時（21:00-23:00）</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>目前職業 / 工作類型</label>
+      <input type="text" id="f-job" placeholder="例：房地產仲介、創業者、業務主管...">
+    </div>
+
+    <div class="form-group">
+      <label>目前收入狀況</label>
+      <select id="f-income">
+        <option value="">請選擇（可不填）</option>
+        <option value="月收入未穩定">月收入未穩定</option>
+        <option value="月收入 3~5萬">月收入 3~5萬</option>
+        <option value="月收入 5~10萬">月收入 5~10萬</option>
+        <option value="月收入 10~30萬">月收入 10~30萬</option>
+        <option value="月收入 30萬以上">月收入 30萬以上</option>
+      </select>
+    </div>
+
+    <div id="s1-error" class="error-box"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="goTo(0)">← 上一步</button>
+      <button class="btn btn-gold" onclick="goToS2()">下一步 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ SCREEN 2 — 深度問題 ════ -->
+<div class="screen" id="screen-2">
+  <div class="container">
+
+    <div class="section-title">深度問題（這決定分析準確度）</div>
+
+    <div class="form-group">
+      <label>現在最卡的問題是什麼？ <span class="req">*</span></label>
+      <textarea id="f-problem" placeholder="例：收入卡在某個數字上不去、有成交但不穩定、客戶很多但不下單、想放大但不知道怎麼做..."></textarea>
+      <div class="form-hint">越具體越準確，這比命盤資料還重要</div>
+    </div>
+
+    <div class="form-group">
+      <label>想突破的目標？ <span class="req">*</span></label>
+      <textarea id="f-goal" placeholder="例：月收破百萬、建立被動收入、穩定成交、做個人品牌、資產配置..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>過去3年最明顯的卡關事件</label>
+      <textarea id="f-block" placeholder="例：成交下滑、投資失利、合夥問題、客戶流失...（可不填）"></textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>決策習慣</label>
+        <select id="f-decision">
+          <option value="直覺型">直覺型（憑感覺決定）</option>
+          <option value="分析型">分析型（分析後決定）</option>
+          <option value="猶豫型">猶豫型（難以決定）</option>
+          <option value="混合型">混合型</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>對風險的態度</label>
+        <select id="f-risk">
+          <option value="敢衝型">敢衝型（積極冒險）</option>
+          <option value="保守型">保守型（穩健優先）</option>
+          <option value="看機會型">看機會型（視情況而定）</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="s2-error" class="error-box"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="goTo(1)">← 上一步</button>
+      <button class="btn btn-gold" id="generate-btn" onclick="generateReport()">🐉 生成命格解析 →</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════ SCREEN 3 — LOADING ════ -->
+<div class="screen" id="screen-3">
+  <div class="loading-screen">
+    <div class="loader-ring"></div>
+    <div class="loading-title">元辰宮解析中…</div>
+    <p style="font-size:.72rem;color:var(--text-dim);letter-spacing:2px">AI 正在為您推算專屬命格</p>
+    <ul class="loading-steps" id="loading-steps">
+      <li id="ls-1">解讀命格能量</li>
+      <li id="ls-2">分析性格天賦</li>
+      <li id="ls-3">推算財富之路</li>
+      <li id="ls-4">生成人生建議</li>
+      <li id="ls-5">撰寫命格祝福</li>
+      <li id="ls-6">整合報告輸出</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════ SCREEN 4 — REPORT ════ -->
+<div class="screen" id="screen-4">
+
+  <div class="report-actions">
+    <button class="btn btn-outline" onclick="window.print()">🖨️ 列印 / 存 PDF</button>
+    <button class="btn btn-outline" onclick="goTo(0)">🔄 重新分析</button>
+    <button class="btn btn-gold" onclick="copyReport()">📋 複製分析文字</button>
+  </div>
+
+  <div id="report-container">
+    <div class="report-page" id="generated-report">
+      <div class="r-corner r-corner-tl"></div>
+      <div class="r-corner r-corner-tr"></div>
+      <div class="r-corner r-corner-bl"></div>
+      <div class="r-corner r-corner-br"></div>
+      <div class="bg-glow"></div>
+      <!-- 動態填入 -->
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════
+//  STATE
+// ════════════════════════════════
+let apiKey = localStorage.getItem('ycApiKey') || '';
+let formData = {};
+let reportData = {};
+
+// ════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════
+function goTo(n) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(`screen-${n}`).classList.add('active');
+
+  document.querySelectorAll('.step-item').forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    if (i < n) el.classList.add('done');
+    if (i === n) el.classList.add('active');
+  });
+
+  window.scrollTo(0, 0);
+}
+
+// ════════════════════════════════
+//  STEP 0 — API KEY
+// ════════════════════════════════
+if (apiKey) {
+  document.getElementById('api-key').value = apiKey;
+}
+
+function saveApiKey() {
+  const key = document.getElementById('api-key').value.trim();
+  const errBox = document.getElementById('api-error');
+  if (!key.startsWith('gsk_')) {
+    errBox.style.display = 'block';
+    errBox.textContent = '⚠️ API Key 格式不正確，應以 gsk_ 開頭（請到 console.groq.com 申請）';
+    return;
+  }
+  errBox.style.display = 'none';
+  apiKey = key;
+  localStorage.setItem('ycApiKey', key);
+  goTo(1);
+}
+
+// ════════════════════════════════
+//  STEP 1 → 2
+// ════════════════════════════════
+function goToS2() {
+  const name = document.getElementById('f-name').value.trim();
+  const gender = document.getElementById('f-gender').value;
+  const birthDate = document.getElementById('f-birth-date').value;
+  const errBox = document.getElementById('s1-error');
+
+  if (!name || !gender || !birthDate) {
+    errBox.style.display = 'block';
+    errBox.textContent = '⚠️ 請填寫姓名、性別與出生日期';
+    return;
+  }
+
+  errBox.style.display = 'none';
+  formData.name = name;
+  formData.gender = gender;
+  formData.birthDate = birthDate;
+  formData.birthTime = document.getElementById('f-birth-time').value;
+  formData.job = document.getElementById('f-job').value.trim() || '未填寫';
+  formData.income = document.getElementById('f-income').value || '未填寫';
+  goTo(2);
+}
+
+// ════════════════════════════════
+//  STEP 2 → GENERATE
+// ════════════════════════════════
+function goToS3_validate() {
+  const problem = document.getElementById('f-problem').value.trim();
+  const goal = document.getElementById('f-goal').value.trim();
+  const errBox = document.getElementById('s2-error');
+
+  if (!problem || !goal) {
+    errBox.style.display = 'block';
+    errBox.textContent = '⚠️ 請填寫「最卡的問題」與「想突破的目標」';
+    return false;
+  }
+
+  errBox.style.display = 'none';
+  formData.problem = problem;
+  formData.goal = goal;
+  formData.block = document.getElementById('f-block').value.trim() || '無特別說明';
+  formData.decision = document.getElementById('f-decision').value;
+  formData.risk = document.getElementById('f-risk').value;
+  return true;
+}
+
+// ════════════════════════════════
+//  BUILD PROMPT
+// ════════════════════════════════
+function buildPrompt(fd) {
+  const birthDateFormatted = fd.birthDate.replace(/-/g, '/');
+  return `你是「助哥元辰宮」的AI命格策略師，結合東方命理智慧與現代商業策略思維。
+
+請根據以下客戶資料，生成一份「專屬命格解析報告」。
+
+【客戶資料】
+- 姓名：${fd.name}
+- 性別：${fd.gender}
+- 出生日期：${birthDateFormatted}
+- 出生時間：${fd.birthTime}
+- 職業/工作：${fd.job}
+- 收入狀況：${fd.income}
+- 最卡的問題：${fd.problem}
+- 想突破的目標：${fd.goal}
+- 過去卡關事件：${fd.block}
+- 決策習慣：${fd.decision}
+- 風險態度：${fd.risk}
+
+【輸出格式】
+請嚴格輸出以下JSON格式（不要有任何其他文字）：
+
+{
+  "destiny_symbol": "（2個字，例：天龍、金鳳、地虎、水蛟等）",
+  "destiny_type": "（4~8字，命格類型，例：開創型・精準型）",
+  "core_insight": "（30~50字，最精準的核心洞見，要讓客戶看到覺得「就是在說我」的那句話）",
+  "trait_tag": "（4~6字，命格特質）",
+  "challenge_tag": "（4~6字，關鍵課題）",
+  "wealth_tag": "（4~6字，財富關鍵）",
+  "success_tag": "（4~6字，成功關鍵）",
+  "energy": ["bullet1（15~25字）", "bullet2", "bullet3", "bullet4"],
+  "personality": ["bullet1（15~25字）", "bullet2", "bullet3", "bullet4"],
+  "lessons": ["bullet1（15~25字）", "bullet2", "bullet3", "bullet4"],
+  "wealth": ["bullet1（15~25字）", "bullet2", "bullet3", "bullet4"],
+  "relationships": ["bullet1（15~25字）", "bullet2", "bullet3", "bullet4"],
+  "blessings": ["bullet1（15~25字）", "bullet2", "bullet3", "bullet4"],
+  "footer_quote": "（20~30字，激勵性金句，適合放在報告底部）",
+  "footer_sub": "（8~15字，副標語）"
+}
+
+【寫作原則】
+- 命中痛點：每一句話要讓客戶感覺「就是在說我」
+- 不是空洞算命，而是策略性分析
+- 結合客戶的具體問題與目標
+- 語氣：自信、溫暖、有力量
+- 避免廢話和模糊語句
+- 財富之路要有具體可行的方向`;
+}
+
+// ════════════════════════════════
+//  CALL OPENAI
+// ════════════════════════════════
+async function callOpenAI(prompt) {
+  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: '你是專業的命格策略分析師，請嚴格按照指定JSON格式輸出，不要有任何其他文字。' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 1800,
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  return JSON.parse(data.choices[0].message.content);
+}
+
+// ════════════════════════════════
+//  ANIMATE LOADING STEPS
+// ════════════════════════════════
+function animateLoadingSteps() {
+  const steps = ['ls-1','ls-2','ls-3','ls-4','ls-5','ls-6'];
+  let i = 0;
+
+  function next() {
+    if (i > 0) document.getElementById(steps[i-1]).className = 'done';
+    if (i < steps.length) {
+      document.getElementById(steps[i]).className = 'current';
+      i++;
+      setTimeout(next, 1400);
+    }
+  }
+  next();
+}
+
+// ════════════════════════════════
+//  RENDER REPORT
+// ════════════════════════════════
+function renderReport(d) {
+  const today = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  const birthFormatted = formData.birthDate.replace(/-/g, '/');
+
+  function makeLis(arr) {
+    return (arr || []).map(t => `<li>${t}</li>`).join('');
+  }
+
+  document.getElementById('generated-report').innerHTML = `
+    <div class="r-corner r-corner-tl"></div>
+    <div class="r-corner r-corner-tr"></div>
+    <div class="r-corner r-corner-bl"></div>
+    <div class="r-corner r-corner-br"></div>
+    <div class="bg-glow"></div>
+
+    <div class="r-header">
+      <div>
+        <div class="r-brand-name">助哥元辰宮</div>
+        <div class="r-brand-sub">命運 × 策略 × 財富</div>
+      </div>
+      <div>
+        <div class="r-report-title">專屬命格解析</div>
+        <div class="r-report-sub">為您解鎖命運密碼，創造豐足人生</div>
+      </div>
+    </div>
+
+    <div class="r-main">
+      <div class="r-left">
+        <div class="r-seal">
+          <div class="r-seal-icon">🐉</div>
+          <div class="r-seal-type">${d.destiny_symbol}</div>
+        </div>
+
+        <div class="r-client-card">
+          <div class="r-client-name">${formData.name}</div>
+          <div class="r-info-row">
+            <span class="r-info-label">出生</span>
+            <span class="r-info-value">${birthFormatted}</span>
+          </div>
+          <div class="r-info-row">
+            <span class="r-info-label">時辰</span>
+            <span class="r-info-value">${formData.birthTime}</span>
+          </div>
+          <div class="r-info-row">
+            <span class="r-info-label">性別</span>
+            <span class="r-info-value">${formData.gender}</span>
+          </div>
+          <div class="r-info-row">
+            <span class="r-info-label">解析日期</span>
+            <span class="r-info-value">${today}</span>
+          </div>
+        </div>
+
+        <div class="r-type-badge">
+          <span class="r-badge-label">YOUR DESTINY TYPE</span>
+          <span class="r-badge-type">${d.destiny_type}</span>
+        </div>
+
+        <div class="r-insight">
+          <span class="r-insight-label">▸ 核心洞見</span>
+          <div class="r-insight-text">${d.core_insight}</div>
+        </div>
+
+        <div class="r-tags">
+          <div class="r-tag">
+            <span class="r-tag-icon">👤</span>
+            <span class="r-tag-label">命格特質</span>
+            <span class="r-tag-value">${d.trait_tag}</span>
+          </div>
+          <div class="r-tag">
+            <span class="r-tag-icon">🎯</span>
+            <span class="r-tag-label">關鍵課題</span>
+            <span class="r-tag-value">${d.challenge_tag}</span>
+          </div>
+          <div class="r-tag">
+            <span class="r-tag-icon">💎</span>
+            <span class="r-tag-label">財富關鍵</span>
+            <span class="r-tag-value">${d.wealth_tag}</span>
+          </div>
+          <div class="r-tag">
+            <span class="r-tag-icon">🏆</span>
+            <span class="r-tag-label">成功關鍵</span>
+            <span class="r-tag-value">${d.success_tag}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="r-right">
+        <div class="r-section">
+          <div class="r-sec-header">
+            <div class="r-sec-num">1</div>
+            <div class="r-sec-icon">🐉</div>
+            <div class="r-sec-title">元辰宮能量</div>
+          </div>
+          <div class="r-sec-body"><ul>${makeLis(d.energy)}</ul></div>
+        </div>
+
+        <div class="r-section">
+          <div class="r-sec-header">
+            <div class="r-sec-num">2</div>
+            <div class="r-sec-icon">👑</div>
+            <div class="r-sec-title">性格與天賦</div>
+          </div>
+          <div class="r-sec-body"><ul>${makeLis(d.personality)}</ul></div>
+        </div>
+
+        <div class="r-section">
+          <div class="r-sec-header">
+            <div class="r-sec-num">3</div>
+            <div class="r-sec-icon">📖</div>
+            <div class="r-sec-title">人生課程</div>
+          </div>
+          <div class="r-sec-body"><ul>${makeLis(d.lessons)}</ul></div>
+        </div>
+
+        <div class="r-section">
+          <div class="r-sec-header">
+            <div class="r-sec-num">4</div>
+            <div class="r-sec-icon">📈</div>
+            <div class="r-sec-title">財富之路</div>
+          </div>
+          <div class="r-sec-body"><ul>${makeLis(d.wealth)}</ul></div>
+        </div>
+
+        <div class="r-section">
+          <div class="r-sec-header">
+            <div class="r-sec-num">5</div>
+            <div class="r-sec-icon">🤝</div>
+            <div class="r-sec-title">人際與財富</div>
+          </div>
+          <div class="r-sec-body"><ul>${makeLis(d.relationships)}</ul></div>
+        </div>
+
+        <div class="r-section">
+          <div class="r-sec-header">
+            <div class="r-sec-num">6</div>
+            <div class="r-sec-icon">🪷</div>
+            <div class="r-sec-title">命格祝福</div>
+          </div>
+          <div class="r-sec-body"><ul>${makeLis(d.blessings)}</ul></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="r-footer">
+      <div class="r-footer-quote">
+        <span class="r-quote-main">${d.footer_quote}</span>
+        <span class="r-quote-sub">${d.footer_sub}</span>
+      </div>
+      <div class="r-footer-icons">
+        <div class="r-fi">
+          <span class="r-fi-icon">🏢</span>
+          <span class="r-fi-label">專業背景</span>
+          <span class="r-fi-value">房地產策略</span>
+        </div>
+        <div class="r-fi">
+          <span class="r-fi-icon">🤖</span>
+          <span class="r-fi-label">分析系統</span>
+          <span class="r-fi-value">人工智慧</span>
+        </div>
+        <div class="r-fi">
+          <span class="r-fi-icon">💎</span>
+          <span class="r-fi-label">服務等級</span>
+          <span class="r-fi-value">資產配置</span>
+        </div>
+        <div class="r-fi">
+          <span class="r-fi-icon">🎯</span>
+          <span class="r-fi-label">核心方法</span>
+          <span class="r-fi-value">精準成交</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ════════════════════════════════
+//  MAIN GENERATE
+// ════════════════════════════════
+async function generateReport() {
+  if (!goToS3_validate()) return;
+
+  const btn = document.getElementById('generate-btn');
+  btn.disabled = true;
+
+  goTo(3);
+  animateLoadingSteps();
+
+  try {
+    const prompt = buildPrompt(formData);
+    const data = await callOpenAI(prompt);
+    reportData = data;
+    renderReport(data);
+    goTo(4);
+  } catch (err) {
+    goTo(2);
+    const errBox = document.getElementById('s2-error');
+    errBox.style.display = 'block';
+    errBox.textContent = `⚠️ 生成失敗：${err.message}。請確認 Groq API Key 正確（gsk_ 開頭），或重試。`;
+    btn.disabled = false;
+  }
+}
+
+// ════════════════════════════════
+//  COPY TEXT
+// ════════════════════════════════
+function copyReport() {
+  if (!reportData || !Object.keys(reportData).length) return;
+  const d = reportData;
+  const lines = [
+    `【助哥元辰宮｜${formData.name} 命格解析報告】`,
+    ``,
+    `命格類型：${d.destiny_type}`,
+    `核心洞見：${d.core_insight}`,
+    ``,
+    `▸ 元辰宮能量`,
+    ...(d.energy || []).map(x => `・${x}`),
+    ``,
+    `▸ 性格與天賦`,
+    ...(d.personality || []).map(x => `・${x}`),
+    ``,
+    `▸ 人生課程`,
+    ...(d.lessons || []).map(x => `・${x}`),
+    ``,
+    `▸ 財富之路`,
+    ...(d.wealth || []).map(x => `・${x}`),
+    ``,
+    `▸ 人際與財富`,
+    ...(d.relationships || []).map(x => `・${x}`),
+    ``,
+    `▸ 命格祝福`,
+    ...(d.blessings || []).map(x => `・${x}`),
+    ``,
+    `「${d.footer_quote}」`,
+    d.footer_sub,
+  ];
+
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    alert('✅ 已複製到剪貼簿！');
+  }).catch(() => {
+    alert('複製失敗，請手動選取報告文字');
+  });
+}
+
+// init — if already has API key, skip to step 1
+if (apiKey && apiKey.startsWith('gsk_')) {
+  goTo(1);
+}
+</script>
+</body>
+</html>

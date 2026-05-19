@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>助哥元辰宮｜命運 × 策略 × 財富</title>
+<meta name="description" content="不是算命，是AI命格策略分析。找出你的財富卡點，解鎖你的成交密碼。">
+<meta property="og:title" content="助哥元辰宮｜專屬命格解析">
+<meta property="og:description" content="你不是沒能力，你只是還不知道你的命格密碼。">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #E8C96B;
+    --gold-dark: #8B6914;
+    --black: #080808;
+    --dark: #0F0F0F;
+    --dark2: #1A1A1A;
+    --text: #F0E6CC;
+    --text-dim: #9A8060;
+    --bg: #0A0A0A;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans TC', 'PingFang TC', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ════════════════ NAV ════════════════ */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(8,8,8,.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(201,168,76,.15);
+    padding: 14px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .nav-brand {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.15rem; font-weight: 900;
+    color: var(--gold); letter-spacing: 3px;
+    text-shadow: 0 0 20px rgba(201,168,76,.4);
+  }
+
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+
+  .nav-links a {
+    font-size: .75rem; color: var(--text-dim);
+    text-decoration: none; letter-spacing: 1px;
+    transition: color .2s;
+  }
+
+  .nav-links a:hover { color: var(--gold); }
+
+  .nav-cta {
+    background: var(--gold);
+    color: var(--black) !important;
+    padding: 8px 20px;
+    border-radius: 3px;
+    font-weight: 700 !important;
+    font-size: .75rem !important;
+    letter-spacing: 1px;
+    transition: all .2s !important;
+  }
+
+  .nav-cta:hover { background: var(--gold-light) !important; transform: translateY(-1px); }
+
+  /* ════════════════ HERO ════════════════ */
+  .hero {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    padding: 120px 24px 80px;
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(120,85,20,.12) 0%, transparent 70%);
+  }
+
+  .hero-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 20% 20%, rgba(201,168,76,.04) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 60% at 80% 80%, rgba(100,65,10,.05) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  /* 浮動粒子 */
+  .particle {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: var(--gold);
+    border-radius: 50%;
+    opacity: 0;
+    animation: float-particle 6s ease-in-out infinite;
+  }
+
+  @keyframes float-particle {
+    0% { transform: translateY(0) translateX(0); opacity: 0; }
+    20% { opacity: .4; }
+    80% { opacity: .2; }
+    100% { transform: translateY(-120px) translateX(30px); opacity: 0; }
+  }
+
+  .hero-content { position: relative; z-index: 2; max-width: 860px; }
+
+  .hero-eyebrow {
+    display: inline-block;
+    font-size: .68rem; letter-spacing: 4px; color: var(--gold);
+    border: 1px solid rgba(201,168,76,.3);
+    padding: 5px 18px; border-radius: 20px;
+    margin-bottom: 24px;
+    background: rgba(201,168,76,.06);
+  }
+
+  .hero-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    font-weight: 900;
+    line-height: 1.2;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  .hero-title .gold { color: var(--gold); text-shadow: 0 0 40px rgba(201,168,76,.4); }
+
+  .hero-brand {
+    font-family: 'Noto Serif TC', serif;
+    font-size: clamp(2.8rem, 7vw, 5rem);
+    font-weight: 900;
+    color: var(--gold);
+    letter-spacing: 8px;
+    text-shadow: 0 0 60px rgba(201,168,76,.5);
+    margin-bottom: 20px;
+    display: block;
+  }
+
+  .hero-sub {
+    font-size: .78rem; letter-spacing: 4px; color: var(--text-dim);
+    margin-bottom: 28px;
+  }
+
+  .hero-desc {
+    font-size: 1rem; color: var(--text);
+    max-width: 580px; margin: 0 auto 40px;
+    line-height: 1.9; opacity: .85;
+  }
+
+  .hero-cta-row {
+    display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+    margin-bottom: 56px;
+  }
+
+  /* stats */
+  .hero-stats {
+    display: flex; justify-content: center; gap: 48px; flex-wrap: wrap;
+    padding-top: 32px;
+    border-top: 1px solid rgba(201,168,76,.15);
+  }
+
+  .stat-item { text-align: center; }
+
+  .stat-num {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 2rem; font-weight: 900;
+    color: var(--gold);
+    display: block;
+  }
+
+  .stat-label { font-size: .65rem; color: var(--text-dim); letter-spacing: 2px; margin-top: 2px; }
+
+  /* ════════════════ BUTTONS ════════════════ */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 14px 32px; border-radius: 4px;
+    font-family: inherit; font-size: .88rem; font-weight: 700;
+    letter-spacing: 1px; cursor: pointer; border: none;
+    text-decoration: none; transition: all .2s;
+  }
+
+  .btn-gold {
+    background: var(--gold); color: var(--black);
+    box-shadow: 0 6px 30px rgba(201,168,76,.35);
+  }
+
+  .btn-gold:hover { background: var(--gold-light); transform: translateY(-2px); box-shadow: 0 10px 40px rgba(201,168,76,.45); }
+
+  .btn-outline {
+    background: transparent; color: var(--gold);
+    border: 1px solid rgba(201,168,76,.4);
+  }
+
+  .btn-outline:hover { border-color: var(--gold); background: rgba(201,168,76,.08); }
+
+  .btn-lg { padding: 18px 44px; font-size: 1rem; }
+
+  /* ════════════════ SECTIONS ════════════════ */
+  section { padding: 80px 24px; }
+
+  .container { max-width: 1080px; margin: 0 auto; }
+
+  .section-badge {
+    display: inline-block;
+    font-size: .65rem; letter-spacing: 3px; color: var(--gold);
+    border-bottom: 1px solid rgba(201,168,76,.3);
+    padding-bottom: 4px; margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: clamp(1.4rem, 3vw, 2.2rem); font-weight: 900;
+    color: var(--text); margin-bottom: 16px; line-height: 1.3;
+  }
+
+  .section-title .gold { color: var(--gold); }
+
+  .section-desc {
+    font-size: .85rem; color: var(--text-dim); line-height: 1.9;
+    max-width: 600px;
+  }
+
+  /* ════════════════ PAIN POINTS ════════════════ */
+  #pain { background: var(--dark); }
+
+  .pain-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px; margin-top: 40px;
+  }
+
+  .pain-card {
+    background: rgba(255,255,255,.02);
+    border: 1px solid rgba(201,168,76,.12);
+    border-radius: 6px; padding: 22px;
+    position: relative; overflow: hidden;
+    transition: border-color .3s;
+  }
+
+  .pain-card:hover { border-color: rgba(201,168,76,.3); }
+
+  .pain-card::before {
+    content: ''; position: absolute;
+    left: 0; top: 0; bottom: 0; width: 2px;
+    background: var(--gold); opacity: .5;
+  }
+
+  .pain-icon { font-size: 1.6rem; margin-bottom: 10px; display: block; }
+  .pain-title { font-size: .88rem; color: var(--gold-light); font-weight: 700; margin-bottom: 6px; }
+  .pain-text { font-size: .72rem; color: var(--text-dim); line-height: 1.7; }
+
+  /* ════════════════ WHAT IS ════════════════ */
+  #what .text-center { text-align: center; }
+
+  .what-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px; margin-top: 48px;
+  }
+
+  .what-item { text-align: center; }
+
+  .what-num {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 2.5rem; color: rgba(201,168,76,.2); font-weight: 900;
+    display: block; line-height: 1;
+  }
+
+  .what-icon { font-size: 1.8rem; display: block; margin: 8px auto; }
+
+  .what-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: .9rem; color: var(--gold); font-weight: 700; margin-bottom: 6px;
+  }
+
+  .what-desc { font-size: .72rem; color: var(--text-dim); line-height: 1.7; }
+
+  /* ════════════════ HOW ════════════════ */
+  #how { background: var(--dark); }
+
+  .how-steps {
+    display: flex; flex-direction: column; gap: 0; margin-top: 40px;
+    position: relative;
+  }
+
+  .how-steps::before {
+    content: ''; position: absolute;
+    left: 28px; top: 0; bottom: 0; width: 1px;
+    background: linear-gradient(180deg, var(--gold), transparent);
+    opacity: .3;
+  }
+
+  .how-step {
+    display: flex; gap: 20px; padding: 20px 0; align-items: flex-start;
+  }
+
+  .how-step-num {
+    width: 56px; height: 56px; flex-shrink: 0;
+    border: 1px solid var(--gold); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(201,168,76,.08);
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.1rem; font-weight: 700; color: var(--gold);
+    box-shadow: 0 0 20px rgba(201,168,76,.15);
+  }
+
+  .how-step-content h3 {
+    font-family: 'Noto Serif TC', serif;
+    font-size: .95rem; color: var(--gold-light); font-weight: 700;
+    margin-bottom: 5px; letter-spacing: 1px;
+  }
+
+  .how-step-content p { font-size: .75rem; color: var(--text-dim); line-height: 1.7; }
+
+  /* ════════════════ PRICING ════════════════ */
+  #pricing .text-center { text-align: center; }
+
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px; margin-top: 48px; align-items: start;
+  }
+
+  .price-card {
+    background: var(--dark);
+    border: 1px solid rgba(201,168,76,.2);
+    border-radius: 8px; padding: 28px;
+    position: relative; overflow: hidden;
+    transition: transform .3s, border-color .3s;
+  }
+
+  .price-card:hover { transform: translateY(-4px); border-color: rgba(201,168,76,.4); }
+
+  .price-card.featured {
+    border-color: var(--gold);
+    background: linear-gradient(135deg, rgba(201,168,76,.08), var(--dark));
+    box-shadow: 0 0 40px rgba(201,168,76,.15);
+  }
+
+  .price-tag-top {
+    position: absolute; top: 16px; right: -28px;
+    background: var(--gold); color: var(--black);
+    font-size: .62rem; font-weight: 700; letter-spacing: 1px;
+    padding: 4px 36px; transform: rotate(45deg);
+  }
+
+  .price-tier {
+    font-size: .62rem; letter-spacing: 3px; color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .price-name {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.3rem; font-weight: 900; color: var(--gold-light);
+    margin-bottom: 16px; letter-spacing: 1px;
+  }
+
+  .price-amount {
+    margin-bottom: 20px; padding-bottom: 20px;
+    border-bottom: 1px solid rgba(201,168,76,.15);
+  }
+
+  .price-old {
+    font-size: .75rem; color: var(--text-dim);
+    text-decoration: line-through; margin-right: 8px;
+  }
+
+  .price-num {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 2.4rem; font-weight: 900; color: var(--gold);
+    line-height: 1;
+  }
+
+  .price-unit { font-size: .72rem; color: var(--text-dim); margin-left: 4px; }
+
+  .price-features { list-style: none; margin-bottom: 24px; display: flex; flex-direction: column; gap: 8px; }
+
+  .price-features li {
+    font-size: .75rem; color: var(--text); display: flex; align-items: flex-start; gap: 8px;
+  }
+
+  .price-features li::before {
+    content: '✓';
+    color: var(--gold); font-size: .7rem; font-weight: 700;
+    flex-shrink: 0; margin-top: 2px;
+  }
+
+  .price-note {
+    font-size: .65rem; color: var(--text-dim); text-align: center;
+    margin-top: 10px; font-style: italic;
+  }
+
+  /* ════════════════ TESTIMONIALS ════════════════ */
+  #reviews { background: var(--dark); }
+
+  .reviews-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px; margin-top: 40px;
+  }
+
+  .review-card {
+    background: rgba(255,255,255,.02);
+    border: 1px solid rgba(201,168,76,.12);
+    border-radius: 6px; padding: 22px;
+  }
+
+  .review-stars { color: var(--gold); font-size: .85rem; margin-bottom: 10px; letter-spacing: 2px; }
+
+  .review-text {
+    font-size: .75rem; color: var(--text); line-height: 1.8;
+    font-style: italic; margin-bottom: 14px;
+    border-left: 2px solid rgba(201,168,76,.3);
+    padding-left: 12px;
+  }
+
+  .review-author { font-size: .68rem; color: var(--text-dim); }
+  .review-author strong { color: var(--gold-light); }
+
+  /* ════════════════ CTA BAND ════════════════ */
+  #cta-band {
+    background: linear-gradient(135deg, rgba(201,168,76,.1), rgba(100,65,10,.08));
+    border-top: 1px solid rgba(201,168,76,.2);
+    border-bottom: 1px solid rgba(201,168,76,.2);
+    text-align: center;
+    padding: 64px 24px;
+  }
+
+  #cta-band h2 {
+    font-family: 'Noto Serif TC', serif;
+    font-size: clamp(1.5rem, 4vw, 2.4rem); font-weight: 900;
+    color: var(--gold-light); margin-bottom: 12px; line-height: 1.3;
+  }
+
+  #cta-band p {
+    font-size: .82rem; color: var(--text-dim); margin-bottom: 32px; line-height: 1.8;
+  }
+
+  /* ════════════════ FOOTER ════════════════ */
+  footer {
+    background: var(--black);
+    border-top: 1px solid rgba(201,168,76,.1);
+    padding: 40px 24px 24px;
+    text-align: center;
+  }
+
+  .footer-brand {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.4rem; font-weight: 900;
+    color: var(--gold); letter-spacing: 4px;
+    margin-bottom: 6px;
+  }
+
+  .footer-sub { font-size: .68rem; color: var(--text-dim); letter-spacing: 4px; margin-bottom: 24px; }
+
+  .footer-links { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; }
+
+  .footer-links a { font-size: .7rem; color: var(--text-dim); text-decoration: none; transition: color .2s; }
+  .footer-links a:hover { color: var(--gold); }
+
+  .footer-copy { font-size: .62rem; color: rgba(154,128,96,.5); letter-spacing: 1px; }
+
+  /* ════════════════ GOLD DIVIDER ════════════════ */
+  .gold-line {
+    width: 60px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 20px auto;
+  }
+
+  /* ════════════════ MISC ════════════════ */
+  .text-center { text-align: center; }
+  .mt-8 { margin-top: 32px; }
+  .mt-16 { margin-top: 64px; }
+
+  /* ════════════════ RESPONSIVE ════════════════ */
+  @media (max-width: 600px) {
+    nav { padding: 12px 16px; }
+    .nav-links { gap: 12px; }
+    .nav-links a:not(.nav-cta) { display: none; }
+    section { padding: 56px 16px; }
+    .hero { padding: 100px 16px 64px; }
+    .hero-stats { gap: 28px; }
+    .how-steps::before { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <div class="nav-brand">助哥元辰宮</div>
+  <div class="nav-links">
+    <a href="#what">什麼是元辰宮</a>
+    <a href="#how">流程</a>
+    <a href="#pricing">方案價格</a>
+    <a href="yuanchen-system.html" class="nav-cta">立即開始解析 →</a>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="hero-bg"></div>
+
+  <!-- 粒子裝飾 -->
+  <div class="particle" style="left:15%;top:60%;animation-delay:0s;animation-duration:5s"></div>
+  <div class="particle" style="left:30%;top:70%;animation-delay:1s;animation-duration:7s"></div>
+  <div class="particle" style="left:60%;top:55%;animation-delay:2s;animation-duration:6s"></div>
+  <div class="particle" style="left:75%;top:65%;animation-delay:.5s;animation-duration:8s"></div>
+  <div class="particle" style="left:85%;top:75%;animation-delay:1.5s;animation-duration:5.5s"></div>
+
+  <div class="hero-content">
+    <div class="hero-eyebrow">頂級房地產專家 × 人工智慧策略師</div>
+
+    <h1 class="hero-title">你不是沒能力<br>你只是還不知道</h1>
+    <span class="hero-brand">助哥元辰宮</span>
+    <div class="hero-sub">命運 × 策略 × 財富</div>
+
+    <p class="hero-desc">
+      這不是算命。<br>
+      這是用AI命格系統，幫你找出<strong style="color:var(--gold-light)">為什麼一直卡住、你的財富模式、如何提升成交與收入</strong>的完整策略分析。
+    </p>
+
+    <div class="hero-cta-row">
+      <a href="yuanchen-system.html" class="btn btn-gold btn-lg">🐉 立即解析我的命格</a>
+      <a href="#pricing" class="btn btn-outline">查看方案價格</a>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat-item">
+        <span class="stat-num">1,200+</span>
+        <span class="stat-label">已解析命格</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">98%</span>
+        <span class="stat-label">客戶命中率</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">10種</span>
+        <span class="stat-label">命格分類系統</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">AI+</span>
+        <span class="stat-label">人工智慧驅動</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PAIN POINTS ── -->
+<section id="pain">
+  <div class="container">
+    <div class="section-badge">你是不是這樣？</div>
+    <h2 class="section-title">這些<span class="gold">卡關感</span>，你有幾個？</h2>
+    <p class="section-desc">97%的人不是沒能力，而是不知道自己的命格卡點在哪。</p>
+
+    <div class="pain-grid">
+      <div class="pain-card">
+        <span class="pain-icon">💸</span>
+        <div class="pain-title">收入卡關，上不去</div>
+        <div class="pain-text">努力了很久，收入就是卡在某個數字，明明很拼，就是突破不了。</div>
+      </div>
+      <div class="pain-card">
+        <span class="pain-icon">😤</span>
+        <div class="pain-title">客戶很多，但不下單</div>
+        <div class="pain-text">花了大量時間在客戶身上，最後他們找別人買，你感覺白忙一場。</div>
+      </div>
+      <div class="pain-card">
+        <span class="pain-icon">🔁</span>
+        <div class="pain-title">有成交，但不穩定</div>
+        <div class="pain-text">好月份很爽，壞月份很慘，收入像雲霄飛車，根本無法規劃。</div>
+      </div>
+      <div class="pain-card">
+        <span class="pain-icon">🤯</span>
+        <div class="pain-title">想放大，但不知道怎麼做</div>
+        <div class="pain-text">知道自己有潛力，卻找不到放大的方向，試了很多方法都無效。</div>
+      </div>
+      <div class="pain-card">
+        <span class="pain-icon">😔</span>
+        <div class="pain-title">一直幫錯誤的人付出</div>
+        <div class="pain-text">時間、精力、金錢都花在不對的人身上，貴人卻始終沒出現。</div>
+      </div>
+      <div class="pain-card">
+        <span class="pain-icon">🌀</span>
+        <div class="pain-title">感覺選了錯誤的方向</div>
+        <div class="pain-text">總覺得哪裡不對，但說不清楚，就是做什麼都有種「不對勁」的感覺。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── WHAT IS ── -->
+<section id="what">
+  <div class="container">
+    <div class="text-center">
+      <div class="section-badge">關於助哥元辰宮</div>
+      <h2 class="section-title">不是算命<br>是<span class="gold">AI命格策略</span>系統</h2>
+      <div class="gold-line"></div>
+      <p class="section-desc" style="margin:0 auto">
+        結合東方命理智慧與現代商業策略思維，透過你的出生資料＋現況分析，
+        找出你的命格能量與財富卡點，給出具體可行的突破路徑。
+      </p>
+    </div>
+
+    <div class="what-grid">
+      <div class="what-item">
+        <span class="what-num">01</span>
+        <span class="what-icon">🔍</span>
+        <div class="what-title">命格定位</div>
+        <div class="what-desc">10種命格系統，精準找出你的能量類型與天生優勢</div>
+      </div>
+      <div class="what-item">
+        <span class="what-num">02</span>
+        <span class="what-icon">⚡</span>
+        <div class="what-title">卡點分析</div>
+        <div class="what-desc">找出真正讓你卡住的深層原因，不是表面問題</div>
+      </div>
+      <div class="what-item">
+        <span class="what-num">03</span>
+        <span class="what-icon">💰</span>
+        <div class="what-title">財富密碼</div>
+        <div class="what-desc">你的賺錢模式、適合的客戶類型、最佳成交策略</div>
+      </div>
+      <div class="what-item">
+        <span class="what-num">04</span>
+        <span class="what-icon">🗺️</span>
+        <div class="what-title">突破路徑</div>
+        <div class="what-desc">一條具體可執行的行動方向，讓財富自然流向你</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW ── -->
+<section id="how">
+  <div class="container">
+    <div class="section-badge">解析流程</div>
+    <h2 class="section-title">從填表到<span class="gold">拿到報告</span>，只需5分鐘</h2>
+
+    <div class="how-steps">
+      <div class="how-step">
+        <div class="how-step-num">①</div>
+        <div class="how-step-content">
+          <h3>填寫基本資料</h3>
+          <p>出生年月日、時辰、性別，加上你現在最卡的問題與想突破的目標。資料越具體，分析越精準。</p>
+        </div>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">②</div>
+        <div class="how-step-content">
+          <h3>AI命格推算</h3>
+          <p>系統結合命理邏輯與GPT-4，在60秒內完成命格分析，生成你的專屬命格定位與財富策略。</p>
+        </div>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">③</div>
+        <div class="how-step-content">
+          <h3>專屬PDF報告</h3>
+          <p>包含6大分析區塊：元辰宮能量、性格天賦、人生課程、財富之路、人際財富、命格祝福。高端排版，可直接存成PDF。</p>
+        </div>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">④</div>
+        <div class="how-step-content">
+          <h3>高價值客戶→一對一諮詢</h3>
+          <p>看完報告後，想要更深度的房地產策略、資產配置、個人品牌規劃，直接預約助哥一對一顧問服務。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PRICING ── -->
+<section id="pricing">
+  <div class="container">
+    <div class="text-center">
+      <div class="section-badge">選擇方案</div>
+      <h2 class="section-title">找到你的<span class="gold">命格密碼</span></h2>
+      <div class="gold-line"></div>
+      <p class="section-desc" style="margin:0 auto">三個層次，對應不同需求。從引流到大單，完整產品階梯。</p>
+    </div>
+
+    <div class="pricing-grid">
+
+      <!-- 基礎版 -->
+      <div class="price-card">
+        <div class="price-tier">🟢 第一層・引流款</div>
+        <div class="price-name">元辰宮基礎版</div>
+        <div class="price-amount">
+          <span class="price-old">原價 $999</span>
+          <div>
+            <span class="price-num">699</span>
+            <span class="price-unit">TWD</span>
+          </div>
+        </div>
+        <ul class="price-features">
+          <li>AI命格解析報告（6大區塊）</li>
+          <li>命格類型定位（10選1）</li>
+          <li>核心卡點分析</li>
+          <li>基礎財富建議</li>
+          <li>高端黑金PDF報告</li>
+        </ul>
+        <a href="yuanchen-system.html" class="btn btn-outline" style="width:100%;justify-content:center">立即解析 →</a>
+        <div class="price-note">適合：想了解自己命格的入門者</div>
+      </div>
+
+      <!-- 財富策略版 -->
+      <div class="price-card featured">
+        <div class="price-tag-top">最熱銷</div>
+        <div class="price-tier">🟡 第二層・主力款</div>
+        <div class="price-name">財富策略版</div>
+        <div class="price-amount">
+          <span class="price-old">原價 $4,980</span>
+          <div>
+            <span class="price-num">2,680</span>
+            <span class="price-unit">TWD</span>
+          </div>
+        </div>
+        <ul class="price-features">
+          <li>基礎版所有內容</li>
+          <li>深度財富卡點分析</li>
+          <li>個人化成交策略</li>
+          <li>財富路線圖（具體可行）</li>
+          <li>人際貴人分析</li>
+          <li>未來12個月走勢</li>
+          <li>Email 跟進支援（1次）</li>
+        </ul>
+        <a href="yuanchen-system.html" class="btn btn-gold" style="width:100%;justify-content:center">立即解析 →</a>
+        <div class="price-note">適合：業務、創業者、想突破收入天花板的人</div>
+      </div>
+
+      <!-- 一對一顧問 -->
+      <div class="price-card">
+        <div class="price-tier">🔴 第三層・頂級款</div>
+        <div class="price-name">一對一顧問版</div>
+        <div class="price-amount">
+          <div>
+            <span class="price-num" style="font-size:1.8rem">12,800</span>
+            <span class="price-unit">TWD 起</span>
+          </div>
+        </div>
+        <ul class="price-features">
+          <li>財富策略版完整報告</li>
+          <li>90分鐘真人線上諮詢</li>
+          <li>房地產投資策略規劃</li>
+          <li>AI成交系統建置指導</li>
+          <li>個人品牌定位策略</li>
+          <li>資產配置建議</li>
+          <li>30天LINE私訊支援</li>
+        </ul>
+        <a href="#cta-band" class="btn btn-outline" style="width:100%;justify-content:center">預約諮詢 →</a>
+        <div class="price-note">適合：高資產客戶・想做大的創業者</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── TESTIMONIALS ── -->
+<section id="reviews">
+  <div class="container">
+    <div class="section-badge">真實回饋</div>
+    <h2 class="section-title">他們看完報告後說…</h2>
+
+    <div class="reviews-grid">
+      <div class="review-card">
+        <div class="review-stars">★★★★★</div>
+        <div class="review-text">「靠…這根本在講我。我一直以為問題是市場不好，結果報告說我的卡點是把時間浪費在不會成交的人身上。看完當天就篩掉了3個無效客戶。」</div>
+        <div class="review-author"><strong>王○明</strong>・房地產仲介・月收從8萬提升至23萬</div>
+      </div>
+      <div class="review-card">
+        <div class="review-stars">★★★★★</div>
+        <div class="review-text">「我以前覺得命格分析是玄學，但助哥這套完全不一樣。它告訴我我是什麼類型的人，適合什麼樣的賺錢方式，非常具體，不是空洞的吉祥話。」</div>
+        <div class="review-author"><strong>林○慧</strong>・保險業務主管・半年內升上Top Manager</div>
+      </div>
+      <div class="review-card">
+        <div class="review-stars">★★★★★</div>
+        <div class="review-text">「選了一對一顧問方案，助哥幫我設計了整套品牌定位與成交流程。現在客單價翻了3倍，反而工作更輕鬆了。」</div>
+        <div class="review-author"><strong>陳○翰</strong>・創業者・客單價從3萬提升至9萬</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA BAND ── -->
+<section id="cta-band">
+  <div class="container">
+    <h2>當你選擇對的方向<br>財富將自然流向你</h2>
+    <p>
+      頂級房地產專家 × 人工智慧策略師<br>
+      將命運轉化為現實世界的成功
+    </p>
+    <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
+      <a href="yuanchen-system.html" class="btn btn-gold btn-lg">🐉 立即解析我的命格</a>
+      <a href="#pricing" class="btn btn-outline">查看方案價格</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-brand">助哥元辰宮</div>
+  <div class="footer-sub">命運 × 策略 × 財富</div>
+  <div class="footer-links">
+    <a href="#what">關於元辰宮</a>
+    <a href="#how">解析流程</a>
+    <a href="#pricing">方案價格</a>
+    <a href="#reviews">客戶回饋</a>
+    <a href="yuanchen-system.html">立即解析</a>
+  </div>
+  <div class="footer-copy">© 2025 助哥元辰宮・All Rights Reserved</div>
+</footer>
+
+<script>
+// ── 滑入動畫 ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(el => {
+    if (el.isIntersecting) {
+      el.target.style.opacity = '1';
+      el.target.style.transform = 'translateY(0)';
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.pain-card, .what-item, .how-step, .price-card, .review-card').forEach(el => {
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(24px)';
+  el.style.transition = 'opacity .6s ease, transform .6s ease';
+  observer.observe(el);
+});
+</script>
+</body>
+</html>
