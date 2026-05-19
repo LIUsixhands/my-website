@@ -591,15 +591,16 @@
 <div class="screen active" id="screen-0">
   <div class="container">
     <div class="api-card">
-      <h2>🔑 設定 OpenAI API Key</h2>
+      <h2>🔑 設定 Groq API Key（免費）</h2>
       <p>
-        本系統使用 OpenAI GPT-4 生成個人化命格分析。<br>
-        API Key 僅存在您的瀏覽器中，不會傳送至任何第三方伺服器。<br>
-        取得 API Key：<strong style="color:var(--gold-light)">platform.openai.com → API Keys</strong>
+        本系統使用 Groq Llama 生成個人化命格分析，<strong style="color:var(--gold-light)">完全免費</strong>。<br>
+        API Key 僅存在您的瀏覽器中，不會傳送至任何第三方伺服器。<br><br>
+        申請免費 Key：<strong style="color:var(--gold-light)">console.groq.com → API Keys → Create API Key</strong><br>
+        <span style="font-size:.68rem;opacity:.7">（用 Google 帳號登入即可，不需信用卡）</span>
       </p>
       <div class="form-group">
-        <label>OpenAI API Key <span class="req">*</span></label>
-        <input type="password" id="api-key" placeholder="sk-..." autocomplete="off">
+        <label>Groq API Key <span class="req">*</span></label>
+        <input type="password" id="api-key" placeholder="gsk_..." autocomplete="off">
       </div>
       <div id="api-error" class="error-box"></div>
     </div>
@@ -806,9 +807,9 @@ if (apiKey) {
 function saveApiKey() {
   const key = document.getElementById('api-key').value.trim();
   const errBox = document.getElementById('api-error');
-  if (!key.startsWith('sk-')) {
+  if (!key.startsWith('gsk_')) {
     errBox.style.display = 'block';
-    errBox.textContent = '⚠️ API Key 格式不正確，應以 sk- 開頭';
+    errBox.textContent = '⚠️ API Key 格式不正確，應以 gsk_ 開頭（請到 console.groq.com 申請）';
     return;
   }
   errBox.style.display = 'none';
@@ -921,14 +922,14 @@ function buildPrompt(fd) {
 //  CALL OPENAI
 // ════════════════════════════════
 async function callOpenAI(prompt) {
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o',
+      model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: '你是專業的命格策略分析師，請嚴格按照指定JSON格式輸出，不要有任何其他文字。' },
         { role: 'user', content: prompt }
@@ -1166,7 +1167,7 @@ async function generateReport() {
     goTo(2);
     const errBox = document.getElementById('s2-error');
     errBox.style.display = 'block';
-    errBox.textContent = `⚠️ 生成失敗：${err.message}。請檢查 API Key 是否正確，或重試。`;
+    errBox.textContent = `⚠️ 生成失敗：${err.message}。請確認 Groq API Key 正確（gsk_ 開頭），或重試。`;
     btn.disabled = false;
   }
 }
@@ -1213,7 +1214,7 @@ function copyReport() {
 }
 
 // init — if already has API key, skip to step 1
-if (apiKey && apiKey.startsWith('sk-')) {
+if (apiKey && apiKey.startsWith('gsk_')) {
   goTo(1);
 }
 </script>
