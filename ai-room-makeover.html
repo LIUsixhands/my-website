@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 空屋改造模板包｜舊家具換新、風格改造、毛胚模擬，三合一出片</title>
+<meta name="description" content="不用真的裝潢，AI 幫你把舊家具移除、換入新家具、改造風格、模擬毛胚完工。房仲必備三合一 AI 空間改造工具包。">
+<meta property="og:title" content="AI 空屋改造模板包｜三種改造類型一次學會">
+<meta property="og:description" content="舊家具移除 + 新家具放入、風格改造對比、毛胚屋模擬完工。30 分鐘出一組 Before/After，吸引買家目光。">
+<style>
+  :root {
+    --navy:   #1B2A4A;
+    --gold:   #C9943A;
+    --teal:   #2A7F7F;
+    --green:  #2D7D4E;
+    --purple: #6D28D9;
+    --rose:   #BE185D;
+    --amber:  #B45309;
+    --bg:     #F8F6F1;
+    --white:  #FFFFFF;
+    --gray:   #6B7280;
+    --light:  #F3F4F6;
+    --dark:   #111827;
+  }
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Noto Sans TC','PingFang TC',Arial,sans-serif; background:var(--bg); color:#1a1a1a; line-height:1.75; }
+
+  /* ── Topbar ── */
+  .topbar { background:var(--rose); color:#fff; text-align:center; font-size:0.82rem; font-weight:700; padding:8px 16px; letter-spacing:1px; }
+
+  /* ── Hero ── */
+  .hero {
+    background:linear-gradient(140deg,#0f1f3d 0%,#1B2A4A 45%,#1a4a4a 100%);
+    color:#fff; padding:80px 24px 100px; text-align:center; position:relative; overflow:hidden;
+  }
+  .hero::after {
+    content:''; position:absolute; bottom:-2px; left:0; right:0; height:60px;
+    background:var(--bg);
+    clip-path:ellipse(55% 100% at 50% 100%);
+  }
+  .hero-inner { position:relative; max-width:860px; margin:0 auto; }
+  .badge { display:inline-block; background:var(--gold); color:#fff; font-size:0.75rem; font-weight:800; padding:5px 18px; border-radius:20px; letter-spacing:2px; margin-bottom:24px; }
+  .hero h1 { font-size:clamp(1.9rem,5vw,3.1rem); font-weight:900; line-height:1.2; margin-bottom:20px; }
+  .hero h1 em { color:var(--gold); font-style:normal; }
+  .hero .subtitle { font-size:1.08rem; opacity:.87; max-width:640px; margin:0 auto 36px; line-height:1.85; }
+  .cta-row { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; margin-bottom:52px; }
+  .btn-gold { display:inline-block; background:var(--gold); color:#fff; padding:16px 40px; border-radius:50px; font-size:1.05rem; font-weight:800; text-decoration:none; letter-spacing:1px; box-shadow:0 8px 28px rgba(201,148,58,.5); transition:transform .2s,box-shadow .2s; }
+  .btn-gold:hover { transform:translateY(-3px); box-shadow:0 12px 36px rgba(201,148,58,.6); }
+  .btn-ghost { display:inline-block; border:2px solid rgba(255,255,255,.45); color:#fff; padding:14px 32px; border-radius:50px; font-size:1rem; font-weight:700; text-decoration:none; transition:border-color .2s,background .2s; }
+  .btn-ghost:hover { border-color:#fff; background:rgba(255,255,255,.08); }
+
+  /* ── Before/After Hero Cards ── */
+  .ba-row { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }
+  .ba-card { border-radius:14px; overflow:hidden; width:260px; box-shadow:0 8px 32px rgba(0,0,0,.35); }
+  .ba-img { height:140px; display:flex; align-items:center; justify-content:center; font-size:3rem; position:relative; }
+  .ba-img.before { background:linear-gradient(135deg,#4a3728,#6b5040); }
+  .ba-img.after  { background:linear-gradient(135deg,#2a5f5f,#1a7a6a); }
+  .ba-label { padding:10px 14px; background:rgba(0,0,0,.65); backdrop-filter:blur(4px); font-size:0.78rem; font-weight:700; letter-spacing:2px; text-align:center; }
+  .ba-label.before-lbl { color:#fca5a5; }
+  .ba-label.after-lbl  { color:#6ee7b7; }
+  .ba-arrow { display:flex; align-items:center; color:var(--gold); font-size:2.2rem; align-self:center; }
+
+  /* ── Container ── */
+  .container { max-width:1040px; margin:0 auto; padding:0 24px; }
+
+  /* ── Section ── */
+  section { padding:80px 0; }
+  .s-title { font-size:clamp(1.6rem,3.5vw,2.1rem); font-weight:900; color:var(--navy); text-align:center; margin-bottom:12px; }
+  .s-sub { font-size:1rem; color:var(--gray); text-align:center; margin-bottom:52px; max-width:620px; margin-left:auto; margin-right:auto; }
+
+  /* ── Type Cards (3 types) ── */
+  .types-section { background:#fff; }
+  .type-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:28px; }
+  .type-card { border-radius:18px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,.08); transition:transform .2s,box-shadow .2s; }
+  .type-card:hover { transform:translateY(-4px); box-shadow:0 12px 36px rgba(0,0,0,.14); }
+  .type-header { padding:28px 28px 20px; color:#fff; }
+  .type-header.t1 { background:linear-gradient(135deg,#1B2A4A,#2a4a7a); }
+  .type-header.t2 { background:linear-gradient(135deg,#2A7F7F,#1a5f6a); }
+  .type-header.t3 { background:linear-gradient(135deg,#6D28D9,#4c1d95); }
+  .type-num { font-size:0.72rem; font-weight:800; letter-spacing:3px; opacity:.7; margin-bottom:8px; text-transform:uppercase; }
+  .type-card h3 { font-size:1.2rem; font-weight:900; margin-bottom:8px; }
+  .type-card .type-tag { display:inline-block; background:rgba(255,255,255,.15); padding:3px 12px; border-radius:20px; font-size:0.75rem; font-weight:700; border:1px solid rgba(255,255,255,.25); }
+  .type-body { padding:24px 28px; background:var(--bg); }
+  .type-body p { font-size:0.91rem; color:#374151; line-height:1.75; margin-bottom:16px; }
+
+  /* ── Mini Before/After ── */
+  .mini-ba { display:flex; gap:8px; align-items:center; margin-bottom:16px; }
+  .mini-frame { flex:1; border-radius:10px; height:80px; display:flex; align-items:center; justify-content:center; font-size:1.6rem; }
+  .mf-b1 { background:linear-gradient(135deg,#5a4030,#7a5840); }
+  .mf-a1 { background:linear-gradient(135deg,#2d6a6a,#1a8a7a); }
+  .mf-b2 { background:linear-gradient(135deg,#60504a,#807060); }
+  .mf-a2 { background:linear-gradient(135deg,#3a6a9a,#2a5080); }
+  .mf-b3 { background:linear-gradient(135deg,#6a6a6a,#808080); }
+  .mf-a3 { background:linear-gradient(135deg,#8B5CF6,#6D28D9); }
+  .mini-arr { color:var(--gold); font-size:1.5rem; flex-shrink:0; }
+  .mini-lbl { display:flex; justify-content:space-between; font-size:0.7rem; font-weight:700; color:var(--gray); letter-spacing:1px; margin-bottom:16px; }
+
+  .type-steps { list-style:none; }
+  .type-steps li { font-size:0.88rem; color:#374151; padding:6px 0; border-bottom:1px solid #f3f4f6; display:flex; gap:10px; }
+  .type-steps li:last-child { border-bottom:none; }
+  .type-steps li .sn { background:var(--gold); color:#fff; font-size:0.7rem; font-weight:800; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+
+  /* ── Tools Section ── */
+  .tools-section { background:linear-gradient(135deg,var(--navy),#1e3a6e); color:#fff; }
+  .tools-section .s-title { color:#fff; }
+  .tools-section .s-sub { color:rgba(255,255,255,.7); }
+  .tool-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; }
+  .tool-card { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:24px 20px; text-align:center; transition:background .2s; }
+  .tool-card:hover { background:rgba(255,255,255,.12); }
+  .tool-card .t-icon { font-size:2rem; margin-bottom:12px; }
+  .tool-card h4 { font-size:1rem; font-weight:800; color:var(--gold); margin-bottom:6px; }
+  .tool-card .t-use { font-size:0.78rem; opacity:.7; margin-bottom:10px; }
+  .tool-card .t-price { font-size:0.8rem; background:rgba(201,148,58,.2); color:var(--gold); padding:3px 12px; border-radius:20px; display:inline-block; font-weight:700; }
+  .tool-tag-row { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:8px; }
+  .tt { font-size:0.7rem; background:rgba(255,255,255,.1); color:#fff; padding:2px 8px; border-radius:10px; }
+
+  /* ── What's Included ── */
+  .included-section { background:var(--bg); }
+  .inc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:24px; }
+  .inc-card { background:#fff; border-radius:16px; padding:28px; box-shadow:0 2px 12px rgba(0,0,0,.06); }
+  .inc-card .ic-head { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .inc-card .ic-icon { font-size:1.8rem; }
+  .inc-card h3 { font-size:1.05rem; font-weight:800; color:var(--navy); }
+  .inc-list { list-style:none; }
+  .inc-list li { font-size:0.88rem; color:#374151; padding:7px 0; border-bottom:1px solid #f3f4f6; display:flex; gap:10px; align-items:flex-start; }
+  .inc-list li:last-child { border-bottom:none; }
+  .inc-list li::before { content:'✓'; color:var(--green); font-weight:800; flex-shrink:0; }
+
+  /* ── Who Is This For ── */
+  .who-section { background:#fff; }
+  .who-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px; }
+  .who-card { border-radius:14px; padding:28px 24px; }
+  .who-card.w1 { background:linear-gradient(135deg,#f0f7ff,#e8f0fe); border-left:4px solid var(--navy); }
+  .who-card.w2 { background:linear-gradient(135deg,#f0fafa,#e8f7f0); border-left:4px solid var(--teal); }
+  .who-card.w3 { background:linear-gradient(135deg,#fdf4ff,#f5e8fe); border-left:4px solid var(--purple); }
+  .who-card .w-icon { font-size:2rem; margin-bottom:12px; }
+  .who-card h3 { font-size:1rem; font-weight:800; color:var(--navy); margin-bottom:8px; }
+  .who-card p { font-size:0.88rem; color:#4b5563; line-height:1.7; }
+  .who-card .w-gain { display:inline-block; margin-top:12px; font-size:0.8rem; font-weight:700; padding:4px 14px; border-radius:20px; }
+  .w1 .w-gain { background:rgba(27,42,74,.1); color:var(--navy); }
+  .w2 .w-gain { background:rgba(42,127,127,.1); color:var(--teal); }
+  .w3 .w-gain { background:rgba(109,40,217,.1); color:var(--purple); }
+
+  /* ── Workflow ── */
+  .workflow-section { background:var(--bg); }
+  .wf-steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0; position:relative; }
+  .wf-step { text-align:center; padding:24px 20px; position:relative; }
+  .wf-step:not(:last-child)::after { content:'→'; position:absolute; right:-10px; top:50%; transform:translateY(-50%); font-size:1.8rem; color:var(--gold); z-index:1; }
+  @media(max-width:700px){ .wf-step:not(:last-child)::after { display:none; } }
+  .wf-num { width:52px; height:52px; border-radius:50%; background:var(--gold); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.3rem; font-weight:900; margin:0 auto 14px; box-shadow:0 4px 16px rgba(201,148,58,.4); }
+  .wf-step h4 { font-size:0.98rem; font-weight:800; color:var(--navy); margin-bottom:6px; }
+  .wf-step p { font-size:0.84rem; color:var(--gray); line-height:1.65; }
+  .wf-tool { display:inline-block; margin-top:8px; background:var(--navy); color:#fff; font-size:0.72rem; padding:3px 12px; border-radius:20px; font-weight:700; }
+
+  /* ── Pricing ── */
+  .pricing-section { background:var(--bg); }
+  .pricing-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:24px; align-items:start; }
+  .price-card { background:#fff; border-radius:18px; padding:36px 28px; box-shadow:0 2px 16px rgba(0,0,0,.07); border:2px solid #e5e7eb; transition:transform .2s,box-shadow .2s; position:relative; }
+  .price-card:hover { transform:translateY(-4px); box-shadow:0 12px 36px rgba(0,0,0,.12); }
+  .price-card.featured { border-color:var(--gold); box-shadow:0 8px 32px rgba(201,148,58,.25); transform:scale(1.03); }
+  .price-card.featured:hover { transform:scale(1.03) translateY(-4px); }
+  .popular-badge { position:absolute; top:-14px; left:50%; transform:translateX(-50%); background:var(--gold); color:#fff; font-size:0.72rem; font-weight:800; padding:4px 18px; border-radius:20px; letter-spacing:2px; white-space:nowrap; }
+  .plan-name { font-size:1.1rem; font-weight:900; color:var(--navy); margin-bottom:6px; }
+  .plan-desc { font-size:0.85rem; color:var(--gray); margin-bottom:20px; min-height:44px; }
+  .price-big { font-size:2.4rem; font-weight:900; color:var(--navy); margin-bottom:4px; }
+  .price-big span { font-size:1rem; font-weight:400; color:var(--gray); }
+  .price-orig { font-size:0.88rem; color:var(--gray); text-decoration:line-through; margin-bottom:20px; }
+  hr.pd { border:none; border-top:1px solid #f3f4f6; margin:20px 0; }
+  .pf { list-style:none; }
+  .pf li { font-size:0.88rem; color:#374151; padding:7px 0; display:flex; gap:10px; align-items:flex-start; }
+  .pf li .ck { color:var(--green); font-weight:700; flex-shrink:0; }
+  .pf li .na { color:#d1d5db; flex-shrink:0; }
+  .btn-plan { display:block; text-align:center; margin-top:24px; padding:14px; border-radius:50px; font-size:1rem; font-weight:800; text-decoration:none; transition:transform .2s; }
+  .bp-gold { background:var(--gold); color:#fff; box-shadow:0 4px 16px rgba(201,148,58,.35); }
+  .bp-gold:hover { transform:translateY(-2px); }
+  .bp-outline { border:2px solid var(--navy); color:var(--navy); }
+  .bp-outline:hover { background:var(--navy); color:#fff; }
+  .bp-dark { background:var(--navy); color:#fff; }
+  .bp-dark:hover { transform:translateY(-2px); }
+
+  /* ── Upsell Banner ── */
+  .upsell { background:linear-gradient(135deg,#fdf4e8,#fff8ee); border:2px solid var(--gold); border-radius:16px; padding:28px 32px; max-width:760px; margin:40px auto 0; display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
+  .upsell .us-icon { font-size:2.5rem; flex-shrink:0; }
+  .upsell h3 { font-size:1.05rem; font-weight:800; color:var(--navy); margin-bottom:6px; }
+  .upsell p { font-size:0.88rem; color:#4b5563; }
+  .upsell .us-btn { flex-shrink:0; display:inline-block; background:var(--navy); color:#fff; padding:12px 28px; border-radius:50px; font-size:0.9rem; font-weight:800; text-decoration:none; white-space:nowrap; }
+
+  /* ── Type Selector Pricing ── */
+  .type-selector { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-bottom:32px; }
+  .type-toggle { border:2px solid #e5e7eb; border-radius:14px; padding:20px; cursor:pointer; transition:all .2s; user-select:none; position:relative; background:#fff; }
+  .type-toggle:hover { border-color:var(--gold); box-shadow:0 4px 16px rgba(201,148,58,.15); }
+  .type-toggle.selected { border-color:var(--gold); background:linear-gradient(135deg,#fffbf2,#fff8e8); box-shadow:0 4px 20px rgba(201,148,58,.25); }
+  .type-toggle .tt-check { position:absolute; top:14px; right:14px; width:24px; height:24px; border-radius:50%; border:2px solid #d1d5db; display:flex; align-items:center; justify-content:center; font-size:0.8rem; transition:all .2s; background:#fff; }
+  .type-toggle.selected .tt-check { background:var(--gold); border-color:var(--gold); color:#fff; }
+  .type-toggle .tt-num { font-size:0.7rem; font-weight:800; letter-spacing:2px; color:var(--gray); margin-bottom:6px; }
+  .type-toggle h4 { font-size:0.98rem; font-weight:800; color:var(--navy); margin-bottom:4px; }
+  .type-toggle p { font-size:0.8rem; color:var(--gray); line-height:1.55; }
+  .type-toggle .tt-icon { font-size:1.8rem; margin-bottom:10px; }
+
+  .price-display { background:#fff; border-radius:18px; padding:36px; box-shadow:0 4px 24px rgba(0,0,0,.1); border:2px solid #e5e7eb; text-align:center; transition:border-color .3s; max-width:560px; margin:0 auto; }
+  .price-display.has-selection { border-color:var(--gold); box-shadow:0 8px 32px rgba(201,148,58,.2); }
+  .pd-hint { font-size:0.88rem; color:var(--gray); margin-bottom:16px; }
+  .pd-selected-types { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:20px; min-height:28px; }
+  .pd-type-chip { background:var(--navy); color:#fff; font-size:0.75rem; font-weight:700; padding:4px 14px; border-radius:20px; }
+  .pd-price-row { display:flex; align-items:baseline; gap:12px; justify-content:center; margin-bottom:8px; }
+  .pd-price { font-size:3rem; font-weight:900; color:var(--navy); line-height:1; }
+  .pd-orig { font-size:1rem; color:var(--gray); text-decoration:line-through; }
+  .pd-save { display:inline-block; background:#d1fae5; color:var(--green); font-size:0.82rem; font-weight:800; padding:3px 12px; border-radius:20px; margin-bottom:20px; }
+  .pd-desc { font-size:0.88rem; color:#6b7280; margin-bottom:24px; }
+  .pd-features { list-style:none; text-align:left; margin-bottom:24px; }
+  .pd-features li { font-size:0.88rem; color:#374151; padding:6px 0; border-bottom:1px solid #f3f4f6; display:flex; gap:10px; }
+  .pd-features li:last-child { border-bottom:none; }
+  .pd-features li .ck { color:var(--green); font-weight:700; flex-shrink:0; }
+  .pd-btn { display:block; background:var(--gold); color:#fff; padding:16px; border-radius:50px; font-size:1.05rem; font-weight:800; text-decoration:none; box-shadow:0 4px 16px rgba(201,148,58,.35); transition:transform .2s,opacity .2s; }
+  .pd-btn:hover { transform:translateY(-2px); }
+  .pd-btn.disabled { opacity:.4; pointer-events:none; background:var(--gray); box-shadow:none; }
+  .pd-note { font-size:0.78rem; color:var(--gray); margin-top:12px; }
+
+  .vip-card { background:linear-gradient(135deg,var(--navy),#1e3a6e); color:#fff; border-radius:18px; padding:32px; max-width:560px; margin:24px auto 0; text-align:center; }
+  .vip-card h3 { font-size:1.1rem; font-weight:900; color:var(--gold); margin-bottom:8px; }
+  .vip-card p { font-size:0.9rem; opacity:.82; margin-bottom:16px; }
+  .vip-card .vip-price { font-size:2rem; font-weight:900; color:#fff; margin-bottom:4px; }
+  .vip-card .vip-orig { font-size:0.85rem; color:rgba(255,255,255,.5); text-decoration:line-through; margin-bottom:16px; }
+  .vip-card .vip-feats { list-style:none; text-align:left; margin-bottom:20px; }
+  .vip-card .vip-feats li { font-size:0.85rem; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.1); display:flex; gap:8px; }
+  .vip-card .vip-feats li:last-child { border-bottom:none; }
+  .vip-card .vip-feats li::before { content:'✓'; color:var(--gold); font-weight:700; flex-shrink:0; }
+  .vip-btn { display:block; border:2px solid var(--gold); color:var(--gold); padding:14px; border-radius:50px; font-size:1rem; font-weight:800; text-decoration:none; transition:background .2s,color .2s; }
+  .vip-btn:hover { background:var(--gold); color:#fff; }
+
+  /* ── FAQ ── */
+  .faq-section { background:#fff; }
+  .faq-list { max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  details { background:var(--bg); border-radius:12px; border:1px solid #e5e7eb; overflow:hidden; cursor:pointer; }
+  summary { padding:18px 24px; font-weight:700; color:var(--navy); list-style:none; display:flex; justify-content:space-between; align-items:center; font-size:0.98rem; }
+  summary::-webkit-details-marker { display:none; }
+  summary::after { content:'+'; font-size:1.4rem; color:var(--gold); transition:transform .2s; }
+  details[open] summary::after { transform:rotate(45deg); }
+  details .ans { padding:0 24px 20px; font-size:0.91rem; color:#4b5563; line-height:1.8; }
+
+  /* ── Final CTA ── */
+  .cta-section { background:linear-gradient(135deg,#0f1f3d,#1B2A4A,#1a4a4a); color:#fff; text-align:center; padding:96px 24px; }
+  .cta-section h2 { font-size:clamp(1.8rem,4vw,2.4rem); font-weight:900; margin-bottom:16px; }
+  .cta-section h2 em { color:var(--gold); font-style:normal; }
+  .cta-section p { font-size:1.05rem; opacity:.85; max-width:560px; margin:0 auto 36px; }
+  .guarantee { display:inline-flex; align-items:center; gap:10px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.2); border-radius:50px; padding:10px 24px; margin-top:24px; font-size:0.85rem; opacity:.82; }
+
+  footer { background:var(--dark); color:rgba(255,255,255,.5); text-align:center; padding:28px 24px; font-size:0.82rem; }
+
+  @media(max-width:768px){
+    .hero { padding:60px 20px 80px; }
+    .ba-row { gap:10px; }
+    .ba-card { width:220px; }
+    section { padding:60px 0; }
+    .price-card.featured { transform:none; }
+    .upsell { flex-direction:column; text-align:center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">🔥 三合一模板包限時優惠 — 完整版 NT$797（原價 NT$1,997）</div>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="badge">AI 空屋改造模板包</div>
+    <h1>不用真的裝潢<br><em>AI 30 分鐘</em>把舊房變新家</h1>
+    <p class="subtitle">
+      舊家具移除 + 放入新家具 ／ 空間風格改造 ／ 毛胚屋模擬完工<br>
+      三種 AI 改造類型全包，Before/After 影片讓買家一看就心動
+    </p>
+    <div class="cta-row">
+      <a href="#pricing" class="btn-gold">立即取得模板包 →</a>
+      <a href="#types" class="btn-ghost">看三種改造類型</a>
+    </div>
+    <!-- Hero Before/After Visual -->
+    <div class="ba-row">
+      <div class="ba-card">
+        <div class="ba-img before">🛋️</div>
+        <div class="ba-label before-lbl">BEFORE — 舊家具</div>
+      </div>
+      <div class="ba-arrow">→</div>
+      <div class="ba-card">
+        <div class="ba-img after">🏠</div>
+        <div class="ba-label after-lbl">AFTER — AI 改造</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Three Types -->
+<section class="types-section" id="types">
+  <div class="container">
+    <h2 class="s-title">三種 AI 空屋改造，全部學會</h2>
+    <p class="s-sub">每種類型都有完整 SOP + AI Prompt 模板 + 社群發文腳本，買一包全搞定</p>
+    <div class="type-grid">
+
+      <!-- Type 1: Furniture Swap -->
+      <div class="type-card">
+        <div class="type-header t1">
+          <div class="type-num">類型 01</div>
+          <h3>舊家具移除<br>放入新家具</h3>
+          <span class="type-tag">最受歡迎</span>
+        </div>
+        <div class="type-body">
+          <div class="mini-ba">
+            <div class="mini-frame mf-b1">🛋️</div>
+            <div class="mini-arr">→</div>
+            <div class="mini-frame mf-a1">🪑</div>
+          </div>
+          <div class="mini-lbl"><span>老舊雜亂</span><span>現代清爽</span></div>
+          <p>你說的就是這種！屋內有舊家具，AI 先幫你「清空」，再放入符合市場喜好的新家具與軟裝，讓老屋瞬間煥然一新，提升買家第一印象。</p>
+          <ul class="type-steps">
+            <li><span class="sn">1</span>上傳房間照片到 AI 工具</li>
+            <li><span class="sn">2</span>選擇「移除家具 + 虛擬佈置」模式</li>
+            <li><span class="sn">3</span>選風格偏好（現代 / 北歐 / 輕奢）</li>
+            <li><span class="sn">4</span>下載 Before/After，做成影片</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Type 2: Style Transformation -->
+      <div class="type-card">
+        <div class="type-header t2">
+          <div class="type-num">類型 02</div>
+          <h3>空間風格改造<br>同房間換裝潢</h3>
+          <span class="type-tag">最吸睛</span>
+        </div>
+        <div class="type-body">
+          <div class="mini-ba">
+            <div class="mini-frame mf-b2">🏚️</div>
+            <div class="mini-arr">→</div>
+            <div class="mini-frame mf-a2">🎨</div>
+          </div>
+          <div class="mini-lbl"><span>傳統台式</span><span>北歐現代</span></div>
+          <p>同一個空間，一鍵切換成 5 種不同裝潢風格：北歐清爽、日系侘寂、輕奢金屬、現代簡約、美式鄉村。買家自己選最喜歡的風格，成交率大幅提升。</p>
+          <ul class="type-steps">
+            <li><span class="sn">1</span>上傳現有空間照片</li>
+            <li><span class="sn">2</span>輸入風格 Prompt（模板包內附）</li>
+            <li><span class="sn">3</span>生成 5 種風格版本</li>
+            <li><span class="sn">4</span>一張輪播或影片呈現對比</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Type 3: Shell to Furnished -->
+      <div class="type-card">
+        <div class="type-header t3">
+          <div class="type-num">類型 03</div>
+          <h3>毛胚屋模擬<br>完工裝潢效果</h3>
+          <span class="type-tag">最能打動首購族</span>
+        </div>
+        <div class="type-body">
+          <div class="mini-ba">
+            <div class="mini-frame mf-b3">🏗️</div>
+            <div class="mini-arr">→</div>
+            <div class="mini-frame mf-a3">✨</div>
+          </div>
+          <div class="mini-lbl"><span>水泥空殼</span><span>完工入住</span></div>
+          <p>預售屋或毛胚屋最大痛點：買家想像不到住起來的感覺。AI 幫你把空殼變成有家具、有燈光、有溫度的完工效果，讓潛客「看到就想買」。</p>
+          <ul class="type-steps">
+            <li><span class="sn">1</span>上傳毛胚空間或平面圖</li>
+            <li><span class="sn">2</span>選擇空間類型（客廳 / 主臥 / 廚房）</li>
+            <li><span class="sn">3</span>AI 生成裝修後效果圖</li>
+            <li><span class="sn">4</span>搭配說明腳本發布短影音</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Workflow -->
+<section class="workflow-section">
+  <div class="container">
+    <h2 class="s-title">從照片到影片，完整工作流程</h2>
+    <p class="s-sub">每個步驟都有對應工具推薦和模板，不需要設計背景</p>
+    <div class="wf-steps">
+      <div class="wf-step">
+        <div class="wf-num">1</div>
+        <h4>拍攝現有空間</h4>
+        <p>用手機拍 3-5 張，建議自然採光、横向構圖</p>
+        <span class="wf-tool">📱 手機拍攝指南（附）</span>
+      </div>
+      <div class="wf-step">
+        <div class="wf-num">2</div>
+        <h4>選類型 + 輸入 Prompt</h4>
+        <p>從模板包選好風格 Prompt，貼入 AI 工具</p>
+        <span class="wf-tool">🎨 Prompt 模板（附）</span>
+      </div>
+      <div class="wf-step">
+        <div class="wf-num">3</div>
+        <h4>生成改造效果圖</h4>
+        <p>AI 自動生成，通常 30 秒內完成，可重複生成選最好的</p>
+        <span class="wf-tool">🤖 REimagineHome / Midjourney</span>
+      </div>
+      <div class="wf-step">
+        <div class="wf-num">4</div>
+        <h4>做成 Before/After 影片</h4>
+        <p>用 CapCut 模板快速剪輯，加字幕、配樂，完成</p>
+        <span class="wf-tool">✂️ CapCut 模板（附）</span>
+      </div>
+      <div class="wf-step">
+        <div class="wf-num">5</div>
+        <h4>發布 + 等詢問</h4>
+        <p>搭配社群發文腳本，貼上 LINE，讓客戶主動來問</p>
+        <span class="wf-tool">📝 發文腳本（附）</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI Tools -->
+<section class="tools-section">
+  <div class="container">
+    <h2 class="s-title" style="color:#fff;">推薦 AI 工具一覽</h2>
+    <p class="s-sub">模板包內附每個工具的操作教學，零基礎也能上手</p>
+    <div class="tool-grid">
+      <div class="tool-card">
+        <div class="t-icon">🏠</div>
+        <h4>REimagineHome</h4>
+        <div class="t-use">家具移除 + 虛擬佈置</div>
+        <div class="tool-tag-row"><span class="tt">類型 01</span><span class="tt">類型 02</span></div>
+        <div class="t-price" style="margin-top:10px;">免費方案可用</div>
+      </div>
+      <div class="tool-card">
+        <div class="t-icon">🎨</div>
+        <h4>Midjourney</h4>
+        <div class="t-use">風格改造 / 毛胚模擬</div>
+        <div class="tool-tag-row"><span class="tt">類型 02</span><span class="tt">類型 03</span></div>
+        <div class="t-price" style="margin-top:10px;">USD $10/月起</div>
+      </div>
+      <div class="tool-card">
+        <div class="t-icon">🖼️</div>
+        <h4>Virtual Staging AI</h4>
+        <div class="t-use">空屋虛擬佈置專用</div>
+        <div class="tool-tag-row"><span class="tt">類型 01</span><span class="tt">類型 03</span></div>
+        <div class="t-price" style="margin-top:10px;">按張計費</div>
+      </div>
+      <div class="tool-card">
+        <div class="t-icon">✂️</div>
+        <h4>CapCut</h4>
+        <div class="t-use">Before/After 影片製作</div>
+        <div class="tool-tag-row"><span class="tt">類型 01</span><span class="tt">類型 02</span><span class="tt">類型 03</span></div>
+        <div class="t-price" style="margin-top:10px;">免費</div>
+      </div>
+      <div class="tool-card">
+        <div class="t-icon">🤖</div>
+        <h4>ChatGPT</h4>
+        <div class="t-use">發文文案 + Prompt 優化</div>
+        <div class="tool-tag-row"><span class="tt">全類型適用</span></div>
+        <div class="t-price" style="margin-top:10px;">免費方案可用</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- What's Included -->
+<section class="included-section">
+  <div class="container">
+    <h2 class="s-title">模板包裡有什麼</h2>
+    <p class="s-sub">完整版涵蓋從拍照到發布的每一個環節，不需要再到處找資料</p>
+    <div class="inc-grid">
+      <div class="inc-card">
+        <div class="ic-head">
+          <div class="ic-icon">📋</div>
+          <h3>操作 SOP 手冊</h3>
+        </div>
+        <ul class="inc-list">
+          <li>類型 01 家具移除 + 換新完整步驟</li>
+          <li>類型 02 風格改造 5 種風格操作流程</li>
+          <li>類型 03 毛胚屋模擬完工步驟</li>
+          <li>拍攝技巧指南（角度、光線、構圖）</li>
+          <li>效果圖品質判斷標準</li>
+        </ul>
+      </div>
+      <div class="inc-card">
+        <div class="ic-head">
+          <div class="ic-icon">💬</div>
+          <h3>AI Prompt 模板庫</h3>
+        </div>
+        <ul class="inc-list">
+          <li>北歐風格 Prompt × 3 個變體</li>
+          <li>現代簡約 Prompt × 3 個變體</li>
+          <li>日系侘寂 Prompt × 3 個變體</li>
+          <li>輕奢金屬 Prompt × 3 個變體</li>
+          <li>美式鄉村 Prompt × 3 個變體</li>
+          <li>毛胚屋各空間 Prompt × 5 個</li>
+        </ul>
+      </div>
+      <div class="inc-card">
+        <div class="ic-head">
+          <div class="ic-icon">🎬</div>
+          <h3>影片製作素材</h3>
+        </div>
+        <ul class="inc-list">
+          <li>CapCut 空屋改造影片模板（3種）</li>
+          <li>Before/After 轉場效果設定教學</li>
+          <li>字幕樣式推薦 + 設定方式</li>
+          <li>背景音樂挑選原則</li>
+          <li>影片輸出規格建議（IG / YT / FB）</li>
+        </ul>
+      </div>
+      <div class="inc-card">
+        <div class="ic-head">
+          <div class="ic-icon">📱</div>
+          <h3>社群發文腳本</h3>
+        </div>
+        <ul class="inc-list">
+          <li>家具換新影片 — IG 發文文案 × 5</li>
+          <li>風格改造影片 — FB 發文文案 × 5</li>
+          <li>毛胚模擬影片 — Threads 發文 × 5</li>
+          <li>吸引詢問的 CTA 話術模板</li>
+          <li>Hashtag 套組（房仲適用）</li>
+        </ul>
+      </div>
+      <div class="inc-card">
+        <div class="ic-head">
+          <div class="ic-icon">🤝</div>
+          <h3>屋主提案話術</h3>
+        </div>
+        <ul class="inc-list">
+          <li>如何向屋主介紹 AI 改造服務</li>
+          <li>屋主常見疑問解答話術</li>
+          <li>AI 改造 vs 真實裝潢差異說明</li>
+          <li>服務差異化定位腳本</li>
+        </ul>
+      </div>
+      <div class="inc-card" style="background:linear-gradient(135deg,#fdf4e8,#fff8ee);border:2px solid var(--gold);">
+        <div class="ic-head">
+          <div class="ic-icon">🎁</div>
+          <h3 style="color:var(--amber);">完整版限定加贈</h3>
+        </div>
+        <ul class="inc-list">
+          <li>AI 改造收費定價參考表</li>
+          <li>「AI 空間改造」加值服務話術</li>
+          <li>房仲社群 30 天內容行事曆</li>
+          <li>搭配 AI 說話影片工具教學</li>
+          <li>優先取得後續新增模板</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Who Is This For -->
+<section class="who-section">
+  <div class="container">
+    <h2 class="s-title">這套模板包適合誰？</h2>
+    <p class="s-sub">三種使用情境，找到最適合你的方式</p>
+    <div class="who-grid">
+      <div class="who-card w1">
+        <div class="w-icon">🏢</div>
+        <h3>房仲業務</h3>
+        <p>用 AI 改造圖替代傳統靜態照片，影片曝光比圖文高 3 倍，讓更多潛客看見你的物件，詢問自然增加。</p>
+        <span class="w-gain">獲客成本降低</span>
+      </div>
+      <div class="who-card w2">
+        <div class="w-icon">🏠</div>
+        <h3>屋主 / 屋主的仲介</h3>
+        <p>老屋、格局特殊的物件？AI 改造讓買家「看到美好未來」，不再因為裝潢老舊而錯失出價機會。</p>
+        <span class="w-gain">成交速度加快</span>
+      </div>
+      <div class="who-card w3">
+        <div class="w-icon">🎨</div>
+        <h3>想做自媒體的房產 KOL</h3>
+        <p>空屋改造影片是目前房產自媒體互動率最高的內容類型之一，穩定產出能快速累積粉絲與信任感。</p>
+        <span class="w-gain">粉絲成長加速</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="pricing-section" id="pricing">
+  <div class="container">
+    <h2 class="s-title">自選類型，按需購買</h2>
+    <p class="s-sub">選 1 種、2 種或全部 3 種，選越多越划算。點擊下方類型卡片來選擇</p>
+
+    <!-- Interactive Type Selector -->
+    <div class="type-selector">
+      <div class="type-toggle" data-type="1" onclick="toggleType(this)">
+        <div class="tt-check">✓</div>
+        <div class="tt-icon">🛋️</div>
+        <div class="tt-num">類型 01</div>
+        <h4>舊家具移除<br>放入新家具</h4>
+        <p>清除舊有家具，換入符合市場喜好的新軟裝佈置</p>
+      </div>
+      <div class="type-toggle" data-type="2" onclick="toggleType(this)">
+        <div class="tt-check">✓</div>
+        <div class="tt-icon">🎨</div>
+        <div class="tt-num">類型 02</div>
+        <h4>空間風格改造<br>同房換裝潢</h4>
+        <p>同一空間切換成 5 種風格，讓買家自己選最愛</p>
+      </div>
+      <div class="type-toggle" data-type="3" onclick="toggleType(this)">
+        <div class="tt-check">✓</div>
+        <div class="tt-icon">🏗️</div>
+        <div class="tt-num">類型 03</div>
+        <h4>毛胚屋模擬<br>完工裝潢效果</h4>
+        <p>空殼變成完工入住感，幫首購族打開想像力</p>
+      </div>
+    </div>
+
+    <!-- Dynamic Price Display -->
+    <div class="price-display" id="priceDisplay">
+      <p class="pd-hint">👆 點選上方類型卡片，查看對應價格</p>
+      <div class="pd-selected-types" id="selectedChips"></div>
+      <div class="pd-price-row">
+        <div class="pd-price" id="priceNum">—</div>
+        <div class="pd-orig" id="priceOrig"></div>
+      </div>
+      <div class="pd-save" id="priceSave" style="display:none;"></div>
+      <p class="pd-desc" id="priceDesc">請選擇至少一種類型</p>
+      <ul class="pd-features" id="priceFeatures"></ul>
+      <a href="#" class="pd-btn disabled" id="buyBtn">請先選擇類型</a>
+      <p class="pd-note">一次購買，永久使用 ・ 數位商品自動交付</p>
+    </div>
+
+    <!-- VIP Card (always shown) -->
+    <div class="vip-card">
+      <h3>VIP 帶做版 — 有人陪你做第一支</h3>
+      <p>包含全部三種類型 + 1 對 1 線上帶做 60 分鐘，現場完成你的第一支 AI 改造影片</p>
+      <div class="vip-price">NT$2,497</div>
+      <div class="vip-orig">原價 NT$4,500</div>
+      <ul class="vip-feats">
+        <li>三種類型模板包（完整版全部內容）</li>
+        <li>1 對 1 線上帶做 60 分鐘</li>
+        <li>現場完成第一支改造影片</li>
+        <li>30 天 LINE 問題支援</li>
+        <li>3 張效果圖品質審閱</li>
+        <li>個人化發布策略建議</li>
+      </ul>
+      <a href="https://sixhands.gumroad.com/l/ldgwmc" target="_blank" class="vip-btn">諮詢 VIP 方案</a>
+    </div>
+
+    <!-- Cross-sell Banner -->
+    <div class="upsell">
+      <div class="us-icon">💬</div>
+      <div>
+        <h3>已有 AI 影片腳本模板包？</h3>
+        <p>把 AI 空間改造圖放進腳本影片裡，視覺效果翻倍。兩包合購享 NT$300 折扣，直接聯繫詢問。</p>
+      </div>
+      <a href="ai-video-template.html" class="us-btn">查看腳本模板包</a>
+    </div>
+
+  </div>
+</section>
+
+<script>
+const TYPES = {
+  1: { name:'類型 01 家具換新', emoji:'🛋️' },
+  2: { name:'類型 02 風格改造', emoji:'🎨' },
+  3: { name:'類型 03 毛胚模擬', emoji:'🏗️' }
+};
+
+const PLANS = {
+  '1':   { price:297,  orig:597,  save:0,   label:'單類型方案', desc:'取得所選類型的完整 SOP、Prompt 模板、CapCut 影片模板、社群發文腳本', features:['所選類型完整 SOP 手冊','AI Prompt 模板 × 5 個','CapCut 影片模板 × 1 種','社群發文腳本 × 5 篇','AI 工具入門教學'] },
+  '2':   { price:297,  orig:597,  save:0,   label:'單類型方案', desc:'取得所選類型的完整 SOP、Prompt 模板、CapCut 影片模板、社群發文腳本', features:['所選類型完整 SOP 手冊','AI Prompt 模板 × 5 個','CapCut 影片模板 × 1 種','社群發文腳本 × 5 篇','AI 工具入門教學'] },
+  '3':   { price:297,  orig:597,  save:0,   label:'單類型方案', desc:'取得所選類型的完整 SOP、Prompt 模板、CapCut 影片模板、社群發文腳本', features:['所選類型完整 SOP 手冊','AI Prompt 模板 × 5 個','CapCut 影片模板 × 1 種','社群發文腳本 × 5 篇','AI 工具入門教學'] },
+  '1,2': { price:497,  orig:794,  save:297, label:'雙類型組合', desc:'兩種類型全包，一次學會舊家具換新與風格改造', features:['兩種類型完整 SOP 手冊','AI Prompt 模板 × 12 個','CapCut 影片模板 × 2 種','社群發文腳本 × 10 篇','屋主提案話術（基礎版）','省下 NT$297 vs 分開買'] },
+  '1,3': { price:497,  orig:794,  save:297, label:'雙類型組合', desc:'家具換新與毛胚模擬，最常搭配的組合', features:['兩種類型完整 SOP 手冊','AI Prompt 模板 × 12 個','CapCut 影片模板 × 2 種','社群發文腳本 × 10 篇','屋主提案話術（基礎版）','省下 NT$297 vs 分開買'] },
+  '2,3': { price:497,  orig:794,  save:297, label:'雙類型組合', desc:'風格改造與毛胚模擬，適合主攻預售屋的房仲', features:['兩種類型完整 SOP 手冊','AI Prompt 模板 × 12 個','CapCut 影片模板 × 2 種','社群發文腳本 × 10 篇','屋主提案話術（基礎版）','省下 NT$297 vs 分開買'] },
+  '1,2,3': { price:697, orig:1191, save:494, label:'三合一完整版 ★ 最推薦', desc:'三種類型全包 + 加贈內容，一次全學最超值', features:['三種類型完整 SOP 手冊','AI Prompt 模板庫（25+ 個）','CapCut 影片模板 × 3 種','社群發文腳本 × 15 篇','屋主提案話術全套','5 大加贈內容','後續新增模板優先取得','省下 NT$494 vs 分開買'] }
+};
+
+let selected = new Set();
+
+function toggleType(el) {
+  const t = el.dataset.type;
+  if (selected.has(t)) { selected.delete(t); el.classList.remove('selected'); }
+  else { selected.add(t); el.classList.add('selected'); }
+  updatePrice();
+}
+
+function updatePrice() {
+  const key = [...selected].sort().join(',');
+  const display = document.getElementById('priceDisplay');
+  const chips = document.getElementById('selectedChips');
+  const priceNum = document.getElementById('priceNum');
+  const priceOrig = document.getElementById('priceOrig');
+  const priceSave = document.getElementById('priceSave');
+  const priceDesc = document.getElementById('priceDesc');
+  const priceFeatures = document.getElementById('priceFeatures');
+  const buyBtn = document.getElementById('buyBtn');
+
+  chips.innerHTML = '';
+  selected.forEach(t => {
+    const chip = document.createElement('span');
+    chip.className = 'pd-type-chip';
+    chip.textContent = TYPES[t].emoji + ' ' + TYPES[t].name;
+    chips.appendChild(chip);
+  });
+
+  if (!key) {
+    display.classList.remove('has-selection');
+    priceNum.textContent = '—';
+    priceOrig.textContent = '';
+    priceSave.style.display = 'none';
+    priceDesc.textContent = '請選擇至少一種類型';
+    priceFeatures.innerHTML = '';
+    buyBtn.className = 'pd-btn disabled';
+    buyBtn.textContent = '請先選擇類型';
+    return;
+  }
+
+  const plan = PLANS[key];
+  display.classList.add('has-selection');
+  priceNum.textContent = 'NT$' + plan.price;
+  priceOrig.textContent = '原價 NT$' + plan.orig;
+  if (plan.save > 0) {
+    priceSave.style.display = 'inline-block';
+    priceSave.textContent = '省下 NT$' + plan.save;
+  } else {
+    priceSave.style.display = 'none';
+  }
+  priceDesc.textContent = '【' + plan.label + '】' + plan.desc;
+  priceFeatures.innerHTML = plan.features.map(f => '<li><span class="ck">✓</span>' + f + '</li>').join('');
+  buyBtn.className = 'pd-btn';
+  buyBtn.href = 'https://sixhands.gumroad.com/l/ldgwmc';
+  buyBtn.target = '_blank';
+  buyBtn.textContent = '立即購買 ' + plan.label + ' →';
+}
+</script>
+
+<!-- FAQ -->
+<section class="faq-section">
+  <div class="container">
+    <h2 class="s-title">常見問題</h2>
+    <p class="s-sub"></p>
+    <div class="faq-list">
+      <details>
+        <summary>AI 生成的改造圖，買家會接受嗎？</summary>
+        <div class="ans">現在市場已非常習慣虛擬佈置與 AI 效果圖，尤其在社群媒體上這類 Before/After 內容互動率反而很高。重點是在發文時說明「AI 效果示意圖」，誠實標示，反而能建立透明度和信任感。</div>
+      </details>
+      <details>
+        <summary>需要 Photoshop 或設計技能嗎？</summary>
+        <div class="ans">完全不需要。REimagineHome 等工具只需要上傳照片、選風格、按生成，整個流程不需要任何設計軟體。模板包內的操作教學有逐步截圖說明，零基礎可以上手。</div>
+      </details>
+      <details>
+        <summary>生成出來的效果圖品質如何？</summary>
+        <div class="ans">效果取決於原始照片品質。模板包內附有「拍攝技巧指南」，只要按照建議的角度、光線拍攝，生成品質通常可以直接用於社群發文。模板也附有「重新生成判斷標準」，讓你知道什麼時候要重跑。</div>
+      </details>
+      <details>
+        <summary>每次生成要花多少錢？</summary>
+        <div class="ans">REimagineHome 有免費方案（每月有限次），付費升級約 USD $15/月可無限生成。Midjourney 約 USD $10/月。CapCut 影片製作完全免費。一個月的工具成本大約 NT$300-800，遠低於外包一次虛擬佈置的費用（通常 NT$500-1,500/張）。</div>
+      </details>
+      <details>
+        <summary>這個可以用在租屋物件嗎？</summary>
+        <div class="ans">完全可以。租屋市場同樣需要讓租客「看到居住感」，尤其空屋招租時，用類型 01（虛擬佈置）效果很好，能讓潛在租客更快決定看屋。</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section class="cta-section">
+  <div class="container">
+    <h2>現在就讓 <em>AI 替你改造空屋</em></h2>
+    <p>一張照片，30 分鐘，讓舊房變成讓買家一眼心動的理想家。</p>
+    <a href="#pricing" class="btn-gold">立即取得模板包 →</a>
+    <br>
+    <div class="guarantee">🔒 &nbsp; 數位商品特性，不提供退款，購買前請確認適合需求</div>
+  </div>
+</section>
+
+<footer>
+  <p>© 2025 AI 空屋改造模板包 &nbsp;｜&nbsp; 台灣房地產 AI 工具資源</p>
+</footer>
+
+</body>
+</html>
