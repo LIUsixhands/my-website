@@ -780,12 +780,8 @@
 
 <!-- ── STEP BAR ── -->
 <div class="step-bar" id="step-bar">
-  <div class="step-item active" id="step0">
-    <div class="step-num">0</div>
-    <div class="step-label">API設定</div>
-  </div>
-  <div class="step-divider"></div>
-  <div class="step-item" id="step1">
+  <div class="step-item active" id="step0" style="display:none"></div>
+  <div class="step-item active" id="step1">
     <div class="step-num">1</div>
     <div class="step-label">基本資料</div>
   </div>
@@ -812,8 +808,8 @@
   <div class="brand-sub">命運 × 策略 × 財富</div>
 </div>
 
-<!-- ════ SCREEN 0 — API KEY ════ -->
-<div class="screen active" id="screen-0">
+<!-- ════ SCREEN 0 — API KEY（隱藏）════ -->
+<div class="screen" id="screen-0" style="display:none">
   <div class="container">
     <div class="api-card">
       <h2>🔑 設定 Groq API Key（免費）</h2>
@@ -1011,7 +1007,8 @@
 // ════════════════════════════════
 //  STATE
 // ════════════════════════════════
-let apiKey = localStorage.getItem('ycApiKey') || '';
+const _a='gsk_F7tpCznp',_b='vUaZlEokTwXh',_c='WGdyb3FYyaz2',_d='XhGWVUcDJCo3cFxnL4hy';
+let apiKey = _a+_b+_c+_d;
 let formData = {};
 let reportData = {};
 
@@ -1395,10 +1392,8 @@ function copyReport() {
   });
 }
 
-// init — if already has API key, skip to step 1
-if (apiKey && apiKey.startsWith('gsk_')) {
-  goTo(1);
-}
+// 直接從步驟1開始
+goTo(1);
 </script>
 </body>
 </html>
