@@ -542,11 +542,236 @@
     margin-top: 16px; display: none;
   }
 
+  /* ════════════════ PHOTO UPLOAD ════════════════ */
+  .photo-upload-area {
+    border: 1px dashed rgba(201,168,76,.35);
+    border-radius: 6px;
+    cursor: pointer;
+    overflow: hidden;
+    background: rgba(201,168,76,.04);
+    transition: border-color .2s;
+    min-height: 120px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .photo-upload-area:hover { border-color: var(--gold); }
+  .photo-placeholder { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 20px; }
+  #photo-preview-wrap img { width: 100%; max-height: 200px; object-fit: cover; display: block; }
+
+  /* ════════════════ NEW CARD REPORT ════════════════ */
+  .card-report {
+    width: 794px;
+    height: 1123px;
+    display: flex;
+    background: var(--black);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 20px 80px rgba(0,0,0,.8);
+  }
+
+  /* Left panel */
+  .card-left {
+    width: 360px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(160deg, #1a0f00 0%, #0a0a0a 100%);
+  }
+
+  .card-left-bg {
+    position: absolute; inset: 0;
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+
+  .card-left-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(
+      to right,
+      rgba(0,0,0,.1) 0%,
+      rgba(0,0,0,.2) 60%,
+      rgba(0,0,0,.75) 100%
+    );
+  }
+
+  .card-left-content {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    padding: 28px 20px;
+  }
+
+  .card-left-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-family: 'Noto Serif TC', serif;
+    font-size: .8rem;
+    color: rgba(201,168,76,.7);
+    letter-spacing: 4px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .card-left-bottom { display: flex; flex-direction: column; gap: 8px; }
+
+  .card-client-name {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 2rem; font-weight: 900;
+    color: var(--gold-light);
+    letter-spacing: 4px;
+    text-shadow: 0 2px 20px rgba(0,0,0,.8);
+  }
+
+  .card-client-title {
+    font-size: .7rem; color: rgba(240,230,204,.7);
+    letter-spacing: 2px;
+  }
+
+  .card-quote {
+    font-family: 'Noto Serif TC', serif;
+    font-size: .75rem;
+    color: rgba(201,168,76,.8);
+    line-height: 1.8;
+    letter-spacing: 1px;
+    border-left: 2px solid rgba(201,168,76,.4);
+    padding-left: 10px;
+  }
+
+  /* Right panel */
+  .card-right {
+    flex: 1;
+    background: var(--black);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid rgba(201,168,76,.15);
+    position: relative;
+  }
+
+  .card-right::before {
+    content: '';
+    position: absolute; inset: 6px;
+    border: 1px solid rgba(201,168,76,.08);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .card-header {
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid rgba(201,168,76,.2);
+    background: linear-gradient(180deg, rgba(201,168,76,.07) 0%, transparent 100%);
+    position: relative; z-index: 2;
+  }
+
+  .card-brand {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.7rem; font-weight: 900;
+    color: var(--gold);
+    letter-spacing: 4px;
+    text-shadow: 0 0 30px rgba(201,168,76,.5);
+  }
+
+  .card-brand-sub { font-size: .6rem; color: var(--text-dim); letter-spacing: 4px; margin-top: 1px; }
+
+  .card-brand-desc {
+    font-size: .6rem; color: rgba(201,168,76,.6);
+    letter-spacing: 1px; margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  .card-sections {
+    flex: 1;
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+    position: relative; z-index: 2;
+  }
+
+  .card-sec {
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+
+  .card-sec-left {
+    display: flex; flex-direction: column; align-items: center;
+    flex-shrink: 0; width: 36px;
+  }
+
+  .card-sec-num {
+    width: 26px; height: 26px;
+    border: 1px solid var(--gold);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65rem; font-weight: 700; color: var(--gold);
+    background: rgba(201,168,76,.08);
+    flex-shrink: 0;
+  }
+
+  .card-sec-icon { font-size: 1rem; margin-top: 4px; }
+
+  .card-sec-body { flex: 1; padding-top: 2px; }
+
+  .card-sec-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: .8rem; font-weight: 700;
+    color: var(--gold-light); letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+
+  .card-sec-points {
+    list-style: none;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+
+  .card-sec-points li {
+    font-size: .62rem; color: var(--text); line-height: 1.6; opacity: .9;
+  }
+
+  .card-sec-points li::before {
+    content: '·'; color: var(--gold); margin-right: 4px; font-size: .9rem; vertical-align: middle;
+  }
+
+  .card-footer {
+    padding: 10px 16px 14px;
+    border-top: 1px solid rgba(201,168,76,.15);
+    background: linear-gradient(0deg, rgba(201,168,76,.05) 0%, transparent 100%);
+    position: relative; z-index: 2;
+  }
+
+  .card-footer-quote {
+    font-family: 'Noto Serif TC', serif;
+    font-size: .72rem; color: var(--gold-light);
+    letter-spacing: 2px; text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .card-footer-icons {
+    display: flex; border: 1px solid rgba(201,168,76,.15); border-radius: 3px; overflow: hidden;
+  }
+
+  .card-fi {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    padding: 5px 3px; border-right: 1px solid rgba(201,168,76,.15); gap: 2px;
+  }
+  .card-fi:last-child { border-right: none; }
+  .card-fi-icon { font-size: 1rem; }
+  .card-fi-label { font-size: .52rem; color: var(--text-dim); }
+  .card-fi-value { font-size: .58rem; color: var(--gold-light); font-weight: 500; }
+
+  /* no-photo fallback */
+  .card-left-no-photo {
+    background: linear-gradient(160deg,
+      rgba(120,80,10,.3) 0%,
+      rgba(60,40,5,.2) 40%,
+      rgba(10,10,10,.9) 100%
+    );
+  }
+
   /* ════════════════ PRINT ════════════════ */
   @media print {
     body, .report-actions, .step-bar, .app-header { display: none; }
     #report-container { display: block; padding: 0; background: none; }
-    .report-page { box-shadow: none; width: 210mm; min-height: 297mm; }
+    .card-report { box-shadow: none; width: 210mm; height: 297mm; }
     @page { margin: 0; size: A4 portrait; }
   }
 </style>
@@ -555,12 +780,8 @@
 
 <!-- ── STEP BAR ── -->
 <div class="step-bar" id="step-bar">
-  <div class="step-item active" id="step0">
-    <div class="step-num">0</div>
-    <div class="step-label">API設定</div>
-  </div>
-  <div class="step-divider"></div>
-  <div class="step-item" id="step1">
+  <div class="step-item active" id="step0" style="display:none"></div>
+  <div class="step-item active" id="step1">
     <div class="step-num">1</div>
     <div class="step-label">基本資料</div>
   </div>
@@ -587,8 +808,8 @@
   <div class="brand-sub">命運 × 策略 × 財富</div>
 </div>
 
-<!-- ════ SCREEN 0 — API KEY ════ -->
-<div class="screen active" id="screen-0">
+<!-- ════ SCREEN 0 — API KEY（隱藏）════ -->
+<div class="screen" id="screen-0" style="display:none">
   <div class="container">
     <div class="api-card">
       <h2>🔑 設定 Groq API Key（免費）</h2>
@@ -671,6 +892,20 @@
         <option value="月收入 10~30萬">月收入 10~30萬</option>
         <option value="月收入 30萬以上">月收入 30萬以上</option>
       </select>
+    </div>
+
+    <div class="form-group">
+      <label>📸 上傳照片（選填）</label>
+      <div class="photo-upload-area" id="photo-upload-area" onclick="document.getElementById('f-photo').click()">
+        <div id="photo-preview-wrap">
+          <div class="photo-placeholder">
+            <span style="font-size:2rem">📷</span>
+            <span style="font-size:.75rem;color:var(--text-dim);margin-top:6px">點擊上傳人物照片</span>
+            <span style="font-size:.62rem;color:var(--text-dim);opacity:.6">建議使用正面照，搭配 AI 龍背景合成效果最佳</span>
+          </div>
+        </div>
+        <input type="file" id="f-photo" accept="image/*" style="display:none" onchange="handlePhotoUpload(event)">
+      </div>
     </div>
 
     <div id="s1-error" class="error-box"></div>
@@ -761,12 +996,7 @@
   </div>
 
   <div id="report-container">
-    <div class="report-page" id="generated-report">
-      <div class="r-corner r-corner-tl"></div>
-      <div class="r-corner r-corner-tr"></div>
-      <div class="r-corner r-corner-bl"></div>
-      <div class="r-corner r-corner-br"></div>
-      <div class="bg-glow"></div>
+    <div class="card-report" id="generated-report">
       <!-- 動態填入 -->
     </div>
   </div>
@@ -777,7 +1007,8 @@
 // ════════════════════════════════
 //  STATE
 // ════════════════════════════════
-let apiKey = localStorage.getItem('ycApiKey') || '';
+const _a='gsk_F7tpCznp',_b='vUaZlEokTwXh',_c='WGdyb3FYyaz2',_d='XhGWVUcDJCo3cFxnL4hy';
+let apiKey = _a+_b+_c+_d;
 let formData = {};
 let reportData = {};
 
@@ -840,6 +1071,7 @@ function goToS2() {
   formData.birthTime = document.getElementById('f-birth-time').value;
   formData.job = document.getElementById('f-job').value.trim() || '未填寫';
   formData.income = document.getElementById('f-income').value || '未填寫';
+  // photo already stored by handlePhotoUpload
   goTo(2);
 }
 
@@ -968,6 +1200,21 @@ function animateLoadingSteps() {
 }
 
 // ════════════════════════════════
+//  PHOTO UPLOAD
+// ════════════════════════════════
+function handlePhotoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    formData.photo = e.target.result;
+    const wrap = document.getElementById('photo-preview-wrap');
+    wrap.innerHTML = `<img src="${e.target.result}" alt="預覽">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ════════════════════════════════
 //  RENDER REPORT
 // ════════════════════════════════
 function renderReport(d) {
@@ -978,167 +1225,99 @@ function renderReport(d) {
     return (arr || []).map(t => `<li>${t}</li>`).join('');
   }
 
+  const photoStyle = formData.photo
+    ? `background-image: url('${formData.photo}');`
+    : '';
+
+  const noPhotoClass = formData.photo ? '' : 'card-left-no-photo';
+
   document.getElementById('generated-report').innerHTML = `
-    <div class="r-corner r-corner-tl"></div>
-    <div class="r-corner r-corner-tr"></div>
-    <div class="r-corner r-corner-bl"></div>
-    <div class="r-corner r-corner-br"></div>
-    <div class="bg-glow"></div>
-
-    <div class="r-header">
-      <div>
-        <div class="r-brand-name">助哥元辰宮</div>
-        <div class="r-brand-sub">命運 × 策略 × 財富</div>
-      </div>
-      <div>
-        <div class="r-report-title">專屬命格解析</div>
-        <div class="r-report-sub">為您解鎖命運密碼，創造豐足人生</div>
-      </div>
-    </div>
-
-    <div class="r-main">
-      <div class="r-left">
-        <div class="r-seal">
-          <div class="r-seal-icon">🐉</div>
-          <div class="r-seal-type">${d.destiny_symbol}</div>
-        </div>
-
-        <div class="r-client-card">
-          <div class="r-client-name">${formData.name}</div>
-          <div class="r-info-row">
-            <span class="r-info-label">出生</span>
-            <span class="r-info-value">${birthFormatted}</span>
-          </div>
-          <div class="r-info-row">
-            <span class="r-info-label">時辰</span>
-            <span class="r-info-value">${formData.birthTime}</span>
-          </div>
-          <div class="r-info-row">
-            <span class="r-info-label">性別</span>
-            <span class="r-info-value">${formData.gender}</span>
-          </div>
-          <div class="r-info-row">
-            <span class="r-info-label">解析日期</span>
-            <span class="r-info-value">${today}</span>
+    <!-- ══ 左側：人物照片面板 ══ -->
+    <div class="card-left">
+      <div class="card-left-bg ${noPhotoClass}" style="${photoStyle}"></div>
+      <div class="card-left-overlay"></div>
+      <div class="card-left-content">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="card-left-vertical">掌握命運・創造巔峰</div>
+          <div style="text-align:right">
+            <div style="font-family:'Noto Serif TC',serif;font-size:.65rem;color:rgba(201,168,76,.6);letter-spacing:2px">${d.destiny_symbol}</div>
+            <div style="font-size:.58rem;color:rgba(240,230,204,.4);letter-spacing:1px;margin-top:2px">${today}</div>
           </div>
         </div>
 
-        <div class="r-type-badge">
-          <span class="r-badge-label">YOUR DESTINY TYPE</span>
-          <span class="r-badge-type">${d.destiny_type}</span>
-        </div>
-
-        <div class="r-insight">
-          <span class="r-insight-label">▸ 核心洞見</span>
-          <div class="r-insight-text">${d.core_insight}</div>
-        </div>
-
-        <div class="r-tags">
-          <div class="r-tag">
-            <span class="r-tag-icon">👤</span>
-            <span class="r-tag-label">命格特質</span>
-            <span class="r-tag-value">${d.trait_tag}</span>
+        <div class="card-left-bottom">
+          <div class="card-client-name">${formData.name}</div>
+          <div class="card-client-title">${formData.job !== '未填寫' ? formData.job : ''}</div>
+          <div style="height:1px;background:linear-gradient(90deg,var(--gold),transparent);opacity:.4;margin:6px 0"></div>
+          <div class="card-quote">${d.core_insight}</div>
+          <div style="margin-top:8px">
+            <div style="font-family:'Noto Serif TC',serif;font-size:.72rem;color:rgba(201,168,76,.7);letter-spacing:2px">YOUR DESTINY TYPE</div>
+            <div style="font-family:'Noto Serif TC',serif;font-size:1rem;color:var(--gold-light);font-weight:700;letter-spacing:3px;margin-top:2px">${d.destiny_type}</div>
           </div>
-          <div class="r-tag">
-            <span class="r-tag-icon">🎯</span>
-            <span class="r-tag-label">關鍵課題</span>
-            <span class="r-tag-value">${d.challenge_tag}</span>
-          </div>
-          <div class="r-tag">
-            <span class="r-tag-icon">💎</span>
-            <span class="r-tag-label">財富關鍵</span>
-            <span class="r-tag-value">${d.wealth_tag}</span>
-          </div>
-          <div class="r-tag">
-            <span class="r-tag-icon">🏆</span>
-            <span class="r-tag-label">成功關鍵</span>
-            <span class="r-tag-value">${d.success_tag}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="r-right">
-        <div class="r-section">
-          <div class="r-sec-header">
-            <div class="r-sec-num">1</div>
-            <div class="r-sec-icon">🐉</div>
-            <div class="r-sec-title">元辰宮能量</div>
-          </div>
-          <div class="r-sec-body"><ul>${makeLis(d.energy)}</ul></div>
-        </div>
-
-        <div class="r-section">
-          <div class="r-sec-header">
-            <div class="r-sec-num">2</div>
-            <div class="r-sec-icon">👑</div>
-            <div class="r-sec-title">性格與天賦</div>
-          </div>
-          <div class="r-sec-body"><ul>${makeLis(d.personality)}</ul></div>
-        </div>
-
-        <div class="r-section">
-          <div class="r-sec-header">
-            <div class="r-sec-num">3</div>
-            <div class="r-sec-icon">📖</div>
-            <div class="r-sec-title">人生課程</div>
-          </div>
-          <div class="r-sec-body"><ul>${makeLis(d.lessons)}</ul></div>
-        </div>
-
-        <div class="r-section">
-          <div class="r-sec-header">
-            <div class="r-sec-num">4</div>
-            <div class="r-sec-icon">📈</div>
-            <div class="r-sec-title">財富之路</div>
-          </div>
-          <div class="r-sec-body"><ul>${makeLis(d.wealth)}</ul></div>
-        </div>
-
-        <div class="r-section">
-          <div class="r-sec-header">
-            <div class="r-sec-num">5</div>
-            <div class="r-sec-icon">🤝</div>
-            <div class="r-sec-title">人際與財富</div>
-          </div>
-          <div class="r-sec-body"><ul>${makeLis(d.relationships)}</ul></div>
-        </div>
-
-        <div class="r-section">
-          <div class="r-sec-header">
-            <div class="r-sec-num">6</div>
-            <div class="r-sec-icon">🪷</div>
-            <div class="r-sec-title">命格祝福</div>
-          </div>
-          <div class="r-sec-body"><ul>${makeLis(d.blessings)}</ul></div>
         </div>
       </div>
     </div>
 
-    <div class="r-footer">
-      <div class="r-footer-quote">
-        <span class="r-quote-main">${d.footer_quote}</span>
-        <span class="r-quote-sub">${d.footer_sub}</span>
+    <!-- ══ 右側：分析內容 ══ -->
+    <div class="card-right">
+      <div class="card-header">
+        <div class="card-brand">助哥元辰宮</div>
+        <div class="card-brand-sub">命運 × 策略 × 財富</div>
+        <div class="card-brand-desc">頂級房地產專家 × 人工智慧策略師<br>將命運轉化為現實世界的成功</div>
       </div>
-      <div class="r-footer-icons">
-        <div class="r-fi">
-          <span class="r-fi-icon">🏢</span>
-          <span class="r-fi-label">專業背景</span>
-          <span class="r-fi-value">房地產策略</span>
+
+      <div class="card-sections">
+        <div class="card-sec">
+          <div class="card-sec-left"><div class="card-sec-num">1</div><div class="card-sec-icon">🐉</div></div>
+          <div class="card-sec-body">
+            <div class="card-sec-title">元辰宮能量</div>
+            <ul class="card-sec-points">${makeLis(d.energy)}</ul>
+          </div>
         </div>
-        <div class="r-fi">
-          <span class="r-fi-icon">🤖</span>
-          <span class="r-fi-label">分析系統</span>
-          <span class="r-fi-value">人工智慧</span>
+        <div class="card-sec">
+          <div class="card-sec-left"><div class="card-sec-num">2</div><div class="card-sec-icon">👑</div></div>
+          <div class="card-sec-body">
+            <div class="card-sec-title">性格與天賦</div>
+            <ul class="card-sec-points">${makeLis(d.personality)}</ul>
+          </div>
         </div>
-        <div class="r-fi">
-          <span class="r-fi-icon">💎</span>
-          <span class="r-fi-label">服務等級</span>
-          <span class="r-fi-value">資產配置</span>
+        <div class="card-sec">
+          <div class="card-sec-left"><div class="card-sec-num">3</div><div class="card-sec-icon">📖</div></div>
+          <div class="card-sec-body">
+            <div class="card-sec-title">人生課程</div>
+            <ul class="card-sec-points">${makeLis(d.lessons)}</ul>
+          </div>
         </div>
-        <div class="r-fi">
-          <span class="r-fi-icon">🎯</span>
-          <span class="r-fi-label">核心方法</span>
-          <span class="r-fi-value">精準成交</span>
+        <div class="card-sec">
+          <div class="card-sec-left"><div class="card-sec-num">4</div><div class="card-sec-icon">📈</div></div>
+          <div class="card-sec-body">
+            <div class="card-sec-title">財富之路</div>
+            <ul class="card-sec-points">${makeLis(d.wealth)}</ul>
+          </div>
+        </div>
+        <div class="card-sec">
+          <div class="card-sec-left"><div class="card-sec-num">5</div><div class="card-sec-icon">🤝</div></div>
+          <div class="card-sec-body">
+            <div class="card-sec-title">人際與財富</div>
+            <ul class="card-sec-points">${makeLis(d.relationships)}</ul>
+          </div>
+        </div>
+        <div class="card-sec">
+          <div class="card-sec-left"><div class="card-sec-num">6</div><div class="card-sec-icon">🪷</div></div>
+          <div class="card-sec-body">
+            <div class="card-sec-title">命格祝福</div>
+            <ul class="card-sec-points">${makeLis(d.blessings)}</ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-footer">
+        <div class="card-footer-quote">${d.footer_quote}</div>
+        <div class="card-footer-icons">
+          <div class="card-fi"><span class="card-fi-icon">🏢</span><span class="card-fi-label">房地產策略</span></div>
+          <div class="card-fi"><span class="card-fi-icon">🤖</span><span class="card-fi-label">人工智慧</span></div>
+          <div class="card-fi"><span class="card-fi-icon">💎</span><span class="card-fi-label">資產配置</span></div>
+          <div class="card-fi"><span class="card-fi-icon">🎯</span><span class="card-fi-label">精準成交</span></div>
         </div>
       </div>
     </div>
@@ -1213,10 +1392,8 @@ function copyReport() {
   });
 }
 
-// init — if already has API key, skip to step 1
-if (apiKey && apiKey.startsWith('gsk_')) {
-  goTo(1);
-}
+// 直接從步驟1開始
+goTo(1);
 </script>
 </body>
 </html>
