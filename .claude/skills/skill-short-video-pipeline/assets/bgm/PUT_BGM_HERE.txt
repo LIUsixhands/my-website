@@ -1,0 +1,1 @@
+# 把可商用音樂（Musopen / filmmusic.io）命名為 bgm.mp3 放進你的成品資料夾的 assets/，程式會自動以 18% 音量混入。
