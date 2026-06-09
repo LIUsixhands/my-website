@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>5 大說話公式 · 社群圖片卡</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:'Noto Sans TC','PingFang TC',Arial,sans-serif;
+    background:#222;color:#fff;padding:40px 20px;
+  }
+  .help{
+    max-width:900px;margin:0 auto 40px;background:#333;padding:24px;
+    border-radius:14px;line-height:1.8;
+  }
+  .help h1{font-size:1.4rem;margin-bottom:10px;color:#FFD27A;}
+  .help code{
+    background:#000;padding:2px 8px;border-radius:4px;color:#FFD27A;
+    font-family:Courier,monospace;
+  }
+  .cards{display:flex;flex-direction:column;gap:50px;align-items:center;}
+  .card-wrap{position:relative;}
+  .card-label{
+    position:absolute;top:-32px;left:0;background:#FFD27A;color:#1B2A4A;
+    padding:4px 14px;border-radius:50px;font-size:0.85rem;font-weight:800;
+    letter-spacing:1px;
+  }
+
+  /* ============ 通用色票 ============ */
+  :root{
+    --navy:#1B2A4A;--gold:#C9943A;--teal:#2A7F7F;
+    --warm:#F8F6F1;--accent:#FFD27A;
+  }
+
+  /* ============ FB / LINE 主圖 1200x630 ============ */
+  .card-fb{
+    width:1200px;height:630px;
+    background:linear-gradient(135deg,#1B2A4A 0%,#2E4A7A 55%,#2A7F7F 100%);
+    color:#fff;padding:60px 70px;position:relative;overflow:hidden;
+    display:flex;flex-direction:column;justify-content:space-between;
+  }
+  .card-fb::before{
+    content:"";position:absolute;right:-150px;top:-150px;
+    width:500px;height:500px;border-radius:50%;
+    background:radial-gradient(circle,rgba(201,148,58,.45) 0%,transparent 70%);
+  }
+  .card-fb::after{
+    content:"";position:absolute;left:-100px;bottom:-200px;
+    width:450px;height:450px;border-radius:50%;
+    background:radial-gradient(circle,rgba(42,127,127,.45) 0%,transparent 70%);
+  }
+  .card-fb .pill{
+    display:inline-block;background:#C9943A;color:#fff;
+    padding:6px 18px;border-radius:50px;font-size:0.95rem;font-weight:800;
+    letter-spacing:3px;margin-bottom:20px;width:fit-content;z-index:2;position:relative;
+  }
+  .card-fb h1{
+    font-size:5.2rem;line-height:1.1;font-weight:900;
+    margin-bottom:18px;z-index:2;position:relative;
+  }
+  .card-fb h1 .accent{color:#FFD27A;}
+  .card-fb .sub{
+    font-size:1.6rem;line-height:1.5;opacity:.92;z-index:2;position:relative;
+    margin-bottom:24px;
+  }
+  .card-fb .formulas{
+    display:flex;flex-wrap:wrap;gap:10px;z-index:2;position:relative;
+  }
+  .card-fb .formulas span{
+    background:rgba(255,255,255,.13);border:1.5px solid rgba(255,255,255,.4);
+    padding:10px 20px;border-radius:50px;font-size:1.05rem;font-weight:700;
+  }
+  .card-fb .foot{
+    z-index:2;position:relative;display:flex;justify-content:space-between;
+    align-items:flex-end;
+  }
+  .card-fb .url{
+    font-size:1.4rem;color:#FFD27A;font-weight:800;
+  }
+  .card-fb .cta{
+    background:#FFD27A;color:#1B2A4A;font-weight:900;
+    padding:16px 34px;border-radius:50px;font-size:1.3rem;
+    box-shadow:0 6px 20px rgba(0,0,0,.3);
+  }
+
+  /* ============ IG 方形 1080x1080 ============ */
+  .card-ig{
+    width:1080px;height:1080px;
+    background:linear-gradient(160deg,#1B2A4A 0%,#3A2456 50%,#2A7F7F 100%);
+    color:#fff;padding:90px 80px;position:relative;overflow:hidden;
+    display:flex;flex-direction:column;
+  }
+  .card-ig::before{
+    content:"";position:absolute;right:-200px;top:-200px;
+    width:700px;height:700px;border-radius:50%;
+    background:radial-gradient(circle,rgba(201,148,58,.3) 0%,transparent 70%);
+  }
+  .card-ig .quote-mark{
+    font-size:14rem;line-height:0.7;color:#FFD27A;opacity:.4;
+    font-family:Georgia,serif;margin-bottom:-20px;
+  }
+  .card-ig h1{
+    font-size:6.2rem;line-height:1.15;font-weight:900;
+    margin-bottom:30px;z-index:2;position:relative;
+  }
+  .card-ig h1 .accent{color:#FFD27A;}
+  .card-ig .sub{
+    font-size:1.7rem;line-height:1.6;opacity:.9;z-index:2;position:relative;
+    margin-bottom:50px;
+  }
+  .card-ig .grid5{
+    display:grid;grid-template-columns:repeat(5,1fr);gap:14px;z-index:2;position:relative;
+    margin-bottom:auto;
+  }
+  .card-ig .grid5 .item{
+    background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.25);
+    border-radius:18px;padding:24px 12px;text-align:center;
+  }
+  .card-ig .grid5 .num{
+    font-size:2.2rem;font-weight:900;color:#FFD27A;display:block;margin-bottom:8px;
+  }
+  .card-ig .grid5 .name{font-size:1.05rem;font-weight:700;line-height:1.3;}
+  .card-ig .ig-foot{
+    z-index:2;position:relative;margin-top:60px;
+    border-top:2px solid rgba(255,255,255,.2);padding-top:30px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .card-ig .ig-foot .url{
+    font-size:1.4rem;color:#FFD27A;font-weight:700;
+  }
+  .card-ig .ig-foot .badge{
+    background:#FFD27A;color:#1B2A4A;padding:14px 30px;
+    border-radius:50px;font-weight:900;font-size:1.3rem;
+  }
+
+  /* ============ IG 限動 1080x1350 ============ */
+  .card-story{
+    width:1080px;height:1350px;
+    background:#F8F6F1;color:#1B2A4A;padding:100px 80px;
+    position:relative;overflow:hidden;display:flex;flex-direction:column;
+  }
+  .card-story::before{
+    content:"";position:absolute;left:0;top:0;width:100%;height:14px;
+    background:linear-gradient(90deg,#C9943A,#2A7F7F,#1B2A4A);
+  }
+  .card-story .top-label{
+    display:inline-block;background:#1B2A4A;color:#FFD27A;
+    padding:8px 24px;border-radius:50px;font-size:1rem;font-weight:800;
+    letter-spacing:3px;margin-bottom:36px;width:fit-content;
+  }
+  .card-story h1{
+    font-size:5.8rem;line-height:1.1;font-weight:900;color:#1B2A4A;
+    margin-bottom:26px;
+  }
+  .card-story h1 .hl{
+    background:linear-gradient(180deg,transparent 65%,#FFD27A 65%);
+    padding:0 8px;
+  }
+  .card-story .sub{
+    font-size:1.6rem;color:#555;line-height:1.6;margin-bottom:48px;
+  }
+  .card-story .list{margin-bottom:auto;}
+  .card-story .list .row{
+    display:flex;align-items:center;gap:22px;padding:20px 0;
+    border-bottom:2px dashed #d8d3c4;
+  }
+  .card-story .list .row:last-child{border-bottom:none;}
+  .card-story .list .num{
+    flex:0 0 auto;width:60px;height:60px;border-radius:50%;
+    background:#1B2A4A;color:#FFD27A;display:flex;align-items:center;
+    justify-content:center;font-size:1.8rem;font-weight:900;
+  }
+  .card-story .list .name{font-size:2rem;font-weight:800;flex:1;}
+  .card-story .list .tag{
+    background:#fff;border:2px solid #C9943A;color:#C9943A;
+    padding:6px 16px;border-radius:50px;font-weight:700;font-size:1rem;
+  }
+  .card-story .story-foot{
+    margin-top:50px;background:#1B2A4A;border-radius:24px;
+    padding:30px 36px;color:#fff;display:flex;justify-content:space-between;
+    align-items:center;flex-direction:column;gap:14px;text-align:center;
+  }
+  .card-story .story-foot .cta-text{
+    font-size:1.8rem;font-weight:900;color:#FFD27A;
+  }
+  .card-story .story-foot .url{
+    font-size:1.25rem;word-break:break-all;opacity:.95;font-weight:700;
+  }
+  .card-story .story-foot .swipe{
+    font-size:1.1rem;opacity:.85;margin-top:6px;
+  }
+
+  /* ============ 提示卡 ============ */
+  @media print{ .help{display:none;} body{padding:0;background:#fff;} }
+</style>
+</head>
+<body>
+
+<div class="help">
+  <h1>📸 怎麼用這頁做社群圖？</h1>
+  <p>1. 想要哪張就<strong>把那張卡片放大到佔滿視窗</strong>，然後手機/電腦截圖。</p>
+  <p>2. <strong>建議用電腦瀏覽器</strong>截圖（畫面比較高解析度）。Mac：<code>Shift+Cmd+4</code>，Windows：<code>Win+Shift+S</code>。</p>
+  <p>3. 或用 Chrome：<code>F12 → Ctrl+Shift+P → "Capture node screenshot"</code>，可直接存成 PNG。</p>
+  <p>4. 三種尺寸：<strong>FB / LINE 主圖 (1200×630)</strong>、<strong>IG 方形 (1080×1080)</strong>、<strong>IG 限動 / 直式 (1080×1350)</strong>。</p>
+</div>
+
+<div class="cards">
+
+  <!-- ============ 1. FB / LINE 1200x630 ============ -->
+  <div class="card-wrap">
+    <div class="card-label">FB / LINE 主圖　1200 × 630</div>
+    <div class="card-fb">
+      <div>
+        <div class="pill">SPEAKING PRACTICE</div>
+        <h1>會講話的人，<br>都用 <span class="accent">公式</span>。</h1>
+        <p class="sub">5 大說話公式 × 情境練習 × 語音輸入<br>講完馬上給你打分數＋改進建議</p>
+        <div class="formulas">
+          <span>① 先說結論</span>
+          <span>② 把話接住</span>
+          <span>③ 觀點清楚</span>
+          <span>④ 說服他人</span>
+          <span>⑤ 讓人記住</span>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="url">liusixhands.github.io/my-website/speaking-practice.html</div>
+        <div class="cta">免費開玩 →</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2. IG 方形 1080x1080 ============ -->
+  <div class="card-wrap">
+    <div class="card-label">IG 方形　1080 × 1080</div>
+    <div class="card-ig">
+      <div class="quote-mark">"</div>
+      <h1>你以為的<br>口才好，<br>其實是<br><span class="accent">結構好。</span></h1>
+      <p class="sub">5 個公式，把你想說的話<br>變成讓人想聽的話。</p>
+      <div class="grid5">
+        <div class="item"><span class="num">1</span><div class="name">先說<br>結論</div></div>
+        <div class="item"><span class="num">2</span><div class="name">把話<br>接住</div></div>
+        <div class="item"><span class="num">3</span><div class="name">觀點<br>清楚</div></div>
+        <div class="item"><span class="num">4</span><div class="name">說服<br>他人</div></div>
+        <div class="item"><span class="num">5</span><div class="name">讓人<br>記住</div></div>
+      </div>
+      <div class="ig-foot">
+        <div class="url">🔗 連結在 BIO ／簡介</div>
+        <div class="badge">免費玩</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 3. IG 限動 / 直式 1080x1350 ============ -->
+  <div class="card-wrap">
+    <div class="card-label">IG 限動 / 直式　1080 × 1350</div>
+    <div class="card-story">
+      <span class="top-label">5 大說話公式 · 免費練習</span>
+      <h1>
+        為什麼有些人<br>
+        <span class="hl">一開口</span><br>
+        就有人想聽？
+      </h1>
+      <p class="sub">不是聲音，不是長相。<br>是他們用了 5 個簡單的「說話公式」。</p>
+      <div class="list">
+        <div class="row">
+          <div class="num">1</div><div class="name">先說結論</div>
+          <div class="tag">結論+原因+行動</div>
+        </div>
+        <div class="row">
+          <div class="num">2</div><div class="name">把話接住</div>
+          <div class="tag">回應+感受+追問</div>
+        </div>
+        <div class="row">
+          <div class="num">3</div><div class="name">觀點清楚</div>
+          <div class="tag">觀點+原因+例子</div>
+        </div>
+        <div class="row">
+          <div class="num">4</div><div class="name">說服他人</div>
+          <div class="tag">在意點+建議+變化</div>
+        </div>
+        <div class="row">
+          <div class="num">5</div><div class="name">讓人記住</div>
+          <div class="tag">判斷+對比+短句</div>
+        </div>
+      </div>
+      <div class="story-foot">
+        <div class="cta-text">立刻開玩，完全免費</div>
+        <div class="url">liusixhands.github.io/<br>my-website/speaking-practice.html</div>
+        <div class="swipe">手機 / 電腦都能玩 · 進度自動存</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
