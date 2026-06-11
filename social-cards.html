@@ -192,6 +192,95 @@
 
   /* ============ 提示卡 ============ */
   @media print{ .help{display:none;} body{padding:0;background:#fff;} }
+
+  /* ============ Demo 卡片：練習實況 (FB 1200x630) ============ */
+  .card-demo-fb{
+    width:1200px;height:630px;background:#F8F6F1;color:#1B2A4A;
+    padding:50px 60px;position:relative;overflow:hidden;
+    display:grid;grid-template-columns:1fr 1.1fr;gap:40px;align-items:center;
+  }
+  .card-demo-fb::before{
+    content:"";position:absolute;left:0;top:0;width:100%;height:10px;
+    background:linear-gradient(90deg,#C9943A,#2A7F7F);
+  }
+  .card-demo-fb .left h2{font-size:3.4rem;line-height:1.15;font-weight:900;margin-bottom:18px;}
+  .card-demo-fb .left h2 .hl{background:linear-gradient(180deg,transparent 60%,#FFD27A 60%);}
+  .card-demo-fb .left .desc{font-size:1.3rem;color:#555;line-height:1.6;margin-bottom:24px;}
+  .card-demo-fb .left .url-pill{
+    display:inline-block;background:#1B2A4A;color:#FFD27A;
+    padding:14px 26px;border-radius:50px;font-size:1.15rem;font-weight:800;
+  }
+  .card-demo-fb .mock{
+    background:#fff;border-radius:18px;padding:28px;
+    box-shadow:0 18px 50px rgba(27,42,74,.2);
+    transform:rotate(-1.5deg);
+  }
+  .card-demo-fb .mock .q-box{
+    background:#fff7ec;border-left:5px solid #E07A1F;
+    padding:14px 16px;border-radius:8px;font-size:1.05rem;line-height:1.6;
+    margin-bottom:14px;
+  }
+  .card-demo-fb .mock .q-box strong{color:#E07A1F;}
+  .card-demo-fb .mock .ans{
+    background:#fafaf7;border:2px solid #e0ddd2;border-radius:10px;
+    padding:14px;font-size:1.05rem;line-height:1.6;margin-bottom:14px;
+    color:#333;
+  }
+  .card-demo-fb .mock .ans::before{content:"✍️ 你的回答\A";white-space:pre;font-size:0.78rem;color:#888;font-weight:700;}
+  .card-demo-fb .mock .fb-box{
+    background:linear-gradient(135deg,#f4f9f7,#eaf3ef);
+    border-left:5px solid #2D7D4E;border-radius:10px;
+    padding:14px 16px;
+  }
+  .card-demo-fb .mock .score-tag{
+    display:inline-block;background:#1B2A4A;color:#FFD27A;
+    padding:6px 14px;border-radius:50px;font-weight:900;font-size:0.95rem;
+    margin-bottom:10px;
+  }
+  .card-demo-fb .mock .check-row{
+    font-size:0.95rem;line-height:1.7;color:#1B2A4A;padding-left:24px;position:relative;
+  }
+  .card-demo-fb .mock .check-row::before{
+    content:"✓";position:absolute;left:0;color:#2D7D4E;font-weight:900;
+  }
+
+  /* ============ Demo 卡片：Before / After (IG 1080x1080) ============ */
+  .card-ba{
+    width:1080px;height:1080px;
+    background:linear-gradient(180deg,#1B2A4A 0%,#2A7F7F 100%);
+    padding:70px 60px;color:#fff;display:flex;flex-direction:column;
+  }
+  .card-ba h2{
+    font-size:4.4rem;font-weight:900;text-align:center;line-height:1.1;
+    margin-bottom:14px;
+  }
+  .card-ba h2 .accent{color:#FFD27A;}
+  .card-ba .sub{font-size:1.4rem;text-align:center;opacity:.88;margin-bottom:44px;}
+
+  .card-ba .ba-row{
+    background:#fff;border-radius:20px;padding:30px 30px;
+    margin-bottom:24px;color:#1B2A4A;
+  }
+  .card-ba .ba-row.before{border-left:8px solid #B94040;}
+  .card-ba .ba-row.after{border-left:8px solid #2D7D4E;}
+  .card-ba .ba-tag{
+    display:inline-block;padding:6px 18px;border-radius:50px;
+    font-size:1rem;font-weight:900;letter-spacing:2px;margin-bottom:14px;
+  }
+  .card-ba .ba-row.before .ba-tag{background:#B94040;color:#fff;}
+  .card-ba .ba-row.after .ba-tag{background:#2D7D4E;color:#fff;}
+  .card-ba .ba-text{font-size:1.6rem;line-height:1.55;font-weight:600;}
+  .card-ba .ba-text .mark{
+    background:#FFE89E;padding:0 6px;border-radius:4px;
+  }
+  .card-ba .ba-foot{
+    margin-top:auto;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.3);
+    border-radius:18px;padding:26px;text-align:center;
+  }
+  .card-ba .ba-foot .cta{
+    font-size:1.7rem;font-weight:900;color:#FFD27A;margin-bottom:8px;
+  }
+  .card-ba .ba-foot .link{font-size:1.1rem;opacity:.95;font-weight:700;word-break:break-all;}
 </style>
 </head>
 <body>
@@ -246,6 +335,52 @@
       <div class="ig-foot">
         <div class="url">🔗 連結在 BIO ／簡介</div>
         <div class="badge">免費玩</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 4. Demo 卡：練習實況 1200x630 ============ -->
+  <div class="card-wrap">
+    <div class="card-label">FB 主圖（練習實況）　1200 × 630</div>
+    <div class="card-demo-fb">
+      <div class="left">
+        <h2>不只練習，<br>還會 <span class="hl">幫你打分數</span></h2>
+        <p class="desc">寫完馬上看到分數、勾出哪裡對、哪裡可以更好，附 ★ 參考答案對照。</p>
+        <div class="url-pill">🎯 免費試玩</div>
+      </div>
+      <div class="mock">
+        <div class="q-box"><strong>情境：</strong>朋友說「我最近不知道為什麼一直睡不好。」</div>
+        <div class="ans">聽起來你最近壓力滿大的，是不是有事情一直在想？</div>
+        <div class="fb-box">
+          <span class="score-tag">分數：85 / 100</span>
+          <div class="check-row">長度剛好，節奏不會太散</div>
+          <div class="check-row">公式結構出現：「聽起來」、「是不是」</div>
+          <div class="check-row">有追問，對方會願意繼續講</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 5. Before / After 1080x1080 ============ -->
+  <div class="card-wrap">
+    <div class="card-label">IG 方形（Before/After）　1080 × 1080</div>
+    <div class="card-ba">
+      <h2>同一句話<br><span class="accent">改一下結構</span></h2>
+      <p class="sub">說服力差三倍</p>
+
+      <div class="ba-row before">
+        <span class="ba-tag">BEFORE</span>
+        <div class="ba-text">「你要早點睡啦，不然身體會壞掉，<span class="mark">每次都很晚才睡⋯</span>」</div>
+      </div>
+
+      <div class="ba-row after">
+        <span class="ba-tag">AFTER · 用公式</span>
+        <div class="ba-text">「<span class="mark">你不是想更有精神嗎？</span>試試早點睡，明天起床會輕鬆很多。」</div>
+      </div>
+
+      <div class="ba-foot">
+        <div class="cta">5 個公式，30 分鐘練會</div>
+        <div class="link">liusixhands.github.io/my-website/speaking-practice.html</div>
       </div>
     </div>
   </div>
