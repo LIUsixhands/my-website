@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>助哥｜七期房地產．房仲土仲 — 不賣房子，賣判斷</title>
+<meta name="description" content="台中七期房地產在地深耕。住宅 × 土地 × 廠房。用實價登錄數據幫您判斷，用長線視角幫您看對。">
+<meta name="theme-color" content="#5B3A1E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --brown-dark:#3B2618;--brown:#5B3A1E;--brown-mid:#8B6332;
+  --gold:#C9A961;--gold-light:#E8D29A;
+  --cream:#FAF6EF;--cream-dark:#F1E6CF;--cream-mid:#F4EFE2;
+  --red:#8B1E2F;--green:#4A6B3F;
+  --text:#2B2017;--text-mute:#7A6B5A;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;color:var(--text);line-height:1.7;background:var(--cream)}
+h1,h2,h3,h4{font-family:'Noto Serif TC','PingFang TC',serif;font-weight:700}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+
+/* === NAV === */
+.nav{position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(43,32,23,.92);backdrop-filter:blur(8px);padding:12px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(201,169,97,.3)}
+.nav .brand{color:var(--gold-light);font-family:'Noto Serif TC',serif;font-size:18px;letter-spacing:1px}
+.nav .brand b{color:#fff}
+.nav-links{display:flex;gap:24px;font-size:14px;color:var(--cream-dark)}
+.nav-links a:hover{color:var(--gold-light)}
+.nav .cta-mini{background:var(--gold);color:var(--brown-dark);padding:8px 18px;border-radius:99px;font-weight:700;font-size:14px}
+@media(max-width:768px){.nav-links{display:none}.nav{padding:10px 16px}.nav .brand{font-size:14px}}
+
+/* === HERO === */
+.hero{position:relative;min-height:100vh;background:linear-gradient(135deg,rgba(59,38,24,.85),rgba(91,58,30,.6) 60%,rgba(43,32,23,.85)),url('photos/qiqi-view.jpg') center/cover;display:flex;align-items:center;padding:120px 24px 80px}
+.hero-inner{max-width:1100px;margin:0 auto;color:#fff;width:100%}
+.hero-tag{display:inline-block;padding:6px 18px;border:1px solid var(--gold-light);color:var(--gold-light);font-size:13px;letter-spacing:4px;margin-bottom:24px}
+.hero h1{font-size:84px;line-height:1.1;color:#fff;margin-bottom:20px;font-weight:900;text-shadow:0 4px 30px rgba(0,0,0,.5)}
+.hero h1 span{color:var(--gold-light)}
+.hero .lead{font-size:20px;color:var(--gold-light);margin-bottom:8px;letter-spacing:2px}
+.hero .sub{font-size:16px;color:#fff;opacity:.85;max-width:560px;margin-bottom:40px}
+.hero-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;max-width:760px;margin-bottom:48px;border-top:1px solid rgba(232,210,154,.3);border-bottom:1px solid rgba(232,210,154,.3);padding:22px 0}
+.hero-stats .item .num{font-family:'Noto Serif TC',serif;font-size:32px;color:var(--gold-light);font-weight:700}
+.hero-stats .item .lbl{font-size:12px;color:#fff;opacity:.7;letter-spacing:2px;margin-top:2px}
+.hero-cta{display:flex;gap:16px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:16px 32px;border-radius:99px;font-weight:700;font-size:16px;cursor:pointer;transition:all .2s;border:none;font-family:inherit}
+.btn-primary{background:var(--gold);color:var(--brown-dark)}
+.btn-primary:hover{background:var(--gold-light);transform:translateY(-2px);box-shadow:0 8px 24px rgba(201,169,97,.4)}
+.btn-ghost{background:transparent;color:#fff;border:1.5px solid var(--gold-light)}
+.btn-ghost:hover{background:var(--gold-light);color:var(--brown-dark)}
+@media(max-width:768px){.hero h1{font-size:48px}.hero{padding:100px 20px 60px}.hero-stats{grid-template-columns:repeat(2,1fr);gap:18px}.hero-stats .item .num{font-size:24px}.btn{padding:14px 24px;font-size:14px}}
+
+/* === SECTION === */
+.section{padding:90px 24px}
+.section-inner{max-width:1100px;margin:0 auto}
+.section-tag{font-size:12px;letter-spacing:5px;color:var(--gold);margin-bottom:14px;text-transform:uppercase}
+.section-title{font-size:42px;color:var(--brown);margin-bottom:12px;line-height:1.3}
+.section-title span{color:var(--gold)}
+.section-lead{font-size:17px;color:var(--text-mute);margin-bottom:48px;max-width:680px}
+@media(max-width:768px){.section{padding:60px 20px}.section-title{font-size:30px}}
+
+/* === ABOUT === */
+.about{background:var(--cream)}
+.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:start}
+.about-text h2{margin-bottom:24px}
+.about-text p{margin-bottom:18px;font-size:16px;color:var(--text)}
+.about-text p b{color:var(--brown);background:linear-gradient(transparent 60%,var(--gold-light) 60%)}
+.about-cite{font-family:'Noto Serif TC',serif;font-size:24px;color:var(--brown);border-left:4px solid var(--gold);padding-left:20px;margin:32px 0;line-height:1.6}
+.about-img{position:relative;border-radius:8px;overflow:hidden;box-shadow:0 20px 60px rgba(59,38,24,.25)}
+.about-img img{aspect-ratio:4/5;object-fit:cover;width:100%}
+.about-img::after{content:"七期．實景";position:absolute;bottom:20px;left:20px;background:var(--brown-dark);color:var(--gold-light);padding:6px 16px;font-size:12px;letter-spacing:3px}
+@media(max-width:768px){.about-grid{grid-template-columns:1fr;gap:32px}}
+
+/* === SPECIALTIES === */
+.specs{background:var(--cream-mid)}
+.specs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.spec-card{background:#fff;padding:36px 28px;border-radius:8px;border-top:4px solid var(--gold);transition:all .3s}
+.spec-card:hover{transform:translateY(-6px);box-shadow:0 24px 60px rgba(59,38,24,.15)}
+.spec-icon{font-family:'Noto Serif TC',serif;font-size:48px;color:var(--gold);font-weight:900;line-height:1;margin-bottom:14px}
+.spec-card h3{font-size:22px;color:var(--brown);margin-bottom:10px}
+.spec-card p{font-size:14px;color:var(--text-mute)}
+@media(max-width:768px){.specs-grid{grid-template-columns:1fr}}
+
+/* === DATA === */
+.data{background:var(--brown-dark);color:#fff}
+.data .section-title,.data .section-tag{color:var(--gold-light)}
+.data .section-tag{color:var(--gold)}
+.data .section-lead{color:rgba(255,255,255,.7)}
+.data-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:48px}
+.data-card{background:rgba(255,255,255,.05);border:1px solid rgba(201,169,97,.3);border-radius:8px;padding:28px}
+.data-card .data-num{font-family:'Noto Serif TC',serif;font-size:48px;color:var(--gold-light);font-weight:900;line-height:1}
+.data-card .data-unit{font-size:14px;color:var(--gold-light);opacity:.7;margin-left:6px}
+.data-card .data-label{margin-top:10px;font-size:15px;color:#fff}
+.data-card .data-sub{font-size:12px;color:rgba(255,255,255,.5);margin-top:4px}
+.age-chart{background:rgba(255,255,255,.04);border:1px solid rgba(201,169,97,.2);border-radius:8px;padding:28px}
+.age-chart h4{color:var(--gold-light);font-size:16px;margin-bottom:24px;letter-spacing:1px}
+.age-bars{display:flex;align-items:flex-end;gap:14px;height:200px;border-bottom:1px solid rgba(232,210,154,.2);padding-bottom:8px}
+.age-bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px}
+.age-bar .bar{width:100%;background:linear-gradient(to top,var(--gold),var(--gold-light));border-radius:4px 4px 0 0;position:relative;min-height:6px}
+.age-bar .bar-num{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:13px;color:var(--gold-light);font-weight:700;white-space:nowrap}
+.age-bar .bar-label{font-size:12px;color:rgba(255,255,255,.7);margin-top:4px}
+.data-source{font-size:11px;color:rgba(255,255,255,.4);margin-top:18px;text-align:right}
+@media(max-width:768px){.data-grid{grid-template-columns:1fr}.data-card .data-num{font-size:36px}}
+
+/* === SERVICE === */
+.service{background:var(--cream)}
+.service-tabs{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+.service-card{background:#fff;border-radius:12px;padding:40px 32px;box-shadow:0 8px 30px rgba(59,38,24,.08);border:1px solid var(--cream-dark)}
+.service-card .ic{display:inline-block;background:var(--brown);color:var(--gold-light);padding:6px 16px;font-size:12px;letter-spacing:4px;margin-bottom:16px;font-family:'Noto Serif TC',serif}
+.service-card h3{font-size:26px;color:var(--brown);margin-bottom:18px}
+.service-card ul{list-style:none;padding:0}
+.service-card li{padding:10px 0;border-bottom:1px dashed var(--cream-dark);display:flex;gap:12px;align-items:flex-start}
+.service-card li:last-child{border-bottom:none}
+.service-card li::before{content:"●";color:var(--gold);font-size:10px;margin-top:8px;flex-shrink:0}
+.service-card li b{color:var(--brown)}
+@media(max-width:768px){.service-tabs{grid-template-columns:1fr}}
+
+/* === PROCESS === */
+.process{background:var(--cream-mid)}
+.proc-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;position:relative}
+.proc-step{background:#fff;border-radius:8px;padding:32px 20px;text-align:center;position:relative;border-top:3px solid var(--gold)}
+.proc-step .step-num{font-family:'Noto Serif TC',serif;font-size:42px;color:var(--gold);font-weight:900;line-height:1}
+.proc-step h4{font-size:18px;color:var(--brown);margin:12px 0 8px}
+.proc-step p{font-size:13px;color:var(--text-mute)}
+@media(max-width:768px){.proc-flow{grid-template-columns:repeat(2,1fr)}}
+
+/* === FAQ === */
+.faq{background:var(--cream)}
+.faq-list{display:flex;flex-direction:column;gap:16px;max-width:780px}
+.faq-item{background:#fff;border:1px solid var(--cream-dark);border-radius:8px;overflow:hidden}
+.faq-item summary{padding:22px 24px;cursor:pointer;font-weight:700;color:var(--brown);font-size:16px;display:flex;justify-content:space-between;align-items:center;list-style:none}
+.faq-item summary::-webkit-details-marker{display:none}
+.faq-item summary::after{content:"＋";color:var(--gold);font-size:22px;transition:transform .3s}
+.faq-item[open] summary::after{transform:rotate(45deg)}
+.faq-item .faq-a{padding:0 24px 22px;color:var(--text);font-size:14px;line-height:1.8}
+
+/* === CTA === */
+.final-cta{background:linear-gradient(135deg,var(--brown-dark),var(--brown) 60%,var(--brown-dark));color:#fff;text-align:center;padding:100px 24px}
+.final-cta h2{color:#fff;font-size:48px;margin-bottom:18px}
+.final-cta h2 span{color:var(--gold-light)}
+.final-cta p{color:rgba(255,255,255,.8);font-size:17px;margin-bottom:36px;max-width:580px;margin-left:auto;margin-right:auto}
+.contact-row{display:flex;justify-content:center;gap:20px;margin-bottom:32px;flex-wrap:wrap}
+.line-box{display:inline-flex;align-items:center;gap:14px;background:rgba(255,255,255,.08);padding:14px 24px;border-radius:99px;border:1px solid rgba(201,169,97,.4)}
+.line-box .line-id{font-family:'Noto Serif TC',serif;color:var(--gold-light);font-size:18px;letter-spacing:1px}
+@media(max-width:768px){.final-cta h2{font-size:32px}}
+
+/* === FOOTER === */
+.footer{background:#1a1108;color:rgba(255,255,255,.6);padding:50px 24px 30px;font-size:13px}
+.footer-inner{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr;gap:40px;margin-bottom:32px}
+.footer-brand{color:var(--gold-light);font-family:'Noto Serif TC',serif;font-size:18px;margin-bottom:12px}
+.footer h5{color:var(--gold);font-size:13px;letter-spacing:2px;margin-bottom:14px;font-weight:700}
+.footer ul{list-style:none}
+.footer li{padding:4px 0}
+.footer-disclaimer{border-top:1px solid rgba(255,255,255,.1);padding-top:20px;font-size:11px;color:rgba(255,255,255,.4);line-height:1.7}
+.footer-disclaimer b{color:rgba(255,255,255,.7)}
+@media(max-width:768px){.footer-inner{grid-template-columns:1fr;gap:24px}}
+
+/* === Sticky mobile CTA === */
+.mobile-cta{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--brown-dark);padding:12px 16px;z-index:60;border-top:1px solid var(--gold);gap:10px}
+.mobile-cta a{flex:1;text-align:center}
+@media(max-width:768px){.mobile-cta{display:flex}body{padding-bottom:72px}}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <a href="#" class="brand"><b>助哥</b> ｜ 七期房地產．房仲土仲</a>
+  <div class="nav-links">
+    <a href="#about">關於助哥</a>
+    <a href="#data">數據判斷力</a>
+    <a href="#service">買 / 賣服務</a>
+    <a href="#faq">常見問題</a>
+  </div>
+  <a href="#cta" class="cta-mini">加 LINE</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-tag">SINCE 2010 · 七期在地深耕</div>
+    <h1>不賣房子，<br><span>賣判斷</span></h1>
+    <div class="lead">用市場判讀幫您成交．用長線視角幫您看對</div>
+    <div class="sub">十餘年七期在地房仲。住宅 × 土地 × 廠房，**房仲土仲雙修**——別人查的是均價，我幫你看的是「這戶該不該買、開價合不合理、能砍多少」。</div>
+    <div class="hero-stats">
+      <div class="item"><div class="num">10<small style="font-size:18px">+</small></div><div class="lbl">年在地</div></div>
+      <div class="item"><div class="num">3</div><div class="lbl">大領域</div></div>
+      <div class="item"><div class="num">100<small style="font-size:18px">+</small></div><div class="lbl">成交實證</div></div>
+      <div class="item"><div class="num">∞</div><div class="lbl">行情數據</div></div>
+    </div>
+    <div class="hero-cta">
+      <a href="#cta" class="btn btn-primary">加 LINE 諮詢 →</a>
+      <a href="#data" class="btn btn-ghost">看數據判斷力</a>
+    </div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section id="about" class="section about">
+  <div class="section-inner">
+    <div class="about-grid">
+      <div class="about-text">
+        <div class="section-tag">ABOUT</div>
+        <h2 class="section-title">為什麼說<br><span>「不賣房子，賣判斷」</span></h2>
+        <p>七期不是一個區，是 <b>5 個次分區</b>——市政路廊帶、河南秋紅谷、文心東側、公益向上、朝馬七期南。同一個社區、不同樓層、不同戶型、價差可以拉到 30%。</p>
+        <p>大部分仲介告訴你「均價多少」。我告訴你：<b>同棟同戶型上一筆成交、屋齡帶大盤折價曲線、車位該扣多少、議價空間有多大、什麼時候該硬撐、什麼時候該放手。</b></p>
+        <p>而且——我是<b>房仲土仲</b>。會做土地的房仲台中很少。當你問的是換屋、收益分析、置產，光看大樓行情不夠，要會看土地、看廠房、看長線。</p>
+        <div class="about-cite">「給我數字，別給我感覺。<br>讓我用判斷力，幫您看對房子。」</div>
+      </div>
+      <div class="about-img"><img src="photos/qiqi-view.jpg" alt="七期實景"></div>
+    </div>
+  </div>
+</section>
+
+<!-- SPECIALTIES -->
+<section class="section specs">
+  <div class="section-inner">
+    <div class="section-tag">SPECIALTIES</div>
+    <h2 class="section-title">住宅 × 土地 × 廠房 <span>三線俱備</span></h2>
+    <p class="section-lead">大部分仲介只會看一種產品。我同時操作三種，所以能幫您看「住、收、傳」三個維度。</p>
+    <div class="specs-grid">
+      <div class="spec-card">
+        <div class="spec-icon">宅</div>
+        <h3>住宅</h3>
+        <p>七期、西屯南屯一線大樓、透天、別墅。從首購到豪宅、從中古到新案，依屋齡帶、樓層差、車位數，做「淨房單價」精算。</p>
+      </div>
+      <div class="spec-card">
+        <div class="spec-icon">地</div>
+        <h3>土地</h3>
+        <p>會做土地的房仲不多。我熟「土地單價 × 地坪」量化模型，從建商買地、自地自建、長線置產，都能給您數據判斷。</p>
+      </div>
+      <div class="spec-card">
+        <div class="spec-icon">廠</div>
+        <h3>廠房</h3>
+        <p>實戰過 9,380 萬廠房議價案，工業地、廠辦、商業區大樓，會看分區、看坪效、看通路。中小企業搬家、置產、收租，都能談。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DATA -->
+<section id="data" class="section data">
+  <div class="section-inner">
+    <div class="section-tag">DATA-DRIVEN</div>
+    <h2 class="section-title">用<span>實價登錄數據</span>幫您看穿房價</h2>
+    <p class="section-lead">所有判斷都有數據根據。樂居、實價登錄、自有行情庫，逐棟成交歷史時間軸，是別人給不了的「判斷力」。</p>
+
+    <div class="data-grid">
+      <div class="data-card">
+        <div><span class="data-num">65.35</span><span class="data-unit">萬/坪</span></div>
+        <div class="data-label">七期一年成交均價</div>
+        <div class="data-sub">含新案；中古宅較親民</div>
+      </div>
+      <div class="data-card">
+        <div><span class="data-num">85.27</span><span class="data-unit">萬/坪</span></div>
+        <div class="data-label">七期新案天花板</div>
+        <div class="data-sub">中古宅相對節省空間大</div>
+      </div>
+      <div class="data-card">
+        <div><span class="data-num">−73<small>%</small></span></div>
+        <div class="data-label">2024 → 2025 量縮</div>
+        <div class="data-sub">買方議價空間擴大中</div>
+      </div>
+    </div>
+
+    <div class="age-chart">
+      <h4>七期屋齡價格分佈（萬/坪）— 估價校正關鍵</h4>
+      <div class="age-bars">
+        <div class="age-bar"><div class="bar" style="height:90%"><div class="bar-num">77.08</div></div><div class="bar-label">0-5 年</div></div>
+        <div class="age-bar"><div class="bar" style="height:64%"><div class="bar-num">54.71</div></div><div class="bar-label">5-10 年</div></div>
+        <div class="age-bar"><div class="bar" style="height:51%"><div class="bar-num">43.81</div></div><div class="bar-label">10-20 年</div></div>
+        <div class="age-bar"><div class="bar" style="height:46%"><div class="bar-num">39.12</div></div><div class="bar-label">20-30 年</div></div>
+        <div class="age-bar"><div class="bar" style="height:2%;background:rgba(232,210,154,.2)"><div class="bar-num" style="color:rgba(232,210,154,.5)">—</div></div><div class="bar-label">30 年+</div></div>
+      </div>
+      <div class="data-source">資料來源：內政部實價登錄 / 樂居統計（撈取日 2026/05）｜ 屋齡每跨一帶折價最大 29%，買賣方訂價的關鍵變數。</div>
+    </div>
+  </div>
+</section>
+
+<!-- SERVICE -->
+<section id="service" class="section service">
+  <div class="section-inner">
+    <div class="section-tag">SERVICE</div>
+    <h2 class="section-title">買方 / 賣方 <span>專業服務</span></h2>
+    <p class="section-lead">不只是帶看與委託——是用數據幫您把每個關鍵決策做對。</p>
+    <div class="service-tabs">
+      <div class="service-card">
+        <div class="ic">BUYER · 買方</div>
+        <h3>幫您看對、出手不踩雷</h3>
+        <ul>
+          <li><b>淨房單價精算</b>：扣車位、剔特殊交易，看真實房價</li>
+          <li><b>同社區成交比對</b>：逐棟歷史時間軸、同戶型對照</li>
+          <li><b>屋齡帶與大盤位階</b>：判斷開價在哪個級別</li>
+          <li><b>議價空間建議</b>：可砍多少、從哪裡切入談</li>
+          <li><b>識破話術陷阱</b>：銷售技巧、多次刊登、同物件包裝</li>
+          <li><b>地段長線判斷</b>：學區、機能、未來建設一次看</li>
+        </ul>
+      </div>
+      <div class="service-card">
+        <div class="ic">SELLER · 屋主</div>
+        <h3>幫您訂對、賣到最好價</h3>
+        <ul>
+          <li><b>市場行情分析建議書</b>：書面化、可列印對買方說明</li>
+          <li><b>成交機率價格帶</b>：高/中/低三檔對應總價</li>
+          <li><b>同棟、同戶型參考</b>：用真實數據佐證售價</li>
+          <li><b>開價策略建議</b>：速售、試高、平衡三種方案</li>
+          <li><b>銷售期管理</b>：避免拉太長、二次降價</li>
+          <li><b>合規文宣輸出</b>：符合不動產經紀業管理條例</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROCESS -->
+<section class="section process">
+  <div class="section-inner">
+    <div class="section-tag">PROCESS</div>
+    <h2 class="section-title">四步驟 <span>從諮詢到成交</span></h2>
+    <p class="section-lead">每一步都有判斷依據，不靠話術靠數據。</p>
+    <div class="proc-flow">
+      <div class="proc-step"><div class="step-num">01</div><h4>諮詢</h4><p>釐清您的需求、預算、時程，給出方向建議。</p></div>
+      <div class="proc-step"><div class="step-num">02</div><h4>看對</h4><p>篩選對的物件，逐戶用淨房單價＋大盤位階做判斷。</p></div>
+      <div class="proc-step"><div class="step-num">03</div><h4>議價</h4><p>用數據找出合理區間，給您切入點與底線建議。</p></div>
+      <div class="proc-step"><div class="step-num">04</div><h4>成交</h4><p>合約、貸款、過戶全程協辦，後續支援售後問題。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq" class="section faq">
+  <div class="section-inner">
+    <div class="section-tag">FAQ</div>
+    <h2 class="section-title">常見問題</h2>
+    <p class="section-lead">買賣方最關心的幾個問題，先講清楚再進來。</p>
+    <div class="faq-list">
+      <details class="faq-item">
+        <summary>諮詢需要費用嗎？</summary>
+        <div class="faq-a">初次諮詢、行情判斷、購屋方向建議皆免費。若委託帶看或委託銷售，服務費依不動產經紀業相關規定及雙方議定。</div>
+      </details>
+      <details class="faq-item">
+        <summary>不在七期可以服務嗎？</summary>
+        <div class="faq-a">主要深耕七期、西屯南屯、近朝馬、河南、市政、文心一線。其他區可諮詢、評估能否提供同等專業的判斷服務。</div>
+      </details>
+      <details class="faq-item">
+        <summary>為什麼說「房仲土仲」很稀缺？</summary>
+        <div class="faq-a">會做土地的房仲台中很少。土地估價的口徑與住宅完全不同（單價 × 地坪、容積、分區用途），這需要長期實戰累積。對於換屋族要看「地段長線價值」、置產族要看「收益與保值」，這個能力才用得上。</div>
+      </details>
+      <details class="faq-item">
+        <summary>給我的「行情分析報告」可以給屋主看嗎？</summary>
+        <div class="faq-a">可以。報告定位為「房地產市場行情分析暨建議售價」，**非不動產估價師之正式估價報告**，但內含實登可回溯數據、成交機率價格帶、議價建議，可以列印給屋主談售價。</div>
+      </details>
+      <details class="faq-item">
+        <summary>怎麼開始？</summary>
+        <div class="faq-a">最簡單：加我 LINE 官方帳號（@080akczk），告訴我您的「想買 / 想賣 / 想問」，我兩小時內回覆，幫您做第一輪初判斷。</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta" class="final-cta">
+  <div class="section-inner">
+    <h2>準備好<span>看對房子</span>了嗎？</h2>
+    <p>不論您是首購、換屋、置產還是想賣房——加 LINE，我們聊聊您的判斷需求。</p>
+    <div class="contact-row">
+      <div class="line-box">
+        <span style="font-size:14px;color:rgba(255,255,255,.7)">LINE 官方帳號</span>
+        <span class="line-id">@080akczk</span>
+      </div>
+    </div>
+    <div class="hero-cta" style="justify-content:center">
+      <a href="https://line.me/R/ti/p/@080akczk" class="btn btn-primary">點此加 LINE →</a>
+      <a href="mailto:sixhands2001@gmail.com" class="btn btn-ghost">Email 聯絡</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">助哥 ｜ 七期房地產．房仲土仲</div>
+      <div style="margin-bottom:16px;color:rgba(255,255,255,.8)">不賣房子，賣判斷。</div>
+      <div>用市場判讀幫您成交，用長線視角幫您看對。<br>住宅 × 土地 × 廠房，七期在地深耕。</div>
+    </div>
+    <div>
+      <h5>導 覽</h5>
+      <ul>
+        <li><a href="#about">關於助哥</a></li>
+        <li><a href="#data">數據判斷力</a></li>
+        <li><a href="#service">買 / 賣服務</a></li>
+        <li><a href="#faq">常見問題</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5>聯 絡</h5>
+      <ul>
+        <li>LINE：@080akczk</li>
+        <li>服務範圍：七期 / 西屯南屯</li>
+        <li>產品：住宅 / 土地 / 廠房</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-disclaimer">
+    <b>免責聲明</b>：本網站所載資訊（行情、判斷、建議）係依公開實價登錄與市場資料整理之參考，<b>非《不動產估價師法》所稱之估價報告</b>，亦不對未來價格、增值或報酬作任何保證。實際成交受個別屋況、條件、時機影響。資料來源：內政部不動產交易實價登錄、樂居統計。<br>
+    Powered by <b>Sixhands Studio</b>　｜　© 2026 助哥．七期房地產．All Rights Reserved.
+  </div>
+</footer>
+
+<!-- Mobile sticky CTA -->
+<div class="mobile-cta">
+  <a href="https://line.me/R/ti/p/@080akczk" class="btn btn-primary">加 LINE 諮詢</a>
+  <a href="#service" class="btn btn-ghost">看服務</a>
+</div>
+
+</body>
+</html>
