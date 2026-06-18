@@ -1,537 +1,404 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>房地產仲介 AI 提示詞包｜28 個專業話術模板</title>
-<meta name="description" content="專為台灣房仲打造的 28 個 AI 提示詞模板，房源文案、客戶開發、社群貼文一次搞定。複製貼上 ChatGPT，秒出專業內容。">
-<meta property="og:title" content="房地產仲介 AI 提示詞包｜28 個專業話術模板">
-<meta property="og:description" content="複製貼上 ChatGPT，30 秒寫出專業房仲文案。每月省下 20 小時。">
+<title>Sixhands Studio｜助哥 — AI × 房地產 × 創意內容工作室</title>
+<meta name="description" content="Sixhands Studio 助哥的作品集——房地產 IP、AI 提示詞、影片模板、空屋改造、國風動畫。不賣房子，賣判斷。">
+<meta name="theme-color" content="#3B2618">
+<meta property="og:title" content="Sixhands Studio｜助哥的 AI 工作室">
+<meta property="og:description" content="七期房地產．房仲土仲｜AI 創意內容工作室">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@500;700;900&family=Inter:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --navy:#1B2A4A; --gold:#C9943A; --teal:#2A7F7F;
-    --red:#B94040; --green:#2D7D4E; --bg:#F8F6F1;
-    --white:#FFFFFF; --gray:#6B7280; --light:#EEF0F5;
-  }
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Noto Sans TC','PingFang TC',Arial,sans-serif;background:var(--bg);color:#1a1a1a;line-height:1.7;}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --brown-dark:#3B2618;--brown:#5B3A1E;--brown-mid:#8B6332;
+  --gold:#C9A961;--gold-light:#E8D29A;
+  --cream:#FAF6EF;--cream-dark:#F1E6CF;--cream-mid:#F4EFE2;
+  --text:#2B2017;--text-mute:#7A6B5A;
+  --shadow:0 8px 30px rgba(59,38,24,.08);
+  --shadow-hover:0 24px 60px rgba(59,38,24,.18);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;color:var(--text);line-height:1.7;background:var(--cream)}
+h1,h2,h3,h4{font-family:'Noto Serif TC','PingFang TC',serif;font-weight:700}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
 
-  /* Hero */
-  .hero{
-    background:linear-gradient(135deg,var(--navy) 0%,#2E4A7A 60%,var(--teal) 100%);
-    color:var(--white);padding:80px 24px 100px;text-align:center;
-  }
-  .hero .badge{
-    display:inline-block;background:var(--gold);color:var(--white);
-    font-size:0.78rem;font-weight:700;padding:5px 16px;border-radius:20px;
-    letter-spacing:2px;margin-bottom:20px;
-  }
-  .hero h1{font-size:2.6rem;font-weight:900;line-height:1.25;margin-bottom:20px;max-width:880px;margin-left:auto;margin-right:auto;}
-  .hero h1 span{color:var(--gold);}
-  .hero .subtitle{font-size:1.15rem;opacity:.9;max-width:680px;margin:0 auto 36px;}
-  .hero .cta-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;align-items:center;}
-  .btn-primary{
-    display:inline-block;background:var(--gold);color:var(--white);
-    padding:16px 36px;border-radius:50px;font-size:1.1rem;font-weight:800;
-    text-decoration:none;letter-spacing:1px;
-    box-shadow:0 8px 24px rgba(201,148,58,.4);
-    transition:transform .2s;
-  }
-  .btn-primary:hover{transform:translateY(-2px);}
-  .price-tag{color:var(--gold);font-weight:700;font-size:1.1rem;}
-  .price-tag s{opacity:.5;font-size:.95rem;margin-right:8px;}
-  .hero .stats{display:flex;justify-content:center;gap:48px;flex-wrap:wrap;margin-top:48px;}
-  .hero .stat .num{font-size:2rem;font-weight:900;color:var(--gold);}
-  .hero .stat .lbl{font-size:0.78rem;opacity:.75;letter-spacing:1px;}
+.nav{position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(43,32,23,.94);backdrop-filter:blur(8px);padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(201,169,97,.3)}
+.nav .brand{color:var(--gold-light);font-family:'Noto Serif TC',serif;font-size:17px;letter-spacing:1.5px}
+.nav .brand b{color:#fff;font-weight:900}
+.nav .brand small{color:var(--gold);font-size:11px;letter-spacing:3px;display:block;margin-top:1px;font-family:'Inter',sans-serif}
+.nav-links{display:flex;gap:28px;font-size:14px;color:var(--cream-dark)}
+.nav-links a:hover{color:var(--gold-light)}
+.nav .cta-mini{background:var(--gold);color:var(--brown-dark);padding:8px 18px;border-radius:99px;font-weight:700;font-size:14px}
+@media(max-width:880px){.nav-links{display:none}.nav{padding:10px 16px}}
 
-  /* Container */
-  .container{max-width:1080px;margin:0 auto;padding:0 24px;}
+.hero{padding:140px 24px 70px;background:linear-gradient(160deg,var(--brown-dark) 0%,var(--brown) 50%,var(--brown-dark) 100%);color:#fff;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(201,169,97,.15),transparent 70%);pointer-events:none}
+.hero-inner{max-width:1180px;margin:0 auto;position:relative;z-index:1}
+.studio-tag{display:inline-block;padding:6px 18px;border:1px solid var(--gold-light);color:var(--gold-light);font-size:12px;letter-spacing:5px;font-family:'Inter',sans-serif;margin-bottom:26px}
+.hero h1{font-size:64px;line-height:1.15;color:#fff;font-weight:900;margin-bottom:18px}
+.hero h1 .gold{color:var(--gold-light)}
+.hero .tagline{font-family:'Noto Serif TC',serif;font-size:24px;color:var(--gold-light);margin-bottom:20px;letter-spacing:2px}
+.hero .lead{font-size:16px;color:rgba(255,255,255,.85);max-width:620px;margin-bottom:36px;line-height:1.8}
+.hero-meta{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:36px;color:rgba(255,255,255,.7);font-size:14px;border-top:1px solid rgba(232,210,154,.2);border-bottom:1px solid rgba(232,210,154,.2);padding:18px 0}
+.hero-meta b{color:var(--gold-light);font-family:'Noto Serif TC',serif;font-size:18px;display:block;margin-bottom:2px;font-weight:700}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 26px;border-radius:99px;font-weight:700;font-size:15px;cursor:pointer;transition:all .2s;border:none;font-family:inherit}
+.btn-primary{background:var(--gold);color:var(--brown-dark)}
+.btn-primary:hover{background:var(--gold-light);transform:translateY(-2px);box-shadow:0 8px 24px rgba(201,169,97,.4)}
+.btn-ghost{background:transparent;color:#fff;border:1.5px solid var(--gold-light)}
+.btn-ghost:hover{background:var(--gold-light);color:var(--brown-dark)}
+.hero-cta{display:flex;gap:14px;flex-wrap:wrap}
+@media(max-width:768px){.hero h1{font-size:42px}.hero .tagline{font-size:18px}.hero{padding:110px 20px 50px}}
 
-  /* Section */
-  section{padding:72px 0;}
-  .section-title{
-    font-size:2rem;font-weight:900;color:var(--navy);
-    text-align:center;margin-bottom:12px;
-  }
-  .section-sub{
-    font-size:1.05rem;color:var(--gray);
-    text-align:center;margin-bottom:48px;max-width:640px;margin-left:auto;margin-right:auto;
-  }
+.featured{padding:80px 24px;background:var(--cream)}
+.section-inner{max-width:1180px;margin:0 auto}
+.eyebrow{font-size:11px;letter-spacing:5px;color:var(--gold);margin-bottom:12px;font-family:'Inter',sans-serif;font-weight:700;text-transform:uppercase}
+.section-title{font-size:38px;color:var(--brown);margin-bottom:14px;line-height:1.3}
+.section-title .gold{color:var(--gold)}
+.section-lead{font-size:16px;color:var(--text-mute);max-width:680px;margin-bottom:40px}
+.featured-card{background:linear-gradient(135deg,var(--brown-dark) 0%,var(--brown) 60%);color:#fff;border-radius:14px;padding:50px;display:grid;grid-template-columns:3fr 2fr;gap:40px;align-items:center;position:relative;overflow:hidden;border:1px solid var(--gold)}
+.featured-card::before{content:"NEW";position:absolute;top:24px;right:24px;background:var(--gold);color:var(--brown-dark);padding:5px 14px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:3px;font-family:'Inter',sans-serif}
+.featured-card h3{font-size:36px;color:#fff;margin-bottom:14px;line-height:1.3}
+.featured-card h3 .gold{color:var(--gold-light)}
+.featured-card .sub{font-size:14px;color:var(--gold-light);letter-spacing:2px;margin-bottom:18px}
+.featured-card p{color:rgba(255,255,255,.85);font-size:15px;margin-bottom:24px}
+.featured-img{border-radius:8px;overflow:hidden;aspect-ratio:4/3;background:#000}
+.featured-img img{width:100%;height:100%;object-fit:cover}
+@media(max-width:880px){.featured-card{grid-template-columns:1fr;padding:32px}.featured-card h3{font-size:26px}}
 
-  /* Pain points */
-  .pain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;}
-  .pain-card{
-    background:var(--white);padding:28px;border-radius:12px;
-    border-left:4px solid var(--red);
-    box-shadow:0 2px 12px rgba(0,0,0,.05);
-  }
-  .pain-card .emoji{font-size:1.8rem;margin-bottom:12px;}
-  .pain-card h3{font-size:1.05rem;color:var(--navy);margin-bottom:8px;}
-  .pain-card p{font-size:0.92rem;color:var(--gray);}
+.works{padding:90px 24px;background:var(--cream-mid)}
+.works-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.work-card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:var(--shadow);transition:all .25s;border:1px solid transparent;display:flex;flex-direction:column}
+.work-card:hover{transform:translateY(-6px);box-shadow:var(--shadow-hover);border-color:var(--gold)}
+.work-thumb{aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;color:var(--gold-light);font-family:'Noto Serif TC',serif;font-size:32px;font-weight:900;letter-spacing:2px;text-align:center;padding:20px;position:relative;overflow:hidden}
+.work-thumb.t1{background:linear-gradient(135deg,#5B3A1E,#8B1E2F)}
+.work-thumb.t2{background:linear-gradient(135deg,#8B6332,#5B3A1E)}
+.work-thumb.t3{background:linear-gradient(135deg,#2C3E50,#34495E)}
+.work-thumb.t4{background:linear-gradient(135deg,#1F4E5F,#2C3E50)}
+.work-thumb.t5{background:linear-gradient(135deg,#5D4037,#3E2723)}
+.work-thumb.t6{background:linear-gradient(135deg,#0D7377,#14A085)}
+.work-thumb.t7{background:linear-gradient(135deg,#4A148C,#7B1FA2)}
+.work-thumb .thumb-en{position:absolute;bottom:14px;right:18px;font-size:11px;color:rgba(232,210,154,.5);letter-spacing:4px;font-family:'Inter',sans-serif;font-weight:400}
+.work-body{padding:24px;flex:1;display:flex;flex-direction:column}
+.work-cat{display:inline-block;padding:3px 10px;border:1px solid var(--cream-dark);color:var(--brown-mid);font-size:11px;letter-spacing:2px;margin-bottom:12px;border-radius:4px;width:fit-content;font-weight:700}
+.work-body h4{font-size:18px;color:var(--brown);margin-bottom:8px;line-height:1.4}
+.work-body p{font-size:13px;color:var(--text-mute);margin-bottom:18px;flex:1}
+.work-link{font-size:13px;color:var(--gold);font-weight:700;letter-spacing:1px;display:inline-flex;align-items:center;gap:6px}
+.work-link::after{content:"→";transition:transform .2s}
+.work-card:hover .work-link::after{transform:translateX(4px)}
+@media(max-width:880px){.works-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:580px){.works-grid{grid-template-columns:1fr}}
 
-  /* Categories */
-  .bg-light{background:var(--light);}
-  .cat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;}
-  .cat-card{
-    background:var(--white);padding:32px 24px;border-radius:14px;
-    text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.06);
-    transition:transform .2s;
-  }
-  .cat-card:hover{transform:translateY(-4px);}
-  .cat-card .icon{font-size:2.4rem;margin-bottom:12px;}
-  .cat-card h3{color:var(--navy);font-size:1.15rem;margin-bottom:8px;}
-  .cat-card .count{
-    display:inline-block;background:var(--gold);color:var(--white);
-    font-size:0.75rem;font-weight:700;padding:3px 12px;border-radius:12px;margin-bottom:10px;
-  }
-  .cat-card p{font-size:0.9rem;color:var(--gray);line-height:1.6;}
+.dl-section{padding:80px 24px;background:var(--cream)}
+.dl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.dl-card{background:#fff;border:1px solid var(--cream-dark);border-radius:8px;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;gap:14px;transition:all .2s}
+.dl-card:hover{border-color:var(--gold);transform:translateX(4px)}
+.dl-info b{display:block;font-size:14px;color:var(--brown);margin-bottom:2px}
+.dl-info small{font-size:11px;color:var(--text-mute);letter-spacing:1px}
+.dl-icon{width:36px;height:36px;border-radius:6px;background:var(--brown);color:var(--gold-light);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:'Inter',sans-serif;letter-spacing:1px;flex-shrink:0}
 
-  /* Sample prompt */
-  .sample-box{
-    background:var(--navy);color:var(--white);
-    padding:36px;border-radius:14px;max-width:760px;margin:0 auto;
-    position:relative;
-  }
-  .sample-box .label{
-    position:absolute;top:-14px;left:24px;background:var(--gold);
-    color:var(--white);padding:4px 14px;border-radius:20px;
-    font-size:0.78rem;font-weight:700;letter-spacing:1px;
-  }
-  .sample-box pre{
-    font-family:'Courier New',monospace;font-size:0.9rem;
-    white-space:pre-wrap;line-height:1.8;opacity:.95;
-  }
-  .blur-overlay{
-    background:linear-gradient(to bottom,transparent 0%,var(--navy) 100%);
-    height:80px;margin-top:-80px;position:relative;border-radius:0 0 14px 14px;
-  }
-  .sample-cta{text-align:center;margin-top:24px;font-size:0.95rem;color:var(--gray);}
+.bottom-cta{background:linear-gradient(135deg,var(--brown-dark),var(--brown) 60%,var(--brown-dark));color:#fff;text-align:center;padding:80px 24px}
+.bottom-cta h2{color:#fff;font-size:40px;margin-bottom:16px}
+.bottom-cta h2 .gold{color:var(--gold-light)}
+.bottom-cta p{color:rgba(255,255,255,.8);font-size:16px;margin-bottom:32px;max-width:560px;margin-left:auto;margin-right:auto}
+.line-box{display:inline-flex;align-items:center;gap:14px;background:rgba(255,255,255,.08);padding:14px 24px;border-radius:99px;border:1px solid rgba(201,169,97,.4);margin-bottom:28px}
+.line-box .line-id{font-family:'Noto Serif TC',serif;color:var(--gold-light);font-size:18px;letter-spacing:1px}
+@media(max-width:768px){.bottom-cta h2{font-size:28px}}
 
-  /* Benefits */
-  .benefit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;}
-  .benefit-card{padding:24px;text-align:center;}
-  .benefit-card .check{
-    width:48px;height:48px;background:var(--green);color:var(--white);
-    border-radius:50%;display:flex;align-items:center;justify-content:center;
-    font-size:1.4rem;margin:0 auto 14px;font-weight:700;
-  }
-  .benefit-card h3{color:var(--navy);font-size:1rem;margin-bottom:6px;}
-  .benefit-card p{font-size:0.88rem;color:var(--gray);}
-
-  /* Pricing */
-  .price-card{
-    background:var(--white);max-width:480px;margin:0 auto;
-    padding:48px 36px;border-radius:20px;text-align:center;
-    box-shadow:0 12px 40px rgba(27,42,74,.15);
-    border:3px solid var(--gold);
-  }
-  .price-card .label{
-    color:var(--gold);font-weight:700;font-size:0.85rem;
-    letter-spacing:2px;margin-bottom:12px;
-  }
-  .price-card h3{font-size:1.5rem;color:var(--navy);margin-bottom:16px;}
-  .price-card .price-big{
-    font-size:3.2rem;font-weight:900;color:var(--navy);
-    margin:8px 0;
-  }
-  .price-card .price-big small{font-size:1.4rem;color:var(--gray);font-weight:600;}
-  .price-card .price-old{color:var(--gray);text-decoration:line-through;font-size:1.05rem;margin-bottom:24px;display:block;}
-  .price-card ul{
-    text-align:left;margin:24px 0 32px;padding-left:0;list-style:none;
-  }
-  .price-card li{
-    padding:8px 0;font-size:0.95rem;
-    border-bottom:1px solid #eee;
-  }
-  .price-card li:before{
-    content:"✓ ";color:var(--green);font-weight:700;margin-right:8px;
-  }
-
-  /* FAQ */
-  .faq-item{
-    background:var(--white);padding:20px 24px;border-radius:10px;
-    margin-bottom:12px;box-shadow:0 1px 6px rgba(0,0,0,.05);
-  }
-  .faq-item h3{
-    color:var(--navy);font-size:1.05rem;margin-bottom:8px;
-    display:flex;align-items:center;gap:8px;
-  }
-  .faq-item h3:before{content:"❓";font-size:1.1rem;}
-  .faq-item p{font-size:0.92rem;color:var(--gray);padding-left:32px;}
-
-  /* Final CTA */
-  .final-cta{
-    background:linear-gradient(135deg,var(--navy),var(--teal));
-    color:var(--white);padding:80px 24px;text-align:center;
-  }
-  .final-cta h2{font-size:2.2rem;margin-bottom:16px;}
-  .final-cta p{font-size:1.1rem;opacity:.85;margin-bottom:32px;max-width:580px;margin-left:auto;margin-right:auto;}
-
-  /* Footer */
-  footer{
-    background:#0F1828;color:rgba(255,255,255,.6);
-    padding:32px 24px;text-align:center;font-size:0.85rem;
-  }
-
-  /* Product Family */
-  .product-family{background:var(--navy);padding:80px 24px;}
-  .product-family .section-title{color:#fff;margin-bottom:8px;}
-  .product-family .section-sub{color:rgba(255,255,255,.65);}
-  .prod-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;max-width:1080px;margin:0 auto;}
-  .prod-card{
-    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
-    border-radius:18px;padding:32px 28px;transition:background .2s,transform .2s;
-  }
-  .prod-card:hover{background:rgba(255,255,255,.09);transform:translateY(-4px);}
-  .prod-card .prod-icon{font-size:2.4rem;margin-bottom:14px;}
-  .prod-card .prod-tag{
-    display:inline-block;font-size:0.7rem;font-weight:800;letter-spacing:2px;
-    padding:3px 12px;border-radius:20px;margin-bottom:12px;
-  }
-  .prod-card.tag-video .prod-tag{background:rgba(42,127,127,.35);color:#5eead4;}
-  .prod-card.tag-makeover .prod-tag{background:rgba(109,40,217,.35);color:#c4b5fd;}
-  .prod-card h3{font-size:1.1rem;font-weight:800;color:#fff;margin-bottom:8px;line-height:1.35;}
-  .prod-card p{font-size:0.88rem;color:rgba(255,255,255,.65);line-height:1.7;margin-bottom:20px;}
-  .prod-card .prod-price{font-size:1.4rem;font-weight:900;color:var(--gold);margin-bottom:4px;}
-  .prod-card .prod-price-sub{font-size:0.78rem;color:rgba(255,255,255,.45);margin-bottom:18px;}
-  .prod-card .prod-feats{list-style:none;margin-bottom:22px;}
-  .prod-card .prod-feats li{font-size:0.82rem;color:rgba(255,255,255,.7);padding:4px 0;display:flex;gap:8px;}
-  .prod-card .prod-feats li::before{content:'✓';color:var(--gold);font-weight:700;flex-shrink:0;}
-  .btn-prod{
-    display:block;text-align:center;border:2px solid var(--gold);color:var(--gold);
-    padding:12px;border-radius:50px;font-size:0.95rem;font-weight:800;
-    text-decoration:none;transition:background .2s,color .2s;
-  }
-  .btn-prod:hover{background:var(--gold);color:#fff;}
-
-  .prod-card.tag-wuxing .prod-tag{background:rgba(45,125,78,.35);color:#6ecf8e;}
-  .prod-card.tag-speaking .prod-tag{background:rgba(201,148,58,.35);color:#f5cf7d;}
-  .prod-card .prod-free{
-    display:inline-block;background:#2D7D4E;color:#fff;
-    font-size:0.7rem;font-weight:800;letter-spacing:2px;
-    padding:3px 10px;border-radius:20px;margin-left:6px;
-  }
-
-  /* Mobile */
-  @media (max-width:720px){
-    .hero h1{font-size:1.9rem;}
-    .hero .stats{gap:24px;}
-    section{padding:48px 0;}
-    .section-title{font-size:1.6rem;}
-    .product-family{padding:56px 20px;}
-  }
+.footer{background:#1a1108;color:rgba(255,255,255,.6);padding:50px 24px 30px;font-size:13px}
+.footer-inner{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:32px;margin-bottom:32px}
+.footer-brand{color:var(--gold-light);font-family:'Noto Serif TC',serif;font-size:18px;margin-bottom:10px;font-weight:700}
+.footer-brand b{color:#fff;font-weight:900}
+.footer h5{color:var(--gold);font-size:12px;letter-spacing:3px;margin-bottom:14px;font-weight:700;font-family:'Inter',sans-serif}
+.footer ul{list-style:none}
+.footer li{padding:4px 0}
+.footer li a:hover{color:var(--gold-light)}
+.footer-bottom{border-top:1px solid rgba(255,255,255,.1);padding-top:20px;font-size:11px;color:rgba(255,255,255,.4);line-height:1.7;text-align:center}
+.footer-bottom b{color:rgba(255,255,255,.7)}
+@media(max-width:768px){.footer-inner{grid-template-columns:1fr;gap:24px}}
 </style>
 </head>
 <body>
 
-<!-- HERO -->
+<nav class="nav">
+  <a href="#" class="brand"><b>Sixhands Studio</b>
+    <small>HUB · 助哥的作品集</small>
+  </a>
+  <div class="nav-links">
+    <a href="#featured">主打作品</a>
+    <a href="#works">作品集</a>
+    <a href="#downloads">下載資源</a>
+    <a href="#contact">聯絡</a>
+  </div>
+  <a href="https://line.me/R/ti/p/@080akczk" class="cta-mini">加 LINE</a>
+</nav>
+
 <section class="hero">
-  <div class="container">
-    <div class="badge">AI PROMPT PACK · 2025 EDITION</div>
-    <h1>房仲業績倍增的祕密武器：<br><span>28 個 AI 提示詞模板</span></h1>
-    <p class="subtitle">
-      複製貼上 ChatGPT，30 秒寫出專業房源文案、客戶開發信、社群貼文。<br>
-      平均每月為您省下 20 小時。
-    </p>
-    <div class="cta-row">
-      <a href="https://sixhands.gumroad.com/l/beljzu" class="btn-primary" target="_blank">立即購買 →</a>
-      <span class="price-tag"><s>NT$1,200</s> 限時 NT$790</span>
+  <div class="hero-inner">
+    <div class="studio-tag">SIXHANDS STUDIO · 2026</div>
+    <h1>AI × 房地產 × <span class="gold">創意內容</span></h1>
+    <div class="tagline">不賣房子，賣判斷。</div>
+    <p class="lead">助哥的個人作品集。十餘年七期房仲在地深耕 × AI 創意工作室——把實戰經驗變成可用工具、可看內容、可賣產品。從房地產 IP、提示詞包，到影片模板、空屋改造、國風動畫，全部開放給你。</p>
+    <div class="hero-meta">
+      <div><b>14</b>作品上線</div>
+      <div><b>5</b>下載資源</div>
+      <div><b>10+</b>年房仲在地</div>
+      <div><b>七期</b>主場深耕</div>
     </div>
-    <div class="stats">
-      <div class="stat"><div class="num">28</div><div class="lbl">個專業提示詞</div></div>
-      <div class="stat"><div class="num">6</div><div class="lbl">大核心分類</div></div>
-      <div class="stat"><div class="num">100%</div><div class="lbl">繁體中文</div></div>
-      <div class="stat"><div class="num">∞</div><div class="lbl">終身使用</div></div>
+    <div class="hero-cta">
+      <a href="#featured" class="btn btn-primary">看主打作品 →</a>
+      <a href="#works" class="btn btn-ghost">瀏覽全部作品集</a>
     </div>
   </div>
 </section>
 
-<!-- PAIN POINTS -->
-<section>
-  <div class="container">
-    <h2 class="section-title">您是不是也有這些困擾？</h2>
-    <p class="section-sub">如果有 2 個以上點頭，這個提示詞包就是為您準備的</p>
-    <div class="pain-grid">
-      <div class="pain-card">
-        <div class="emoji">😩</div>
-        <h3>房源貼文寫了又刪</h3>
-        <p>每次發文卡住，不知道怎麼吸引買家眼球</p>
+<section id="featured" class="featured">
+  <div class="section-inner">
+    <div class="eyebrow">FEATURED · 主打作品</div>
+    <h2 class="section-title">七期房地產 <span class="gold">IP</span></h2>
+    <p class="section-lead">助哥的本業主場——把十餘年實戰累積成「判斷力」，用實價登錄數據幫買賣方做最關鍵的價格決策。</p>
+    <a href="qiqi-realestate.html" style="display:block;text-decoration:none">
+      <div class="featured-card">
+        <div>
+          <div class="sub">SINCE 2010 · 七期在地深耕</div>
+          <h3>不賣房子，<span class="gold">賣判斷</span></h3>
+          <p>住宅 × 土地 × 廠房三線俱備。十餘年成交實戰、自有七期大樓行情庫（淨房單價精算、屋齡折價曲線、議價空間判斷）。買方看對、屋主賣對，靠的是數據不是話術。</p>
+          <span class="btn btn-primary" style="background:var(--gold-light)">進入網站 →</span>
+        </div>
+        <div class="featured-img"><img src="photos/qiqi-view.jpg" alt="七期實景"></div>
       </div>
-      <div class="pain-card">
-        <div class="emoji">📵</div>
-        <h3>客戶已讀不回</h3>
-        <p>訊息太制式，怕太頻繁被封鎖，怕太冷淡又失聯</p>
-      </div>
-      <div class="pain-card">
-        <div class="emoji">🤐</div>
-        <h3>議價說不出口</h3>
-        <p>面對屋主不敢開口，買方猶豫不知怎麼推一把</p>
-      </div>
-      <div class="pain-card">
-        <div class="emoji">⏰</div>
-        <h3>文書工作吃掉帶看時間</h3>
-        <p>每天花 3 小時寫文案，本該帶看的時間都沒了</p>
-      </div>
+    </a>
+  </div>
+</section>
+
+<section id="works" class="works">
+  <div class="section-inner">
+    <div class="eyebrow">PORTFOLIO · 作品集</div>
+    <h2 class="section-title">13 個作品 <span class="gold">同場開放</span></h2>
+    <p class="section-lead">房地產提示詞、影片腳本、空屋改造、國風動畫——AI 創意工具一站集合。</p>
+    <div class="works-grid">
+
+      <a href="yuanchen-landing.html" class="work-card">
+        <div class="work-thumb t1">助哥元辰宮<span class="thumb-en">DESTINY × WEALTH</span></div>
+        <div class="work-body">
+          <span class="work-cat">命格策略 · 旗艦</span>
+          <h4>助哥元辰宮｜命運 × 策略 × 財富</h4>
+          <p>不是算命，是 AI 命格策略分析。找出財富卡點、解鎖成交密碼。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="yuanchen-system.html" class="work-card">
+        <div class="work-thumb t5">命格系統<span class="thumb-en">ANALYZER</span></div>
+        <div class="work-body">
+          <span class="work-cat">命格策略 · 系統</span>
+          <h4>助哥元辰宮｜命格解析系統</h4>
+          <p>線上互動命格解析平台，AI 即時生成個人專屬報告。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="yuanchen-report.html" class="work-card">
+        <div class="work-thumb t2">專屬報告<span class="thumb-en">REPORT</span></div>
+        <div class="work-body">
+          <span class="work-cat">命格策略 · 報告</span>
+          <h4>助哥元辰宮｜專屬命格解析</h4>
+          <p>填寫資料後 AI 即時生成的命格解析報告範本。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="speaking-practice.html" class="work-card">
+        <div class="work-thumb t4">說話公式<span class="thumb-en">SPEAKING</span></div>
+        <div class="work-body">
+          <span class="work-cat">表達力訓練</span>
+          <h4>5 大說話公式 · 互動練習模組</h4>
+          <p>先說結論、把話接住、觀點清楚、說服他人、讓人記住——4 情境 × 即時改進。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="social-cards.html" class="work-card">
+        <div class="work-thumb t6">社群圖卡<span class="thumb-en">FB / IG CARDS</span></div>
+        <div class="work-body">
+          <span class="work-cat">表達力 · 圖卡</span>
+          <h4>5 大說話公式 · 社群圖片卡</h4>
+          <p>FB / IG / 限動分享用的精美圖卡，含 Before/After 案例。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="prompt-pack-28.html" class="work-card">
+        <div class="work-thumb t1">28 提示詞<span class="thumb-en">PROMPT PACK · LITE</span></div>
+        <div class="work-body">
+          <span class="work-cat">提示詞包</span>
+          <h4>房地產仲介 AI 提示詞包</h4>
+          <p>28 個專業話術模板。房仲業績倍增的祕密武器。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="real-estate-prompt-pack.html" class="work-card">
+        <div class="work-thumb t2">完整版<span class="thumb-en">PROMPT PACK · FULL</span></div>
+        <div class="work-body">
+          <span class="work-cat">提示詞包 · 完整版</span>
+          <h4>房地產 AI 提示詞包（完整版）</h4>
+          <p>Real Estate Prompt Pack——專業房仲完整實戰版，含進階話術。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="房地產AI提示詞包_買家版.html" class="work-card">
+        <div class="work-thumb t1">買家版<span class="thumb-en">FOR BUYERS</span></div>
+        <div class="work-body">
+          <span class="work-cat">提示詞包 · 買家版</span>
+          <h4>房地產 AI 提示詞包（買家版）</h4>
+          <p>為買方打造的 AI 諮詢提示詞包，看屋、議價、判斷一站滿足。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="ai-video-template.html" class="work-card">
+        <div class="work-thumb t3">AI 影片模板<span class="thumb-en">VIDEO TEMPLATE</span></div>
+        <div class="work-body">
+          <span class="work-cat">影片模板</span>
+          <h4>房仲 AI 影片模板包</h4>
+          <p>不露臉也能做自媒體，讓 AI 幫你講房產知識。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="scripts-30.html" class="work-card">
+        <div class="work-thumb t4">30 個腳本<span class="thumb-en">30 SCRIPTS</span></div>
+        <div class="work-body">
+          <span class="work-cat">影片腳本</span>
+          <h4>30 個房仲 AI 影片腳本</h4>
+          <p>一鍵複製的房仲影片腳本，主題涵蓋自媒體經營全場景。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="ai-room-makeover.html" class="work-card">
+        <div class="work-thumb t6">空屋改造<span class="thumb-en">ROOM MAKEOVER</span></div>
+        <div class="work-body">
+          <span class="work-cat">AI 改造</span>
+          <h4>AI 空屋改造模板包</h4>
+          <p>舊家具換新、風格改造、毛胚模擬，三合一出片。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="scripts-room-makeover.html" class="work-card">
+        <div class="work-thumb t6">一鍵複製<span class="thumb-en">QUICK COPY</span></div>
+        <div class="work-body">
+          <span class="work-cat">AI 改造 · 內容</span>
+          <h4>AI 空屋改造 · 一鍵複製內容</h4>
+          <p>配套提示詞與腳本，加速空屋改造出片流程。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
+      <a href="five-elements-animation.html" class="work-card">
+        <div class="work-thumb t7">五行系列<span class="thumb-en">FIVE ELEMENTS</span></div>
+        <div class="work-body">
+          <span class="work-cat">YouTube 動畫</span>
+          <h4>五行系列 · 國風水墨動畫製作包</h4>
+          <p>木．火．土．金．水——五集完整腳本＋AI 生圖提示詞＋製作流程。</p>
+          <span class="work-link">查看作品</span>
+        </div>
+      </a>
+
     </div>
   </div>
 </section>
 
-<!-- CATEGORIES -->
-<section class="bg-light">
-  <div class="container">
-    <h2 class="section-title">28 個提示詞，6 大實戰分類</h2>
-    <p class="section-sub">從開發客戶到成交議價，每個房仲場景都有對應模板</p>
-    <div class="cat-grid">
-      <div class="cat-card">
-        <div class="icon">🏠</div>
-        <span class="count">5 個 Prompt</span>
-        <h3>房源行銷文案</h3>
-        <p>豪宅、首購、急售、租屋、591 標題，各種物件都有對應文案</p>
-      </div>
-      <div class="cat-card">
-        <div class="icon">👥</div>
-        <span class="count">5 個 Prompt</span>
-        <h3>客戶開發話術</h3>
-        <p>陌生開發、買方接觸、屋主邀約、轉介紹、節慶問候</p>
-      </div>
-      <div class="cat-card">
-        <div class="icon">📱</div>
-        <span class="count">5 個 Prompt</span>
-        <h3>社群媒體貼文</h3>
-        <p>Facebook、Instagram、LINE 推播，建立個人品牌</p>
-      </div>
-      <div class="cat-card">
-        <div class="icon">📧</div>
-        <span class="count">5 個 Prompt</span>
-        <h3>跟進訊息</h3>
-        <p>看屋後跟進、冷客戶喚醒、報價預熱、成交感謝信</p>
-      </div>
-      <div class="cat-card">
-        <div class="icon">🤝</div>
-        <span class="count">4 個 Prompt</span>
-        <h3>議價談判話術</h3>
-        <p>降價建議、出價策略、臨門一腳、屋主心理建設</p>
-      </div>
-      <div class="cat-card">
-        <div class="icon">📊</div>
-        <span class="count">4 個 Prompt</span>
-        <h3>市場分析報告</h3>
-        <p>區域行情、投資報酬、競品比較、貸款試算</p>
-      </div>
+<section id="downloads" class="dl-section">
+  <div class="section-inner">
+    <div class="eyebrow">DOWNLOADS · 下載資源</div>
+    <h2 class="section-title">完整版 <span class="gold">PDF / Word / ZIP</span> 打包</h2>
+    <p class="section-lead">不想瀏覽？整包下載慢慢看。</p>
+    <div class="dl-grid">
+      <a href="房地產AI提示詞包_完整28個.pdf" class="dl-card" download>
+        <div class="dl-info"><b>房地產 AI 提示詞包 · 完整 28 個</b><small>PDF · 840 KB</small></div>
+        <div class="dl-icon">PDF</div>
+      </a>
+      <a href="房地產AI提示詞包_買家版_v2.pdf" class="dl-card" download>
+        <div class="dl-info"><b>提示詞包 · 買家版 v2</b><small>PDF · 747 KB · 最新</small></div>
+        <div class="dl-icon">PDF</div>
+      </a>
+      <a href="房地產AI提示詞包_買家版.pdf" class="dl-card" download>
+        <div class="dl-info"><b>提示詞包 · 買家版 v1</b><small>PDF · 740 KB</small></div>
+        <div class="dl-icon">PDF</div>
+      </a>
+      <a href="房地產AI提示詞包.docx" class="dl-card" download>
+        <div class="dl-info"><b>房地產 AI 提示詞包</b><small>Word · 28 KB</small></div>
+        <div class="dl-icon">DOC</div>
+      </a>
+      <a href="房地產AI提示詞包_完整版.zip" class="dl-card" download>
+        <div class="dl-info"><b>提示詞包 · 完整打包</b><small>ZIP · 60 KB</small></div>
+        <div class="dl-icon">ZIP</div>
+      </a>
     </div>
   </div>
 </section>
 
-<!-- SAMPLE -->
-<section>
-  <div class="container">
-    <h2 class="section-title">看看實際的提示詞長什麼樣</h2>
-    <p class="section-sub">每個提示詞都填好變數即可，貼到 ChatGPT 就能用</p>
-    <div class="sample-box">
-      <span class="label">範例：P-01 豪宅文案</span>
-      <pre>你是一位頂尖房地產文案撰寫師，專精撰寫高端豪宅銷售描述。
-請為以下物件撰寫繁體中文房源介紹：
-
-【物件資訊】
-- 物件名稱：[PROPERTY_NAME]
-- 坪數：[SIZE_PING] 坪
-- 樓層：[FLOOR]
-- 地點：[LOCATION]
-- 特色：[KEY_FEATURES]
-- 售價：[PRICE] 萬元
-- 目標買家：[TARGET_BUYER]
-
-【撰寫要求】
-1. 開頭使用情境式鉤子句（30字內）
-2. 以「生活方式」為核心
-3. 融入地段優勢與稀缺性
-4. 結尾加入行動呼籲（CTA）...</pre>
+<section id="contact" class="bottom-cta">
+  <div class="section-inner">
+    <h2>看完了？<span class="gold">聊聊吧</span></h2>
+    <p>房地產判斷、AI 工具、創意內容合作——任何需求，先加 LINE 聊聊。</p>
+    <div class="line-box">
+      <span style="font-size:14px;color:rgba(255,255,255,.7)">LINE 官方帳號</span>
+      <span class="line-id">@080akczk</span>
     </div>
-    <p class="sample-cta">👆 完整 28 個提示詞，每個都附變數說明 + 示例輸出</p>
-  </div>
-</section>
-
-<!-- BENEFITS -->
-<section class="bg-light">
-  <div class="container">
-    <h2 class="section-title">為什麼房仲都在用？</h2>
-    <div class="benefit-grid">
-      <div class="benefit-card">
-        <div class="check">✓</div>
-        <h3>節省 20 小時/月</h3>
-        <p>每個提示詞省 30–60 分鐘</p>
-      </div>
-      <div class="benefit-card">
-        <div class="check">✓</div>
-        <h3>零學習門檻</h3>
-        <p>填變數即可，不用會 AI</p>
-      </div>
-      <div class="benefit-card">
-        <div class="check">✓</div>
-        <h3>三平台通用</h3>
-        <p>ChatGPT、Claude、Gemini</p>
-      </div>
-      <div class="benefit-card">
-        <div class="check">✓</div>
-        <h3>台灣市場語境</h3>
-        <p>繁體中文、本地用詞</p>
-      </div>
-      <div class="benefit-card">
-        <div class="check">✓</div>
-        <h3>買一次終身用</h3>
-        <p>沒有月費，沒有限制</p>
-      </div>
-      <div class="benefit-card">
-        <div class="check">✓</div>
-        <h3>即買即用</h3>
-        <p>PDF 立即下載</p>
-      </div>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <a href="https://line.me/R/ti/p/@080akczk" class="btn btn-primary">點此加 LINE →</a>
+      <a href="qiqi-realestate.html" class="btn btn-ghost">看七期房地產 IP</a>
     </div>
   </div>
 </section>
 
-<!-- PRICING -->
-<section>
-  <div class="container">
-    <h2 class="section-title">限時優惠價</h2>
-    <p class="section-sub">您可能花一杯星巴克的價格，買到一年的時間</p>
-    <div class="price-card">
-      <div class="label">FULL ACCESS · 完整版</div>
-      <h3>房地產仲介 AI 提示詞包</h3>
-      <span class="price-old">原價 NT$1,200</span>
-      <div class="price-big">NT$<strong>790</strong></div>
+<footer class="footer">
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand"><b>Sixhands Studio</b></div>
+      <div style="margin-bottom:14px;color:rgba(255,255,255,.8);font-family:'Noto Serif TC',serif">助哥｜七期房地產．房仲土仲</div>
+      <div>AI × 房地產 × 創意內容工作室<br>不賣房子，賣判斷。</div>
+    </div>
+    <div>
+      <h5>主打</h5>
       <ul>
-        <li>28 個完整提示詞（PDF 格式）</li>
-        <li>每個都附變數說明 + 示例輸出</li>
-        <li>6 大房仲核心分類</li>
-        <li>5 個附贈提示詞</li>
-        <li>3 個工作流程鏈</li>
-        <li>終身使用，沒有月費</li>
-        <li>立即下載，不用等待</li>
+        <li><a href="qiqi-realestate.html">七期房地產 IP</a></li>
+        <li><a href="yuanchen-landing.html">助哥元辰宮</a></li>
+        <li><a href="speaking-practice.html">5 大說話公式</a></li>
+        <li><a href="real-estate-prompt-pack.html">提示詞包·完整</a></li>
       </ul>
-      <a href="https://sixhands.gumroad.com/l/beljzu" class="btn-primary" target="_blank" style="display:block;">立即購買 →</a>
-      <p style="font-size:0.8rem;color:var(--gray);margin-top:16px;">支援信用卡、PayPal · 30 天退款保證</p>
+    </div>
+    <div>
+      <h5>作品</h5>
+      <ul>
+        <li><a href="prompt-pack-28.html">28 提示詞</a></li>
+        <li><a href="scripts-30.html">30 個腳本</a></li>
+        <li><a href="ai-room-makeover.html">空屋改造</a></li>
+        <li><a href="five-elements-animation.html">五行動畫</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5>聯絡</h5>
+      <ul>
+        <li>LINE：@080akczk</li>
+        <li>七期 / 西屯南屯</li>
+        <li>住宅 / 土地 / 廠房</li>
+      </ul>
     </div>
   </div>
-</section>
-
-<!-- FAQ -->
-<section class="bg-light">
-  <div class="container">
-    <h2 class="section-title">常見問題</h2>
-    <div style="max-width:760px;margin:0 auto;">
-      <div class="faq-item">
-        <h3>我不會用 ChatGPT，能用嗎？</h3>
-        <p>絕對可以！您只要把提示詞複製、填入您的物件資料，貼到 ChatGPT 對話框，按下送出，就會自動產出文案。完全不需要學任何技巧。</p>
-      </div>
-      <div class="faq-item">
-        <h3>ChatGPT 要付費嗎？</h3>
-        <p>免費版就完全夠用！如果您想要更高品質的輸出，可以考慮 ChatGPT Plus（每月 USD$20），但用免費版也能寫出專業文案。</p>
-      </div>
-      <div class="faq-item">
-        <h3>檔案格式是什麼？怎麼拿到？</h3>
-        <p>PDF 格式，購買後 Gumroad 會自動寄到您的 Email，也可以直接下載。完全自動化，不用等待。</p>
-      </div>
-      <div class="faq-item">
-        <h3>這跟一般 AI 課程有什麼不同？</h3>
-        <p>不用學，直接用。一般課程教您怎麼下指令，這套是已經幫您寫好最好的指令，您只要填入資料即可。</p>
-      </div>
-      <div class="faq-item">
-        <h3>適合哪種房仲？</h3>
-        <p>新手房仲、資深房仲、店長都適用。特別是每天需要寫房源文案、跟進客戶、發社群貼文的房仲，效果最明顯。</p>
-      </div>
-      <div class="faq-item">
-        <h3>不滿意可以退款嗎？</h3>
-        <p>可以！透過 Gumroad 購買享 30 天退款保證，不滿意全額退款，無風險嘗試。</p>
-      </div>
-    </div>
+  <div class="footer-bottom">
+    Powered by <b>Sixhands Studio</b>　｜　© 2026 助哥 · Sixhands Studio · All Rights Reserved.<br>
+    本網站所載資訊僅供參考，非《不動產估價師法》所稱之估價報告；房地產買賣須遵循相關法規。
   </div>
-</section>
-
-<!-- PRODUCT FAMILY -->
-<section class="product-family">
-  <h2 class="section-title">AI 創作工具全系列</h2>
-  <p class="section-sub" style="color:rgba(255,255,255,.65);margin-bottom:40px;">從房仲文案到國風動畫，完整的 AI 創作資源包</p>
-  <div class="prod-grid">
-
-    <div class="prod-card tag-video">
-      <div class="prod-icon">🎬</div>
-      <div class="prod-tag">AI 影片模板</div>
-      <h3>房仲 AI 影片腳本模板包</h3>
-      <p>不露臉、不剪片，30 個腳本模板讓 AI 替你講房產知識。每週穩定出片，讓潛客記住你。</p>
-      <div class="prod-price">NT$297 起</div>
-      <div class="prod-price-sub">入門版 / 完整版 NT$697 / VIP NT$1,997</div>
-      <ul class="prod-feats">
-        <li>30 個即套即用影片腳本模板</li>
-        <li>5 大主題：知識、行情、避坑、品牌、問答</li>
-        <li>HeyGen / Pictory / CapCut 操作教學</li>
-        <li>IG / YT 標題公式套組 × 30 個</li>
-      </ul>
-      <a href="ai-video-template.html" class="btn-prod">查看 AI 影片模板包 →</a>
-    </div>
-
-    <div class="prod-card tag-makeover">
-      <div class="prod-icon">🏠</div>
-      <div class="prod-tag">AI 空屋改造</div>
-      <h3>AI 空屋改造模板包（三合一）</h3>
-      <p>舊家具移除換新、風格改造對比、毛胚屋模擬完工，三種類型自選搭配，30 分鐘出一組 Before/After。</p>
-      <div class="prod-price">NT$297 起</div>
-      <div class="prod-price-sub">單類型 / 雙類型 NT$497 / 三合一 NT$697 / VIP NT$2,497</div>
-      <ul class="prod-feats">
-        <li>類型 01：舊家具移除 + 放入新家具</li>
-        <li>類型 02：空間風格改造（5 種風格）</li>
-        <li>類型 03：毛胚屋模擬完工效果</li>
-        <li>AI Prompt 模板庫 + CapCut 影片模板</li>
-      </ul>
-      <a href="ai-room-makeover.html" class="btn-prod">查看 AI 空屋改造包 →</a>
-    </div>
-
-    <div class="prod-card tag-wuxing">
-      <div class="prod-icon">🖌️</div>
-      <div class="prod-tag">國風動畫系列</div>
-      <h3>五行系列 YouTube 國風水墨動畫製作包</h3>
-      <p>木・火・土・金・水五位擬人角色，五集完整腳本分鏡＋Midjourney AI 生圖提示詞＋製作 SOP，開箱即用打造整個系列頻道。</p>
-      <div class="prod-price">NT$397 起</div>
-      <div class="prod-price-sub">入門版 / 完整版 NT$897 / VIP NT$2,497</div>
-      <ul class="prod-feats">
-        <li>五集完整腳本分鏡（每集 3.5 分鐘）</li>
-        <li>五角色設定＋Midjourney 提示詞</li>
-        <li>七步製作 SOP（生圖→動畫→剪輯）</li>
-        <li>頻道營運規劃＋標題公式</li>
-      </ul>
-      <a href="five-elements-animation.html" class="btn-prod">查看五行動畫製作包 →</a>
-    </div>
-
-    <div class="prod-card tag-speaking">
-      <div class="prod-icon">🗣️</div>
-      <div class="prod-tag">表達力訓練<span class="prod-free">免費試用</span></div>
-      <h3>5 大說話公式互動式練習模組</h3>
-      <p>結論先說、把話接住、觀點清楚、說服他人、讓人記住。每個公式都有情境練習＋語音輸入＋即時改進建議，提升表達力與情商。</p>
-      <div class="prod-price">免費體驗</div>
-      <div class="prod-price-sub">線上互動 · 不用下載 · 進度自動存</div>
-      <ul class="prod-feats">
-        <li>5 大說話公式 × 4 個情境練習題</li>
-        <li>支援文字 + 語音輸入（zh-TW）</li>
-        <li>即時評分、勾叉清單、改進 tip</li>
-        <li>進度追蹤＋完成結算頁</li>
-      </ul>
-      <a href="speaking-practice.html" class="btn-prod">立即開始練習 →</a>
-    </div>
-
-  </div>
-</section>
-
-<!-- FINAL CTA -->
-<section class="final-cta">
-  <div class="container">
-    <h2>讓 AI 成為您的 24 小時業務助理</h2>
-    <p>因為您的競爭對手，可能已經在用了。</p>
-    <a href="https://sixhands.gumroad.com/l/beljzu" class="btn-primary" target="_blank">立即購買 NT$790 →</a>
-  </div>
-</section>
-
-<footer>
-  © 2025 房地產仲介 AI 提示詞包 · 為台灣房仲打造
 </footer>
 
 </body>
