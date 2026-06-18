@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>助哥元辰宮｜專屬命格解析</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #E8C96B;
+    --gold-dark: #8B6914;
+    --black: #0A0A0A;
+    --dark: #111111;
+    --dark2: #1A1A1A;
+    --text: #F0E6CC;
+    --text-dim: #A89060;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans TC', 'PingFang TC', Arial, sans-serif;
+    background: #333;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  /* A4 Portrait */
+  .report-page {
+    width: 794px;
+    min-height: 1123px;
+    background: var(--black);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 80px rgba(0,0,0,.8);
+  }
+
+  /* ── 外框金邊 ── */
+  .report-page::before {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    border: 1px solid rgba(201,168,76,.25);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .report-page::after {
+    content: '';
+    position: absolute;
+    inset: 12px;
+    border: 1px solid rgba(201,168,76,.1);
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* ── 背景裝飾光暈 ── */
+  .bg-glow {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 25% 30%, rgba(180,130,30,.08) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 60% at 75% 70%, rgba(100,70,10,.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* ── 頂部標題列 ── */
+  .header {
+    position: relative;
+    z-index: 5;
+    padding: 22px 28px 16px;
+    border-bottom: 1px solid rgba(201,168,76,.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(180deg, rgba(201,168,76,.06) 0%, transparent 100%);
+  }
+
+  .header-left { display: flex; flex-direction: column; gap: 2px; }
+
+  .brand-name {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 2rem;
+    font-weight: 900;
+    color: var(--gold);
+    letter-spacing: 4px;
+    text-shadow: 0 0 30px rgba(201,168,76,.5);
+  }
+
+  .brand-sub {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 6px;
+    font-weight: 300;
+  }
+
+  .header-right { text-align: right; }
+
+  .report-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1rem;
+    color: var(--gold-light);
+    letter-spacing: 3px;
+    margin-bottom: 3px;
+  }
+
+  .report-subtitle {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+  }
+
+  /* ── 金色分隔線 ── */
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: .4;
+  }
+
+  /* ── 主體兩欄 ── */
+  .main-body {
+    flex: 1;
+    display: flex;
+    position: relative;
+    z-index: 5;
+  }
+
+  /* 左欄 — 個人資訊 + 裝飾 */
+  .left-col {
+    width: 230px;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, rgba(201,168,76,.05) 0%, rgba(0,0,0,0) 100%);
+    border-right: 1px solid rgba(201,168,76,.15);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px;
+    gap: 16px;
+  }
+
+  /* 命格印鑑 */
+  .destiny-seal {
+    width: 90px;
+    height: 90px;
+    border: 2px solid var(--gold);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(201,168,76,.05);
+    box-shadow: 0 0 20px rgba(201,168,76,.2), inset 0 0 20px rgba(201,168,76,.05);
+    position: relative;
+  }
+
+  .destiny-seal::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid rgba(201,168,76,.3);
+    border-radius: 50%;
+  }
+
+  .seal-icon { font-size: 2rem; }
+
+  .seal-type {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 0.55rem;
+    color: var(--gold);
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  /* 客戶資訊卡 */
+  .client-card {
+    width: 100%;
+    background: rgba(201,168,76,.05);
+    border: 1px solid rgba(201,168,76,.2);
+    border-radius: 4px;
+    padding: 12px;
+  }
+
+  .client-name {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--gold-light);
+    text-align: center;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(201,168,76,.2);
+  }
+
+  .client-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+  }
+
+  .info-label {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .info-value {
+    font-size: 0.65rem;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* 命格類型標籤 */
+  .destiny-type-badge {
+    width: 100%;
+    text-align: center;
+    padding: 10px;
+    background: linear-gradient(135deg, rgba(201,168,76,.15), rgba(201,168,76,.05));
+    border: 1px solid rgba(201,168,76,.3);
+    border-radius: 4px;
+  }
+
+  .badge-label {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .badge-type {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1rem;
+    color: var(--gold);
+    font-weight: 700;
+    letter-spacing: 2px;
+    display: block;
+  }
+
+  /* 致命結論 */
+  .fatal-conclusion {
+    width: 100%;
+    padding: 10px;
+    border-left: 2px solid var(--gold);
+    background: rgba(201,168,76,.04);
+  }
+
+  .fc-label {
+    font-size: 0.58rem;
+    color: var(--gold);
+    letter-spacing: 2px;
+    margin-bottom: 5px;
+    display: block;
+  }
+
+  .fc-text {
+    font-size: 0.7rem;
+    color: var(--text);
+    line-height: 1.6;
+    font-style: italic;
+  }
+
+  /* 底部標籤 (左欄) */
+  .left-bottom-tags {
+    width: 100%;
+    margin-top: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .mini-tag {
+    background: rgba(201,168,76,.08);
+    border: 1px solid rgba(201,168,76,.2);
+    border-radius: 3px;
+    padding: 6px 4px;
+    text-align: center;
+  }
+
+  .mini-tag .tag-icon { font-size: 0.9rem; display: block; margin-bottom: 2px; }
+  .mini-tag .tag-label { font-size: 0.55rem; color: var(--text-dim); letter-spacing: 0.5px; display: block; }
+  .mini-tag .tag-value { font-size: 0.6rem; color: var(--gold-light); font-weight: 500; display: block; margin-top: 1px; }
+
+  /* 右欄 — 分析內容 */
+  .right-col {
+    flex: 1;
+    padding: 18px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* 分析區塊 */
+  .analysis-section {
+    border: 1px solid rgba(201,168,76,.15);
+    border-radius: 4px;
+    padding: 12px 14px;
+    background: rgba(255,255,255,.01);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .analysis-section::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, var(--gold), var(--gold-dark));
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 7px;
+  }
+
+  .section-num {
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--gold);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.62rem;
+    color: var(--gold);
+    font-weight: 700;
+    flex-shrink: 0;
+    background: rgba(201,168,76,.08);
+  }
+
+  .section-icon { font-size: 1rem; }
+
+  .section-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 0.85rem;
+    color: var(--gold-light);
+    font-weight: 700;
+    letter-spacing: 2px;
+    flex: 1;
+  }
+
+  .section-content {
+    font-size: 0.68rem;
+    color: var(--text);
+    line-height: 1.8;
+    opacity: .9;
+  }
+
+  .section-content ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .section-content ul li::before {
+    content: '·';
+    color: var(--gold);
+    margin-right: 6px;
+    font-size: 1rem;
+    vertical-align: middle;
+  }
+
+  /* ── 底部 ── */
+  .footer {
+    position: relative;
+    z-index: 5;
+    padding: 14px 28px 18px;
+    border-top: 1px solid rgba(201,168,76,.2);
+    background: linear-gradient(0deg, rgba(201,168,76,.06) 0%, transparent 100%);
+  }
+
+  .footer-quote {
+    text-align: center;
+    margin-bottom: 14px;
+  }
+
+  .quote-main {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 0.88rem;
+    color: var(--gold-light);
+    letter-spacing: 3px;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  .quote-sub {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 4px;
+  }
+
+  .footer-icons {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    border: 1px solid rgba(201,168,76,.2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .footer-icon-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 6px;
+    border-right: 1px solid rgba(201,168,76,.2);
+    gap: 4px;
+  }
+
+  .footer-icon-item:last-child { border-right: none; }
+
+  .fi-icon { font-size: 1.2rem; }
+
+  .fi-label {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .fi-value {
+    font-size: 0.65rem;
+    color: var(--gold-light);
+    font-weight: 500;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── 角落裝飾 ── */
+  .corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    z-index: 11;
+  }
+
+  .corner-tl { top: 16px; left: 16px; border-top: 1px solid var(--gold); border-left: 1px solid var(--gold); opacity: .5; }
+  .corner-tr { top: 16px; right: 16px; border-top: 1px solid var(--gold); border-right: 1px solid var(--gold); opacity: .5; }
+  .corner-bl { bottom: 16px; left: 16px; border-bottom: 1px solid var(--gold); border-left: 1px solid var(--gold); opacity: .5; }
+  .corner-br { bottom: 16px; right: 16px; border-bottom: 1px solid var(--gold); border-right: 1px solid var(--gold); opacity: .5; }
+
+  /* ── 列印樣式 ── */
+  @media print {
+    body { background: none; padding: 0; }
+    .report-page {
+      box-shadow: none;
+      width: 210mm;
+      min-height: 297mm;
+    }
+    @page { margin: 0; size: A4 portrait; }
+  }
+</style>
+</head>
+<body>
+
+<div class="report-page" id="report">
+
+  <!-- 裝飾角落 -->
+  <div class="corner corner-tl"></div>
+  <div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div>
+  <div class="corner corner-br"></div>
+
+  <!-- 背景光暈 -->
+  <div class="bg-glow"></div>
+
+  <!-- ── 頂部標題 ── -->
+  <div class="header">
+    <div class="header-left">
+      <div class="brand-name">助哥元辰宮</div>
+      <div class="brand-sub">命運 × 策略 × 財富</div>
+    </div>
+    <div class="header-right">
+      <div class="report-title">專屬命格解析</div>
+      <div class="report-subtitle">為您解鎖命運密碼，創造豐足人生</div>
+    </div>
+  </div>
+
+  <!-- ── 主體 ── -->
+  <div class="main-body">
+
+    <!-- 左欄 -->
+    <div class="left-col">
+
+      <!-- 命格印鑑 -->
+      <div class="destiny-seal">
+        <div class="seal-icon">🐉</div>
+        <div class="seal-type">{{destiny_symbol}}</div>
+      </div>
+
+      <!-- 客戶資訊 -->
+      <div class="client-card">
+        <div class="client-name">{{client_name}}</div>
+        <div class="client-info-row">
+          <span class="info-label">出生</span>
+          <span class="info-value">{{birth_date}}</span>
+        </div>
+        <div class="client-info-row">
+          <span class="info-label">時辰</span>
+          <span class="info-value">{{birth_time}}</span>
+        </div>
+        <div class="client-info-row">
+          <span class="info-label">性別</span>
+          <span class="info-value">{{gender}}</span>
+        </div>
+        <div class="client-info-row">
+          <span class="info-label">解析日期</span>
+          <span class="info-value">{{report_date}}</span>
+        </div>
+      </div>
+
+      <!-- 命格類型 -->
+      <div class="destiny-type-badge">
+        <span class="badge-label">YOUR DESTINY TYPE</span>
+        <span class="badge-type">{{destiny_type}}</span>
+      </div>
+
+      <!-- 致命結論 -->
+      <div class="fatal-conclusion">
+        <span class="fc-label">▸ 核心洞見</span>
+        <div class="fc-text">{{core_insight}}</div>
+      </div>
+
+      <!-- 底部 mini tags -->
+      <div class="left-bottom-tags">
+        <div class="mini-tag">
+          <span class="tag-icon">👤</span>
+          <span class="tag-label">命格特質</span>
+          <span class="tag-value">{{trait_tag}}</span>
+        </div>
+        <div class="mini-tag">
+          <span class="tag-icon">🎯</span>
+          <span class="tag-label">關鍵課題</span>
+          <span class="tag-value">{{challenge_tag}}</span>
+        </div>
+        <div class="mini-tag">
+          <span class="tag-icon">💎</span>
+          <span class="tag-label">財富關鍵</span>
+          <span class="tag-value">{{wealth_tag}}</span>
+        </div>
+        <div class="mini-tag">
+          <span class="tag-icon">🏆</span>
+          <span class="tag-label">成功關鍵</span>
+          <span class="tag-value">{{success_tag}}</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 右欄 — 分析內容 -->
+    <div class="right-col">
+
+      <!-- 1. 元辰宮能量 -->
+      <div class="analysis-section">
+        <div class="section-header">
+          <div class="section-num">1</div>
+          <div class="section-icon">🐉</div>
+          <div class="section-title">元辰宮能量</div>
+        </div>
+        <div class="section-content">
+          <ul>
+            {{energy_points}}
+          </ul>
+        </div>
+      </div>
+
+      <!-- 2. 性格與天賦 -->
+      <div class="analysis-section">
+        <div class="section-header">
+          <div class="section-num">2</div>
+          <div class="section-icon">👑</div>
+          <div class="section-title">性格與天賦</div>
+        </div>
+        <div class="section-content">
+          <ul>
+            {{personality_points}}
+          </ul>
+        </div>
+      </div>
+
+      <!-- 3. 人生課程 -->
+      <div class="analysis-section">
+        <div class="section-header">
+          <div class="section-num">3</div>
+          <div class="section-icon">📖</div>
+          <div class="section-title">人生課程</div>
+        </div>
+        <div class="section-content">
+          <ul>
+            {{lesson_points}}
+          </ul>
+        </div>
+      </div>
+
+      <!-- 4. 財富之路 -->
+      <div class="analysis-section">
+        <div class="section-header">
+          <div class="section-num">4</div>
+          <div class="section-icon">📈</div>
+          <div class="section-title">財富之路</div>
+        </div>
+        <div class="section-content">
+          <ul>
+            {{wealth_points}}
+          </ul>
+        </div>
+      </div>
+
+      <!-- 5. 人際與財富 -->
+      <div class="analysis-section">
+        <div class="section-header">
+          <div class="section-num">5</div>
+          <div class="section-icon">🤝</div>
+          <div class="section-title">人際與財富</div>
+        </div>
+        <div class="section-content">
+          <ul>
+            {{relationship_points}}
+          </ul>
+        </div>
+      </div>
+
+      <!-- 6. 命格祝福 -->
+      <div class="analysis-section">
+        <div class="section-header">
+          <div class="section-num">6</div>
+          <div class="section-icon">🪷</div>
+          <div class="section-title">命格祝福</div>
+        </div>
+        <div class="section-content">
+          <ul>
+            {{blessing_points}}
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── 底部 ── -->
+  <div class="footer">
+    <div class="footer-quote">
+      <span class="quote-main">{{footer_quote}}</span>
+      <span class="quote-sub">{{footer_sub}}</span>
+    </div>
+    <div class="footer-icons">
+      <div class="footer-icon-item">
+        <span class="fi-icon">🏢</span>
+        <span class="fi-label">專業背景</span>
+        <span class="fi-value">{{icon1}}</span>
+      </div>
+      <div class="footer-icon-item">
+        <span class="fi-icon">🤖</span>
+        <span class="fi-label">分析系統</span>
+        <span class="fi-value">{{icon2}}</span>
+      </div>
+      <div class="footer-icon-item">
+        <span class="fi-icon">💎</span>
+        <span class="fi-label">服務等級</span>
+        <span class="fi-value">{{icon3}}</span>
+      </div>
+      <div class="footer-icon-item">
+        <span class="fi-icon">🎯</span>
+        <span class="fi-label">核心方法</span>
+        <span class="fi-value">{{icon4}}</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 示範資料（實際系統會用 JS 動態填入）── -->
+<script>
+const DEMO_DATA = {
+  client_name:       "王大明",
+  birth_date:        "1985/03/15",
+  birth_time:        "辰時（08:00）",
+  gender:            "男",
+  report_date:       "2025/05/11",
+  destiny_symbol:    "天龍",
+  destiny_type:      "開創型 · 精準型",
+  core_insight:      "你不是沒能力，是一直把時間浪費在不會成交的人身上。你的財富密碼在於精準篩選，而非廣撒網。",
+  trait_tag:         "開創精準型",
+  challenge_tag:     "學會篩選",
+  wealth_tag:        "選對客戶",
+  success_tag:       "專注價值",
+  energy_points:     `<li>能量強大，直覺敏銳，天生具備領導與開創力</li>
+                      <li>財富能量穩定，具吸金體質，適合高價值成交</li>
+                      <li>元辰宮守護力強，逢凶化吉，貴人不斷</li>`,
+  personality_points:`<li>直覺快速，決策果斷，行動力強、敢衝敢拼</li>
+                      <li>人緣佳，善於溝通，有洞察力，能看穿本質</li>
+                      <li>天賦領導，影響力強，適合建立個人品牌</li>`,
+  lesson_points:     `<li>學會篩選與設界線，不再為別人的猶豫買單</li>
+                      <li>把時間與精力，留給對的人、對的客戶</li>
+                      <li>建立高價值服務定位，停止低價競爭</li>`,
+  wealth_points:     `<li>減少錯誤付出，提高成交率，聚焦高價值客戶</li>
+                      <li>提升單價，建立個人品牌與信任感</li>
+                      <li>穩定被動收入＋資產配置，創造財富雪球</li>`,
+  relationship_points:`<li>吸引對的人來到你身邊，合作共贏、資源自然匯聚</li>
+                       <li>用真誠與專業創造長期財富，貴人相助</li>
+                       <li>善用人脈槓桿，將社交資本轉化為財富</li>`,
+  blessing_points:   `<li>龍龜賜福，財富穩定累積，智慧提升，決策更精準</li>
+                      <li>所做的每個選擇都帶來豐盛，事業與財富雙豐收</li>
+                      <li>成就非凡，名利雙收，造福社會，福澤綿長</li>`,
+  footer_quote:      "當你選擇對的人與方向，宇宙將為你打開豐盛之門。",
+  footer_sub:        "專注・篩選・成交・財富自然流向你",
+  icon1:             "房地產策略",
+  icon2:             "人工智慧",
+  icon3:             "資產配置",
+  icon4:             "精準成交",
+};
+
+function fillReport(data) {
+  const page = document.getElementById('report');
+  let html = page.innerHTML;
+  for (const [key, val] of Object.entries(data)) {
+    html = html.split(`{{${key}}}`).join(val);
+  }
+  page.innerHTML = html;
+}
+
+fillReport(DEMO_DATA);
+</script>
+
+</body>
+</html>
