@@ -1,0 +1,10 @@
+# Python 快取
+__pycache__/
+*.pyc
+# 產出物（每次生成的素材，不入庫）
+generated_frames_output/
+*.mp3
+*.mp4
+*.srt
+!cat_economics.srt
+!examples/*.srt

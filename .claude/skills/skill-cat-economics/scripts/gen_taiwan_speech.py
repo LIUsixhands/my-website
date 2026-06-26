@@ -1,141 +1,148 @@
+#!/usr/bin/env python3
+"""Minimax 國際版 (t2a_v2) 配音生成。
+
+讀取逐字稿 → 呼叫 Minimax T2A v2 → 輸出 mp3。
+支援台灣女生音色，可用環境變數覆寫設定。
+
+環境變數：
+    MINIMAX_API_KEY    (必填) sk- 開頭的金鑰
+    MINIMAX_GROUP_ID   (必填) 帳號 UID / GroupId
+    MINIMAX_VOICE_ID   (選填) 預設 female-shaonv（貓咪經濟學經典台灣女生音色）
+    MINIMAX_MODEL      (選填) 預設 speech-02-hd
+    MINIMAX_API_HOST   (選填) 預設 https://api.minimax.io（西美可改 https://api-uw.minimax.io）
+
+用法：
+    python gen_taiwan_speech.py            # 讀腳本全文 → voiceover.mp3
+    python gen_taiwan_speech.py --demo     # 只唸前一句 → voiceover_demo.mp3（試聽用）
+    python gen_taiwan_speech.py <腳本路徑> [輸出.mp3]
+"""
 import os
-import json
-import urllib.request
-import urllib.error
+import re
 import sys
 
-# ==========================================
-# 配置信息
-# ==========================================
-# 從環境變量讀取 API Key 和 Group ID
+try:
+    import requests
+except ImportError:
+    print("❌ 缺少套件 requests。請確認 setup script 已執行：pip install requests")
+    sys.exit(1)
+
 API_KEY = os.getenv("MINIMAX_API_KEY")
 GROUP_ID = os.getenv("MINIMAX_GROUP_ID")
+VOICE_ID = os.getenv("MINIMAX_VOICE_ID", "female-shaonv")
+MODEL = os.getenv("MINIMAX_MODEL", "speech-02-hd")
+API_HOST = os.getenv("MINIMAX_API_HOST", "https://api.minimax.io")
 
-API_BASE_URL = "https://api.minimax.chat/v1"
-# 使用 speech-01 以匹配 female-shaonv 音色
-MODEL_SPEECH = "speech-01" 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_SCRIPT = os.path.join(BASE_DIR, "..", "貓咪經濟學腳本.txt")
 
-def make_request(endpoint, method="POST", data=None):
-    if not API_KEY:
-        print("❌ 錯誤: 未找到 MINIMAX_API_KEY 環境變量。")
-        return None
 
-    # 將 Group ID 添加到 URL 查詢參數中
-    if "?" in endpoint:
-        url = f"{API_BASE_URL}{endpoint}&GroupId={GROUP_ID}"
-    else:
-        url = f"{API_BASE_URL}{endpoint}?GroupId={GROUP_ID}"
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_KEY}"
-    }
-    
-    if data:
-        json_data = json.dumps(data).encode('utf-8')
-    else:
-        json_data = None
-        
-    req = urllib.request.Request(url, data=json_data, headers=headers, method=method)
-    
-    try:
-        with urllib.request.urlopen(req) as response:
-            return json.loads(response.read().decode('utf-8'))
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode('utf-8')
-        print(f"❌ API 請求失敗: {e.code} - {error_body}")
-        return None
-    except Exception as e:
-        print(f"❌ 發生錯誤: {e}")
-        return None
+def sanitize(text):
+    """移除非口播內容（[畫面]、(旁白)、# 標題），確保 TTS 只唸台詞。"""
+    text = re.sub(r"\[.*?\]", "", text)
+    text = re.sub(r"\(.*?\)", "", text)
+    text = re.sub(r"（.*?）", "", text)
+    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
+    return text.strip()
 
-def generate_speech(text, voice_id="female-shaonv"):
-    print(f"🎙️ 正在生成語音...")
-    print(f"📝 文本: {text[:50]}...")
-    print(f"🗣️ 聲音 ID: {voice_id}")
-    
-    # 根據模型調整 payload
-    payload = {
-        "model": MODEL_SPEECH,
-        "text": text,
-        "voice_id": voice_id, # speech-01 使用 voice_id
-        "speed": 1.0,
-        "vol": 1.0,
-        "pitch": 0
-    }
-    
-    # 調用 T2A V1 (text_to_speech)
-    response = make_request("/text_to_speech", data=payload)
-    
-    if not response:
-        return
 
-    # 檢查響應
-    if "base_resp" in response and response["base_resp"]["status_code"] == 0:
-        # T2A V1 通常在 content 或 audio_file 中返回
-        # 注意：Minimax T2A V1 API 直接返回二進制流，但這裡 make_request 嘗試解析 JSON
-        # 如果是 V1，make_request 的 json.loads 可能會失敗，因為它返回的是 audio/mpeg
-        pass
-    
-    # 修正：make_request 假設是 JSON，但 speech-01 如果成功會直接返回音頻流
-    # 我們需要重寫 make_request 來處理二進制響應，或者在此處使用 requests 庫更簡單
-    # 為了保持依賴最少，我們修改上面的邏輯，但為了穩定性，這裡改用 requests (如果環境有) 或者 urllib 的正確處理
-    
-    # 由於 make_request 已經讀取了 body，如果它是二進制，decode('utf-8') 會失敗。
-    # 讓我們重新實現一個簡單的 generate 函數，不使用上面的 make_request
-    pass
+def first_sentence(text):
+    for sep in ["。", "！", "？", "\n"]:
+        if sep in text:
+            return text.split(sep)[0] + sep
+    return text[:60]
 
-# 重寫生成函數以支持二進制響應
-def generate_speech_robust(text, voice_id="female-shaonv", output_file="voiceover.mp3"):
+
+def synthesize(text, output_file):
     if not API_KEY or not GROUP_ID:
-        print("❌ 錯誤: 未設置 MINIMAX_API_KEY 或 MINIMAX_GROUP_ID。")
-        return
+        print("❌ 找不到 MINIMAX_API_KEY 或 MINIMAX_GROUP_ID。請確認環境設定已填入並存檔，且這是新開的 session。")
+        return False
 
-    url = f"{API_BASE_URL}/text_to_speech?GroupId={GROUP_ID}"
-    
+    url = f"{API_HOST}/v1/t2a_v2?GroupId={GROUP_ID}"
     headers = {
+        "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_KEY}"
     }
-    
     payload = {
-        "model": MODEL_SPEECH,
+        "model": MODEL,
         "text": text,
-        "voice_id": voice_id,
-        "speed": 1.0,
-        "vol": 1.0,
-        "pitch": 0
+        "stream": False,
+        "voice_setting": {
+            "voice_id": VOICE_ID,
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+        },
+        "audio_setting": {
+            "sample_rate": 32000,
+            "bitrate": 128000,
+            "format": "mp3",
+            "channel": 1,
+        },
     }
+
+    print(f"🎙️ 模型 {MODEL}｜音色 {VOICE_ID}｜字數 {len(text)}")
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=120)
+    except Exception as e:
+        print(f"❌ 連線失敗：{e}")
+        print("   （若是網路被擋，請確認環境網路白名單已加入 *.minimax.io）")
+        return False
+
+    if resp.status_code != 200:
+        print(f"❌ HTTP {resp.status_code}：{resp.text[:500]}")
+        return False
 
     try:
-        data = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        
-        with urllib.request.urlopen(req) as response:
-            if response.getheader("Content-Type") == "audio/mpeg":
-                audio_content = response.read()
-                with open(output_file, "wb") as f:
-                    f.write(audio_content)
-                print(f"✅ 語音生成成功！已保存為: {output_file}")
-            else:
-                print(f"⚠️ 收到非音頻響應: {response.read().decode('utf-8')}")
-                
-    except Exception as e:
-        print(f"❌ 請求失敗: {e}")
+        data = resp.json()
+    except Exception:
+        print(f"❌ 回應不是 JSON：{resp.text[:300]}")
+        return False
 
-if __name__ == "__main__":
-    # 默認讀取同目錄下的腳本文件
-    script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "貓咪經濟學腳本.txt")
-    if os.path.exists(script_path):
-        with open(script_path, "r", encoding="utf-8") as f:
-            text = f.read()
-        generate_speech_robust(text)
+    base = data.get("base_resp", {})
+    if base.get("status_code") not in (0, None):
+        print(f"❌ Minimax 回報錯誤：{base.get('status_code')} - {base.get('status_msg')}")
+        print(f"   完整回應：{str(data)[:400]}")
+        return False
+
+    audio_hex = (data.get("data") or {}).get("audio")
+    if not audio_hex:
+        print(f"❌ 回應沒有音檔內容：{str(data)[:400]}")
+        return False
+
+    try:
+        audio_bytes = bytes.fromhex(audio_hex)
+    except ValueError:
+        print("❌ 音檔解碼失敗（非 hex 格式）。")
+        return False
+
+    with open(output_file, "wb") as f:
+        f.write(audio_bytes)
+    print(f"✅ 配音完成：{output_file}（{len(audio_bytes)//1024} KB）")
+    return True
+
+
+def main():
+    args = [a for a in sys.argv[1:]]
+    demo = "--demo" in args
+    args = [a for a in args if a != "--demo"]
+
+    script_path = args[0] if args else DEFAULT_SCRIPT
+    if not os.path.exists(script_path):
+        print(f"⚠️ 找不到腳本 {script_path}，改用測試句。")
+        text = "歡迎來到貓咪經濟學，今天我們聊聊爪爪稅大戰。"
+        out = args[1] if len(args) > 1 else "voiceover_demo.mp3"
     else:
-        print("未找到腳本文件，生成測試語音...")
-        generate_speech_robust("這是一個測試語音，確認貓咪經濟學的音色。")
+        with open(script_path, "r", encoding="utf-8") as f:
+            text = sanitize(f.read())
+        if demo:
+            text = first_sentence(text)
+            out = args[1] if len(args) > 1 else "voiceover_demo.mp3"
+            print("（試聽模式：只唸第一句）")
+        else:
+            out = args[1] if len(args) > 1 else "voiceover.mp3"
+
+    synthesize(text, os.path.join(os.getcwd(), out))
+
 
 if __name__ == "__main__":
-    text = "你好嗎？想你了"
-    # 嘗試使用甜美女生聲音模擬台灣女生風格
-    # 其他可選 ID: Lovely_Girl, Lively_Girl, Chinese (Mandarin)_HK_Flight_Attendant
-    generate_speech(text, voice_id="Sweet_Girl_2")
+    main()
