@@ -5,3 +5,8 @@ requests
 google-genai
 # 步驟六 合成：音畫同步輸出 MP4（需系統另裝 ffmpeg）
 moviepy
+# 自動上傳 YouTube：YouTube Data API v3 + OAuth
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
