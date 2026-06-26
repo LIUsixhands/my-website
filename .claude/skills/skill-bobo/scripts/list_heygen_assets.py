@@ -42,7 +42,7 @@ def list_voices(all_voices=False):
 
 
 def list_avatars(limit=20):
-    r = requests.get(f"{API}/v2/avatars", headers=headers(), timeout=60)
+    r = requests.get(f"{API}/v2/avatars", headers=headers(), timeout=180)
     avatars = r.json().get("data", {}).get("avatars", [])
     print(f"\n=== 主播角色(共 {len(avatars)} 個，顯示前 {limit}) ===")
     for a in avatars[:limit]:
