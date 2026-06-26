@@ -52,12 +52,39 @@ def first_sentence(text):
     return text[:60]
 
 
+def _attempt(url, payload, headers):
+    """單次嘗試，回傳 (audio_bytes 或 None, 錯誤說明字串)。"""
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=120)
+    except Exception as e:
+        return None, f"連線失敗：{e}（若網路被擋，請確認白名單已加 *.minimax.io）"
+
+    if resp.status_code != 200:
+        return None, f"HTTP {resp.status_code}：{resp.text[:300]}"
+    try:
+        data = resp.json()
+    except Exception:
+        return None, f"回應不是 JSON：{resp.text[:200]}"
+
+    base = data.get("base_resp", {}) or {}
+    code = base.get("status_code")
+    if code not in (0, None):
+        return None, f"Minimax 錯誤 {code} - {base.get('status_msg')}"
+
+    audio_hex = (data.get("data") or {}).get("audio")
+    if not audio_hex:
+        return None, f"回應沒有音檔：{str(data)[:200]}"
+    try:
+        return bytes.fromhex(audio_hex), None
+    except ValueError:
+        return None, "音檔解碼失敗（非 hex）"
+
+
 def synthesize(text, output_file):
-    if not API_KEY or not GROUP_ID:
-        print("❌ 找不到 MINIMAX_API_KEY 或 MINIMAX_GROUP_ID。請確認環境設定已填入並存檔，且這是新開的 session。")
+    if not API_KEY:
+        print("❌ 找不到 MINIMAX_API_KEY。請確認環境設定已填入並存檔，且這是新開的 session。")
         return False
 
-    url = f"{API_HOST}/v1/t2a_v2?GroupId={GROUP_ID}"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
@@ -66,59 +93,34 @@ def synthesize(text, output_file):
         "model": MODEL,
         "text": text,
         "stream": False,
-        "voice_setting": {
-            "voice_id": VOICE_ID,
-            "speed": 1.0,
-            "vol": 1.0,
-            "pitch": 0,
-        },
-        "audio_setting": {
-            "sample_rate": 32000,
-            "bitrate": 128000,
-            "format": "mp3",
-            "channel": 1,
-        },
+        "voice_setting": {"voice_id": VOICE_ID, "speed": 1.0, "vol": 1.0, "pitch": 0},
+        "audio_setting": {"sample_rate": 32000, "bitrate": 128000, "format": "mp3", "channel": 1},
     }
 
+    # 國際版多半「不帶 GroupId」即可；帶錯的 GroupId 會出現 1004。
+    # 自動依序嘗試：不帶 GroupId → 帶 GroupId，哪個成功用哪個。
+    base_url = f"{API_HOST}/v1/t2a_v2"
+    variants = [("不帶 GroupId", base_url)]
+    if GROUP_ID:
+        variants.append((f"帶 GroupId={GROUP_ID}", f"{base_url}?GroupId={GROUP_ID}"))
+
     print(f"🎙️ 模型 {MODEL}｜音色 {VOICE_ID}｜字數 {len(text)}")
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=120)
-    except Exception as e:
-        print(f"❌ 連線失敗：{e}")
-        print("   （若是網路被擋，請確認環境網路白名單已加入 *.minimax.io）")
-        return False
+    errors = []
+    for label, url in variants:
+        print(f"  嘗試（{label}）…")
+        audio_bytes, err = _attempt(url, payload, headers)
+        if audio_bytes:
+            with open(output_file, "wb") as f:
+                f.write(audio_bytes)
+            print(f"✅ 配音完成（{label}）：{output_file}（{len(audio_bytes)//1024} KB）")
+            return True
+        print(f"     ✗ {err}")
+        errors.append(f"{label}: {err}")
 
-    if resp.status_code != 200:
-        print(f"❌ HTTP {resp.status_code}：{resp.text[:500]}")
-        return False
-
-    try:
-        data = resp.json()
-    except Exception:
-        print(f"❌ 回應不是 JSON：{resp.text[:300]}")
-        return False
-
-    base = data.get("base_resp", {})
-    if base.get("status_code") not in (0, None):
-        print(f"❌ Minimax 回報錯誤：{base.get('status_code')} - {base.get('status_msg')}")
-        print(f"   完整回應：{str(data)[:400]}")
-        return False
-
-    audio_hex = (data.get("data") or {}).get("audio")
-    if not audio_hex:
-        print(f"❌ 回應沒有音檔內容：{str(data)[:400]}")
-        return False
-
-    try:
-        audio_bytes = bytes.fromhex(audio_hex)
-    except ValueError:
-        print("❌ 音檔解碼失敗（非 hex 格式）。")
-        return False
-
-    with open(output_file, "wb") as f:
-        f.write(audio_bytes)
-    print(f"✅ 配音完成：{output_file}（{len(audio_bytes)//1024} KB）")
-    return True
+    print("❌ 全部寫法都失敗：")
+    for e in errors:
+        print("   -", e)
+    return False
 
 
 def main():
