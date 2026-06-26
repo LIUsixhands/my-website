@@ -1,0 +1,7 @@
+# 貓咪經濟學 skill 步驟三~六所需套件
+# 步驟三 配音：呼叫 Minimax TTS API
+requests
+# 步驟五 畫面：呼叫 Gemini 影像生成
+google-genai
+# 步驟六 合成：音畫同步輸出 MP4（需系統另裝 ffmpeg）
+moviepy
