@@ -1,0 +1,8 @@
+# 播播 skill（HeyGen → YouTube）所需套件
+# HeyGen API 呼叫 + 影片下載
+requests
+# 自動上傳 YouTube
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
