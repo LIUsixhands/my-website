@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-估價報告產生器（精裝版 v1）— 小屯 · AI 數字員工龍蝦學院
+估價報告產生器（精裝版 v1）— 小登 · AI 數字員工Sixhands Studio
 用途：把單一物件數據填入 DATA，生成「房地產市場行情分析暨建議售價報告」PDF。
 換一棟物件：複製 DATA、改數值、執行本檔即可產出新報告。
 依賴：weasyprint（pip install weasyprint）；中文用系統字型 WenQuanYi Zen Hei。
@@ -151,7 +151,7 @@ def generate(d, out_path):
 <h2>六、建議售價策略</h2>
 <table class="kv">{strat}</table><ul>{stratnote}</ul>
 <div class="note">【免責聲明】本報告係依內政部不動產實價登錄公開資料及市場行情所作之「市場行情分析暨建議售價」，<b>非《不動產估價師法》所稱之不動產估價報告</b>，亦不作為交易價格之保證。實際成交價格受個別屋況、裝潢、市場時機、雙方議價等因素影響。淨房單價中車位價值為估算值。本報告僅供委託人內部參考。<br>
-資料來源：內政部不動產交易實價登錄（統計區間 {d['資料區間']}）。　製作：助哥團隊 · AI 數字員工龍蝦學院。</div>
+資料來源：內政部不動產交易實價登錄（統計區間 {d['資料區間']}）。　製作：助哥團隊 · AI 數字員工Sixhands Studio。</div>
 </body></html>"""
     HTML(string=body).write_pdf(out_path)
     return out_path

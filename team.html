@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sixhands Studio · AI 數字員工團隊</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 86 92'><g stroke='%231F3A2E' stroke-width='4' fill='none' stroke-linecap='square'><line x1='14' y1='20' x2='14' y2='68'/><line x1='26' y1='14' x2='26' y2='74'/><line x1='38' y1='20' x2='38' y2='68'/><line x1='50' y1='14' x2='50' y2='74'/><line x1='62' y1='20' x2='62' y2='68'/><line x1='74' y1='14' x2='74' y2='74'/><line x1='8' y1='82' x2='80' y2='82' stroke-width='3'/></g></svg>">
+<style>
+  :root{
+    --forest:#1F3A2E; --forest-2:#2C4E3D; --cream:#F3EEE2; --cream-2:#FAF7EF;
+    --brass:#B08D3F; --brass-lite:#D8BC7E; --ink:#22271F;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    background:radial-gradient(1200px 600px at 50% -10%, #274436 0%, var(--forest) 55%, #182b21 100%);
+    color:var(--cream); min-height:100vh; padding:48px 20px 72px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+  header{text-align:center;margin-bottom:44px}
+  .kicker{
+    font-size:12px;letter-spacing:.42em;color:var(--brass-lite);
+    text-transform:uppercase;margin-bottom:18px;font-weight:600;
+  }
+  .titlebar{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap}
+  .mark{width:60px;height:64px;flex-shrink:0}
+  .mark svg{width:100%;height:100%;display:block}
+  h1{
+    font-family:"Noto Serif TC",serif;font-weight:800;font-size:clamp(28px,4.6vw,46px);
+    line-height:1.15;letter-spacing:.02em;color:var(--cream);
+  }
+  h1 .studio{color:var(--brass-lite)}
+  .sub{margin-top:16px;color:#C6D2C6;font-size:15px;letter-spacing:.02em}
+  .rule{width:56px;height:3px;background:var(--brass);margin:22px auto 0;border-radius:2px}
+
+  .tier{margin-top:40px}
+  .tier-label{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  .tier-label .tag{
+    font-size:12.5px;letter-spacing:.24em;color:var(--brass-lite);font-weight:700;
+    border:1px solid rgba(216,188,126,.4);padding:5px 12px;border-radius:999px;white-space:nowrap;
+  }
+  .tier-label .desc{font-size:13px;color:#B9C6B9}
+  .tier-label .bar{flex:1;height:1px;background:linear-gradient(90deg,rgba(201,190,159,.5),transparent)}
+
+  .row{display:flex;flex-wrap:wrap;gap:16px}
+  .card{
+    background:linear-gradient(180deg,var(--cream-2),var(--cream));
+    color:var(--ink);border-radius:16px;padding:18px 18px 16px;
+    flex:1 1 220px;min-width:210px;position:relative;
+    border:1px solid rgba(31,58,46,.08);
+    box-shadow:0 10px 24px -14px rgba(0,0,0,.55);
+    transition:transform .18s ease, box-shadow .18s ease;
+  }
+  .card:hover{transform:translateY(-3px);box-shadow:0 18px 34px -16px rgba(0,0,0,.6)}
+  .card .top{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+  .card .name{font-family:"Noto Serif TC",serif;font-weight:800;font-size:22px;color:var(--forest)}
+  .card .en{font-size:11px;letter-spacing:.14em;color:var(--brass);text-transform:uppercase;font-weight:700}
+  .card .role{font-size:13.5px;font-weight:700;color:var(--forest-2);margin-bottom:7px}
+  .card .job{font-size:12.5px;line-height:1.6;color:#565c50}
+  .card.lead{
+    background:linear-gradient(180deg,#2C4E3D,#20392C);color:var(--cream);
+    border:1px solid rgba(216,188,126,.35);
+  }
+  .card.lead .name{color:var(--cream)}
+  .card.lead .role{color:var(--brass-lite)}
+  .card.lead .job{color:#CDD8CC}
+  .card.ceo{max-width:360px;margin:0 auto;text-align:center}
+  .card.ceo .top{justify-content:center}
+
+
+  .dept-grid{display:flex;gap:22px;flex-wrap:wrap}
+  .dept{flex:1 1 420px;min-width:300px;
+    background:rgba(255,255,255,.035);border:1px solid rgba(201,190,159,.18);
+    border-radius:18px;padding:16px}
+  .dept h3{font-size:13px;letter-spacing:.2em;color:var(--brass-lite);font-weight:700;margin-bottom:14px;padding-left:2px}
+  .dept .row{gap:12px}
+  .dept .card{flex:1 1 180px;min-width:170px;padding:15px 15px 13px}
+  .dept .card .name{font-size:19px}
+
+  .flow{margin-top:44px;text-align:center;font-size:12.5px;color:#AEBBAE;letter-spacing:.04em;line-height:2}
+  .flow b{color:var(--brass-lite);font-weight:700}
+  footer{margin-top:40px;text-align:center;font-size:11.5px;color:#8A978A;letter-spacing:.06em}
+  @media (max-width:560px){ .card{flex-basis:100%} .tier-label{flex-wrap:wrap} .mark{width:46px;height:50px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Sixhands Studio · AI Workforce</div>
+    <div class="titlebar">
+      <span class="mark">
+        <svg viewBox="0 0 86 92" xmlns="http://www.w3.org/2000/svg" aria-label="Sixhands Studio">
+          <g stroke="#D8BC7E" stroke-width="3" fill="none" stroke-linecap="square">
+            <line x1="14" y1="20" x2="14" y2="68"/>
+            <line x1="26" y1="14" x2="26" y2="74"/>
+            <line x1="38" y1="20" x2="38" y2="68"/>
+            <line x1="50" y1="14" x2="50" y2="74"/>
+            <line x1="62" y1="20" x2="62" y2="68"/>
+            <line x1="74" y1="14" x2="74" y2="74"/>
+            <line x1="8" y1="82" x2="80" y2="82" stroke-width="2"/>
+          </g>
+        </svg>
+      </span>
+      <h1><span class="studio">Sixhands Studio</span> 工作室<br>AI 數字員工團隊</h1>
+    </div>
+    <p class="sub">戰略 → 洞察 → 選題 → 內容　一條龍生產鏈｜資料層以 Notion 為事實源</p>
+    <div class="rule"></div>
+  </header>
+
+  <section class="tier">
+    <div class="tier-label"><span class="tag">最高決策</span><span class="desc">主持人本人</span><span class="bar"></span></div>
+    <div class="card lead ceo">
+      <div class="top"><span class="name">助哥</span><span class="en">Founder</span></div>
+      <div class="role">主持人 · Sixhands Studio</div>
+      <div class="job">定方向、下目標，團隊為其本業（房仲開發／帶客帶賣）與知識 IP 服務。</div>
+    </div>
+  </section>
+
+  <section class="tier">
+    <div class="tier-label"><span class="tag">戰略部</span><span class="desc">生產鏈最上游 · 客戶是主持人本人</span><span class="bar"></span></div>
+    <div class="row">
+      <div class="card">
+        <div class="top"><span class="name">小定</span><span class="en">Anchor</span></div>
+        <div class="role">首席戰略長 · IP 定位／商業模式</div>
+        <div class="job">把「我會什麼＋想做什麼」轉成完整 IP 定位＋變現組合拳＋護城河。六輪 18 題戰略診斷。</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tier">
+    <div class="tier-label"><span class="tag">統籌調度</span><span class="desc">派工 · 把關 · 整合 · 交付登記</span><span class="bar"></span></div>
+    <div class="row">
+      <div class="card lead">
+        <div class="top"><span class="name">小潔</span><span class="en">Marshal</span></div>
+        <div class="role">行銷總監</div>
+        <div class="job">統轄市場部與內容部。把目標翻成派工方案、決定調度順序、整合成果。本身不產專業內容。</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tier">
+    <div class="tier-label"><span class="tag">執行雙部</span><span class="desc">市場部出料 · 內容部產出</span><span class="bar"></span></div>
+    <div class="dept-grid">
+      <div class="dept">
+        <h3>市場部 · 洞察與數據</h3>
+        <div class="row">
+          <div class="card">
+            <div class="top"><span class="name">小察</span><span class="en">Persona</span></div>
+            <div class="role">洞察組長 · 用戶畫像</div>
+            <div class="job">從產品反推 3–5 個立體 Persona，是彈藥庫上游。</div>
+          </div>
+          <div class="card">
+            <div class="top"><span class="name">小挖</span><span class="en">Miner</span></div>
+            <div class="role">需求挖掘 · 選題彈藥庫</div>
+            <div class="job">把畫像變成六大維度可量產選題（痛點／怎麼做／避坑…）。</div>
+          </div>
+          <div class="card">
+            <div class="top"><span class="name">小登</span><span class="en">Data</span></div>
+            <div class="role">實登行情數據官</div>
+            <div class="job">維護台中各區行情，每個數字標來源、期別、截止日。管「數字」。</div>
+          </div>
+          <div class="card">
+            <div class="top"><span class="name">小名</span><span class="en">Roster</span></div>
+            <div class="role">名冊官 · 地主／客戶名單</div>
+            <div class="job">地主名冊、各大樓住戶名冊、拜訪辨識與進度。名冊×實登交叉，分得出誰已賣、誰可拜訪。管「人」。</div>
+          </div>
+        </div>
+      </div>
+      <div class="dept">
+        <h3>內容部 · 腳本與爆款</h3>
+        <div class="row">
+          <div class="card">
+            <div class="top"><span class="name">小爆</span><span class="en">UGC</span></div>
+            <div class="role">短影音爆款 · 帶貨腳本</div>
+            <div class="job">拆解競品爆款，8 大 UGC 模型轉可執行仿寫，衝 ROAS。</div>
+          </div>
+          <div class="card">
+            <div class="top"><span class="name">小構</span><span class="en">Story</span></div>
+            <div class="role">爆款架構師 · 通用敘事</div>
+            <div class="job">跨領域敘事拆解＋公式提煉＋主題遷移，知識／情感／劇情型腳本。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="flow">
+    生產鏈：<b>小定</b>（戰略定位）→ <b>小察</b>（畫像）→ <b>小挖</b>（彈藥庫）→ <b>小爆／小構</b>（內容）<br>
+    本業支援：<b>小登</b>（行情數字）＋ <b>小名</b>（地主名冊）→ 直接餵養助哥開發與帶客帶賣
+  </div>
+
+  <footer>Sixhands Studio 工作室 · 團隊組織圖 2026.07</footer>
+</div>
+</body>
+</html>
