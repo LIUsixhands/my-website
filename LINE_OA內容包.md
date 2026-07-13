@@ -17,8 +17,8 @@
 
 先送你 3 樣：
 
-🎯 七期猜房價遊戲（測你的購屋判斷力）
-👉 https://sixhands-studio.netlify.app/guess-price.html
+🎯 每日運勢轉盤（今日開運）
+👉 https://sixhands-studio.netlify.app/fortune-wheel.html
 
 🏠 七期房地產．不賣房子賣判斷
 👉 https://sixhands-studio.netlify.app/qiqi-realestate.html
@@ -39,7 +39,7 @@
 
 | 格子 | 顯示文字 | 動作類型 | 連結 |
 |:--|:--|:--|:--|
-| 左上 | 🎯 猜房價 | 連結 | https://sixhands-studio.netlify.app/guess-price.html |
+| 左上 | 🎡 運勢轉盤 | 連結 | https://sixhands-studio.netlify.app/fortune-wheel.html |
 | 中上 | 🏠 找房 | 文字：「我要找房」| （設「文字」動作，觸發你回覆）|
 | 右上 | 💰 賣房估價 | 文字：「我要賣房」| （設「文字」動作）|
 | 左下 | 📊 七期行情 | 連結 | https://sixhands-studio.netlify.app/qiqi-realestate.html |
@@ -57,7 +57,7 @@
 
 | 關鍵字 | 自動回覆內容 |
 |:--|:--|
-| 猜房價 / 遊戲 | 「來測測你的購屋判斷力！🎯\nhttps://sixhands-studio.netlify.app/guess-price.html」|
+| 猜房價 / 遊戲 | 「來測測你的購屋判斷力！🎯\nhttps://sixhands-studio.netlify.app/fortune-wheel.html」|
 | 找房 / 我要找房 | 「好的！請留『想找的區段＋預算＋幾房』，我 2 小時內幫你抓物件方向 🏠」|
 | 賣房 / 估價 / 我要賣房 | 「幫您免費評估！請留『地址＋坪數＋樓層』，助哥用實登數據幫您抓合理售價 💰」|
 | 行情 / 七期 | 「七期各社區行情我都有！想問哪一棟？回我社區名，幫你查近年成交 📊」|
@@ -70,14 +70,14 @@
 > 後台位置：主頁 → **群發訊息** → 建立新訊息 → 發送。
 
 ```
-🎯 你敢猜七期的房價嗎？
+🎡 今天運勢如何？轉一下就知道！
 
 助哥用「真實成交數據」做了一個小遊戲：
-看物件、猜每坪多少，測測你的購屋判斷力。
+每天轉一下，看看今天的運勢、幸運色與開運小語。
 
-6 題就知道你是「七期地頭蛇」還是「購屋新手」😏
+轉出你的今日開運小語，帶著好心情出門 ✨
 
-免費玩 👉 https://sixhands-studio.netlify.app/guess-price.html
+免費玩 👉 https://sixhands-studio.netlify.app/fortune-wheel.html
 
 （玩完想知道某一戶到底該出多少？回我一句「我想聊聊」）
 ```

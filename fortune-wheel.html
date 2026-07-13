@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>每日運勢轉盤｜今日開運 — Sixhands Studio</title>
+<meta name="description" content="每天轉一下，看看今天的運勢、幸運色、幸運數字與開運小語。助哥送你一個好心情。">
+<meta name="theme-color" content="#1F3A2E">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 86 92'><g stroke='%231F3A2E' stroke-width='4' fill='none' stroke-linecap='square'><line x1='14' y1='20' x2='14' y2='68'/><line x1='26' y1='14' x2='26' y2='74'/><line x1='38' y1='20' x2='38' y2='68'/><line x1='50' y1='14' x2='50' y2='74'/><line x1='62' y1='20' x2='62' y2='68'/><line x1='74' y1='14' x2='74' y2='74'/><line x1='8' y1='82' x2='80' y2='82' stroke-width='3'/></g></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root{--forest:#1F3A2E;--forest-2:#2C4E3D;--forest-3:#182b21;--cream:#F3EEE2;--cream-2:#FAF7EF;--brass:#B08D3F;--brass-lite:#D8BC7E;--ink:#22271F;--muted:#565c50}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Noto Sans TC","PingFang TC",sans-serif;background:radial-gradient(1000px 600px at 50% -10%,#274436,var(--forest) 55%,var(--forest-3));background-attachment:fixed;color:var(--cream);min-height:100vh;line-height:1.7;padding:0 16px 40px;text-align:center}
+h1,h2,h3{font-family:"Noto Serif TC",serif}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:480px;margin:0 auto}
+.top{padding:36px 0 6px}
+.mark{width:52px;height:56px;margin:0 auto 12px}.mark svg{width:100%;height:100%}
+.kicker{font-size:11px;letter-spacing:.34em;color:var(--brass-lite);text-transform:uppercase;margin-bottom:8px}
+.top h1{font-size:32px;font-weight:900;color:#fff}.top h1 .g{color:var(--brass-lite)}
+.top .sub{font-size:14px;color:#AEBBAE;margin-top:8px}
+
+/* wheel */
+.stage{position:relative;width:300px;height:300px;margin:30px auto 10px}
+.pointer{position:absolute;top:-6px;left:50%;transform:translateX(-50%);z-index:5;width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-top:26px solid var(--brass-lite);filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.wheel{width:300px;height:300px;border-radius:50%;position:relative;border:8px solid var(--brass);box-shadow:0 12px 40px rgba(0,0,0,.5),inset 0 0 0 4px rgba(255,255,255,.15);
+  transition:transform 4.4s cubic-bezier(.15,.62,.28,1);
+  background:conic-gradient(
+    #1F3A2E 0deg 45deg, #B08D3F 45deg 90deg, #2C4E3D 90deg 135deg, #C9A961 135deg 180deg,
+    #24503b 180deg 225deg, #a5843a 225deg 270deg, #1a4432 270deg 315deg, #d8bc7e 315deg 360deg)}
+.lbl{position:absolute;top:50%;left:50%;font-size:24px;transform-origin:0 0}
+.hub{position:absolute;top:50%;left:50%;width:64px;height:64px;transform:translate(-50%,-50%);z-index:4;border-radius:50%;background:linear-gradient(180deg,var(--cream-2),var(--cream));border:3px solid var(--brass);display:flex;align-items:center;justify-content:center;font-family:"Noto Serif TC",serif;font-weight:900;color:var(--forest);font-size:15px;box-shadow:0 3px 10px rgba(0,0,0,.4)}
+
+.btn{display:block;width:100%;max-width:320px;margin:14px auto 0;text-align:center;padding:16px;border-radius:12px;font-weight:700;font-size:17px;border:none;cursor:pointer;font-family:inherit;transition:transform .12s}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-p{background:var(--brass);color:#fff}
+.btn-line{background:#06C755;color:#fff;box-shadow:0 6px 18px rgba(6,199,85,.35)}
+.btn-ghost{background:transparent;color:var(--cream);border:1.5px solid var(--brass-lite);margin-top:10px}
+.spin-hint{font-size:13px;color:#AEBBAE;margin-top:12px}
+
+/* result */
+.result{background:linear-gradient(180deg,var(--cream-2),var(--cream));color:var(--ink);border-radius:18px;padding:26px 22px;margin-top:22px;border:1px solid rgba(216,188,126,.4);box-shadow:0 18px 40px -20px rgba(0,0,0,.6);text-align:center}
+.result .emoji{font-size:54px;line-height:1}
+.result .grade{font-family:"Noto Serif TC",serif;font-size:30px;font-weight:900;color:var(--forest);margin:6px 0 2px}
+.result .theme{font-size:16px;color:var(--brass);font-weight:700;margin-bottom:14px}
+.lucky{display:flex;justify-content:center;gap:12px;margin:14px 0}
+.lucky .box{background:#fff;border:1px solid rgba(31,58,46,.1);border-radius:10px;padding:10px 16px;min-width:88px}
+.lucky .box .k{font-size:11px;color:var(--muted)}
+.lucky .box .v{font-size:18px;color:var(--forest);font-weight:700;margin-top:2px}
+.saying{background:#FBEFD8;border:1px solid var(--brass);border-radius:10px;padding:14px;font-size:15px;color:#5a4715;margin:16px 0;line-height:1.7}
+.saying b{color:var(--forest)}
+.today-yi{font-size:13px;color:var(--muted);margin-bottom:6px}
+.hide{display:none}
+.disc{font-size:11px;color:#8fa08f;margin-top:22px;line-height:1.7}
+.foot-brand{margin-top:16px;font-size:12px;color:var(--brass-lite);font-family:"Noto Serif TC",serif}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="mark"><svg viewBox="0 0 86 92"><g stroke="#D8BC7E" stroke-width="3" fill="none" stroke-linecap="square"><line x1="14" y1="20" x2="14" y2="68"/><line x1="26" y1="14" x2="26" y2="74"/><line x1="38" y1="20" x2="38" y2="68"/><line x1="50" y1="14" x2="50" y2="74"/><line x1="62" y1="20" x2="62" y2="68"/><line x1="74" y1="14" x2="74" y2="74"/><line x1="8" y1="82" x2="80" y2="82" stroke-width="2"/></g></svg></div>
+    <div class="kicker">Sixhands Studio · 助哥送你好心情</div>
+    <h1>每日<span class="g">運勢轉盤</span></h1>
+    <div class="sub">每天轉一下，看看今天的運勢與開運小語</div>
+  </div>
+
+  <div class="stage">
+    <div class="pointer"></div>
+    <div class="wheel" id="wheel"></div>
+    <div class="hub">開運</div>
+  </div>
+
+  <button class="btn btn-p" id="spinBtn" onclick="spin()">轉出今日運勢 🎡</button>
+  <div class="spin-hint" id="hint">點按上方，轉出你今天的運勢</div>
+
+  <div class="result hide" id="result">
+    <div class="emoji" id="rEmoji">🌟</div>
+    <div class="grade" id="rGrade">大吉</div>
+    <div class="theme" id="rTheme">財運亨通</div>
+    <div class="lucky">
+      <div class="box"><div class="k">幸運色</div><div class="v" id="rColor">金</div></div>
+      <div class="box"><div class="k">幸運數字</div><div class="v" id="rNum">8</div></div>
+    </div>
+    <div class="today-yi" id="rYi">今日宜：保持好心情</div>
+    <div class="saying" id="rSay">—</div>
+    <a href="https://line.me/R/ti/p/@080akczk" class="btn btn-line">把好運分享給助哥 · 加 LINE →</a>
+    <a href="index.html" class="btn btn-ghost">回 Sixhands Studio 官網</a>
+    <button class="btn btn-ghost" onclick="reSpin()" id="reBtn">再轉一次</button>
+  </div>
+
+  <div class="disc">本轉盤僅供娛樂與參考，帶給你一個好心情，非命理或投資建議。<br>Sixhands Studio · 助哥</div>
+  <div class="foot-brand">不賣房子，賣判斷</div>
+</div>
+
+<script>
+const F=[
+ {e:"🌟",g:"大吉",t:"財運亨通",c:"金",n:8,yi:"談大事、做決定",say:"今天氣場很旺，<b>該爭取的別客氣</b>。想做的事，就是今天。"},
+ {e:"🍀",g:"上吉",t:"貴人相助",c:"綠",n:3,yi:"開口求助、找人聊",say:"貴人就在身邊，<b>主動開口</b>就對了。今天的緣分別錯過。"},
+ {e:"🌸",g:"吉",t:"桃花朵朵",c:"粉",n:6,yi:"微笑、多交流",say:"笑容是今天最好的名片。<b>好人緣</b>會帶來好事。"},
+ {e:"☀️",g:"吉",t:"諸事順心",c:"橘",n:9,yi:"把握順勢、多完成",say:"順順的一天，<b>把握它</b>。該收尾的事，今天做完最舒服。"},
+ {e:"💪",g:"中吉",t:"穩中求進",c:"棕",n:5,yi:"踏實、按部就班",say:"不急，<b>穩穩走最遠</b>。今天適合把基本功打好。"},
+ {e:"📚",g:"中吉",t:"學習運強",c:"藍",n:4,yi:"進修、吸收新知",say:"今天學到的，<b>將來一定用得到</b>。多讀一頁、多學一招。"},
+ {e:"🧘",g:"平",t:"沉住氣",c:"灰綠",n:7,yi:"深呼吸、緩一緩",say:"<b>沉得住氣，是一種本事</b>。今天慢一點，反而看得更清楚。"},
+ {e:"🛡️",g:"平安",t:"健康順遂",c:"白",n:1,yi:"早點休息、顧身體",say:"<b>平安就是最大的福氣</b>。今天照顧好自己，比什麼都重要。"}
+];
+// 在轉盤上放 8 個 emoji 標籤
+(function(){
+  const w=document.getElementById('wheel');
+  F.forEach((f,i)=>{
+    const a=i*45+22.5; // 段中心角
+    const s=document.createElement('div');
+    s.className='lbl';
+    s.textContent=f.e;
+    s.style.transform=`rotate(${a}deg) translateY(-118px) rotate(${-a}deg) translate(-50%,-50%)`;
+    w.appendChild(s);
+  });
+})();
+
+let rot=0, spinning=false;
+function todayKey(){const d=new Date();return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;}
+
+function reveal(i){
+  const f=F[i];
+  document.getElementById('rEmoji').textContent=f.e;
+  document.getElementById('rGrade').textContent=f.g;
+  document.getElementById('rTheme').textContent=f.t;
+  document.getElementById('rColor').textContent=f.c;
+  document.getElementById('rNum').textContent=f.n;
+  document.getElementById('rYi').textContent="今日宜："+f.yi;
+  document.getElementById('rSay').innerHTML="💬 助哥的話："+f.say;
+  document.getElementById('result').classList.remove('hide');
+}
+
+function doSpin(i){
+  spinning=true;
+  document.getElementById('spinBtn').disabled=true;
+  document.getElementById('hint').textContent="轉動中…深呼吸，好運來了 🍃";
+  const center=i*45+22.5;
+  const jitter=(Math.random()*30-15);
+  rot += 360*5 + (360 - (center + jitter));
+  document.getElementById('wheel').style.transform=`rotate(${rot}deg)`;
+  setTimeout(()=>{
+    spinning=false;
+    reveal(i);
+    document.getElementById('spinBtn').classList.add('hide');
+    document.getElementById('hint').classList.add('hide');
+    try{localStorage.setItem('fw_date',todayKey());localStorage.setItem('fw_idx',i);}catch(e){}
+  },4600);
+}
+function spin(){
+  if(spinning)return;
+  const i=Math.floor(Math.random()*F.length);
+  doSpin(i);
+}
+function reSpin(){
+  document.getElementById('result').classList.add('hide');
+  spin();
+}
+// 若今天已轉過，直接顯示結果
+try{
+  if(localStorage.getItem('fw_date')===todayKey()){
+    const i=parseInt(localStorage.getItem('fw_idx'));
+    if(!isNaN(i)){
+      rot = 360*5 + (360 - (i*45+22.5));
+      const w=document.getElementById('wheel'); w.style.transition='none'; w.style.transform=`rotate(${rot}deg)`;
+      reveal(i);
+      document.getElementById('spinBtn').classList.add('hide');
+      document.getElementById('hint').textContent="你今天已經開運囉，明天再來 🌙（也可再轉一次）";
+    }
+  }
+}catch(e){}
+</script>
+</body>
+</html>
