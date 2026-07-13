@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>七期猜房價｜測測你的購屋判斷力 — Sixhands Studio</title>
+<meta name="description" content="用真實實價登錄數據做的猜房價遊戲。看物件、猜單價，測測你的七期購屋判斷力。助哥 · 不賣房子賣判斷。">
+<meta name="theme-color" content="#1F3A2E">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 86 92'><g stroke='%231F3A2E' stroke-width='4' fill='none' stroke-linecap='square'><line x1='14' y1='20' x2='14' y2='68'/><line x1='26' y1='14' x2='26' y2='74'/><line x1='38' y1='20' x2='38' y2='68'/><line x1='50' y1='14' x2='50' y2='74'/><line x1='62' y1='20' x2='62' y2='68'/><line x1='74' y1='14' x2='74' y2='74'/><line x1='8' y1='82' x2='80' y2='82' stroke-width='3'/></g></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --forest:#1F3A2E;--forest-2:#2C4E3D;--forest-3:#182b21;
+  --cream:#F3EEE2;--cream-2:#FAF7EF;
+  --brass:#B08D3F;--brass-lite:#D8BC7E;--ink:#22271F;--muted:#565c50;
+  --good:#4a9b6e;--bad:#c05a4a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Noto Sans TC","PingFang TC",sans-serif;
+  background:radial-gradient(1000px 600px at 50% -10%,#274436,var(--forest) 55%,var(--forest-3));
+  background-attachment:fixed;color:var(--cream);min-height:100vh;line-height:1.7;padding:0 16px 40px}
+h1,h2,h3{font-family:"Noto Serif TC",serif}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:560px;margin:0 auto}
+
+/* header */
+.top{text-align:center;padding:40px 0 10px}
+.mark{width:56px;height:60px;margin:0 auto 14px}
+.mark svg{width:100%;height:100%}
+.kicker{font-size:11px;letter-spacing:.34em;color:var(--brass-lite);text-transform:uppercase;margin-bottom:10px}
+.top h1{font-size:34px;font-weight:900;color:#fff;line-height:1.15}
+.top h1 .g{color:var(--brass-lite)}
+.top .sub{font-size:14px;color:#AEBBAE;margin-top:10px}
+
+/* card */
+.card{background:linear-gradient(180deg,var(--cream-2),var(--cream));color:var(--ink);border-radius:18px;padding:26px 22px;margin-top:22px;border:1px solid rgba(216,188,126,.35);box-shadow:0 18px 40px -20px rgba(0,0,0,.6)}
+
+/* intro */
+.rules{list-style:none;margin:16px 0}
+.rules li{padding:8px 0;border-bottom:1px dashed rgba(31,58,46,.15);font-size:14.5px;color:#3a4034;display:flex;gap:10px}
+.rules li:last-child{border-bottom:none}
+.rules li b{color:var(--forest)}
+.btn{display:block;width:100%;text-align:center;padding:16px;border-radius:12px;font-weight:700;font-size:17px;border:none;cursor:pointer;font-family:inherit;transition:transform .12s}
+.btn:active{transform:scale(.98)}
+.btn-p{background:var(--forest);color:var(--brass-lite)}
+.btn-p:hover{background:var(--forest-2)}
+.btn-line{background:#06C755;color:#fff;box-shadow:0 6px 18px rgba(6,199,85,.35)}
+.btn-ghost{background:transparent;color:var(--forest);border:1.5px solid var(--forest);margin-top:10px}
+
+/* progress */
+.prog{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.prog .r{font-size:12px;letter-spacing:2px;color:var(--brass)}
+.prog .s{font-family:"Noto Serif TC",serif;font-size:15px;color:var(--forest);font-weight:700}
+.pbar{height:6px;background:rgba(31,58,46,.12);border-radius:99px;overflow:hidden;margin-bottom:18px}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--brass),var(--brass-lite));transition:width .3s}
+
+/* property */
+.prop-name{font-size:22px;color:var(--forest);font-weight:900;margin-bottom:4px}
+.prop-zone{font-size:12.5px;color:var(--brass);letter-spacing:1px;margin-bottom:16px}
+.specs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+.spec{background:#fff;border:1px solid rgba(31,58,46,.08);border-radius:10px;padding:10px 12px}
+.spec .k{font-size:11px;color:var(--muted)}
+.spec .v{font-size:16px;color:var(--forest);font-weight:700}
+.feat{font-size:13px;color:var(--muted);margin:12px 0 6px;font-style:italic}
+
+/* guess */
+.guess-val{text-align:center;font-family:"Noto Serif TC",serif;font-size:44px;color:var(--forest);font-weight:900;margin:18px 0 2px}
+.guess-val small{font-size:16px;color:var(--muted)}
+.slider{width:100%;-webkit-appearance:none;height:8px;border-radius:99px;background:linear-gradient(90deg,#8fae9b,var(--brass-lite));outline:none;margin:14px 0}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:var(--forest);border:3px solid var(--brass-lite);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.slider::-moz-range-thumb{width:30px;height:30px;border-radius:50%;background:var(--forest);border:3px solid var(--brass-lite);cursor:pointer}
+.range-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:18px}
+
+/* reveal */
+.reveal-row{display:flex;justify-content:space-around;text-align:center;margin:16px 0}
+.reveal-row .b{flex:1}
+.reveal-row .b .t{font-size:11px;color:var(--muted)}
+.reveal-row .b .n{font-family:"Noto Serif TC",serif;font-size:30px;font-weight:900}
+.reveal-row .b.you .n{color:var(--forest)}
+.reveal-row .b.actual .n{color:var(--brass)}
+.result-badge{text-align:center;font-size:19px;font-weight:900;margin:6px 0}
+.pts{text-align:center;font-size:13px;color:var(--muted);margin-bottom:14px}
+.insight{background:#FBEFD8;border:1px solid var(--brass);border-radius:10px;padding:12px 14px;font-size:13.5px;color:#5a4715;margin:14px 0}
+.insight b{color:var(--forest)}
+
+/* end */
+.final-score{text-align:center;margin:10px 0}
+.final-score .big{font-family:"Noto Serif TC",serif;font-size:64px;font-weight:900;color:var(--forest);line-height:1}
+.final-score .rank{font-size:22px;font-weight:900;color:var(--brass);margin-top:6px}
+.final-score .desc{font-size:14px;color:var(--muted);margin-top:8px}
+
+.disc{font-size:11px;color:#8fa08f;text-align:center;margin-top:22px;line-height:1.7}
+.foot-brand{text-align:center;margin-top:18px;font-size:12px;color:var(--brass-lite);font-family:"Noto Serif TC",serif}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="mark"><svg viewBox="0 0 86 92"><g stroke="#D8BC7E" stroke-width="3" fill="none" stroke-linecap="square"><line x1="14" y1="20" x2="14" y2="68"/><line x1="26" y1="14" x2="26" y2="74"/><line x1="38" y1="20" x2="38" y2="68"/><line x1="50" y1="14" x2="50" y2="74"/><line x1="62" y1="20" x2="62" y2="68"/><line x1="74" y1="14" x2="74" y2="74"/><line x1="8" y1="82" x2="80" y2="82" stroke-width="2"/></g></svg></div>
+    <div class="kicker">Sixhands Studio · 七期房地產</div>
+    <h1>七期<span class="g">猜房價</span></h1>
+    <div class="sub">看真實成交物件，猜猜每坪多少 — 測你的購屋判斷力</div>
+  </div>
+
+  <!-- INTRO -->
+  <div id="intro" class="card">
+    <h3 style="color:var(--forest);font-size:19px">怎麼玩</h3>
+    <ul class="rules">
+      <li><b>①</b> 每題給你一個七期<b>真實成交物件</b>（社區、樓層、坪數、屋齡）</li>
+      <li><b>②</b> 拉桿猜它的<b>每坪單價</b>（不含車位淨房價）</li>
+      <li><b>③</b> 揭曉真實成交價，看你差多少、拿幾分</li>
+      <li><b>④</b> 6 題結算，測出你的「購屋判斷等級」</li>
+    </ul>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">資料來自內政部實價登錄，助哥的七期行情庫。看看你的直覺準不準！</p>
+    <button class="btn btn-p" onclick="startGame()">開始挑戰 →</button>
+  </div>
+
+  <!-- PLAY -->
+  <div id="play" class="card hide">
+    <div class="prog"><span class="r" id="rlabel">第 1 / 6 題</span><span class="s" id="scorelabel">0 分</span></div>
+    <div class="pbar"><i id="pbar" style="width:16%"></i></div>
+    <div class="prop-name" id="pname">—</div>
+    <div class="prop-zone" id="pzone">—</div>
+    <div class="specs" id="pspecs"></div>
+    <div class="feat" id="pfeat">—</div>
+
+    <div id="guessArea">
+      <div class="guess-val"><span id="gval">50</span> <small>萬/坪</small></div>
+      <input type="range" min="30" max="70" value="50" step="0.5" class="slider" id="slider" oninput="document.getElementById('gval').textContent=this.value">
+      <div class="range-lbl"><span>30 萬（親民）</span><span>70 萬（頂級）</span></div>
+      <button class="btn btn-p" onclick="submitGuess()">確定出價 →</button>
+    </div>
+
+    <div id="revealArea" class="hide">
+      <div class="reveal-row">
+        <div class="b you"><div class="t">你猜</div><div class="n" id="ryou">—</div></div>
+        <div class="b actual"><div class="t">真實成交</div><div class="n" id="ract">—</div></div>
+      </div>
+      <div class="result-badge" id="rbadge">—</div>
+      <div class="pts" id="rpts">—</div>
+      <div class="insight" id="rinsight">—</div>
+      <button class="btn btn-p" id="nextBtn" onclick="nextRound()">下一題 →</button>
+    </div>
+  </div>
+
+  <!-- END -->
+  <div id="end" class="card hide">
+    <div class="final-score">
+      <div style="font-size:13px;color:var(--muted);letter-spacing:2px">你的購屋判斷力</div>
+      <div class="big" id="finalPts">0</div>
+      <div style="font-size:13px;color:var(--muted)">/ 600 分</div>
+      <div class="rank" id="finalRank">—</div>
+      <div class="desc" id="finalDesc">—</div>
+    </div>
+    <div class="insight" style="text-align:center">
+      想知道<b>某一戶到底該出多少</b>？助哥用真實行情庫，幫你算淨房單價、屋齡位階、議價空間。
+    </div>
+    <a href="https://line.me/R/ti/p/@080akczk" class="btn btn-line">加 LINE 問助哥（@080akczk）→</a>
+    <a href="index.html" class="btn btn-ghost">回 Sixhands Studio 官網</a>
+    <button class="btn btn-ghost" onclick="startGame()">再玩一次</button>
+  </div>
+
+  <div class="disc">
+    資料來源：內政部不動產實價登錄（去識別化、淨房單價）。本遊戲僅供參考與娛樂，<b>非投資建議</b>，不代表任何物件現值或未來價格，亦不保證增值。
+  </div>
+  <div class="foot-brand">Sixhands Studio · 不賣房子，賣判斷</div>
+</div>
+
+<script>
+// 真實七期成交（去識別化，淨房單價 萬/坪）— 來源：助哥行情庫
+const ROUNDS = [
+  {name:"寶璽睿觀", zone:"市政路廊帶 · 七期核心", age:"18 年 · SRC", ping:"125 坪", floor:"8 樓", car:"雙車位", feat:"社區近年成交高點戶、格局方正", price:52.5,
+   insight:"這是寶璽睿觀近年<b>高點</b>戶（113/03 成交）。市政路核心 + 中樓層 + 雙車位，撐得起社區天花板。"},
+  {name:"國雄領域", zone:"臺灣大道廊帶 · 七期西北", age:"13 年 · RC", ping:"106 坪", floor:"16 樓", car:"雙車位", feat:"社區歷史最高樓層戶、視野佳", price:49.9,
+   insight:"國雄領域<b>歷史最高</b>淨價戶（114/12）。高樓層視野加成，逼近屋齡帶天花板，但商業區公設高要留意。"},
+  {name:"寶璽睿觀", zone:"市政路廊帶 · 七期核心", age:"18 年 · SRC", ping:"158 坪", floor:"13 樓", car:"三車位", feat:"大坪數、三車位", price:46.3,
+   insight:"大坪數（158坪）單價會比小坪數低一截。<b>看淨房價才準</b>——實登原始單價會被三個車位拉低喔。"},
+  {name:"國雄領域", zone:"臺灣大道廊帶 · 七期西北", age:"13 年 · RC", ping:"81 坪", floor:"13 樓", car:"單車位", feat:"中樓層、主流坪數", price:43.0,
+   insight:"這戶貼近國雄領域<b>近年均價</b>（約41-44）。中樓層、主流坪數，是最好脫手的「甜蜜點」戶型。"},
+  {name:"寶璽睿觀", zone:"市政路廊帶 · 七期核心", age:"18 年 · SRC", ping:"117 坪", floor:"4 樓", car:"雙車位", feat:"低樓層", price:42.2,
+   insight:"<b>低樓層</b>（4樓）會扣分。同社區高樓能到 52，低樓落在 42 附近——樓層差可以拉到 20%。"},
+  {name:"國雄領域", zone:"臺灣大道廊帶 · 七期西北", age:"13 年 · RC", ping:"75 坪", floor:"7 樓", car:"單車位", feat:"中低樓層、小家庭適用", price:41.6,
+   insight:"七期一年大盤均價 65（含新案），但這種<b>屋齡13年中古</b>其實 41 上下——中古宅相對親民，這就是判斷力。"}
+];
+
+let idx=0, score=0, order=[];
+function startGame(){
+  idx=0; score=0;
+  order=[0,1,2,3,4,5]; // 固定順序（也可洗牌）
+  document.getElementById('intro').classList.add('hide');
+  document.getElementById('end').classList.add('hide');
+  document.getElementById('play').classList.remove('hide');
+  loadRound();
+}
+function loadRound(){
+  const r=ROUNDS[order[idx]];
+  document.getElementById('rlabel').textContent=`第 ${idx+1} / 6 題`;
+  document.getElementById('scorelabel').textContent=`${score} 分`;
+  document.getElementById('pbar').style.width=`${(idx+1)/6*100}%`;
+  document.getElementById('pname').textContent=r.name;
+  document.getElementById('pzone').textContent=r.zone;
+  document.getElementById('pspecs').innerHTML=
+    `<div class="spec"><div class="k">屋齡／構造</div><div class="v">${r.age}</div></div>`+
+    `<div class="spec"><div class="k">權狀坪數</div><div class="v">${r.ping}</div></div>`+
+    `<div class="spec"><div class="k">樓層</div><div class="v">${r.floor}</div></div>`+
+    `<div class="spec"><div class="k">車位</div><div class="v">${r.car}</div></div>`;
+  document.getElementById('pfeat').textContent="特徵："+r.feat;
+  document.getElementById('guessArea').classList.remove('hide');
+  document.getElementById('revealArea').classList.add('hide');
+  const sl=document.getElementById('slider'); sl.value=50; document.getElementById('gval').textContent='50';
+}
+function submitGuess(){
+  const r=ROUNDS[order[idx]];
+  const guess=parseFloat(document.getElementById('slider').value);
+  const diff=Math.abs(guess-r.price);
+  let pts, badge, color;
+  if(diff<=1.5){pts=100;badge="🎯 神準！";color="var(--good)";}
+  else if(diff<=3){pts=80;badge="👍 很接近";color="var(--good)";}
+  else if(diff<=5){pts=55;badge="🙂 還可以";color="var(--brass)";}
+  else if(diff<=8){pts=30;badge="😐 有點差";color="var(--brass)";}
+  else{pts=10;badge="😅 差很多";color="var(--bad)";}
+  score+=pts;
+  document.getElementById('ryou').textContent=guess.toFixed(1);
+  document.getElementById('ract').textContent=r.price.toFixed(1);
+  document.getElementById('rbadge').textContent=badge;
+  document.getElementById('rbadge').style.color=color;
+  document.getElementById('rpts').textContent=`差 ${diff.toFixed(1)} 萬/坪 · 得 ${pts} 分`;
+  document.getElementById('rinsight').innerHTML="💡 助哥判斷："+r.insight;
+  document.getElementById('scorelabel').textContent=`${score} 分`;
+  document.getElementById('nextBtn').textContent = idx<5 ? "下一題 →" : "看結算 →";
+  document.getElementById('guessArea').classList.add('hide');
+  document.getElementById('revealArea').classList.remove('hide');
+}
+function nextRound(){
+  idx++;
+  if(idx<6){loadRound();}
+  else{showEnd();}
+}
+function showEnd(){
+  document.getElementById('play').classList.add('hide');
+  document.getElementById('end').classList.remove('hide');
+  document.getElementById('finalPts').textContent=score;
+  let rank,desc;
+  if(score>=520){rank="🏆 七期地頭蛇";desc="你的判斷力堪比在地房仲！這種眼光，出手不會虧。";}
+  else if(score>=380){rank="🥈 資深買方";desc="很有 sense！再補一點行情細節，就能砍到好價。";}
+  else if(score>=240){rank="🥉 進階觀望族";desc="方向抓得到，但細節容易被開價帶著走——找助哥對一下數據。";}
+  else{rank="🌱 購屋新手";desc="房價比想像難抓吧？這正是為什麼買房要看數據、不能靠感覺。";}
+  document.getElementById('finalRank').textContent=rank;
+  document.getElementById('finalDesc').textContent=desc;
+}
+</script>
+</body>
+</html>
