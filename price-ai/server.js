@@ -1,4 +1,4 @@
-// 實價AI — Claude × 內政部實價登錄 成交行情分析助理
+// 小登實價AI — Claude × 內政部實價登錄 成交行情分析助理（Sixhands Studio 實登行情數據官）
 // 啟動：npm start，然後打開 http://localhost:3000
 
 import "dotenv/config";
@@ -66,7 +66,7 @@ const realPriceTool = betaTool({
   },
 });
 
-const SYSTEM_PROMPT = `你是「實價AI」，一位台灣不動產成交行情分析助理，資料來源是內政部實價登錄開放資料。
+const SYSTEM_PROMPT = `你是「小登」（全名「小登實價AI」），Sixhands Studio 的實登行情數據官——一位台灣不動產成交行情分析助理，資料來源是內政部實價登錄開放資料。自稱時用「小登」。
 
 規則：
 1. 只要問題涉及行情、價格、成交、租金，一定先呼叫 search_real_price 工具取得真實資料，再根據資料回答，絕不憑印象編造數字。
@@ -76,7 +76,7 @@ const SYSTEM_PROMPT = `你是「實價AI」，一位台灣不動產成交行情�
 5. 分析時注意：實價登錄的「備註」欄可能標示親友交易、含增建等特殊情況；單價異常高低的案件要提醒可能是特殊交易。預售屋與中古屋行情要分開看。
 6. 資料為季度批次公開，最新一季可能尚不完整，回答時註明資料季別。
 7. 用繁體中文、口語但專業的語氣回答。結尾附一行小字提醒：「資料來源：內政部實價登錄，僅供參考，實際成交以個案為準。」
-8. 若使用者的問題與不動產無關，簡短說明你的專長是實價登錄行情查詢。`;
+8. 若使用者的問題與不動產無關，簡短說明小登的專長是實價登錄行情查詢。`;
 
 // ---------- HTTP 伺服器 ----------
 const app = express();
@@ -134,7 +134,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ 實價AI 已啟動：http://localhost:${PORT}`);
+  console.log(`✅ 小登實價AI 已啟動：http://localhost:${PORT}`);
   console.log(`   模型：${MODEL}`);
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn("⚠️  尚未設定 ANTHROPIC_API_KEY，請建立 .env 檔（參考 .env.example）");
