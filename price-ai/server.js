@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3000;
 const MODEL = process.env.CLAUDE_MODEL || "claude-opus-4-8";
 
 const client = new Anthropic(); // 讀取環境變數 ANTHROPIC_API_KEY
+const ACCESS_CODE = process.env.ACCESS_CODE || null; // 選填：設定後才需要通關密碼
 
 // ---------- 給 Claude 使用的工具：查詢實價登錄 ----------
 const realPriceTool = betaTool({
@@ -83,7 +84,18 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
+app.post("/api/verify-code", (req, res) => {
+  if (!ACCESS_CODE) return res.json({ ok: true });
+  const code = typeof req.body?.code === "string" ? req.body.code : "";
+  if (code === ACCESS_CODE) return res.json({ ok: true });
+  res.status(401).json({ ok: false, error: "通關密碼錯誤" });
+});
+
 app.post("/api/chat", async (req, res) => {
+  if (ACCESS_CODE && req.headers["x-access-code"] !== ACCESS_CODE) {
+    return res.status(401).json({ error: "請先輸入正確的通關密碼" });
+  }
+
   const history = Array.isArray(req.body?.messages) ? req.body.messages : [];
   const messages = history
     .filter(m => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())

@@ -114,9 +114,67 @@
     max-width: 760px; margin: 8px auto 0;
     font-size: 11px; color: #999; text-align: center;
   }
+
+  #lock {
+    position: fixed; inset: 0;
+    background: var(--green-dark);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .lockBox {
+    background: var(--cream);
+    border-radius: 16px;
+    padding: 32px 28px;
+    max-width: 340px; width: 100%;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  }
+  .lockBox .logo {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--gold); color: var(--green-dark);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 20px;
+    margin: 0 auto 12px;
+  }
+  .lockBox h1 { font-size: 17px; color: var(--green-dark); margin-bottom: 4px; }
+  .lockBox p { font-size: 13px; color: #777; margin-bottom: 18px; }
+  .lockBox input {
+    width: 100%; border: 1.5px solid #d8d2c2; border-radius: 10px;
+    padding: 12px 14px; font-size: 15px; outline: none;
+    text-align: center; letter-spacing: 2px;
+    margin-bottom: 12px;
+  }
+  .lockBox input:focus { border-color: var(--green); }
+  .lockBox button {
+    width: 100%; background: var(--green-dark); color: var(--gold);
+    border: none; border-radius: 10px;
+    padding: 12px; font-size: 15px; font-weight: 700;
+    cursor: pointer; letter-spacing: 2px;
+  }
+  .lockBox button:disabled { opacity: .5; cursor: not-allowed; }
+  #lockError { color: #c0392b; font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+  #app {
+    display: flex; flex-direction: column;
+    height: 100dvh; width: 100%;
+  }
 </style>
 </head>
 <body>
+<div id="lock">
+  <div class="lockBox">
+    <div class="logo">登</div>
+    <h1>小登實價AI</h1>
+    <p>請輸入通關密碼才能使用</p>
+    <form id="lockForm">
+      <input id="lockInput" type="password" placeholder="通關密碼" autocomplete="off">
+      <button id="lockSend" type="submit">進入</button>
+    </form>
+    <div id="lockError"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
 <header>
   <div class="logo">登</div>
   <div>
@@ -151,8 +209,79 @@
   </div>
   <div class="disclaimer">資料來源：內政部實價登錄開放資料，僅供參考，實際成交以個案為準。</div>
 </form>
+</div>
 
 <script>
+const lock = document.getElementById("lock");
+const app = document.getElementById("app");
+const lockForm = document.getElementById("lockForm");
+const lockInput = document.getElementById("lockInput");
+const lockSend = document.getElementById("lockSend");
+const lockError = document.getElementById("lockError");
+
+function getAccessCode() {
+  return sessionStorage.getItem("accessCode") || "";
+}
+
+function unlock() {
+  lock.style.display = "none";
+  app.style.display = "";
+  input.focus();
+}
+
+async function tryUnlock(code) {
+  lockError.textContent = "";
+  lockSend.disabled = true;
+  try {
+    const res = await fetch("/api/verify-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      sessionStorage.setItem("accessCode", code);
+      unlock();
+    } else {
+      lockError.textContent = "❌ " + (data.error || "密碼錯誤，請再試一次。");
+    }
+  } catch (e) {
+    lockError.textContent = "❌ 連線失敗：" + e.message;
+  } finally {
+    lockSend.disabled = false;
+  }
+}
+
+lockForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  tryUnlock(lockInput.value.trim());
+});
+
+async function silentVerify(code) {
+  try {
+    const res = await fetch("/api/verify-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    return !!data.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+(async function init() {
+  // 沒設密碼（伺服器沒開 ACCESS_CODE）或同一分頁已驗證過，就直接進入，不顯示密碼畫面
+  const savedCode = getAccessCode();
+  if (await silentVerify(savedCode)) {
+    unlock();
+  } else {
+    sessionStorage.removeItem("accessCode");
+    lockInput.focus();
+  }
+})();
+
 const chat = document.getElementById("chat");
 const form = document.getElementById("form");
 const input = document.getElementById("input");
@@ -192,12 +321,20 @@ async function ask(text) {
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-access-code": getAccessCode(),
+      },
       body: JSON.stringify({ messages: history }),
     });
     const data = await res.json();
     typing.remove();
-    if (data.reply) {
+    if (res.status === 401) {
+      sessionStorage.removeItem("accessCode");
+      lock.style.display = "flex";
+      app.style.display = "none";
+      lockError.textContent = "❌ 通關密碼已失效，請重新輸入。";
+    } else if (data.reply) {
       addBubble("ai", data.reply);
       history.push({ role: "assistant", content: data.reply });
     } else {
