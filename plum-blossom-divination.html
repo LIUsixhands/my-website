@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>梅花易數 AI 占卜｜三數起卦 — Sixhands Studio</title>
-<meta name="description" content="憑直覺想三個數字，用梅花易數三數起卦法即時起出本卦、變卦、動爻，並給你體用生剋解讀與行動建議。">
+<title>梅花易數 AI 占卜｜本卦互卦錯卦綜卦變卦五卦交叉驗證 — Sixhands Studio</title>
+<meta name="description" content="憑直覺想三個數字，用梅花易數三數起卦法起出本卦、互卦、錯卦、綜卦、變卦五卦交叉驗證，AI 先直接回答你的問題，再說明卦理依據與行動建議。">
 <meta name="theme-color" content="#1F3A2E">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 86 92'><g stroke='%231F3A2E' stroke-width='4' fill='none' stroke-linecap='square'><line x1='14' y1='20' x2='14' y2='68'/><line x1='26' y1='14' x2='26' y2='74'/><line x1='38' y1='20' x2='38' y2='68'/><line x1='50' y1='14' x2='50' y2='74'/><line x1='62' y1='20' x2='62' y2='68'/><line x1='74' y1='14' x2='74' y2='74'/><line x1='8' y1='82' x2='80' y2='82' stroke-width='3'/></g></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -58,6 +58,9 @@ textarea{resize:vertical;min-height:56px}
 
 .arrow-mid{font-size:22px;color:var(--brass);align-self:center}
 
+.role{font-size:12.5px;color:var(--muted);margin-bottom:14px;padding-bottom:12px;border-bottom:1px dashed rgba(31,58,46,.15)}
+.role b{color:var(--brass)}
+
 .linewrap p{font-size:14.5px;margin-bottom:10px}
 .linewrap b{color:var(--forest)}
 .tag{display:inline-block;font-size:12px;background:rgba(31,58,46,.08);color:var(--forest);padding:3px 10px;border-radius:99px;margin-right:6px;margin-bottom:6px;font-weight:700}
@@ -67,6 +70,14 @@ textarea{resize:vertical;min-height:56px}
 .verdict.good{background:#e9f4ec;color:#1d5b34;border:1px solid #b7ddc2}
 .verdict.warn{background:#fbeed8;color:#7a4d13;border:1px solid #edcf9c}
 .verdict.mid{background:#eef1f8;color:#33436b;border:1px solid #c9d2ea}
+
+.headline{border-radius:12px;padding:18px 18px;margin-bottom:14px;font-size:15px}
+.headline .lead{font-family:"Noto Serif TC",serif;font-weight:900;font-size:19px;margin-bottom:6px;display:block}
+.headline.good{background:linear-gradient(135deg,#e9f4ec,#dcefe2);color:#1d5b34;border:1px solid #b7ddc2}
+.headline.warn{background:linear-gradient(135deg,#fbeed8,#f6e2c1);color:#7a4d13;border:1px solid #edcf9c}
+.headline.mid{background:linear-gradient(135deg,#eef1f8,#e2e7f4);color:#33436b;border:1px solid #c9d2ea}
+.condlist{margin:10px 0 0;padding-left:18px;font-size:14px}
+.condlist li{margin-bottom:6px}
 
 .disc{font-size:11px;color:#8fa08f;margin-top:26px;line-height:1.7}
 .foot-brand{margin-top:16px;font-size:12px;color:var(--brass-lite);font-family:"Noto Serif TC",serif}
@@ -78,7 +89,7 @@ textarea{resize:vertical;min-height:56px}
     <div class="mark"><svg viewBox="0 0 86 92"><g stroke="#D8BC7E" stroke-width="3" fill="none" stroke-linecap="square"><line x1="14" y1="20" x2="14" y2="68"/><line x1="26" y1="14" x2="26" y2="74"/><line x1="38" y1="20" x2="38" y2="68"/><line x1="50" y1="14" x2="50" y2="74"/><line x1="62" y1="20" x2="62" y2="68"/><line x1="74" y1="14" x2="74" y2="74"/><line x1="8" y1="82" x2="80" y2="82" stroke-width="2"/></g></svg></div>
     <div class="kicker">Sixhands Studio · AI 占卜工具</div>
     <h1>梅花易數 <span class="g">三數起卦</span></h1>
-    <div class="sub">憑直覺想三個數字，程式即時起卦、算動爻、判體用生剋</div>
+    <div class="sub">本卦・互卦・錯卦・綜卦・變卦，五卦交叉驗證，AI 先直接回答你的問題</div>
   </div>
 
   <div class="card">
@@ -209,8 +220,37 @@ const MEAN = {
 
 const LINE_NAME = ["初爻","二爻","三爻","四爻","五爻","上爻"];
 
+// ---------- 每卦吉凶傾向評分（1=吉，0=平，-1=欠佳／凶）供 AI 判斷用 ----------
+const BG_SCORE = {
+ 1:1,2:0,3:-1,4:0,5:0,6:-1,7:0,8:1,9:0,10:0,11:1,12:-1,13:1,14:1,15:1,16:1,
+ 17:0,18:-1,19:1,20:0,21:0,22:0,23:-1,24:1,25:0,26:1,27:0,28:-1,29:-1,30:0,31:1,32:1,
+ 33:0,34:0,35:1,36:-1,37:1,38:-1,39:-1,40:1,41:0,42:1,43:0,44:-1,45:1,46:1,47:-1,48:0,
+ 49:0,50:1,51:-1,52:0,53:1,54:-1,55:0,56:-1,57:0,58:1,59:-1,60:0,61:1,62:0,63:0,64:0
+};
+
 function mod8(n){n=Math.abs(Math.round(Number(n))||0);let m=n%8;return m===0?8:m;}
 function mod6(n){n=Math.abs(Math.round(Number(n))||0);let m=n%6;return m===0?6:m;}
+
+function linesToHex(lines){
+  const lowerId = triByBits(lines.slice(0,3).join("")).id;
+  const upperId = triByBits(lines.slice(3,6).join("")).id;
+  return {upperId,lowerId,gua:HEX[upperId+"_"+lowerId]};
+}
+
+// 互卦：取本卦二三四爻為下卦、三四五爻為上卦，反映事情內在真正的發展
+function mutualLines(lines){
+  const newLower = [lines[1],lines[2],lines[3]];
+  const newUpper = [lines[2],lines[3],lines[4]];
+  return newLower.concat(newUpper);
+}
+// 錯卦：全部爻陰陽互換，反映隱藏的阻力或對立面
+function oppositeLines(lines){
+  return lines.map(b=>b==="1"?"0":"1");
+}
+// 綜卦：整卦上下顛倒，反映換個角度看這件事
+function reverseLines(lines){
+  return lines.slice().reverse();
+}
 
 function computeHexagram(n1,n2,n3){
   const upperId = mod8(n1), lowerId = mod8(n2), moveLine = mod6(n3);
@@ -221,7 +261,12 @@ function computeHexagram(n1,n2,n3){
   changed[idx] = changed[idx]==="1"?"0":"1";
   const newLowerId = triByBits(changed.slice(0,3).join("")).id;
   const newUpperId = triByBits(changed.slice(3,6).join("")).id;
-  return {upperId,lowerId,moveLine,lines,changed,newUpperId,newLowerId};
+
+  const mutual = linesToHex(mutualLines(lines));
+  const opposite = linesToHex(oppositeLines(lines));
+  const reverseH = linesToHex(reverseLines(lines));
+
+  return {upperId,lowerId,moveLine,lines,changed,newUpperId,newLowerId,mutual,opposite,reverseH};
 }
 
 const WX_GEN = {"木":"火","火":"土","土":"金","金":"水","水":"木"};
@@ -237,12 +282,20 @@ function relation(bodyWx,useWx){
 }
 
 const RELATION_INFO = {
-  "體生用":{tone:"warn",text:"你為此事付出較多、收穫需要時間，宜量力而為、先捨後得，不必操之過急。"},
-  "用生體":{tone:"good",text:"外界對你有明顯助力，大吉之象，宜積極把握、順勢而為，好機會別放過。"},
-  "體剋用":{tone:"good",text:"局面在你掌握之中，吉象，宜主動出擊、按自己的節奏推進，結果多半順你的意。"},
-  "用剋體":{tone:"warn",text:"外部壓力較大，宜謹慎行事、以退為進，避免正面硬碰，先求自保再求進展。"},
-  "比和":{tone:"mid",text:"彼此勢均力敵、平順和諧，宜保持現狀、穩健經營，不躁進也不退縮。"}
+  "體生用":{tone:"warn",score:-1,text:"你為此事付出較多、收穫需要時間，宜量力而為、先捨後得，不必操之過急。",cond:"你需要先付出、先讓步或先投入成本，才可能換來後續機會，不要期待不勞而獲。"},
+  "用生體":{tone:"good",score:1,text:"外界對你有明顯助力，大吉之象，宜積極把握、順勢而為，好機會別放過。",cond:"外部條件已經對你有利，只要不猶豫、抓緊眼前的機會，成功機率較高。"},
+  "體剋用":{tone:"good",score:1,text:"局面在你掌握之中，吉象，宜主動出擊、按自己的節奏推進，結果多半順你的意。",cond:"主動權在你手上，只要按自己的步調推進、不被對方牽著走，就容易成事。"},
+  "用剋體":{tone:"warn",score:-1,text:"外部壓力較大，宜謹慎行事、以退為進，避免正面硬碰，先求自保再求進展。",cond:"目前外部阻力較大，除非你能先化解對方的疑慮、降低對立，否則不容易成。"},
+  "比和":{tone:"mid",score:0,text:"彼此勢均力敵、平順和諧，宜保持現狀、穩健經營，不躁進也不退縮。",cond:"雙方勢均力敵，需要多一點互相配合與耐心，急不得，也不能拖太久。"}
 };
+
+function verdictBucket(total){
+  if(total>=3) return {tone:"good", lead:"這件事：偏有機會", detail:"整體卦象與生剋關係都偏向對你有利。"};
+  if(total>=1) return {tone:"good", lead:"這件事：偏有機會，但仍有條件", detail:"大方向偏向有利，但不是穩贏，仍需注意下面的條件。"};
+  if(total===0) return {tone:"mid", lead:"這件事：機會參半，關鍵在你怎麼做", detail:"卦象吉凶互見，成敗取決於你接下來的應對方式。"};
+  if(total>=-2) return {tone:"warn", lead:"這件事：偏不容易，需要調整條件", detail:"整體偏向不利，除非做出調整，否則較難順利。"};
+  return {tone:"warn", lead:"這件事：目前明顯不利，建議暫緩", detail:"卦象與生剋關係都偏向不利，貿然行動風險較高。"};
+}
 
 function renderHex(lines, movingIdx){
   // lines: array bottom(0) to top(5)
@@ -257,6 +310,25 @@ function renderHex(lines, movingIdx){
     }
   }
   return html;
+}
+
+function miniHexCard(num, title, roleText, upperId, lowerId, lines){
+  const upperT = triById(upperId), lowerT = triById(lowerId);
+  const gua = HEX[upperId+"_"+lowerId];
+  return `
+  <div class="card">
+    <h3><span class="num">${num}</span>${title}</h3>
+    <div class="role">${roleText}</div>
+    <div class="hexbox">
+      <div class="hexcol">${renderHex(lines, -1)}</div>
+      <div class="hexmeta">
+        <div class="nm">${gua.name}</div>
+        <div class="kw">第 ${gua.num} 卦</div>
+        <div class="tri">上卦：${upperT.name}${upperT.symbol}（${upperT.nature}．${upperT.wx}）<br>下卦：${lowerT.name}${lowerT.symbol}（${lowerT.nature}．${lowerT.wx}）</div>
+      </div>
+    </div>
+    <p style="font-size:14px">${MEAN[gua.num]}</p>
+  </div>`;
 }
 
 function cast(){
@@ -281,9 +353,18 @@ function cast(){
   const rel = relation(bodyTri.wx, useTri.wx);
   const relInfo = RELATION_INFO[rel];
 
+  // 綜合評分：體用生剋（權重x2）＋本卦吉凶＋變卦吉凶
+  const total = relInfo.score*2 + BG_SCORE[benGua.num] + BG_SCORE[bianGua.num];
+  const bucket = verdictBucket(total);
+
+  const stagePos = r.moveLine<=2?"事情剛開始的階段，打好基礎最重要"
+    :r.moveLine<=4?"事情進行到一半的節骨眼，這時的判斷會決定走向"
+    :"事情接近尾聲的階段，收尾與善後不能鬆懈";
+
   const hexHTML = `
   <div class="card">
     <h3><span class="num">1</span>本卦</h3>
+    <div class="role">此刻的<b>本卦</b>：代表這件事目前的狀態與起點。</div>
     <div class="hexbox">
       <div class="hexcol">${renderHex(r.lines, r.moveLine-1)}</div>
       <div class="hexmeta">
@@ -292,10 +373,18 @@ function cast(){
         <div class="tri">上卦：${upperT.name}${upperT.symbol}（${upperT.nature}．${upperT.wx}）<br>下卦：${lowerT.name}${lowerT.symbol}（${lowerT.nature}．${lowerT.wx}）</div>
       </div>
     </div>
+    <p style="font-size:14px">${MEAN[benGua.num]}</p>
   </div>
 
+  ${miniHexCard(2, "互卦", "<b>互卦</b>：事情內在真正的發展，比表面卦象更貼近事情的裡子。", r.mutual.upperId, r.mutual.lowerId, mutualLines(r.lines))}
+
+  ${miniHexCard(3, "錯卦", "<b>錯卦</b>：把本卦每一爻陰陽互換，代表隱藏的阻力或對立面。", r.opposite.upperId, r.opposite.lowerId, oppositeLines(r.lines))}
+
+  ${miniHexCard(4, "綜卦", "<b>綜卦</b>：把本卦整個上下顛倒，換個角度、換個立場看這件事。", r.reverseH.upperId, r.reverseH.lowerId, reverseLines(r.lines))}
+
   <div class="card">
-    <h3><span class="num">2</span>變卦</h3>
+    <h3><span class="num">5</span>變卦</h3>
+    <div class="role"><b>變卦</b>：動爻變化之後，事情最終演變的方向。</div>
     <div class="hexbox">
       <div class="hexcol">${renderHex(r.changed, r.moveLine-1)}</div>
       <div class="hexmeta">
@@ -304,10 +393,11 @@ function cast(){
         <div class="tri">上卦：${newUpperT.name}${newUpperT.symbol}（${newUpperT.nature}．${newUpperT.wx}）<br>下卦：${newLowerT.name}${newLowerT.symbol}（${newLowerT.nature}．${newLowerT.wx}）</div>
       </div>
     </div>
+    <p style="font-size:14px">${MEAN[bianGua.num]}</p>
   </div>
 
   <div class="card">
-    <h3><span class="num">3</span>動爻</h3>
+    <h3><span class="num">6</span>動爻</h3>
     <p style="font-size:14.5px">第 <b>${r.moveLine}</b> 爻動（${LINE_NAME[r.moveLine-1]}），位於<b>${useIsLower?"下卦":"上卦"}</b>，代表變化由此而生：<b>${benGua.name}</b> 因此爻變化，轉為 <b>${bianGua.name}</b>。</p>
     <div style="margin-top:10px">
       <span class="tag">起卦數字：${n1} · ${n2} · ${n3}</span>
@@ -318,25 +408,37 @@ function cast(){
   </div>
 
   <div class="card">
-    <h3><span class="num">4</span>卦象代表的含義</h3>
+    <h3><span class="num">7</span>卦象代表的含義</h3>
     <div class="linewrap">
-      <p><b>${benGua.name}（本卦，代表目前狀態）：</b>${MEAN[benGua.num]}</p>
-      <p><b>${bianGua.name}（變卦，代表事情演變的方向）：</b>${MEAN[bianGua.num]}</p>
+      <p><b>${benGua.name}（本卦）：</b>${MEAN[benGua.num]}</p>
+      <p><b>${r.mutual.gua.name}（互卦）：</b>${MEAN[r.mutual.gua.num]}</p>
+      <p><b>${r.opposite.gua.name}（錯卦）：</b>${MEAN[r.opposite.gua.num]}</p>
+      <p><b>${r.reverseH.gua.name}（綜卦）：</b>${MEAN[r.reverseH.gua.num]}</p>
+      <p><b>${bianGua.name}（變卦）：</b>${MEAN[bianGua.num]}</p>
     </div>
   </div>
 
   <div class="card">
-    <h3><span class="num">5</span>針對這個問題的具體解讀</h3>
+    <h3><span class="num">8</span>針對這個問題的具體解讀</h3>
     <p style="font-size:14.5px;margin-bottom:10px">你問的是：<b>「${q}」</b></p>
-    <p style="font-size:14.5px;margin-bottom:10px">以體用生剋來看：<b>${bodyTri.name}</b>（${bodyTri.wx}）為體，代表<b>你自己／現況</b>；<b>${useTri.name}</b>（${useTri.wx}）為用，代表<b>這件事本身／對方</b>。兩者關係為「<b>${rel}</b>」。</p>
+    <div class="headline ${bucket.tone}"><span class="lead">${bucket.lead}</span>${bucket.detail}</div>
+    <p style="font-size:14.5px;margin-bottom:10px"><b>卦理依據：</b>以體用生剋來看，<b>${bodyTri.name}</b>（${bodyTri.wx}）為體，代表你自己／現況；<b>${useTri.name}</b>（${useTri.wx}）為用，代表這件事本身／對方，兩者關係為「<b>${rel}</b>」。</p>
     <div class="verdict ${relInfo.tone}">${relInfo.text}</div>
-    <p style="font-size:14.5px">結合本卦「${benGua.name}」與變卦「${bianGua.name}」來看，事情目前處於「${MEAN[benGua.num].split("，")[0]}」的狀態，未來將往「${MEAN[bianGua.num].split("，")[0]}」的方向發展，這是你這個問題的整體走勢。</p>
+    <p style="font-size:14.5px;margin-bottom:6px"><b>交叉驗證：</b></p>
+    <ul class="condlist">
+      <li>本卦「${benGua.name}」顯示目前狀態：${MEAN[benGua.num].split("，")[0]}。</li>
+      <li>互卦「${r.mutual.gua.name}」顯示事情內在真正的發展：${MEAN[r.mutual.gua.num].split("，")[0]}。</li>
+      <li>錯卦「${r.opposite.gua.name}」提醒隱藏的阻力或對立面：${MEAN[r.opposite.gua.num].split("，")[0]}。</li>
+      <li>綜卦「${r.reverseH.gua.name}」換個角度看：${MEAN[r.reverseH.gua.num].split("，")[0]}。</li>
+      <li>變卦「${bianGua.name}」顯示最終走向：${MEAN[bianGua.num].split("，")[0]}。</li>
+    </ul>
   </div>
 
   <div class="card">
-    <h3><span class="num">6</span>給你的行動建議</h3>
-    <p style="font-size:14.5px">${relInfo.text}</p>
-    <p style="font-size:14.5px;margin-top:8px">動爻落在「${LINE_NAME[r.moveLine-1]}」，提醒你：關鍵的轉折點就在${r.moveLine<=2?"事情剛開始的階段，打好基礎最重要":r.moveLine<=4?"事情進行到一半的節骨眼，這時的判斷會決定走向":"事情接近尾聲的階段，收尾與善後不能鬆懈"}。</p>
+    <h3><span class="num">9</span>給你的行動建議</h3>
+    <p style="font-size:14.5px"><b>需要具備的條件：</b>${relInfo.cond}</p>
+    <p style="font-size:14.5px;margin-top:8px">${relInfo.text}</p>
+    <p style="font-size:14.5px;margin-top:8px">動爻落在「${LINE_NAME[r.moveLine-1]}」，提醒你：關鍵的轉折點就在${stagePos}。</p>
   </div>
   `;
 
