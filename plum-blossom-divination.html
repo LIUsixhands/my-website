@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>梅花易數 AI 占卜｜三數起卦 — Sixhands Studio</title>
+<meta name="description" content="憑直覺想三個數字，用梅花易數三數起卦法即時起出本卦、變卦、動爻，並給你體用生剋解讀與行動建議。">
+<meta name="theme-color" content="#1F3A2E">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 86 92'><g stroke='%231F3A2E' stroke-width='4' fill='none' stroke-linecap='square'><line x1='14' y1='20' x2='14' y2='68'/><line x1='26' y1='14' x2='26' y2='74'/><line x1='38' y1='20' x2='38' y2='68'/><line x1='50' y1='14' x2='50' y2='74'/><line x1='62' y1='20' x2='62' y2='68'/><line x1='74' y1='14' x2='74' y2='74'/><line x1='8' y1='82' x2='80' y2='82' stroke-width='3'/></g></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root{--forest:#1F3A2E;--forest-2:#2C4E3D;--forest-3:#182b21;--cream:#F3EEE2;--cream-2:#FAF7EF;--brass:#B08D3F;--brass-lite:#D8BC7E;--ink:#22271F;--muted:#565c50}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Noto Sans TC","PingFang TC",sans-serif;background:radial-gradient(1000px 600px at 50% -10%,#274436,var(--forest) 55%,var(--forest-3));background-attachment:fixed;color:var(--cream);min-height:100vh;line-height:1.7;padding:0 16px 40px;text-align:center}
+h1,h2,h3{font-family:"Noto Serif TC",serif}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:560px;margin:0 auto}
+.top{padding:36px 0 6px}
+.mark{width:52px;height:56px;margin:0 auto 12px}.mark svg{width:100%;height:100%}
+.kicker{font-size:11px;letter-spacing:.34em;color:var(--brass-lite);text-transform:uppercase;margin-bottom:8px}
+.top h1{font-size:30px;font-weight:900;color:#fff}.top h1 .g{color:var(--brass-lite)}
+.top .sub{font-size:14px;color:#AEBBAE;margin-top:8px}
+
+.card{background:linear-gradient(180deg,var(--cream-2),var(--cream));color:var(--ink);border-radius:18px;padding:26px 22px;margin-top:22px;border:1px solid rgba(216,188,126,.4);box-shadow:0 18px 40px -20px rgba(0,0,0,.6);text-align:left}
+.card h3{font-size:16px;color:var(--forest);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h3 .num{background:var(--brass);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-family:"Noto Sans TC";flex-shrink:0}
+
+label{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px;font-weight:700;text-align:left}
+label:first-child{margin-top:0}
+textarea,input[type=number],input[type=text]{width:100%;font-family:inherit;font-size:15px;padding:12px 14px;border-radius:10px;border:1px solid rgba(31,58,46,.18);background:#fff;color:var(--ink)}
+textarea{resize:vertical;min-height:56px}
+.num-row{display:flex;gap:10px}
+.num-row input{text-align:center}
+.hint{font-size:12px;color:#8a9484;margin-top:6px;text-align:left}
+
+.btn{display:block;width:100%;max-width:320px;margin:18px auto 0;text-align:center;padding:16px;border-radius:12px;font-weight:700;font-size:17px;border:none;cursor:pointer;font-family:inherit;transition:transform .12s}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-p{background:var(--brass);color:#fff}
+.btn-line{background:#06C755;color:#fff;box-shadow:0 6px 18px rgba(6,199,85,.35)}
+.btn-ghost{background:transparent;color:var(--cream);border:1.5px solid var(--brass-lite);margin-top:10px}
+.hide{display:none}
+
+/* hexagram diagram */
+.hexbox{display:flex;gap:22px;align-items:center;justify-content:center;flex-wrap:wrap;margin:6px 0 16px}
+.hexcol{display:flex;flex-direction:column-reverse;gap:7px;width:110px}
+.hexline{height:12px;border-radius:3px;background:var(--forest);position:relative}
+.hexline.yin{background:transparent;display:flex;justify-content:space-between}
+.hexline.yin i{width:46%;height:12px;background:var(--forest);border-radius:3px;display:block}
+.hexline.moving{outline:2px dashed var(--brass);outline-offset:3px}
+.hexline.moving::after{content:"⟵動";position:absolute;right:-42px;top:-2px;font-size:11px;color:var(--brass);font-weight:700;white-space:nowrap}
+.hexmeta{font-size:14px}
+.hexmeta .nm{font-family:"Noto Serif TC",serif;font-weight:900;font-size:20px;color:var(--forest)}
+.hexmeta .kw{font-size:12px;color:var(--muted)}
+.hexmeta .tri{font-size:12px;color:var(--brass);margin-top:4px}
+
+.arrow-mid{font-size:22px;color:var(--brass);align-self:center}
+
+.linewrap p{font-size:14.5px;margin-bottom:10px}
+.linewrap b{color:var(--forest)}
+.tag{display:inline-block;font-size:12px;background:rgba(31,58,46,.08);color:var(--forest);padding:3px 10px;border-radius:99px;margin-right:6px;margin-bottom:6px;font-weight:700}
+.tag.gold{background:rgba(176,141,63,.15);color:#7a5f26}
+
+.verdict{border-radius:12px;padding:14px 16px;margin:10px 0;font-size:14px}
+.verdict.good{background:#e9f4ec;color:#1d5b34;border:1px solid #b7ddc2}
+.verdict.warn{background:#fbeed8;color:#7a4d13;border:1px solid #edcf9c}
+.verdict.mid{background:#eef1f8;color:#33436b;border:1px solid #c9d2ea}
+
+.disc{font-size:11px;color:#8fa08f;margin-top:26px;line-height:1.7}
+.foot-brand{margin-top:16px;font-size:12px;color:var(--brass-lite);font-family:"Noto Serif TC",serif}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="mark"><svg viewBox="0 0 86 92"><g stroke="#D8BC7E" stroke-width="3" fill="none" stroke-linecap="square"><line x1="14" y1="20" x2="14" y2="68"/><line x1="26" y1="14" x2="26" y2="74"/><line x1="38" y1="20" x2="38" y2="68"/><line x1="50" y1="14" x2="50" y2="74"/><line x1="62" y1="20" x2="62" y2="68"/><line x1="74" y1="14" x2="74" y2="74"/><line x1="8" y1="82" x2="80" y2="82" stroke-width="2"/></g></svg></div>
+    <div class="kicker">Sixhands Studio · AI 占卜工具</div>
+    <h1>梅花易數 <span class="g">三數起卦</span></h1>
+    <div class="sub">憑直覺想三個數字，程式即時起卦、算動爻、判體用生剋</div>
+  </div>
+
+  <div class="card">
+    <label>你想問的問題</label>
+    <textarea id="q" placeholder="例如：這個月換工作是否合適？"></textarea>
+
+    <label>憑直覺想到的三個數字</label>
+    <div class="num-row">
+      <input type="number" id="n1" placeholder="第一個">
+      <input type="number" id="n2" placeholder="第二個">
+      <input type="number" id="n3" placeholder="第三個">
+    </div>
+    <div class="hint">傳統三數起卦法：第一數定上卦、第二數定下卦、第三數定動爻（數字任填，程式會自動取餘數換算）。</div>
+
+    <button class="btn btn-p" id="castBtn" onclick="cast()">起卦 ☯</button>
+  </div>
+
+  <div id="results" class="hide"></div>
+
+  <div class="disc">本工具以傳統梅花易數「三數起卦法」與「體用生剋」邏輯程式化實作，結果僅供參考娛樂，非命理保證，重大決策請以專業判斷為準。<br>Sixhands Studio · 助哥</div>
+  <div class="foot-brand">不賣房子，賣判斷</div>
+  <a href="index.html" class="btn btn-ghost">回 Sixhands Studio 官網</a>
+</div>
+
+<script>
+// ---------- 八卦資料（先天八卦數：乾一兌二離三震四巽五坎六艮七坤八）----------
+const TRI = [
+  {id:1,name:"乾",symbol:"☰",nature:"天",wx:"金",bits:"111"},
+  {id:2,name:"兌",symbol:"☱",nature:"澤",wx:"金",bits:"110"},
+  {id:3,name:"離",symbol:"☲",nature:"火",wx:"火",bits:"101"},
+  {id:4,name:"震",symbol:"☳",nature:"雷",wx:"木",bits:"100"},
+  {id:5,name:"巽",symbol:"☴",nature:"風",wx:"木",bits:"011"},
+  {id:6,name:"坎",symbol:"☵",nature:"水",wx:"水",bits:"010"},
+  {id:7,name:"艮",symbol:"☶",nature:"山",wx:"土",bits:"001"},
+  {id:8,name:"坤",symbol:"☷",nature:"地",wx:"土",bits:"000"}
+];
+const triById = id => TRI.find(t=>t.id===id);
+const triByBits = bits => TRI.find(t=>t.bits===bits);
+
+// ---------- 六十四卦（上卦_下卦 -> 卦名 / 序號）----------
+const HEX_RAW = [
+ [1,1,1,"乾為天"],[1,2,10,"天澤履"],[1,3,13,"天火同人"],[1,4,25,"天雷無妄"],
+ [1,5,44,"天風姤"],[1,6,6,"天水訟"],[1,7,33,"天山遯"],[1,8,12,"天地否"],
+ [2,1,43,"澤天夬"],[2,2,58,"兌為澤"],[2,3,49,"澤火革"],[2,4,17,"澤雷隨"],
+ [2,5,28,"澤風大過"],[2,6,47,"澤水困"],[2,7,31,"澤山咸"],[2,8,45,"澤地萃"],
+ [3,1,14,"火天大有"],[3,2,38,"火澤睽"],[3,3,30,"離為火"],[3,4,21,"火雷噬嗑"],
+ [3,5,50,"火風鼎"],[3,6,64,"火水未濟"],[3,7,56,"火山旅"],[3,8,35,"火地晉"],
+ [4,1,34,"雷天大壯"],[4,2,54,"雷澤歸妹"],[4,3,55,"雷火豐"],[4,4,51,"震為雷"],
+ [4,5,32,"雷風恆"],[4,6,40,"雷水解"],[4,7,62,"雷山小過"],[4,8,16,"雷地豫"],
+ [5,1,9,"風天小畜"],[5,2,61,"風澤中孚"],[5,3,37,"風火家人"],[5,4,42,"風雷益"],
+ [5,5,57,"巽為風"],[5,6,59,"風水渙"],[5,7,53,"風山漸"],[5,8,20,"風地觀"],
+ [6,1,5,"水天需"],[6,2,60,"水澤節"],[6,3,63,"水火既濟"],[6,4,3,"水雷屯"],
+ [6,5,48,"水風井"],[6,6,29,"坎為水"],[6,7,39,"水山蹇"],[6,8,8,"水地比"],
+ [7,1,26,"山天大畜"],[7,2,41,"山澤損"],[7,3,22,"山火賁"],[7,4,27,"山雷頤"],
+ [7,5,18,"山風蠱"],[7,6,4,"山水蒙"],[7,7,52,"艮為山"],[7,8,23,"山地剝"],
+ [8,1,11,"地天泰"],[8,2,19,"地澤臨"],[8,3,36,"地火明夷"],[8,4,24,"地雷復"],
+ [8,5,46,"地風升"],[8,6,7,"地水師"],[8,7,15,"地山謙"],[8,8,2,"坤為地"]
+];
+const HEX = {};
+HEX_RAW.forEach(([u,l,num,name])=>{HEX[u+"_"+l]={num,name}});
+
+const MEAN = {
+ 1:"剛健向上，自強不息，大吉之象，宜積極進取，但防過剛易折。",
+ 2:"柔順包容，厚德載物，平順安穩，宜以靜制動、以柔克剛。",
+ 3:"初生艱難，如草穿石，凡事起步維艱，宜守正待時，不宜躁進。",
+ 4:"蒙昧未開，需啟蒙引導，宜求教於人、虛心學習，忌自以為是。",
+ 5:"等待時機，蓄勢待發，不可躁進，宜耐心等待，時機一到自然成。",
+ 6:"爭訟是非，糾紛不斷，宜息訟和解、退讓為上，硬拼兩敗俱傷。",
+ 7:"興師動眾，統御紀律，需有紀律與領導，出師有名方能獲勝。",
+ 8:"親比相依，團結互助，宜與人合作、擇善而從，孤立無援則凶。",
+ 9:"力量尚小，蓄積待發，小有阻滯，宜耐心積累，不可急於求成。",
+ 10:"如履虎尾，謹慎而行，處境雖險但依禮而行可保平安。",
+ 11:"天地交泰，通達順遂，大吉之象，上下交流，諸事皆宜。",
+ 12:"閉塞不通，上下不交，時運不濟，宜韜光養晦、靜待時變。",
+ 13:"與人同心，志同道合，宜團結眾人、開誠布公，共謀大業。",
+ 14:"光明盛大，大有所獲，運勢極佳，但宜謙遜守成，勿驕縱。",
+ 15:"謙虛謹慎，虛心待人，謙受益滿招損，持盈保泰之道。",
+ 16:"順時而動，安樂豫悅，宜順應形勢、及時行動，防止逸樂忘憂。",
+ 17:"隨和順勢，因時而變，宜隨大流、順應他人，但須堅守原則。",
+ 18:"積弊叢生，亟待整治，舊患需整頓革新，宜正本清源。",
+ 19:"居高臨下，德澤廣被，時運漸盛，宜把握機會、擴展格局。",
+ 20:"觀察省思，以德服人，宜靜觀其變、反省自身，以身作則感召他人。",
+ 21:"排除障礙，明察果斷，遇阻宜果斷處理，執法嚴明去除弊病。",
+ 22:"文飾外表，虛實相濟，外表光鮮，宜重實質，勿華而不實。",
+ 23:"剝落衰敗，由盛轉衰，局勢不利，宜靜守待時，避免妄動。",
+ 24:"一陽來復，否極泰來，谷底反彈，轉機將現，宜把握新生之機。",
+ 25:"順天而行，不妄不欺，宜循自然正道行事，勿存僥倖妄為之心。",
+ 26:"蓄德積才，大有可為，宜積蓄實力、厚積薄發，時機成熟自然大成。",
+ 27:"頤養身心，慎言節食，宜養正修身，注意言語飲食，戒慎養生。",
+ 28:"力過負重，非常之舉，處境特殊壓力大，宜果斷應變，勿因循守舊。",
+ 29:"重重險陷，持誠以濟，處境艱險，宜心懷誠信、謹慎前行，方能渡險。",
+ 30:"光明附麗，文明可觀，運勢光明但易生變，宜依附正道、持中守正。",
+ 31:"感應相通，兩情相悅，宜以誠感人，人際或感情有良好互動。",
+ 32:"恆久守常，持之以恆，宜堅守本分、持之以恆，忌朝令夕改。",
+ 33:"退避以待，明哲保身，時運不利宜急流勇退，退一步海闊天空。",
+ 34:"剛健壯盛，聲勢浩大，氣勢正旺，但宜守禮守正，勿恃強妄動。",
+ 35:"晉升向上，光明得志，運勢上升，宜積極進取、把握升遷良機。",
+ 36:"光明受挫，韜光養晦，時運晦暗，宜隱忍藏拙、靜待天明。",
+ 37:"齊家有道，內外有序，宜整頓家庭內部，家和萬事興。",
+ 38:"乖離不合，異中求同，人際或事理有分歧，宜求同存異、化解誤會。",
+ 39:"險阻難行，宜靜不宜動，前路艱險，宜暫緩行動，尋求助力再圖前進。",
+ 40:"化解危難，撥雲見日，困境將解，宜把握時機、迅速處理遺留問題。",
+ 41:"損下益上，先損後益，目前需有所犧牲付出，但終能換來長遠之益。",
+ 42:"損上益下，大有裨益，時運有利，宜把握良機、有所作為，多方受益。",
+ 43:"決斷去除，剛長柔消，宜當機立斷、排除障礙，但需光明正大行事。",
+ 44:"不期而遇，柔遇剛長，易有意外相逢或誘惑，宜謹慎防範、慎始防微。",
+ 45:"聚集眾人，齊心協力，宜聚合資源人脈、團結眾力共成大事。",
+ 46:"積小成大，步步高升，運勢漸升，宜循序漸進、腳踏實地向上發展。",
+ 47:"困頓艱難，守志待通，身處困境，宜堅守志節、以待轉機，勿灰心喪志。",
+ 48:"井養不窮，澤及他人，宜如井水般施惠他人，修養自身以利眾。",
+ 49:"變革創新，除舊布新，時機成熟宜改革創新，除舊布新方能順應變局。",
+ 50:"鼎新革故，穩重承載，宜穩健圖新、禮賢納士，成就大業。",
+ 51:"震動驚懼，反躬自省，忽有驚變，宜臨危不亂、反省自身，轉危為安。",
+ 52:"止而不動，安於本分，宜靜止守分，止於當止，勿輕舉妄動。",
+ 53:"循序漸進，穩紮穩打，宜按部就班、循序漸進，欲速則不達。",
+ 54:"名分未正，宜守本分，處境名不正言不順，宜謹守本分，勿強求。",
+ 55:"豐盛至極，盛極將衰，運勢極盛，宜把握當下，同時提防盛極而衰。",
+ 56:"羈旅在外，謹慎行事，身處異地或變動之中，宜謹言慎行、以和為貴。",
+ 57:"順勢而入，謙遜隨和，宜謙遜柔順、見機行事，反覆申命方能成事。",
+ 58:"喜悅相通，和悅待人，人際和樂，宜以喜悅之心待人接物，廣結善緣。",
+ 59:"渙散渙解，凝聚人心，局面渙散，宜設法凝聚人心、重整旗鼓。",
+ 60:"節制有度，過猶不及，宜自我節制、量力而行，過度節制亦不宜。",
+ 61:"誠信感通，內外皆孚，宜以誠信為本，誠意可感通人心，成事可期。",
+ 62:"小事可為，大事宜緩，宜謹慎行小事，不宜好高騖遠圖謀大事。",
+ 63:"功成圓滿，慎防生變，事已成功，然盛極轉衰之機伏於其中，宜謹慎守成。",
+ 64:"未濟將濟，謹慎有終，事尚未成，仍需努力，謹慎行事終能有成。"
+};
+
+const LINE_NAME = ["初爻","二爻","三爻","四爻","五爻","上爻"];
+
+function mod8(n){n=Math.abs(Math.round(Number(n))||0);let m=n%8;return m===0?8:m;}
+function mod6(n){n=Math.abs(Math.round(Number(n))||0);let m=n%6;return m===0?6:m;}
+
+function computeHexagram(n1,n2,n3){
+  const upperId = mod8(n1), lowerId = mod8(n2), moveLine = mod6(n3);
+  const lowerBits = triById(lowerId).bits, upperBits = triById(upperId).bits;
+  const lines = (lowerBits+upperBits).split(""); // index0=初爻(bottom)...index5=上爻(top)
+  const changed = lines.slice();
+  const idx = moveLine-1;
+  changed[idx] = changed[idx]==="1"?"0":"1";
+  const newLowerId = triByBits(changed.slice(0,3).join("")).id;
+  const newUpperId = triByBits(changed.slice(3,6).join("")).id;
+  return {upperId,lowerId,moveLine,lines,changed,newUpperId,newLowerId};
+}
+
+const WX_GEN = {"木":"火","火":"土","土":"金","金":"水","水":"木"};
+const WX_OVERCOME = {"木":"土","土":"水","水":"火","火":"金","金":"木"};
+
+function relation(bodyWx,useWx){
+  if(bodyWx===useWx) return "比和";
+  if(WX_GEN[bodyWx]===useWx) return "體生用";
+  if(WX_GEN[useWx]===bodyWx) return "用生體";
+  if(WX_OVERCOME[bodyWx]===useWx) return "體剋用";
+  if(WX_OVERCOME[useWx]===bodyWx) return "用剋體";
+  return "比和";
+}
+
+const RELATION_INFO = {
+  "體生用":{tone:"warn",text:"你為此事付出較多、收穫需要時間，宜量力而為、先捨後得，不必操之過急。"},
+  "用生體":{tone:"good",text:"外界對你有明顯助力，大吉之象，宜積極把握、順勢而為，好機會別放過。"},
+  "體剋用":{tone:"good",text:"局面在你掌握之中，吉象，宜主動出擊、按自己的節奏推進，結果多半順你的意。"},
+  "用剋體":{tone:"warn",text:"外部壓力較大，宜謹慎行事、以退為進，避免正面硬碰，先求自保再求進展。"},
+  "比和":{tone:"mid",text:"彼此勢均力敵、平順和諧，宜保持現狀、穩健經營，不躁進也不退縮。"}
+};
+
+function renderHex(lines, movingIdx){
+  // lines: array bottom(0) to top(5)
+  let html = "";
+  for(let i=5;i>=0;i--){
+    const isYang = lines[i]==="1";
+    const moving = i===movingIdx ? " moving":"";
+    if(isYang){
+      html += `<div class="hexline${moving}"></div>`;
+    }else{
+      html += `<div class="hexline yin${moving}"><i></i><i></i></div>`;
+    }
+  }
+  return html;
+}
+
+function cast(){
+  const q = document.getElementById('q').value.trim() || "（未填寫具體問題，以整體運勢解讀）";
+  const n1 = document.getElementById('n1').value;
+  const n2 = document.getElementById('n2').value;
+  const n3 = document.getElementById('n3').value;
+  if(n1===""||n2===""||n3===""){
+    alert("請憑直覺填入三個數字再起卦。");
+    return;
+  }
+
+  const r = computeHexagram(n1,n2,n3);
+  const upperT = triById(r.upperId), lowerT = triById(r.lowerId);
+  const newUpperT = triById(r.newUpperId), newLowerT = triById(r.newLowerId);
+  const benGua = HEX[r.upperId+"_"+r.lowerId];
+  const bianGua = HEX[r.newUpperId+"_"+r.newLowerId];
+
+  const useIsLower = r.moveLine <= 3; // 動爻所在的卦為「用卦」
+  const useTri = useIsLower ? lowerT : upperT;
+  const bodyTri = useIsLower ? upperT : lowerT;
+  const rel = relation(bodyTri.wx, useTri.wx);
+  const relInfo = RELATION_INFO[rel];
+
+  const hexHTML = `
+  <div class="card">
+    <h3><span class="num">1</span>本卦</h3>
+    <div class="hexbox">
+      <div class="hexcol">${renderHex(r.lines, r.moveLine-1)}</div>
+      <div class="hexmeta">
+        <div class="nm">${benGua.name}</div>
+        <div class="kw">第 ${benGua.num} 卦</div>
+        <div class="tri">上卦：${upperT.name}${upperT.symbol}（${upperT.nature}．${upperT.wx}）<br>下卦：${lowerT.name}${lowerT.symbol}（${lowerT.nature}．${lowerT.wx}）</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="num">2</span>變卦</h3>
+    <div class="hexbox">
+      <div class="hexcol">${renderHex(r.changed, r.moveLine-1)}</div>
+      <div class="hexmeta">
+        <div class="nm">${bianGua.name}</div>
+        <div class="kw">第 ${bianGua.num} 卦</div>
+        <div class="tri">上卦：${newUpperT.name}${newUpperT.symbol}（${newUpperT.nature}．${newUpperT.wx}）<br>下卦：${newLowerT.name}${newLowerT.symbol}（${newLowerT.nature}．${newLowerT.wx}）</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="num">3</span>動爻</h3>
+    <p style="font-size:14.5px">第 <b>${r.moveLine}</b> 爻動（${LINE_NAME[r.moveLine-1]}），位於<b>${useIsLower?"下卦":"上卦"}</b>，代表變化由此而生：<b>${benGua.name}</b> 因此爻變化，轉為 <b>${bianGua.name}</b>。</p>
+    <div style="margin-top:10px">
+      <span class="tag">起卦數字：${n1} · ${n2} · ${n3}</span>
+      <span class="tag gold">上卦數 ${mod8(n1)} → ${upperT.name}</span>
+      <span class="tag gold">下卦數 ${mod8(n2)} → ${lowerT.name}</span>
+      <span class="tag gold">動爻數 ${mod6(n3)} → ${LINE_NAME[r.moveLine-1]}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="num">4</span>卦象代表的含義</h3>
+    <div class="linewrap">
+      <p><b>${benGua.name}（本卦，代表目前狀態）：</b>${MEAN[benGua.num]}</p>
+      <p><b>${bianGua.name}（變卦，代表事情演變的方向）：</b>${MEAN[bianGua.num]}</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="num">5</span>針對這個問題的具體解讀</h3>
+    <p style="font-size:14.5px;margin-bottom:10px">你問的是：<b>「${q}」</b></p>
+    <p style="font-size:14.5px;margin-bottom:10px">以體用生剋來看：<b>${bodyTri.name}</b>（${bodyTri.wx}）為體，代表<b>你自己／現況</b>；<b>${useTri.name}</b>（${useTri.wx}）為用，代表<b>這件事本身／對方</b>。兩者關係為「<b>${rel}</b>」。</p>
+    <div class="verdict ${relInfo.tone}">${relInfo.text}</div>
+    <p style="font-size:14.5px">結合本卦「${benGua.name}」與變卦「${bianGua.name}」來看，事情目前處於「${MEAN[benGua.num].split("，")[0]}」的狀態，未來將往「${MEAN[bianGua.num].split("，")[0]}」的方向發展，這是你這個問題的整體走勢。</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="num">6</span>給你的行動建議</h3>
+    <p style="font-size:14.5px">${relInfo.text}</p>
+    <p style="font-size:14.5px;margin-top:8px">動爻落在「${LINE_NAME[r.moveLine-1]}」，提醒你：關鍵的轉折點就在${r.moveLine<=2?"事情剛開始的階段，打好基礎最重要":r.moveLine<=4?"事情進行到一半的節骨眼，這時的判斷會決定走向":"事情接近尾聲的階段，收尾與善後不能鬆懈"}。</p>
+  </div>
+  `;
+
+  const box = document.getElementById('results');
+  box.innerHTML = hexHTML;
+  box.classList.remove('hide');
+  box.scrollIntoView({behavior:'smooth', block:'start'});
+}
+</script>
+</body>
+</html>
