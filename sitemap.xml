@@ -2,6 +2,9 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://sixhands-studio.netlify.app/</loc><priority>1.0</priority><changefreq>weekly</changefreq></url>
   <url><loc>https://sixhands-studio.netlify.app/qiqi-realestate.html</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://sixhands-studio.netlify.app/blog/</loc><priority>0.8</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://sixhands-studio.netlify.app/blog/qiqi-price-2026.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://sixhands-studio.netlify.app/blog/house-age-discount.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
   <url><loc>https://sixhands-studio.netlify.app/fortune-wheel.html</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
   <url><loc>https://sixhands-studio.netlify.app/plum-blossom-divination.html</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
   <url><loc>https://sixhands-studio.netlify.app/real-estate-prompt-pack.html</loc><priority>0.6</priority></url>
