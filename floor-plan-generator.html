@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="canonical" href="https://sixhands-studio.netlify.app/floor-plan-generator.html">
+<title>格局圖產生器｜手繪草圖 → 專業格局圖 — Sixhands Studio 助哥</title>
+<meta name="description" content="房仲售資神器：把手繪草圖秒變乾淨的 2D 格局示意圖。可改房名、門開向，一鍵匯出 PNG／SVG。Sixhands Studio 助哥的 AI 作品。">
+<meta name="theme-color" content="#1F3A2E">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sixhands Studio">
+<meta property="og:title" content="格局圖產生器｜手繪草圖 → 專業格局圖">
+<meta property="og:description" content="房仲售資神器：手繪草圖秒變乾淨格局圖，一鍵匯出 PNG／SVG。">
+<meta property="og:url" content="https://sixhands-studio.netlify.app/floor-plan-generator.html">
+<meta name="robots" content="index,follow">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 86 92'><g stroke='%231F3A2E' stroke-width='4' fill='none' stroke-linecap='square'><line x1='14' y1='20' x2='14' y2='68'/><line x1='26' y1='14' x2='26' y2='74'/><line x1='38' y1='20' x2='38' y2='68'/><line x1='50' y1='14' x2='50' y2='74'/><line x1='62' y1='20' x2='62' y2='68'/><line x1='74' y1='14' x2='74' y2='74'/><line x1='8' y1='82' x2='80' y2='82' stroke-width='3'/></g></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Noto+Serif+TC:wght@600;700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --forest:#1F3A2E;--forest-2:#2C4E3D;--forest-3:#182b21;
+  --gold:#B08D3F;--gold-light:#D8BC7E;
+  --cream:#F3EEE2;--cream-2:#FAF7EF;--cream-3:#F1E6CF;
+  --text:#22271F;--mute:#565c50;
+  --line:#d9d2c1;
+  --shadow:0 8px 30px rgba(24,43,33,.08);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;color:var(--text);line-height:1.7;background:var(--cream)}
+h1,h2,h3{font-family:'Noto Serif TC','PingFang TC',serif;font-weight:700}
+a{color:inherit;text-decoration:none}
+
+.nav{position:sticky;top:0;z-index:50;background:rgba(24,43,33,.95);backdrop-filter:blur(8px);padding:12px 22px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(176,141,63,.3)}
+.nav .brand{color:var(--gold-light);font-family:'Noto Serif TC',serif;font-size:16px;letter-spacing:1.2px}
+.nav .brand b{color:#fff;font-weight:900}
+.nav .brand small{color:var(--gold);font-size:10px;letter-spacing:3px;display:block;font-family:'Inter',sans-serif}
+.nav a.back{color:var(--cream-3);font-size:14px}
+.nav a.back:hover{color:var(--gold-light)}
+
+.hero{padding:52px 22px 34px;background:linear-gradient(160deg,var(--forest-3),var(--forest) 55%,var(--forest-3));color:#fff;text-align:center}
+.hero .tag{display:inline-block;font-size:12px;letter-spacing:3px;color:var(--gold-light);border:1px solid rgba(176,141,63,.5);border-radius:99px;padding:5px 16px;margin-bottom:16px}
+.hero h1{font-size:clamp(26px,5vw,40px);color:#fff;line-height:1.3}
+.hero h1 em{font-style:normal;color:var(--gold-light)}
+.hero p{margin-top:12px;color:var(--cream-3);font-size:15px;max-width:640px;margin-left:auto;margin-right:auto}
+
+.wrap{max-width:1280px;margin:0 auto;padding:26px 18px 60px}
+.app{display:grid;grid-template-columns:340px 1fr;gap:22px;align-items:start}
+@media(max-width:900px){.app{grid-template-columns:1fr}}
+
+.panel{background:var(--cream-2);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px}
+.panel h2{font-size:16px;color:var(--forest);margin-bottom:4px}
+.panel .sub{font-size:12px;color:var(--mute);margin-bottom:14px}
+.group{margin-bottom:18px}
+.group>label.t{display:block;font-size:13px;font-weight:700;color:var(--forest-2);margin-bottom:8px;letter-spacing:.5px}
+
+.field{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.field input[type=text]{flex:1;min-width:0}
+input[type=text],select,textarea{font-family:inherit;font-size:14px;color:var(--text);background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 10px;width:100%}
+input[type=text]:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold)}
+.field .rm{flex:none;width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:8px;color:#b1483c;cursor:pointer;font-size:15px}
+.field .rm:hover{background:#fbeceb;border-color:#e6b7b1}
+
+.doorrow{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;margin-bottom:8px;font-size:13px}
+.doorrow .nm{color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doorrow select{padding:6px 6px;font-size:12px}
+
+.check{display:flex;align-items:center;gap:9px;margin-bottom:9px;font-size:14px;cursor:pointer}
+.check input{width:17px;height:17px;accent-color:var(--forest)}
+
+.btns{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
+.btn{border:none;border-radius:10px;padding:11px 15px;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;transition:.15s}
+.btn.primary{background:var(--forest);color:#fff}
+.btn.primary:hover{background:var(--forest-2)}
+.btn.gold{background:var(--gold);color:var(--forest-3)}
+.btn.gold:hover{background:var(--gold-light)}
+.btn.ghost{background:#fff;border:1px solid var(--line);color:var(--forest-2)}
+.btn.ghost:hover{border-color:var(--gold)}
+
+details{border-top:1px solid var(--line);margin-top:6px;padding-top:12px}
+details summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--forest-2);list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ ";color:var(--gold)}
+details[open] summary::before{content:"▾ "}
+details textarea{margin-top:10px;height:220px;font-family:'Inter',ui-monospace,monospace;font-size:12px;line-height:1.5;white-space:pre;resize:vertical}
+.jerr{color:#b1483c;font-size:12px;margin-top:6px;min-height:16px}
+
+.stage{background:var(--cream-2);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:16px;position:sticky;top:70px}
+.stage .bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
+.stage .bar h2{font-size:15px;color:var(--forest)}
+.svgbox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:auto}
+.svgbox svg{display:block;width:100%;height:auto}
+.hint{font-size:12px;color:var(--mute);margin-top:12px;line-height:1.6}
+
+.foot{background:var(--forest-3);color:var(--cream-3);text-align:center;padding:26px 18px;font-size:13px}
+.foot a{color:var(--gold-light)}
+.foot .line{display:inline-block;margin-top:8px;background:var(--gold);color:var(--forest-3);font-weight:700;padding:8px 20px;border-radius:99px}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="brand"><b>Sixhands Studio</b>｜助哥<small>FLOOR PLAN GENERATOR</small></div>
+  <a class="back" href="./index.html">← 回首頁</a>
+</nav>
+
+<header class="hero">
+  <div class="tag">房仲售資神器</div>
+  <h1>手繪草圖 <em>→</em> 專業格局圖</h1>
+  <p>把隨手畫的格局草圖，變成乾淨、好讀、能放進售資的 2D 格局示意圖。改房名、調門開向，一鍵匯出 PNG／SVG。</p>
+</header>
+
+<div class="wrap">
+<div class="app">
+
+  <!-- ================= CONTROLS ================= -->
+  <section class="panel">
+    <h2>編輯格局</h2>
+    <div class="sub">預設已載入一間 3房2廳2衛範例。改完會即時更新右側圖。</div>
+
+    <div class="group">
+      <label class="t">標題</label>
+      <input type="text" id="titleInput">
+    </div>
+
+    <div class="group">
+      <label class="t">房間名稱</label>
+      <div id="roomList"></div>
+      <div class="btns"><button class="btn ghost" id="addRoom" type="button">＋ 新增房間標籤</button></div>
+    </div>
+
+    <div class="group">
+      <label class="t">門開向</label>
+      <div id="doorList"></div>
+    </div>
+
+    <div class="group">
+      <label class="t">顯示選項</label>
+      <label class="check"><input type="checkbox" id="optFurniture" checked>顯示家具（床／衛浴／廚具／沙發）</label>
+      <label class="check"><input type="checkbox" id="optNorth" checked>顯示指北針</label>
+      <label class="check"><input type="checkbox" id="optNote" checked>顯示底部免責小字</label>
+      <input type="text" id="noteInput" style="margin-top:4px">
+    </div>
+
+    <details>
+      <summary>進階：直接編輯資料（JSON）</summary>
+      <textarea id="jsonBox" spellcheck="false"></textarea>
+      <div class="btns">
+        <button class="btn ghost" id="applyJson" type="button">套用 JSON</button>
+        <button class="btn ghost" id="copyJson" type="button">複製</button>
+        <button class="btn ghost" id="resetPlan" type="button">還原範例</button>
+      </div>
+      <div class="jerr" id="jsonErr"></div>
+    </details>
+  </section>
+
+  <!-- ================= PREVIEW ================= -->
+  <section class="stage">
+    <div class="bar">
+      <h2>即時預覽</h2>
+      <div class="btns">
+        <button class="btn gold" id="exportPng" type="button">⬇ 匯出 PNG</button>
+        <button class="btn primary" id="exportSvg" type="button">⬇ 下載 SVG</button>
+      </div>
+    </div>
+    <div class="svgbox" id="svgBox"></div>
+    <p class="hint">PNG 適合直接放 LINE／591／DM；SVG 是向量原始檔，放大不失真、可再編輯。<br>提示：「門開向」的「外」＝開向走道／客廳，「內」＝開進房間內。</p>
+  </section>
+
+</div>
+</div>
+
+<footer class="foot">
+  <div>Sixhands Studio｜助哥 — 不賣房子，賣判斷</div>
+  <a class="line" href="https://line.me/R/ti/p/@080akczk">加 LINE 聊聊</a>
+</footer>
+
+<script>
+"use strict";
+
+/* ---------- 預設範例：3房2廳2衛（依實際手繪草圖重繪） ---------- */
+function defaultPlan(){return {
+  canvas:{w:1080,h:960},
+  title:"3房2廳2衛 · 格局示意圖",
+  note:"示意圖，實際格局與尺寸以現場丈量為準",
+  showFurniture:true, showNorth:true, showNote:true,
+  outline:"M60,180 L320,180 L320,60 L1010,60 L1010,360 L940,360 L940,800 L780,800 L780,880 L60,880 Z",
+  balconies:[{x:940,y:60,w:70,h:300},{x:60,y:800,w:720,h:80}],
+  walls:[
+    [320,180,320,800],
+    [60,300,320,300],[60,430,320,430],[60,560,320,560],
+    [320,620,940,620],
+    [720,360,940,360],[720,360,720,620],
+    [560,620,560,800],
+    [60,800,780,800],
+    [940,60,940,360]
+  ],
+  openings:[
+    {x:200,y:169,w:92,h:24,fill:"#fff"},
+    {x:311,y:200,w:18,h:92,fill:"#fff"},
+    {x:311,y:330,w:18,h:76,fill:"#fff"},
+    {x:311,y:460,w:18,h:76,fill:"#fff"},
+    {x:311,y:600,w:18,h:80,fill:"#fff"},
+    {x:400,y:611,w:82,h:18,fill:"#fff"},
+    {x:600,y:611,w:82,h:18,fill:"#fff"},
+    {x:711,y:500,w:18,h:80,fill:"#fff"},
+    {x:931,y:150,w:18,h:170,fill:"#eef1f4"},
+    {x:140,y:791,w:92,h:18,fill:"#eef1f4"},
+    {x:390,y:791,w:92,h:18,fill:"#eef1f4"}
+  ],
+  doors:[
+    {name:"大門",   hx:290,hy:180,r:90,leaf:"S",arc:"W"},
+    {name:"浴室①", hx:320,hy:330,r:75,leaf:"E",arc:"S"},
+    {name:"浴室②", hx:320,hy:460,r:75,leaf:"W",arc:"S"},
+    {name:"主臥",   hx:320,hy:600,r:80,leaf:"W",arc:"S"},
+    {name:"臥室(下)",hx:680,hy:620,r:80,leaf:"S",arc:"W"},
+    {name:"臥室(右)",hx:720,hy:500,r:80,leaf:"E",arc:"S"}
+  ],
+  sliding:[[940,150,940,320],[140,800,232,800],[390,800,482,800]],
+  furniture:[
+    {type:"bed",x:82,y:590,w:150,h:195,pillow:"top"},
+    {type:"bed",x:795,y:395,w:118,h:197,pillow:"top"},
+    {type:"bed",x:762,y:648,w:150,h:130,pillow:"top"},
+    {type:"toilet",x:95,y:325,w:46,h:58},
+    {type:"sink",x:232,y:312,w:66,h:34},
+    {type:"toilet",x:95,y:455,w:46,h:58},
+    {type:"sink",x:232,y:442,w:66,h:34},
+    {type:"counter",x:330,y:742,w:222,h:46},
+    {type:"counter",x:330,y:632,w:46,h:110},
+    {type:"circle",cx:402,cy:765,r:12},
+    {type:"circle",cx:486,cy:758,r:9},
+    {type:"circle",cx:516,cy:758,r:9},
+    {type:"sofa",x:338,y:95,w:60,h:150}
+  ],
+  labels:[
+    {x:190,y:252,text:"大門玄關",size:34},
+    {x:190,y:378,text:"浴室",size:36},
+    {x:190,y:508,text:"浴室",size:36},
+    {x:560,y:212,text:"客廳",size:60},
+    {x:190,y:705,text:"主臥",size:42},
+    {x:828,y:500,text:"臥室",size:42},
+    {x:700,y:728,text:"臥室",size:42},
+    {x:438,y:712,text:"廚房",size:40},
+    {x:420,y:856,text:"陽台",size:44},
+    {x:975,y:150,text:"陽台",size:38,vertical:true}
+  ]
+};}
+
+let plan = defaultPlan();
+
+/* ---------- 繪圖引擎：plan → SVG 字串 ---------- */
+const VEC={E:[1,0],W:[-1,0],N:[0,-1],S:[0,1]};
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+function doorSvg(d){
+  const A=VEC[d.leaf]||VEC.E, B=VEC[d.arc]||VEC.S;
+  const lx=d.hx+d.r*A[0], ly=d.hy+d.r*A[1];
+  const ax=d.hx+d.r*B[0], ay=d.hy+d.r*B[1];
+  const cw=[-A[1],A[0]];                       // 螢幕座標順時針 90°
+  const sweep=(cw[0]===B[0]&&cw[1]===B[1])?1:0;
+  return `<line x1="${d.hx}" y1="${d.hy}" x2="${lx}" y2="${ly}"/>`+
+         `<path d="M${lx},${ly} A${d.r},${d.r} 0 0,${sweep} ${ax},${ay}"/>`;
+}
+
+function furnSvg(f){
+  switch(f.type){
+    case "bed":{
+      const p=f.pillow==="left"
+        ? `<line x1="${f.x+42}" y1="${f.y}" x2="${f.x+42}" y2="${f.y+f.h}"/>`
+        : `<line x1="${f.x}" y1="${f.y+42}" x2="${f.x+f.w}" y2="${f.y+42}"/>`;
+      return `<rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4"/>${p}`;
+    }
+    case "toilet": return `<rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="10"/>`;
+    case "sink":   return `<rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="3"/>`;
+    case "counter":return `<rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}"/>`;
+    case "circle": return `<circle cx="${f.cx}" cy="${f.cy}" r="${f.r}"/>`;
+    case "sofa":   return `<rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="8"/>`+
+                          `<line x1="${f.x+28}" y1="${f.y}" x2="${f.x+28}" y2="${f.y+f.h}"/>`;
+    default: return "";
+  }
+}
+
+function labelSvg(l){
+  if(l.vertical){
+    return [...l.text].map((ch,i)=>
+      `<text x="${l.x}" y="${l.y+i*(l.size*1.15)}" font-size="${l.size}">${esc(ch)}</text>`).join("");
+  }
+  return `<text x="${l.x}" y="${l.y}" font-size="${l.size}">${esc(l.text)}</text>`;
+}
+
+function renderSVG(p){
+  const W=p.canvas.w, H=p.canvas.h;
+  const balc=(p.balconies||[]).map(b=>`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="#eef1f4"/>`).join("");
+  const walls=(p.walls||[]).map(w=>`<line x1="${w[0]}" y1="${w[1]}" x2="${w[2]}" y2="${w[3]}"/>`).join("");
+  const opens=(p.openings||[]).map(o=>`<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="${o.fill||"#fff"}"/>`).join("");
+  const doors=(p.doors||[]).map(doorSvg).join("");
+  const slide=(p.sliding||[]).map(s=>`<line x1="${s[0]}" y1="${s[1]}" x2="${s[2]}" y2="${s[3]}"/>`).join("");
+  const furn=p.showFurniture?(p.furniture||[]).map(furnSvg).join(""):"";
+  const labels=(p.labels||[]).map(labelSvg).join("");
+  const title=p.title?`<text x="${W/2}" y="42" font-size="30" text-anchor="middle" font-weight="700" fill="#1F3A2E">${esc(p.title)}</text>`:"";
+  const north=p.showNorth?`<g transform="translate(1005,905)"><text x="0" y="-30" font-size="26" text-anchor="middle" font-weight="bold" fill="#151515">N</text><polygon points="0,-22 9,10 0,3 -9,10" fill="#151515"/></g>`:"";
+  const note=(p.showNote&&p.note)?`<text x="70" y="948" font-size="19" fill="#8a9098">${esc(p.note)}</text>`:"";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="'Noto Sans TC','PingFang TC','WenQuanYi Zen Hei',sans-serif">
+  <rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>
+  <rect x="60" y="60" width="880" height="740" fill="#ffffff"/>
+  ${balc}
+  <g stroke="#151515" stroke-width="8" stroke-linecap="square">${walls}</g>
+  <path d="${p.outline}" fill="none" stroke="#151515" stroke-width="13" stroke-linejoin="miter"/>
+  <g>${opens}</g>
+  <g fill="none" stroke="#9aa1a9" stroke-width="2.5">${doors}${slide}</g>
+  <g fill="none" stroke="#b7bdc4" stroke-width="2.5">${furn}</g>
+  <g fill="#151515" text-anchor="middle" font-weight="bold">${labels}</g>
+  ${title}${north}${note}
+</svg>`;
+}
+
+/* ---------- UI 綁定 ---------- */
+const $=id=>document.getElementById(id);
+
+function draw(){
+  $("svgBox").innerHTML=renderSVG(plan);
+  syncJsonBox();
+}
+
+function buildRoomList(){
+  const box=$("roomList"); box.innerHTML="";
+  plan.labels.forEach((l,i)=>{
+    const row=document.createElement("div"); row.className="field";
+    const inp=document.createElement("input"); inp.type="text"; inp.value=l.text;
+    inp.addEventListener("input",()=>{plan.labels[i].text=inp.value;draw();});
+    const rm=document.createElement("button"); rm.className="rm"; rm.type="button"; rm.textContent="×"; rm.title="刪除";
+    rm.addEventListener("click",()=>{plan.labels.splice(i,1);buildRoomList();draw();});
+    row.appendChild(inp); row.appendChild(rm); box.appendChild(row);
+  });
+}
+
+const SWING=[["E","→ 右／外"],["W","← 左／內"],["N","↑ 上"],["S","↓ 下"]];
+function buildDoorList(){
+  const box=$("doorList"); box.innerHTML="";
+  plan.doors.forEach((d,i)=>{
+    const row=document.createElement("div"); row.className="doorrow";
+    const nm=document.createElement("span"); nm.className="nm"; nm.textContent=d.name||("門"+(i+1));
+    const mk=(key)=>{
+      const s=document.createElement("select");
+      SWING.forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;if(d[key]===v)o.selected=true;s.appendChild(o);});
+      s.addEventListener("change",()=>{plan.doors[i][key]=s.value;draw();});
+      return s;
+    };
+    row.appendChild(nm); row.appendChild(mk("leaf")); row.appendChild(mk("arc"));
+    box.appendChild(row);
+  });
+}
+
+function syncJsonBox(){ $("jsonBox").value=JSON.stringify(plan,null,2); }
+
+function refreshAll(){
+  $("titleInput").value=plan.title||"";
+  $("noteInput").value=plan.note||"";
+  $("optFurniture").checked=!!plan.showFurniture;
+  $("optNorth").checked=!!plan.showNorth;
+  $("optNote").checked=!!plan.showNote;
+  buildRoomList(); buildDoorList(); draw();
+}
+
+$("titleInput").addEventListener("input",e=>{plan.title=e.target.value;draw();});
+$("noteInput").addEventListener("input",e=>{plan.note=e.target.value;draw();});
+$("optFurniture").addEventListener("change",e=>{plan.showFurniture=e.target.checked;draw();});
+$("optNorth").addEventListener("change",e=>{plan.showNorth=e.target.checked;draw();});
+$("optNote").addEventListener("change",e=>{plan.showNote=e.target.checked;draw();});
+
+$("addRoom").addEventListener("click",()=>{
+  plan.labels.push({x:plan.canvas.w/2,y:plan.canvas.h/2,text:"新房間",size:40});
+  buildRoomList(); draw();
+});
+
+$("applyJson").addEventListener("click",()=>{
+  try{
+    const obj=JSON.parse($("jsonBox").value);
+    if(!obj.canvas||!obj.labels) throw new Error("缺少 canvas 或 labels 欄位");
+    plan=obj; $("jsonErr").textContent=""; refreshAll();
+  }catch(err){ $("jsonErr").textContent="JSON 格式錯誤："+err.message; }
+});
+$("copyJson").addEventListener("click",()=>{
+  navigator.clipboard.writeText($("jsonBox").value).then(()=>{
+    const b=$("copyJson"); const t=b.textContent; b.textContent="已複製 ✓"; setTimeout(()=>b.textContent=t,1200);
+  });
+});
+$("resetPlan").addEventListener("click",()=>{ plan=defaultPlan(); $("jsonErr").textContent=""; refreshAll(); });
+
+/* ---------- 匯出 ---------- */
+function currentSvgString(){ return renderSVG(plan); }
+function slug(){ return (plan.title||"floor-plan").replace(/[\s·．。｜|/\\]+/g,"-").replace(/[^\w一-龥-]/g,"").slice(0,40)||"floor-plan"; }
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+
+$("exportSvg").addEventListener("click",()=>{
+  downloadBlob(new Blob([currentSvgString()],{type:"image/svg+xml;charset=utf-8"}), slug()+".svg");
+});
+
+$("exportPng").addEventListener("click",async()=>{
+  const btn=$("exportPng"), t=btn.textContent; btn.textContent="產生中…"; btn.disabled=true;
+  try{
+    if(document.fonts&&document.fonts.ready) await document.fonts.ready;
+    const scale=2, W=plan.canvas.w, H=plan.canvas.h;
+    const svg=currentSvgString();
+    const url="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
+    const img=new Image();
+    await new Promise((res,rej)=>{img.onload=res;img.onerror=()=>rej(new Error("SVG 載入失敗"));img.src=url;});
+    const cv=document.createElement("canvas"); cv.width=W*scale; cv.height=H*scale;
+    const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.drawImage(img,0,0,cv.width,cv.height);
+    cv.toBlob(b=>{ downloadBlob(b, slug()+".png"); btn.textContent=t; btn.disabled=false; },"image/png");
+  }catch(err){ alert("匯出失敗："+err.message); btn.textContent=t; btn.disabled=false; }
+});
+
+/* init */
+refreshAll();
+</script>
+</body>
+</html>
