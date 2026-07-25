@@ -180,10 +180,10 @@ details textarea{margin-top:10px;height:220px;font-family:'Inter',ui-monospace,m
 
 /* ---------- 預設範例：3房2廳2衛（依實際手繪草圖重繪） ---------- */
 function defaultPlan(){return {
-  canvas:{w:1080,h:960},
+  canvas:{w:1080,h:1000},
   title:"3房2廳2衛 · 格局示意圖",
-  note:"示意圖，實際格局與尺寸以現場丈量為準",
-  showFurniture:true, showNorth:true, showNote:true,
+  note:"※ 示意圖，實際格局與尺寸以現場丈量為準",
+  showFurniture:false, showNorth:true, showNote:true,
   outline:"M60,180 L320,180 L320,60 L1010,60 L1010,360 L940,360 L940,800 L780,800 L780,880 L60,880 Z",
   balconies:[{x:940,y:60,w:70,h:300},{x:60,y:800,w:720,h:80}],
   walls:[
@@ -199,24 +199,23 @@ function defaultPlan(){return {
     {x:200,y:169,w:92,h:24,fill:"#fff"},
     {x:311,y:200,w:18,h:92,fill:"#fff"},
     {x:311,y:330,w:18,h:76,fill:"#fff"},
-    {x:311,y:460,w:18,h:76,fill:"#fff"},
-    {x:311,y:600,w:18,h:80,fill:"#fff"},
+    {x:238,y:552,w:80,h:16,fill:"#fff"},
+    {x:311,y:562,w:18,h:56,fill:"#fff"},
     {x:400,y:611,w:82,h:18,fill:"#fff"},
     {x:600,y:611,w:82,h:18,fill:"#fff"},
     {x:711,y:500,w:18,h:80,fill:"#fff"},
     {x:931,y:150,w:18,h:170,fill:"#eef1f4"},
-    {x:140,y:791,w:92,h:18,fill:"#eef1f4"},
     {x:390,y:791,w:92,h:18,fill:"#eef1f4"}
   ],
   doors:[
-    {name:"大門",   hx:290,hy:180,r:90,leaf:"S",arc:"W"},
-    {name:"浴室①", hx:320,hy:330,r:75,leaf:"E",arc:"S"},
-    {name:"浴室②", hx:320,hy:460,r:75,leaf:"W",arc:"S"},
-    {name:"主臥",   hx:320,hy:600,r:80,leaf:"W",arc:"S"},
-    {name:"臥室(下)",hx:680,hy:620,r:80,leaf:"S",arc:"W"},
-    {name:"臥室(右)",hx:720,hy:500,r:80,leaf:"E",arc:"S"}
+    {name:"大門",       hx:290,hy:180,r:90,leaf:"S",arc:"W"},
+    {name:"浴室①",     hx:320,hy:330,r:75,leaf:"W",arc:"S"},
+    {name:"浴室②(套房)",hx:316,hy:560,r:76,leaf:"N",arc:"W"},
+    {name:"主臥",       hx:320,hy:562,r:56,leaf:"W",arc:"S"},
+    {name:"臥室(下)",   hx:680,hy:620,r:80,leaf:"S",arc:"W"},
+    {name:"臥室(右)",   hx:720,hy:500,r:80,leaf:"E",arc:"S"}
   ],
-  sliding:[[940,150,940,320],[140,800,232,800],[390,800,482,800]],
+  sliding:[[940,150,940,320],[390,800,482,800]],
   furniture:[
     {type:"bed",x:82,y:590,w:150,h:195,pillow:"top"},
     {type:"bed",x:795,y:395,w:118,h:197,pillow:"top"},
@@ -298,8 +297,9 @@ function renderSVG(p){
   const furn=p.showFurniture?(p.furniture||[]).map(furnSvg).join(""):"";
   const labels=(p.labels||[]).map(labelSvg).join("");
   const title=p.title?`<text x="${W/2}" y="42" font-size="30" text-anchor="middle" font-weight="700" fill="#1F3A2E">${esc(p.title)}</text>`:"";
-  const north=p.showNorth?`<g transform="translate(1005,905)"><text x="0" y="-30" font-size="26" text-anchor="middle" font-weight="bold" fill="#151515">N</text><polygon points="0,-22 9,10 0,3 -9,10" fill="#151515"/></g>`:"";
-  const note=(p.showNote&&p.note)?`<text x="70" y="948" font-size="19" fill="#8a9098">${esc(p.note)}</text>`:"";
+  const northY=Math.max(872,H-128);
+  const north=p.showNorth?`<g transform="translate(1005,${northY})"><polygon points="0,22 9,-10 0,-3 -9,-10" fill="#151515"/><text x="0" y="52" font-size="26" text-anchor="middle" font-weight="bold" fill="#151515">N</text></g>`:"";
+  const note=(p.showNote&&p.note)?`<text x="70" y="${H-70}" font-size="26" fill="#555b62">${esc(p.note)}</text>`:"";
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="'Noto Sans TC','PingFang TC','WenQuanYi Zen Hei',sans-serif">
   <rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>
