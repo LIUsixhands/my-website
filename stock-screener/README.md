@@ -44,14 +44,72 @@ python3 screener.py --out today.md --html today.html
 | `--out` / `--html` | 無 | 另存 Markdown / HTML 報表 |
 | `--quiet` | 關 | 不印抓取進度 |
 
-### 每天自動跑
+### 結束代碼
 
-```bash
-# crontab -e，週一至週五 15:30 產出當日報表
-30 15 * * 1-5 cd /path/to/my-website/stock-screener && \
-  /usr/bin/python3 screener.py --quiet --out "reports/$(date +\%F).md" \
-  --html "reports/$(date +\%F).html"
-```
+自動化腳本可據此判斷該不該告警：
+
+| 代碼 | 意義 | 該不該當成故障 |
+|------|------|----------------|
+| `0` | 正常產出報表 | — |
+| `1` | 沒有資料（假日休市或盤後尚未更新） | 否 |
+| `2` | 有資料，但沒有個股通過篩選 | 否 |
+| `3` | 連不上交易所 | **是** |
+
+---
+
+## 每天自動跑（GitHub Actions）
+
+`.github/workflows/stock-screener-daily.yml` 已經設定好，**合併進 `main` 之後就會自己動**，
+不需要任何金鑰或額外設定。
+
+- **執行時間**：週一至週五 `07:40 UTC` = **台北時間 15:40**。
+  台股 13:30 收盤、證交所約 14:30 更新、櫃買約 15:00，留了緩衝。
+  GitHub 排程在尖峰時可能延遲數十分鐘 — 晚跑沒關係，早跑才會抓不到資料。
+- **報表位置**：
+  - `stock-screener/reports/latest.md` / `.html` — 永遠是最新一份
+  - `stock-screener/reports/YYYY-MM-DD.md` / `.html` — 依**資料日期**歸檔的歷史報表
+- **執行摘要**：每次 Actions 執行頁面直接看得到當日 Top 10 表格，不必翻檔案。
+- **手動觸發**：Actions 頁面按 **Run workflow**，可指定日期與檔數補跑。
+
+歸檔用的是報表裡的**資料日期**而不是執行日期 — 太早觸發時程式會自動退回前一個交易日，
+檔名要跟著它的判斷走，才不會出現「8/18 的檔案裡裝 8/17 的資料」。
+
+行情快取會透過 `actions/cache` 保留，所以每天只需要向交易所補當天那一筆。
+
+### 三種收場，處理方式不同
+
+| 情況 | 結果 | 行為 |
+|------|------|------|
+| 正常產出報表 | ✅ 成功 | commit 回 repo |
+| 假日休市 / 資料未更新 | ⚠️ 警告 | 不 commit，**不**讓 build 失敗 |
+| 沒有個股通過篩選 | ⚠️ 警告 | 不 commit，**不**讓 build 失敗 |
+| 連不上交易所 | ❌ 失敗 | **讓 build 失敗並通知你** |
+
+國定假日一年有二十幾天，每次都跳紅字沒有意義，所以假日只給警告。
+但「連不上交易所」是真的故障 — 靜靜地失敗比吵你更糟，所以它會讓 build 紅掉。
+
+### 疑難排解：連續多日出現連線失敗
+
+代表交易所擋掉了 GitHub runner 的 IP（雲端 IP 段被擋是常見狀況）。可選：
+
+1. 改用 **self-hosted runner**（放在你自己的機器或台灣的 VPS），workflow 只需把
+   `runs-on: ubuntu-latest` 改成 `runs-on: self-hosted`。
+2. 回到本機 cron：
+
+   ```bash
+   # crontab -e，週一至週五 15:40
+   40 15 * * 1-5 cd /path/to/my-website/stock-screener && \
+     /usr/bin/python3 screener.py --quiet --out reports/latest.md --html reports/latest.html
+   ```
+
+報表會逐日累積（一年約 250 個交易日，每份數 KB）。想控制數量的話，
+在 workflow 的「歸檔報表」步驟後面加一行清理即可，例如
+`find reports -name '2*.md' -mtime +90 -delete`。
+
+### 測試 workflow
+
+`.github/workflows/stock-screener-test.yml` 會在 PR 與 `main` 的推送上，
+以 Python 3.10 / 3.11 / 3.12 跑離線測試。報表 commit 不會觸發它（已排除 `reports/`）。
 
 ---
 
@@ -139,8 +197,8 @@ ATR14 ÷ 收盤價，`3% ~ 6%` 給滿分。太低（<2%）表示短線沒有肉�
 python3 test_screener.py
 ```
 
-53 項離線測試，用合成資料驗證欄位解析（含證交所新舊格式、櫃買與上市不同的欄序）、
-硬性過濾、各評分分項行為與報表渲染。**不需要網路**。
+58 項離線測試，用合成資料驗證欄位解析（含證交所新舊格式、櫃買與上市不同的欄序）、
+硬性過濾、各評分分項行為、報表渲染，以及**連線失敗與假日休市要能分辨**。**不需要網路**。
 
 ---
 

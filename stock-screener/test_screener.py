@@ -192,6 +192,48 @@ check("<!doctype html>" in html and "9999" in html, "HTML 報表生成")
 check(html.count("<tr>") == len(rows) + 1, "HTML 列數符合候選數")
 
 # --------------------------------------------------------------------------
+print("\n櫃買連線失敗不可被吞掉（否則上櫃整段消失卻沒人發現）")
+
+
+def _fetch_boom(url, cache_key=None):
+    raise RuntimeError("connection refused")
+
+
+S.fetch_json = _fetch_boom
+try:
+    S.fetch_tpex_day(dt.date(2026, 8, 17))
+    check(False, "所有櫃買端點連不上時應拋出 RuntimeError")
+except RuntimeError:
+    check(True, "所有櫃買端點連不上時拋出 RuntimeError")
+
+# 端點有回應、但當天沒資料（假日）→ 要安靜回空，不是錯誤
+S.fetch_json = lambda url, cache_key=None: {"tables": [{"data": []}]}  # noqa: E731
+check(S.fetch_tpex_day(dt.date(2026, 8, 17)) == {}, "端點有回應但無資料時回空 dict")
+
+print("\n離線失敗處理：連線錯誤與假日要能分辨")
+
+
+def _raise_net(_d):
+    raise RuntimeError("connection refused")
+
+
+_orig_twse, _orig_tpex = S.fetch_twse_day, S.fetch_tpex_day
+
+# 情境一：交易所連不上 → 必須回報 net_errors，且不能讓例外炸開
+S.fetch_twse_day = _raise_net
+S.fetch_tpex_day = _raise_net
+_, latest, _, _, net_errors = S.build_history(dt.date(2026, 8, 17), 3, verbose=False)
+check(latest is None, "連線全失敗時沒有最新交易日")
+check(net_errors == 6, f"連線失敗次數被記錄（每日 2 個來源 ×3 日 = 6，得到 {net_errors}）")
+
+# 情境二：連得上但當日無資料（假日）→ net_errors 必須是 0
+S.fetch_twse_day = lambda d: {}
+S.fetch_tpex_day = lambda d: {}
+_, latest_h, _, _, net_h = S.build_history(dt.date(2026, 8, 17), 3, verbose=False)
+check(latest_h is None and net_h == 0, "假日無資料不計為連線失敗")
+
+S.fetch_twse_day, S.fetch_tpex_day = _orig_twse, _orig_tpex
+
 print("\n交易日回推")
 days = S.trading_days_back(dt.date(2026, 8, 17), 10)
 check(len(days) == 10, "回推出 10 個日期")

@@ -259,14 +259,19 @@ def fetch_tpex_day(d: dt.date) -> dict[str, Bar]:
             f"stk_quote_result.php?l=zh-tw&d={roc_date(d)}&se=EW"
         ),
     ]
-    data = None
+    data, failures = None, 0
     for idx, url in enumerate(attempts):
         try:
             data = fetch_json(url, cache_key=f"tpex-{ymd}-{idx}")
         except RuntimeError:
+            failures += 1
             data = None
         if data:
             break
+    if data is None and failures == len(attempts):
+        # 每個端點都連不上，跟「端點有回應但當天沒資料」是兩回事，
+        # 吞掉的話上櫃會整段消失卻沒人發現
+        raise RuntimeError(f"櫃買中心連線失敗（已試 {failures} 個端點）")
     if not data:
         return {}
 
@@ -363,11 +368,18 @@ def build_history(end: dt.date, lookback: int, verbose: bool = True):
     inst_days = 0
     latest: dt.date | None = None
 
+    net_errors = 0
     days = trading_days_back(end, lookback)
     for d in days:
         bars = {}
-        bars.update(fetch_twse_day(d))
-        bars.update(fetch_tpex_day(d))
+        for fetch in (fetch_twse_day, fetch_tpex_day):
+            try:
+                bars.update(fetch(d))
+            except RuntimeError as exc:
+                # 連線失敗要跟「假日無資料」分開記，兩者的處理方式完全不同
+                net_errors += 1
+                if verbose:
+                    print(f"  {d} {fetch.__name__} 連線失敗：{exc}", file=sys.stderr)
         if not bars:
             if verbose:
                 print(f"  {d} 無資料（假日或尚未更新），略過", file=sys.stderr)
@@ -392,7 +404,7 @@ def build_history(end: dt.date, lookback: int, verbose: bool = True):
                 inst_totals[code] = inst_totals.get(code, 0.0) + net
             inst_days += 1
 
-    return history, latest, inst_totals, inst_days
+    return history, latest, inst_totals, inst_days, net_errors
 
 
 # --------------------------------------------------------------------------
@@ -706,12 +718,19 @@ def main() -> int:
 
     if verbose:
         print(f"抓取 {end} 起回推 {args.lookback} 個交易日……", file=sys.stderr)
-    history, latest, inst, inst_days = build_history(end, args.lookback, verbose)
+    history, latest, inst, inst_days, net_errors = build_history(end, args.lookback, verbose)
 
     if not latest:
+        if net_errors:
+            print(
+                f"錯誤：連線交易所失敗 {net_errors} 次，完全沒有取得資料。"
+                "請檢查對外網路，或確認交易所是否擋住此主機 IP。",
+                file=sys.stderr,
+            )
+            return 3
         print(
-            "錯誤：完全沒有取得盤後資料。可能原因：日期為假日、盤後資料尚未更新"
-            "（證交所約 14:30 後、櫃買約 15:00 後），或網路無法連到交易所。",
+            "沒有取得盤後資料。可能原因：日期為假日休市，或盤後資料尚未更新"
+            "（證交所約 14:30 後、櫃買約 15:00 後）。",
             file=sys.stderr,
         )
         return 1

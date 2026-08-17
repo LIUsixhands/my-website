@@ -1,0 +1,41 @@
+name: 篩選器測試
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "stock-screener/**"
+      - "!stock-screener/reports/**"
+      - ".github/workflows/stock-screener-*.yml"
+  pull_request:
+    paths:
+      - "stock-screener/**"
+      - "!stock-screener/reports/**"
+      - ".github/workflows/stock-screener-*.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 離線測試，不連交易所
+      - name: 執行測試
+        working-directory: stock-screener
+        run: python3 test_screener.py
+
+      - name: 檢查 CLI 可正常啟動
+        working-directory: stock-screener
+        run: python3 screener.py --help
