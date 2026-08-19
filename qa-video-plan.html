@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://sixhands-studio.netlify.app/qa-video-plan.html">
+<title>《助哥，我問你》雙人短影音企劃｜拍攝現場手冊</title>
+<style>
+  :root{ --navy:#1B2A4A; --gold:#C9943A; --bg:#f8f6f1; --line:#e6e1d6; --grey:#6B7280; --red:#B94040; --teal:#2A7F7F; }
+  *{ box-sizing:border-box; }
+  body { font-family:'Noto Sans TC','PingFang TC','Microsoft JhengHei',Arial,sans-serif; background:var(--bg); color:#1a1a1a; line-height:1.85; padding:20px 16px 80px; max-width:900px; margin:0 auto; }
+  h1 { color:var(--navy); font-size:1.55rem; margin:0 0 6px; line-height:1.4; }
+  .sub { color:var(--grey); font-size:.92rem; margin:0 0 8px; }
+  .meta { color:var(--grey); font-size:.8rem; border-top:1px solid var(--line); padding-top:10px; margin-bottom:28px; }
+  h2 { color:var(--navy); font-size:1.2rem; border-left:5px solid var(--gold); padding-left:13px; margin:52px 0 18px; scroll-margin-top:70px; }
+  h3 { color:var(--navy); font-size:1.02rem; margin:26px 0 10px; }
+  p { margin:0 0 12px; font-size:.94rem; }
+  .card { background:#fff; border-radius:14px; padding:22px; margin-bottom:16px; box-shadow:0 2px 12px rgba(0,0,0,.06); }
+  .tldr { background:var(--navy); color:#fff; border-radius:14px; padding:24px; margin-bottom:8px; }
+  .tldr h2 { color:#fff; border-left-color:var(--gold); margin:0 0 14px; }
+  .tldr table td { border-color:rgba(255,255,255,.15); color:rgba(255,255,255,.92); }
+  .tldr table td:first-child { color:var(--gold); font-weight:700; white-space:nowrap; }
+  nav { position:sticky; top:0; z-index:50; background:rgba(248,246,241,.96); backdrop-filter:blur(6px); border-bottom:1px solid var(--line); margin:0 -16px 28px; padding:10px 16px; display:flex; gap:8px; overflow-x:auto; }
+  nav a { font-size:.78rem; color:var(--navy); text-decoration:none; border:1px solid var(--line); background:#fff; padding:5px 12px; border-radius:20px; white-space:nowrap; }
+  nav a:hover { background:var(--navy); color:#fff; }
+  table { width:100%; border-collapse:collapse; margin:10px 0 18px; font-size:.88rem; }
+  th,td { border-bottom:1px solid var(--line); padding:9px 8px; text-align:left; vertical-align:top; }
+  th { background:#f1eee6; color:var(--navy); font-weight:800; font-size:.82rem; }
+  .scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .scroll table { min-width:640px; }
+  .tag { display:inline-block; font-size:.7rem; font-weight:800; letter-spacing:1px; padding:2px 9px; border-radius:20px; margin-right:6px; }
+  .t-hook{ background:var(--red); color:#fff; } .t-body{ background:var(--teal); color:#fff; }
+  .t-cta{ background:var(--gold); color:#fff; } .t-note{ background:#EEF0F5; color:var(--grey); }
+  .script { border-left:4px solid var(--gold); }
+  .script h3 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:0; }
+  .no { background:var(--navy); color:#fff; font-size:.78rem; padding:2px 10px; border-radius:6px; letter-spacing:1px; }
+  .spec { font-size:.8rem; color:var(--grey); margin:-4px 0 14px; }
+  .line { margin:0 0 10px; font-size:.94rem; }
+  .who { font-weight:800; color:var(--navy); }
+  .who.q { color:var(--red); }
+  .sec { color:var(--grey); font-size:.78rem; margin-left:4px; }
+  .warn { background:#FDF3F3; border-left:4px solid var(--red); padding:12px 16px; border-radius:8px; font-size:.87rem; margin:12px 0; }
+  .tip { background:#F2F7F7; border-left:4px solid var(--teal); padding:12px 16px; border-radius:8px; font-size:.87rem; margin:12px 0; }
+  .fill { color:var(--gold); font-weight:700; }
+  ul,ol { padding-left:20px; margin:0 0 14px; font-size:.94rem; }
+  li { margin-bottom:6px; }
+  .chk { list-style:none; padding-left:0; }
+  .chk li { padding-left:26px; position:relative; }
+  .chk li:before { content:"☐"; position:absolute; left:0; color:var(--gold); font-size:1.1rem; }
+  pre { background:#f1eee6; border-radius:10px; padding:14px; overflow-x:auto; font-size:.83rem; line-height:1.7; margin:0 0 14px; }
+  .copy { background:var(--gold); color:#fff; border:0; cursor:pointer; padding:6px 16px; border-radius:20px; font-size:.78rem; font-weight:800; font-family:inherit; margin-left:auto; }
+  .copy:hover{ background:#b8832e; } .copy.done{ background:#2D7D4E; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media(max-width:640px){ .grid2{ grid-template-columns:1fr; } body{ font-size:.96rem; } }
+  footer { margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--grey); font-size:.8rem; }
+</style>
+</head>
+<body>
+
+<h1>《助哥，我問你》</h1>
+<p class="sub">雙人一問一答短影音企劃 ｜ 12 支腳本 ｜ 四平台發布排程 ｜ 拍攝現場手冊</p>
+<p class="meta">v1.0 · 2026-08-19 製作 · 首發 8/24 · 依據《開箱好宅 30 題題材庫》與 8/18 玩美趨勢直播課，加 2026 台灣四平台實測時段數據</p>
+
+<nav>
+  <a href="#tldr">一頁看懂</a><a href="#why">為什麼</a><a href="#role">人設</a><a href="#formula">五拍公式</a>
+  <a href="#scripts">12 支腳本</a><a href="#shoot">拍攝日</a><a href="#platform">四平台</a><a href="#schedule">排程</a>
+  <a href="#red">紅線</a><a href="#data">數據</a><a href="#teach">教學化</a>
+</nav>
+
+<section id="tldr" class="tldr">
+  <h2>一頁看懂</h2>
+  <table>
+    <tr><td>系列名</td><td>《助哥，我問你》— 台中買房，你不敢問的，她替你問</td></tr>
+    <tr><td>形式</td><td>雙人一問一答。女同事＝觀眾嘴替，助哥＝答方（判斷）</td></tr>
+    <tr><td>規格</td><td>直式 9:16、30–45 秒、每支只講一件事</td></tr>
+    <tr><td>產量</td><td>一天拍完 12 支（8/22 六），分四週發完</td></tr>
+    <tr><td>四平台</td><td>Facebook｜Instagram Reels｜TikTok｜YouTube Shorts（＋Threads 補位）</td></tr>
+    <tr><td>節奏</td><td>每週一、三、五各一支</td></tr>
+    <tr><td>當日時段</td><td>FB 12:00 → TikTok 19:00 → IG 20:00 → Threads 20:30 → Shorts 21:00</td></tr>
+    <tr><td>成功指標</td><td>3 秒留存 ≥70%、完播 ≥45%、單支私訊 ≥3、四週委託 ≥1</td></tr>
+    <tr><td>教學化</td><td>第 5 週把 12 支＋數據＋BTS 打包成內訓課與 SOP</td></tr>
+  </table>
+</section>
+
+<h2 id="why">一、為什麼「一問一答」比單人口播容易爆</h2>
+<div class="card">
+  <ol>
+    <li><b>衝突感前置。</b>單人口播前 3 秒要自己製造張力，很難；雙人只要問方把問題丟出來，張力自動成立。</li>
+    <li><b>問方＝嘴替。</b>30 題題庫裡轉發率最高的兩類（買方痛點、房仲內幕），本質都是「說出觀眾不敢問的話」。單人講像自問自答，有人問才是真對話。</li>
+    <li><b>完播率是演算法第一權重。</b>一問一答天然是「懸念—解答」結構，觀眾為了聽答案會留下來。IG Reels、Shorts、FB Reels 目前都把完播率／平均觀看時間放在最高權重。</li>
+  </ol>
+  <div class="warn"><b>最大失敗風險：</b>問方問得不夠尖銳，形式就退化成兩個人一起念稿。所以人設與表演鐵律不是裝飾，是規格。</div>
+</div>
+
+<h2 id="role">二、雙人角色設定（九宮格）</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>助哥｜答方</h3>
+    <table>
+      <tr><th>職業</th><td>台中七期／西屯南屯房仲，21 年</td></tr>
+      <tr><th>外表</th><td>襯衫不打領帶、袖子捲起來、<b>不穿制服西裝</b>（制服＝業務感＝滑掉）</td></tr>
+      <tr><th>性格</th><td>慢、穩、先講缺點、不推銷</td></tr>
+      <tr><th>優勢</th><td>21 年在地實戰 × 願意講不利自己的話</td></tr>
+      <tr><th>價值</th><td>幫買方做判斷，不是幫賣方賣房子</td></tr>
+      <tr><th>口頭禪</th><td>「這題我要先講缺點。」／收尾「助哥不賣房子，賣判斷。」</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>女同事｜問方</h3>
+    <table>
+      <tr><th>身分</th><td>同店房仲／助理。<b>不要偽裝成客戶</b>，被拆穿一次信任歸零</td></tr>
+      <tr><th>外表</th><td>乾淨、鄰家。與助哥色系錯開（她淺他深，手機小畫面才分得出兩個人）</td></tr>
+      <tr><th>性格</th><td>直、快、不怕得罪人、會追問</td></tr>
+      <tr><th>價值</th><td>觀眾的嘴替</td></tr>
+      <tr><th>口頭禪</th><td>「<b>我問你喔——</b>」固定開場，三個月後觀眾會自己記得</td></tr>
+    </table>
+  </div>
+</div>
+<div class="card">
+  <h3>表演鐵律（違反就重拍）</h3>
+  <ol>
+    <li>問方永遠先開口，<b>不自我介紹、不寒暄、不打招呼</b>。第一個字就是問題。</li>
+    <li>問方問完閉嘴看著助哥，不要點頭附和、不要「對啊對啊」。</li>
+    <li>助哥第一句必須是結論，而且反直覺。不能「這個問題很好，其實呢……」。</li>
+    <li>每支一定要有一次追問（「那如果……？」）。這一刀是完播率的關鍵。</li>
+    <li>不背稿。逐字稿是骨架，現場用自己的話講。卡住重來，不要硬接。</li>
+    <li>30 秒內至少切一次鏡位：雙人正面 → 助哥特寫 → 雙人。</li>
+  </ol>
+</div>
+
+<h2 id="formula">三、爆款腳本公式：QA 五拍</h2>
+<div class="card">
+  <div class="scroll"><table>
+    <tr><th>拍</th><th>秒數</th><th>誰</th><th>做什麼</th></tr>
+    <tr><td>① 開問</td><td>0–3s</td><td>問方</td><td>「我問你喔——」＋一句尖銳問題，同步上問句字卡</td></tr>
+    <tr><td>② 反直覺結論</td><td>3–8s</td><td>助哥</td><td>先給答案，而且要打臉預期。不解釋</td></tr>
+    <tr><td>③ 三點論證</td><td>8–25s</td><td>助哥</td><td>最多三點，每點配一個具體數字或畫面</td></tr>
+    <tr><td>④ 追問</td><td>25–33s</td><td>問方</td><td>「那如果……？」逼出真話的那一刀</td></tr>
+    <tr><td>⑤ 金句＋CTA</td><td>33–45s</td><td>助哥</td><td>能被截圖的一句 → 固定收尾 → 私訊關鍵字</td></tr>
+  </table></div>
+  <div class="tip"><b>最強的一句話必須落在 33 秒前</b>（觀眾平均在 34 秒離開）。剪完拉時間軸確認，位置不對就砍前段。</div>
+  <p><span class="tag t-cta">固定 CTA</span>三選一，養成觀眾習慣：<b>「格局」</b>傳格局圖／<b>「行情」</b>傳該區實登整理／<b>「檢查表」</b>傳看屋檢查清單。<br>
+  <span class="tag t-note">禁用</span>「留言 1 我私你」「你覺得呢？」— 互動餌會被降權，一律直接導 DM。</p>
+</div>
+
+<h2 id="scripts">四、首發 12 支逐字稿</h2>
+<p class="sub">〔#n〕對應《開箱好宅 30 題》題號 ｜ <span class="fill">[方括號]</span> 是拍攝當天要換成真實資料的欄位，<b>不得憑記憶報數字</b></p>
+<div class="card script" data-script="【S01】房仲最怕客戶問的哪一句話&#10;&#10;問（0–3s）：我問你喔，你們房仲，最怕客戶問哪一句話？&#10;答（3–8s）：不是「可以再便宜嗎」。是「你賺多少」。&#10;答（8–25s）：因為前面那句我有標準答案，後面那句沒有。&#10;但我還是講：服務費買方最高 2%、賣方最高 4%，這是法規上限，不是我說了算。&#10;真正怕的不是被問，是怕你問完就不敢再問——很多人從此不敢開口，最後買貴了也不知道。&#10;問（25–31s）：那如果客戶當面殺你服務費呢？&#10;答（31–38s）：我會問他一句：你是覺得貴，還是覺得不值得？&#10;這兩件事的解法完全不一樣。&#10;助哥不賣房子，賣判斷。想要我那份看屋檢查清單，私訊我「檢查表」。">
+  <h3><span class="no">S01</span>房仲最怕客戶問的哪一句話<span class="sec">〔題庫 #22〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：立人設・破圈（非買房族也會看） ｜ 長度：38 秒 ｜ CTA：檢查表</p>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，你們房仲，最怕客戶問哪一句話？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–8s</span><br>不是「可以再便宜嗎」。是「<b>你賺多少</b>」。</p>
+  <p class="line"><span class="who">答</span><span class="sec">8–25s</span><br>因為前面那句我有標準答案，後面那句沒有。<br>但我還是講：服務費買方最高 2%、賣方最高 4%，這是法規上限，不是我說了算。<br>真正怕的不是被問，是怕你<b>問完就不敢再問</b>——很多人從此不敢開口，最後買貴了也不知道。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">25–31s</span><br>那如果客戶當面殺你服務費呢？</p>
+  <p class="line"><span class="who">答</span><span class="sec">31–38s</span><br>我會問他一句：你是覺得貴，還是覺得不值得？<br>這兩件事的解法完全不一樣。<br>助哥不賣房子，賣判斷。想要我那份看屋檢查清單，私訊我「<b>檢查表</b>」。</p>
+</div>
+<div class="card script" data-script="【S02】這間房，你自己會不會買&#10;&#10;問（0–3s）：我問你喔，這間房，你自己會買嗎？&#10;答（3–8s）：不會。&#10;答（8–26s）：不是房子不好，是不適合我。&#10;我家有兩個小孩，這間主臥跟次臥中間隔一個開放式廚房，晚上油煙跟聲音全部進房間。&#10;但如果是一對夫妻、或退休的長輩，這個格局反而是這棟最舒服的一間。&#10;房子沒有好壞，只有對誰好。&#10;問（26–33s）：那你會跟客戶說你不會買嗎？&#10;答（33–40s）：一定說。我怕的不是這間賣不掉，是你三年後才發現不對。&#10;助哥不賣房子，賣判斷。想看這間的格局圖，私訊我「格局」。">
+  <h3><span class="no">S02</span>這間房，你自己會不會買<span class="sec">〔題庫 #5〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：信任・最高說服力 ｜ 長度：40 秒 ｜ CTA：格局</p>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，這間房，你自己會買嗎？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–8s</span><br><b>不會。</b></p>
+  <p class="line"><span class="who">答</span><span class="sec">8–26s</span><br>不是房子不好，是不適合我。<br>我家有兩個小孩，這間主臥跟次臥中間隔一個開放式廚房，晚上油煙跟聲音全部進房間。<br>但如果是一對夫妻、或退休的長輩，這個格局反而是這棟最舒服的一間。<br>房子沒有好壞，只有<b>對誰好</b>。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">26–33s</span><br>那你會跟客戶說你不會買嗎？</p>
+  <p class="line"><span class="who">答</span><span class="sec">33–40s</span><br>一定說。我怕的不是這間賣不掉，是你三年後才發現不對。<br>助哥不賣房子，賣判斷。想看這間的格局圖，私訊我「<b>格局</b>」。</p>
+</div>
+<div class="card script" data-script="【S03】帶看的時候，房仲在觀察你什麼&#10;&#10;問（0–3s）：我問你喔，帶看的時候，你都在偷看客戶什麼？&#10;答（3–8s）：我在看你先走去哪一間房。&#10;答（8–27s）：三個地方。&#10;第一，你進門先走主臥還是先走小孩房——先走小孩房的，學區是你的死穴。&#10;第二，你拍照的位置。拍廚房的是煮飯的人，拍陽台的通常在算曬衣服跟寵物。&#10;第三，你有沒有蹲下來。會蹲下來看排水孔的，多半看過三間以上。&#10;問（27–34s）：所以你不用問預算就知道？&#10;答（34–42s）：預算會騙人，動線不會。&#10;助哥不賣房子，賣判斷。看屋前想先拿檢查清單，私訊我「檢查表」。">
+  <h3><span class="no">S03</span>帶看的時候，房仲在觀察你什麼<span class="sec">〔題庫 #21〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：內幕・破圈 ｜ 長度：42 秒 ｜ CTA：檢查表</p>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，帶看的時候，你都在偷看客戶什麼？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–8s</span><br>我在看你<b>先走去哪一間房</b>。</p>
+  <p class="line"><span class="who">答</span><span class="sec">8–27s</span><br>三個地方。<br>第一，你進門先走主臥還是先走小孩房——先走小孩房的，學區是你的死穴。<br>第二，你拍照的位置。拍廚房的是煮飯的人，拍陽台的通常在算曬衣服跟寵物。<br>第三，你有沒有蹲下來。會蹲下來看排水孔的，多半看過三間以上。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">27–34s</span><br>所以你不用問預算就知道？</p>
+  <p class="line"><span class="who">答</span><span class="sec">34–42s</span><br>預算會騙人，<b>動線不會</b>。<br>助哥不賣房子，賣判斷。看屋前想先拿檢查清單，私訊我「<b>檢查表</b>」。</p>
+</div>
+<div class="card script" data-script="【S04】公設比 35%，你到底少了幾坪&#10;&#10;問（0–3s）：我問你喔，公設比 35%，我到底少了幾坪？&#10;答（3–9s）：我不解釋法規，我直接貼給你看。（蹲下，開始貼膠帶）&#10;答（9–28s）：權狀 [40] 坪，公設 35%，膠帶裡面這一塊——[26] 坪，是你真的能站的地方。&#10;外面這一圈 [14] 坪，是梯廳、健身房、大廳、垃圾室。&#10;這 [14] 坪你有付錢，[以該案開價換算約 XXX 萬]，但你一年可能只用到十次。&#10;問（28–36s）：那公設比低就一定好嗎？&#10;答（36–45s）：不一定。公設低的老公寓，沒電梯、沒管理、沒訪客車位。&#10;你要買的不是低公設，是你用得到的公設。&#10;助哥不賣房子，賣判斷。想看這一區的實際成交，私訊我「行情」。">
+  <h3><span class="no">S04</span>公設比 35%，你到底少了幾坪<span class="sec">〔題庫 #18〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：教學・畫面化・全系列最容易爆的一支 ｜ 長度：45 秒 ｜ CTA：行情</p>
+  <div class="tip">🎬 道具：一捲有色膠帶。現場在客廳地板貼出實際可站範圍——<b>這支的爆點在畫面，不在講解</b>。</div>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，公設比 35%，我到底少了幾坪？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–9s</span><br>我不解釋法規，我直接貼給你看。（蹲下，開始貼膠帶）</p>
+  <p class="line"><span class="who">答</span><span class="sec">9–28s</span><br>權狀 <span class='fill'>[40]</span> 坪，公設 35%，膠帶裡面這一塊——<span class='fill'>[26]</span> 坪，是你真的能站的地方。<br>外面這一圈 <span class='fill'>[14]</span> 坪，是梯廳、健身房、大廳、垃圾室。<br>這 <span class='fill'>[14]</span> 坪你有付錢，<span class='fill'>[以該案開價換算約 XXX 萬]</span>，但你一年可能只用到十次。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">28–36s</span><br>那公設比低就一定好嗎？</p>
+  <p class="line"><span class="who">答</span><span class="sec">36–45s</span><br>不一定。公設低的老公寓，沒電梯、沒管理、沒訪客車位。<br>你要買的不是低公設，是<b>你用得到的公設</b>。<br>助哥不賣房子，賣判斷。想看這一區的實際成交，私訊我「<b>行情</b>」。</p>
+</div>
+<div class="card script" data-script="【S05】屋主講出這句話，你就要小心&#10;&#10;問（0–3s）：我問你喔，屋主講哪句話，我要開始小心？&#10;答（3–8s）：「這裡沒漏過水。」&#10;答（8–27s）：三句。&#10;第一句「沒漏過水」——沒漏過，跟修好了、不會再漏，是三件事。天花板重新油漆過的角落自己看一下。&#10;第二句「這棟很單純」——單純是感受，管委會的會議紀錄才是事實。&#10;第三句「我這價格是賠錢賣」——賠不賠錢，實價登錄查得到他當初買多少。&#10;問（27–34s）：那我當面拆穿他不會很尷尬？&#10;答（34–40s）：不用拆穿。你只要問一句「方便看一下管委會紀錄嗎」，答案就出來了。&#10;助哥不賣房子，賣判斷。私訊我「檢查表」。">
+  <h3><span class="no">S05</span>屋主講出這句話，你就要小心<span class="sec">〔題庫 #16〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：避坑・嘴替・高轉發 ｜ 長度：40 秒 ｜ CTA：檢查表</p>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，屋主講哪句話，我要開始小心？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–8s</span><br>「<b>這裡沒漏過水。</b>」</p>
+  <p class="line"><span class="who">答</span><span class="sec">8–27s</span><br>三句。<br>第一句「沒漏過水」——沒漏過，跟修好了、不會再漏，是三件事。天花板重新油漆過的角落自己看一下。<br>第二句「這棟很單純」——單純是感受，管委會的會議紀錄才是事實。<br>第三句「我這價格是賠錢賣」——賠不賠錢，實價登錄查得到他當初買多少。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">27–34s</span><br>那我當面拆穿他不會很尷尬？</p>
+  <p class="line"><span class="who">答</span><span class="sec">34–40s</span><br>不用拆穿。你只要問一句「<b>方便看一下管委會紀錄嗎</b>」，答案就出來了。<br>助哥不賣房子，賣判斷。私訊我「<b>檢查表</b>」。</p>
+</div>
+<div class="card script" data-script="【S06】買房最貴的不是房價&#10;&#10;問（0–3s）：我問你喔，自備款抓兩成，夠不夠？&#10;答（3–8s）：通常不夠。&#10;答（8–28s）：房價以外，這幾筆一定會出現：&#10;契稅、印花稅、代書費、履約保證、仲介服務費、房貸開辦費、火險地震險。&#10;然後是搬進去才開始的：裝潢、家電、窗簾、冷氣、管理費、車位月租。&#10;這些沒有一筆能貸款。&#10;問（28–35s）：那到底要抓多少？&#10;答（35–42s）：我給客戶的說法是：兩成是門票，兩成五才是能住進去的錢。&#10;實際數字依你的貸款條件跟屋況，差很多。&#10;助哥不賣房子，賣判斷。想要試算表，私訊我「檢查表」。">
+  <h3><span class="no">S06</span>買房最貴的不是房價<span class="sec">〔題庫 #19〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：痛點・收藏率高 ｜ 長度：42 秒 ｜ CTA：檢查表</p>
+  <div class="tip">🎬 字卡：每念一筆就疊一張數字卡上去，最後全部留在畫面上。</div>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，自備款抓兩成，夠不夠？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–8s</span><br><b>通常不夠。</b></p>
+  <p class="line"><span class="who">答</span><span class="sec">8–28s</span><br>房價以外，這幾筆一定會出現：<br>契稅、印花稅、代書費、履約保證、仲介服務費、房貸開辦費、火險地震險。<br>然後是搬進去才開始的：裝潢、家電、窗簾、冷氣、管理費、車位月租。<br>這些沒有一筆能貸款。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">28–35s</span><br>那到底要抓多少？</p>
+  <p class="line"><span class="who">答</span><span class="sec">35–42s</span><br>我給客戶的說法是：<b>兩成是門票，兩成五才是能住進去的錢</b>。<br>實際數字依你的貸款條件跟屋況，差很多。<br>助哥不賣房子，賣判斷。想要試算表，私訊我「<b>檢查表</b>」。</p>
+</div>
+<div class="card script" data-script="【S07】我先講這間房的三個缺點&#10;&#10;問（0–3s）：我問你喔，這間房的缺點，你敢先講嗎？&#10;答（3–8s）：敢。而且我要先講完才帶你進去。&#10;答（8–27s）：第一，[西曬，下午三點後客廳很熱]。&#10;第二，[一樓有小吃店，晚上有味道]。&#10;第三，[管線是原始的，沒有換過]。&#10;三個都是改不掉的、或是要花錢的。&#10;問（27–34s）：那還有人下訂？&#10;答（34–40s）：有。因為他要的是 [這個學區] 跟 [這個總價]，其他他可以忍。&#10;先講缺點，是為了讓你相信我講的優點。&#10;助哥不賣房子，賣判斷。想看格局圖，私訊我「格局」。">
+  <h3><span class="no">S07</span>我先講這間房的三個缺點<span class="sec">〔題庫 #2〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：反向輸出・全系列信任值最高 ｜ 長度：40 秒 ｜ CTA：格局</p>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，這間房的缺點，你敢先講嗎？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–8s</span><br>敢。而且我要先講完才帶你進去。</p>
+  <p class="line"><span class="who">答</span><span class="sec">8–27s</span><br>第一，<span class='fill'>[西曬，下午三點後客廳很熱]</span>。<br>第二，<span class='fill'>[一樓有小吃店，晚上有味道]</span>。<br>第三，<span class='fill'>[管線是原始的，沒有換過]</span>。<br>三個都是改不掉的、或是要花錢的。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">27–34s</span><br>那還有人下訂？</p>
+  <p class="line"><span class="who">答</span><span class="sec">34–40s</span><br>有。因為他要的是 <span class='fill'>[這個學區]</span> 跟 <span class='fill'>[這個總價]</span>，其他他可以忍。<br><b>先講缺點，是為了讓你相信我講的優點。</b><br>助哥不賣房子，賣判斷。想看格局圖，私訊我「<b>格局</b>」。</p>
+</div>
+<div class="card script" data-script="【S08】貸款過不了，八成是這三個原因&#10;&#10;問（0–3s）：我問你喔，為什麼有人簽了約，貸款卻過不了？&#10;答（3–8s）：八成不是收入問題，是聯徵。&#10;答（8–28s）：第一，短時間內到處問銀行，聯徵被查太多次，銀行會覺得你在到處借。&#10;第二，屋齡加上你要的貸款年限，超過銀行的上限，年限直接被砍。&#10;第三，工作年資跟收入證明對不起來——尤其是自營、業務、現金收入。&#10;成數跟利率每家不一樣、政策也一直在變，以你往來銀行最新公告為準。&#10;問（28–35s）：那應該先做什麼？&#10;答（35–42s）：先問銀行，再簽約。順序反過來，你就是在賭。&#10;助哥不賣房子，賣判斷。私訊我「檢查表」。">
+  <h3><span class="no">S08</span>貸款過不了，八成是這三個原因<span class="sec">〔題庫 #20〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：焦慮・搜尋長尾 ｜ 長度：42 秒 ｜ CTA：檢查表</p>
+  <div class="warn">⚠️ 合規：不報死成數、不報死利率，一律「以你往來銀行最新公告為準」。<b>發片當天重新查證政策</b>。</div>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，為什麼有人簽了約，貸款卻過不了？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–8s</span><br>八成不是收入問題，是<b>聯徵</b>。</p>
+  <p class="line"><span class="who">答</span><span class="sec">8–28s</span><br>第一，短時間內到處問銀行，聯徵被查太多次，銀行會覺得你在到處借。<br>第二，屋齡加上你要的貸款年限，超過銀行的上限，年限直接被砍。<br>第三，工作年資跟收入證明對不起來——尤其是自營、業務、現金收入。<br>成數跟利率每家不一樣、政策也一直在變，<b>以你往來銀行最新公告為準</b>。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">28–35s</span><br>那應該先做什麼？</p>
+  <p class="line"><span class="who">答</span><span class="sec">35–42s</span><br><b>先問銀行，再簽約。</b>順序反過來，你就是在賭。<br>助哥不賣房子，賣判斷。私訊我「<b>檢查表</b>」。</p>
+</div>
+<div class="card script" data-script="【S09】第一次看屋，一定要帶的三樣東西&#10;&#10;問（0–3s）：我問你喔，第一次看屋要帶什麼？&#10;答（3–8s）：三樣，加起來不到兩百塊。&#10;答（8–26s）：捲尺——量你家那張床、那個冰箱進不進得來，不是量房間。&#10;手電筒——照天花板角落跟浴室管道間，漏水痕跡白天看不出來。&#10;彈珠——放地上（示範），會滾，代表地板不平；不會滾，你至少排除一件事。&#10;問（26–32s）：手機的手電筒不行嗎？&#10;答（32–38s）：可以，但你會捨不得把手機伸進管道間。&#10;助哥不賣房子，賣判斷。完整清單私訊我「檢查表」。">
+  <h3><span class="no">S09</span>第一次看屋，一定要帶的三樣東西<span class="sec">〔題庫 #15〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：實用・收藏率最高 ｜ 長度：38 秒 ｜ CTA：檢查表</p>
+  <div class="tip">🎬 道具：捲尺、手電筒、彈珠。<b>現場示範，不要只用講的。</b></div>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，第一次看屋要帶什麼？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–8s</span><br>三樣，加起來不到兩百塊。</p>
+  <p class="line"><span class="who">答</span><span class="sec">8–26s</span><br>捲尺——量你家那張床、那個冰箱進不進得來，不是量房間。<br>手電筒——照天花板角落跟浴室管道間，漏水痕跡白天看不出來。<br>彈珠——放地上（示範），會滾，代表地板不平；不會滾，你至少排除一件事。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">26–32s</span><br>手機的手電筒不行嗎？</p>
+  <p class="line"><span class="who">答</span><span class="sec">32–38s</span><br>可以，但你會捨不得把手機伸進管道間。<br>助哥不賣房子，賣判斷。完整清單私訊我「<b>檢查表</b>」。</p>
+</div>
+<div class="card script" data-script="【S10】我勸客戶不要買的那一間&#10;&#10;問（0–3s）：我問你喔，有沒有哪一間，你叫客戶不要買？&#10;答（3–9s）：有。而且他當天就要下斡旋。&#10;答（9–28s）：[一對年輕夫妻，看上一間總價剛好卡在他們預算上限的房子]。&#10;問題不在房子，在他們的錢剛好用完。&#10;簽下去，他們就沒有一毛備用金。裝潢、家電、還有小孩明年要上學。&#10;我算給他們看，這樣他們接下來三年不能生病、不能換工作。&#10;問（28–35s）：那你不就少一筆成交？&#10;答（35–42s）：少一筆。但他們去年介紹了兩組客戶給我。&#10;成交很容易，信任才稀有。&#10;助哥不賣房子，賣判斷。">
+  <h3><span class="no">S10</span>我勸客戶不要買的那一間<span class="sec">〔題庫 #25〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：信任資產・最容易被分享 ｜ 長度：42 秒 ｜ CTA：不放關鍵字，直接導 LINE</p>
+  <div class="warn">⚠️ 合規：<b>完全去識別化</b>。不講社區名、不講門牌、不講屋主姓氏、不講家庭糾紛細節。</div>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，有沒有哪一間，你叫客戶不要買？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–9s</span><br>有。而且他當天就要下斡旋。</p>
+  <p class="line"><span class="who">答</span><span class="sec">9–28s</span><br><span class='fill'>[一對年輕夫妻，看上一間總價剛好卡在他們預算上限的房子]</span>。<br>問題不在房子，在<b>他們的錢剛好用完</b>。<br>簽下去，他們就沒有一毛備用金。裝潢、家電、還有小孩明年要上學。<br>我算給他們看，這樣他們接下來三年不能生病、不能換工作。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">28–35s</span><br>那你不就少一筆成交？</p>
+  <p class="line"><span class="who">答</span><span class="sec">35–42s</span><br>少一筆。但他們去年介紹了兩組客戶給我。<br><b>成交很容易，信任才稀有。</b><br>助哥不賣房子，賣判斷。</p>
+</div>
+<div class="card script" data-script="【S11】屋主自售 vs 找房仲，差在哪&#10;&#10;問（0–3s）：我問你喔，我自己賣，不是省一筆服務費？&#10;答（3–9s）：有些案子你自售就好，我不騙你。&#10;答（9–28s）：如果你的房子條件夠好、你不趕時間、而且買方你自己找得到——自售完全 OK。&#10;會出事的是三種：產權有狀況的、有貸款要塗銷的、還有買方要求你降價又要求你負責保固的。&#10;這三種，履約保證、稅務、交屋點交，任何一個環節出錯，省下的服務費一次賠回去。&#10;問（28–35s）：那怎麼判斷自己是哪一種？&#10;答（35–42s）：先問自己一句：出事的時候，你打給誰？&#10;助哥不賣房子，賣判斷。想知道你家那一區現在成交多少，私訊我「行情」。">
+  <h3><span class="no">S11</span>屋主自售 vs 找房仲，差在哪<span class="sec">〔題庫 #23〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：賣方開發・收委託 ｜ 長度：42 秒 ｜ CTA：行情</p>
+  <div class="warn">⚠️ 合規：<b>不批評同業、不指名他行他店</b>。</div>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，我自己賣，不是省一筆服務費？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–9s</span><br><b>有些案子你自售就好，我不騙你。</b></p>
+  <p class="line"><span class="who">答</span><span class="sec">9–28s</span><br>如果你的房子條件夠好、你不趕時間、而且買方你自己找得到——自售完全 OK。<br>會出事的是三種：產權有狀況的、有貸款要塗銷的、還有買方要求你降價又要求你負責保固的。<br>這三種，履約保證、稅務、交屋點交，任何一個環節出錯，省下的服務費一次賠回去。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">28–35s</span><br>那怎麼判斷自己是哪一種？</p>
+  <p class="line"><span class="who">答</span><span class="sec">35–42s</span><br>先問自己一句：<b>出事的時候，你打給誰？</b><br>助哥不賣房子，賣判斷。想知道你家那一區現在成交多少，私訊我「<b>行情</b>」。</p>
+</div>
+<div class="card script" data-script="【S12】帶看 30 組還賣不掉，問題到底在哪&#10;&#10;問（0–3s）：我問你喔，帶看三十組還沒賣掉，是房子有問題嗎？&#10;答（3–9s）：不是。是價格還沒對。&#10;答（9–30s）：帶看三十組還沒成交，代表市場看得到你、但不買單，這其實是好消息——最怕的是根本沒人來看。&#10;三件事會卡住：&#10;一、開價比同社區近期成交高太多，買方直接跳過。&#10;二、照片跟現場落差大，來了就走。&#10;三、屋主現場在場，買方不敢講真話，也不敢出價。&#10;問（30–37s）：那降價就會賣掉？&#10;答（37–45s）：不一定。先看回饋，再決定要不要動價格。&#10;三十組看完，買方的嫌棄理由會重複——重複的那一點，才是真的問題。&#10;助哥不賣房子，賣判斷。想看你家那一區的真實成交，私訊我「行情」。">
+  <h3><span class="no">S12</span>帶看 30 組還賣不掉，問題到底在哪<span class="sec">〔題庫 #14〕</span><button class="copy" onclick="cp(this)">複製腳本</button></h3>
+  <p class="spec">定位：賣方痛點・本系列最會收委託的一支 ｜ 長度：45 秒 ｜ CTA：行情</p>
+  <p class="line"><span class="who q">問</span><span class="sec">0–3s</span><br>我問你喔，帶看三十組還沒賣掉，是房子有問題嗎？</p>
+  <p class="line"><span class="who">答</span><span class="sec">3–9s</span><br>不是。<b>是價格還沒對。</b></p>
+  <p class="line"><span class="who">答</span><span class="sec">9–30s</span><br>帶看三十組還沒成交，代表市場看得到你、但不買單，這其實是好消息——最怕的是根本沒人來看。<br>三件事會卡住：<br>一、開價比同社區近期成交高太多，買方直接跳過。<br>二、照片跟現場落差大，來了就走。<br>三、屋主現場在場，買方不敢講真話，也不敢出價。</p>
+  <p class="line"><span class="who q">問</span><span class="sec">30–37s</span><br>那降價就會賣掉？</p>
+  <p class="line"><span class="who">答</span><span class="sec">37–45s</span><br>不一定。<b>先看回饋，再決定要不要動價格。</b><br>三十組看完，買方的嫌棄理由會重複——重複的那一點，才是真的問題。<br>助哥不賣房子，賣判斷。想看你家那一區的真實成交，私訊我「<b>行情</b>」。</p>
+</div>
+
+<h2 id="shoot">五、拍攝日 SOP：一天拍完 12 支</h2>
+<div class="card">
+  <p><b>建議日期：2026-08-22（六）09:00–17:00</b></p>
+  <h3>前一天備好</h3>
+  <ul class="chk">
+    <li>12 支逐字稿印出來（<b>大字、每支一張 A4</b>，貼在鏡頭旁邊當提詞）</li>
+    <li>道具：有色膠帶、捲尺、手電筒、彈珠、白板筆</li>
+    <li>服裝：兩人各 2 套，<b>深／淺對比</b>，中途換一次（同一天拍看起來像不同天）</li>
+    <li>器材：手機 A（主機，腳架固定直式）、手機 B（側拍 BTS）、領夾麥 ×2、補光燈 ×1</li>
+    <li>場地：店內會議室（背景乾淨）＋ 一間有授權的物件（S02／S04／S07／S10 要現場）</li>
+    <li><b>書面授權</b>：屋主同意拍攝＋上網公開；女同事肖像使用同意（含未來作教學素材）</li>
+  </ul>
+  <h3>當天動線</h3>
+  <div class="scroll"><table>
+    <tr><th>時段</th><th>內容</th></tr>
+    <tr><td>09:00–09:30</td><td>對詞。兩人先把 12 個問題<b>用聊天的方式講一遍</b>，不錄</td></tr>
+    <tr><td>09:30–12:00</td><td>店內棚拍：S01、S03、S05、S06、S08、S09、S11、S12（8 支）</td></tr>
+    <tr><td>12:00–13:00</td><td>午休。<b>當場看毛片</b>，決定要不要重拍</td></tr>
+    <tr><td>13:00–15:30</td><td>物件現場：S02、S04、S07、S10（4 支）</td></tr>
+    <tr><td>15:30–16:30</td><td>補 B-roll：開門、走廊、窗景、蹲下看排水孔、貼膠帶特寫</td></tr>
+    <tr><td>16:30–17:00</td><td>BTS 收尾訪談 3 題 —— 這段是第 5 週教學片的素材</td></tr>
+  </table></div>
+  <h3>每支的拍法</h3>
+  <ol>
+    <li>一次連續錄完（不分段），<b>NG 就整支重來</b>，不要中間接。</li>
+    <li>每支錄 <b>2 個 take</b>：Take1 照稿、Take2 放開講。剪的時候幾乎都會用 Take2。</li>
+    <li>錄完立刻補 <b>助哥單人特寫 5 秒</b>（給第 ③ 拍當插入鏡）。</li>
+    <li>檔名當場改成 <code>S01_take2_0822</code>，回家不用猜。</li>
+  </ol>
+  <div class="tip"><b>剪輯（單支 15 分鐘）：</b>剪掉所有「嗯／那個／所以說」與兩人之間的空白 → 字幕全上、關鍵數字另打字卡 → 收尾三張卡固定（金句 → 「助哥不賣房子，賣判斷」→ 私訊關鍵字）→ 輸出母帶 1080×1920。</div>
+</div>
+
+<h2 id="platform">六、四平台改版表（一支母帶 → 四個版本）</h2>
+<div class="card">
+  <div class="scroll"><table>
+    <tr><th>項目</th><th>Facebook</th><th>Instagram Reels</th><th>TikTok</th><th>YouTube Shorts</th></tr>
+    <tr><td><b>幫你做什麼</b></td><td><b>主戰場</b>。中壯年、在地、賣方屋主。觸及約為 Threads 6 倍</td><td><b>轉單主場</b>。DM 私訊、追蹤累積</td><td><b>破圈衝量</b>。非買房族也看得到</td><td><b>長尾搜尋</b>。三個月後還在幫你帶客</td></tr>
+    <tr><td>長度</td><td>30–45s</td><td>30–45s</td><td><b>21–34s（再剪快一點）</b></td><td><b>壓 59s 內</b></td></tr>
+    <tr><td>首幀／封面</td><td>首幀＋文案前兩行決定停留</td><td>大字問句卡＋兩人同框</td><td>問句卡＋人臉，不要留白</td><td><b>另做封面</b>，標題要能被搜尋</td></tr>
+    <tr><td>標題邏輯</td><td>情境敘述句</td><td>前 10 個字就要是問句</td><td>口語、挑釁、短</td><td><b>SEO 關鍵字</b>：「台中七期 公設比」</td></tr>
+    <tr><td>字幕位置</td><td>置中</td><td>置中偏上（避開底部 UI）</td><td>置中偏上</td><td>上下各留 15% 安全區</td></tr>
+    <tr><td>音樂</td><td>原聲即可</td><td>熱門音壓低音量</td><td><b>必用平台熱門音</b></td><td><b>只用 YouTube 音效庫</b>（營利紅線）</td></tr>
+    <tr><td>Hashtag</td><td>1–3 個</td><td>5–8 個，在地詞為主</td><td>3–5 個，泛詞＋在地</td><td>標題含關鍵字＋#shorts</td></tr>
+    <tr><td>CTA 落點</td><td>導私訊＋LINE 放<b>留言區</b></td><td>導 DM 關鍵字</td><td>導個人檔案連結</td><td>置頂留言放 LINE</td></tr>
+  </table></div>
+  <h3>固定零件</h3>
+  <pre>IG：#台中買房 #七期 #台中房仲 #西屯買房 #南屯買房 #看屋筆記 #助哥我問你 #不賣房子賣判斷
+TikTok：#台中買房 #房仲 #買房知識 #助哥我問你
+Shorts 標題：公設比35%到底少幾坪？台中房仲用膠帶貼給你看 #shorts</pre>
+  <p class="spec">法定揭露模組（提到具體物件／開價／成交價時，影片末卡＋貼文結尾固定放）</p>
+  <pre>永慶不動產 七期河南市政店｜百富國際開發有限公司
+中市地價二字第1070032073號</pre>
+</div>
+
+<h2 id="schedule">七、發布時間表</h2>
+<div class="card">
+  <h3>每一支的當日時間網格</h3>
+  <div class="scroll"><table>
+    <tr><th>時間</th><th>平台</th><th>動作</th></tr>
+    <tr><td><b>12:00</b></td><td>Facebook</td><td>上片＋3 行導言。<b>LINE 連結放第一則留言並置頂</b></td></tr>
+    <tr><td><b>19:00</b></td><td>TikTok</td><td>上片，用平台熱門音</td></tr>
+    <tr><td><b>20:00</b></td><td>Instagram Reels</td><td>台灣互動高峰 20:00–21:00，週一晚最強</td></tr>
+    <tr><td><b>20:30</b></td><td>Threads</td><td>發金句文字版（4–5 則串文）＋影片，導流回 IG</td></tr>
+    <tr><td><b>21:00</b></td><td>YouTube Shorts</td><td><b>週五那支提前到 18:00</b>（週五 16–19 時段表現最好）</td></tr>
+  </table></div>
+  <div class="tip"><b>發布後的關鍵動作</b><br>
+  ① Threads 發出後 <b>15 分鐘內</b>若互動高於平常，立刻編輯本文放入 CTA／連結（前 15 分鐘決定推播）。<br>
+  ② IG／FB 發出後 <b>30 分鐘內回完所有留言</b>，用完整句子回（一個字的回覆沒有權重）。<br>
+  ③ 每支發出後 <b>48 小時</b>再看數據，不要 2 小時就下結論。</div>
+  <div class="warn"><b>與《助哥人生智慧》錯開：</b>該系列固定 YouTube 08:30／TikTok・Shorts 12:30／FB 21:00／Threads 22:30。本系列全部避開，兩個系列不互相搶自己的觸及。</div>
+
+  <h3>四週逐日排程</h3>
+  <div class="scroll"><table>
+    <tr><th>週</th><th>日期</th><th>影片</th><th>主題</th></tr>
+    <tr><td>前置</td><td>8/20（四）</td><td>—</td><td>逐字稿定稿、兩人線上對詞 30 分鐘</td></tr>
+    <tr><td>前置</td><td>8/21（五）</td><td>—</td><td>器材／服裝／道具／場地確認，屋主與肖像授權留存</td></tr>
+    <tr><td>前置</td><td><b>8/22（六）</b></td><td>—</td><td><b>拍攝日：12 支＋BTS 一次拍完</b></td></tr>
+    <tr><td>前置</td><td>8/23（日）</td><td>—</td><td>先剪 S01、S04、S02、S03；四平台簡介與置頂整理好</td></tr>
+    <tr><td>W1</td><td>8/24（一）</td><td><b>S01</b></td><td>房仲最怕被問的一句話（立人設）</td></tr>
+    <tr><td>W1</td><td>8/26（三）</td><td><b>S04</b></td><td>公設比 35% 少幾坪（衝流量）</td></tr>
+    <tr><td>W1</td><td>8/28（五）</td><td><b>S02</b></td><td>這間房你自己會不會買（信任）</td></tr>
+    <tr><td>W2</td><td>8/31（一）</td><td><b>S03</b></td><td>帶看時在觀察你什麼（破圈）</td></tr>
+    <tr><td>W2</td><td>9/2（三）</td><td><b>S05</b></td><td>屋主這句話要小心（轉發）</td></tr>
+    <tr><td>W2</td><td>9/4（五）</td><td><b>S06</b></td><td>買房最貴的不是房價（收藏）</td></tr>
+    <tr><td>W3</td><td>9/7（一）</td><td><b>S07</b></td><td>先講三個缺點（信任）</td></tr>
+    <tr><td>W3</td><td>9/9（三）</td><td><b>S08</b></td><td>貸款過不了的三個原因（搜尋長尾）</td></tr>
+    <tr><td>W3</td><td>9/11（五）</td><td><b>S09</b></td><td>看屋要帶的三樣東西（收藏）</td></tr>
+    <tr><td>W4</td><td>9/14（一）</td><td><b>S10</b></td><td>我勸客戶不要買的那間（分享）</td></tr>
+    <tr><td>W4</td><td>9/16（三）</td><td><b>S11</b></td><td>自售 vs 找房仲（賣方）</td></tr>
+    <tr><td>W4</td><td>9/18（五）</td><td><b>S12</b></td><td>帶看 30 組還沒賣掉（收委託）</td></tr>
+    <tr><td>收尾</td><td>9/19–9/20</td><td>—</td><td>數據總結會 → 進入教學素材化</td></tr>
+  </table></div>
+  <p><b>排序邏輯：</b>週一發最強的一支（台灣全週互動最高點是週一晚 20:00）；週三發教學型（收藏率高）；週五發信任型（週末會被轉給家人一起看）。賣方題 S11、S12 壓在第四週——前三週先讓屋主看到你的專業，第四週再問他要不要賣。</p>
+</div>
+
+<h2 id="red">八、紅線檢查表</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>拍之前</h3>
+    <ul class="chk">
+      <li>屋主同意「屋內拍攝＋上網公開」，<b>留書面或訊息紀錄</b></li>
+      <li>有租客的物件：個人物品一律不入鏡</li>
+      <li>女同事肖像使用同意（含未來作教學素材）</li>
+      <li>鄰居、住戶、車牌、門牌、信箱姓名一律避開或打碼</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>發之前（每支都過一次）</h3>
+    <ul class="chk">
+      <li>提到具體物件／開價／成交價 → <b>法定揭露有掛上</b></li>
+      <li>沒有「保證增值」「一定漲」「穩賺」「投報率 X%」</li>
+      <li>沒有對貸款成數、利率打包票</li>
+      <li>引用實價登錄 → <b>標明來源與期間</b>；自售價／開價／成交價沒混用</li>
+      <li>沒有點名特定社區、門牌、住戶</li>
+      <li>沒有指名批評同業、他店、特定建商</li>
+      <li>政策數字（新青安、稅制、利率）<b>發片當天重新查證</b></li>
+      <li>CTA 不是「留言 1」互動餌</li>
+    </ul>
+  </div>
+</div>
+<div class="card">
+  <h3>發之前的三問（有一個 No 就重改）</h3>
+  <ol><li>樓下大媽聽得懂嗎？</li><li>觀眾會覺得「這說的就是我」嗎？</li><li>會讓人生氣、驚訝，或想笑嗎？</li></ol>
+</div>
+
+<h2 id="data">九、數據追蹤與迭代</h2>
+<div class="card">
+  <h3>單支數據卡（發布後 48 小時填）</h3>
+  <pre>影片編號：S__  ｜ 發布日：__/__  ｜ 主題：__________
+              FB      IG      TikTok   Shorts
+觀看            ___     ___     ___      ___
+3 秒留存        ___%    ___%    ___%     ___%
+完播率          ___%    ___%    ___%     ___%
+收藏 / 分享     ___     ___     ___      ___
+留言            ___     ___     ___      ___
+私訊（人）      ___     ___     ___      ___
+加 LINE（人）   ___
+→ 約看：___ 組   → 委託：___ 件
+這支最好的一句話是：______________
+下一支要改的一件事：____________</pre>
+  <div class="scroll"><table>
+    <tr><th>指標</th><th>及格</th><th>好</th></tr>
+    <tr><td>3 秒留存</td><td>60%</td><td>75%+</td></tr>
+    <tr><td>完播率（30–45 秒片）</td><td>35%</td><td>50%+</td></tr>
+    <tr><td>單支私訊（FB＋IG 合計）</td><td>1</td><td>3+</td></tr>
+    <tr><td>收藏率（教學題）</td><td>1%</td><td>3%+</td></tr>
+  </table></div>
+  <p><b>四週總目標：</b>私訊 ≥ 40 人｜加 LINE ≥ 20 人｜實際約看 ≥ 5 組｜<b>委託 ≥ 1 件</b></p>
+  <h3>每週五 20 分鐘檢討，只問三題</h3>
+  <ol>
+    <li>這週哪一支 <b>3 秒留存最高</b>？它的問句長什麼樣子？→ 下週照抄句型。</li>
+    <li>私訊都問什麼？→ <b>那就是下一批選題</b>（觀眾自己會告訴你要拍什麼）。</li>
+    <li>哪一支最低？低在 3 秒還是低在完播？→ 3 秒低＝問題不夠尖；完播低＝中段太囉唆。</li>
+  </ol>
+  <div class="tip"><b>不是今天拍三支沒流量就代表短影音沒用。</b>你是在持續告訴平台「什麼樣的人才是我的客戶」。前 10 支是在教演算法，不是在收成。</div>
+</div>
+
+<h2 id="teach">十、教學素材化（第 5 週）</h2>
+<div class="card">
+  <p>拍的時候就要為「之後要拿來教」預留素材，不要事後補。當天同步收集：BTS 側拍全程、收工訪談 3 題（今天拍幾支／最難的是哪一支／下次會改什麼）、桌面素材（逐字稿 A4、器材擺法、腳架高度、燈位）。</p>
+  <div class="scroll"><table>
+    <tr><th>產出</th><th>內容</th><th>用途</th></tr>
+    <tr><td>① 一頁 SOP</td><td>拍攝日流程表＋QA 五拍公式＋四平台改版表</td><td>店內內訓、新人上手</td></tr>
+    <tr><td>② 60 分鐘內訓課</td><td>人設／公式／拍攝／平台／排程 ＋ 12 支實例拆解 ＋ 真實數據</td><td>店內、區部分享會</td></tr>
+    <tr><td>③ 破圈影片 1 支</td><td>〈我們兩個人，一天拍完 12 支影片〉BTS 剪輯</td><td>招募＋同業破圈，這支本身就是廣告</td></tr>
+    <tr><td>④ 電子書／指令包</td><td>《雙人一問一答短影音 SOP》＋12 支腳本模板</td><td>數位產品，可上架</td></tr>
+  </table></div>
+  <div class="warn"><b>教學素材的可信度來自數據，不是來自技巧。</b>第 5 週的課，第一頁請放真實數字：12 支影片、總觀看 ___、私訊 ___ 人、委託 ___ 件。沒有數據的教學是理論；有數據的教學才是方法。所以數據卡每一支都要填，這是原料，不是行政作業。</div>
+</div>
+
+<h2 id="next">十一、下一批 12 支的選題來源（不用重新想）</h2>
+<div class="card">
+  <ol>
+    <li><b>私訊裡重複出現的問題</b>（權重最高，代表真實需求）</li>
+    <li><b>30 題題材庫還沒用的</b>：#6 同棟差三層價差、#13 頂樓加蓋、#17 晚上再看一次、#24 凶宅海砂怎麼查、#26 社區開箱、#27 走路 10 分鐘、#28 早晚兩個樣、#29 帶看日 vlog</li>
+    <li><b>當天發生的事</b>：新政策、突發市場話題、剛拿到的物件——這類不會等你，當天手機拿起來就拍，用同一套 QA 五拍公式，30 分鐘內上線</li>
+  </ol>
+</div>
+
+<h2 id="parts">附錄：常用文案零件</h2>
+<div class="card">
+  <p><b>問方固定開場：</b>「我問你喔——」　<b>助哥固定收尾：</b>「助哥不賣房子，賣判斷。」　<b>品牌簽名句：</b>「成交很容易，信任才稀有。」</p>
+  <p class="spec">FB 貼文開頭三行模板（決定停不停下來）</p>
+  <pre>她問我一句我不太想回答的話。
+（影片）
+——完整回答在影片裡，我沒有閃。</pre>
+  <p class="spec">置頂留言模板</p>
+  <pre>想要 [檢查表／格局圖／行情表] 的，直接私訊我關鍵字「____」，我傳給你。
+LINE 也可以：https://line.me/R/ti/p/@080akczk</pre>
+  <p class="spec">Threads 串文模板（5 則）</p>
+  <pre>1｜她問我：你們房仲最怕客戶問什麼？
+2｜我以為是「可以再便宜嗎」。
+3｜不是。是「你賺多少」。
+4｜因為前面那句我有標準答案，後面那句沒有。
+5｜完整的我在影片裡講完了 →（IG 連結）</pre>
+</div>
+
+<footer>
+  《助哥，我問你》企劃 v1.0 ｜ 內部使用 ｜ 資料依據：《開箱好宅 30 題題材庫》（玩美趨勢 × 關關）、2026-08-18 房產經紀人短影音冒泡線上課簡報、2026 台灣四平台公開時段研究。<br>
+  影片如涉及具體物件、開價或成交價，請掛：永慶不動產 七期河南市政店｜百富國際開發有限公司｜中市地價二字第1070032073號
+</footer>
+
+<script>
+function cp(btn){
+  var card = btn.closest('.script');
+  var txt = card.getAttribute('data-script');
+  navigator.clipboard.writeText(txt).then(function(){
+    var old = btn.textContent;
+    btn.textContent = '已複製 ✓'; btn.classList.add('done');
+    setTimeout(function(){ btn.textContent = old; btn.classList.remove('done'); }, 1800);
+  });
+}
+</script>
+</body>
+</html>
