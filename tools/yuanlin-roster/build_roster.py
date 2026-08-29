@@ -18,17 +18,49 @@ KEY    = '"邊緣,一般,卡中央,卡道路,卡出入口"'
 HDR = ['區塊','縣市','鄉鎮市','段別','地號','地號全碼','宗地面積(㎡)','宗地面積(坪)',
        '公告現值(元/㎡)','宗地現值總額(元)','使用分區','使用地類別',
        '登記次序','所有權人','統一編號','所有權人類型','管理者',
-       '權利範圍','持分比例','持分面積(㎡)','持分面積(坪)','持分現值(元)',
+       '權利範圍','持分型態','持分比例','持分面積(㎡)','持分面積(坪)','持分現值(元)',
        '登記日期','登記原因','權狀字號','設定他項權利','其他登記事項'] + MANUAL + \
       ['謄本列印時間','來源檔案','資料鍵值']
 
+ZH_DIGIT = str.maketrans('０１２３４５６７８９', '0123456789')
+
+def share_type(rv):
+    rv = rv or ''
+    if '公同共有' in rv: return '公同共有'
+    if re.search(r'(\d+)分之(\d+)', rv):
+        m = re.search(r'(\d+)分之(\d+)', rv)
+        return '單獨所有' if m.group(1) == m.group(2) else '分別共有'
+    return '待確認'
+
 def frac(s):
     if not s: return None
-    s = s.replace('全部','').strip()
+    s = s.replace('全部','').replace('公同共有','').strip()
     m = re.search(r'(\d+)分之(\d+)', s)
     if m: return Fraction(int(m.group(2)), int(m.group(1)))
     if '全部' in (s or '') or s == '': return Fraction(1,1)
     return None
+
+def joint_groups(owners):
+    """辨識公同共有群組。優先讀「主登記2.3.4…為公同共有」註記，
+    讀不到時退而以相同權利範圍字串歸為同一群。回傳 (登記次序->群組id, 群組id->人數)"""
+    gid, members = {}, {}
+    for o in owners:
+        if '公同共有' not in (o.get('權利範圍') or ''): continue
+        seq = o.get('登記次序','')
+        note = (o.get('其他登記事項') or '').translate(ZH_DIGIT)
+        m = re.search(r'主登記([\d．\.、,\s]+)為公同共有', note)
+        if m:
+            nums = tuple(sorted(int(x) for x in re.findall(r'\d+', m.group(1))))
+            key = ('note', nums)
+        else:
+            key = ('rv', o.get('權利範圍'))
+        gid[seq] = key
+        members.setdefault(key, set()).add(seq)
+    gsize = {}
+    for key, seqs in members.items():
+        # 有註記時以註記列舉的人數為準（可涵蓋本謄本以外的登記次序）
+        gsize[key] = len(key[1]) if key[0] == 'note' else len(seqs)
+    return gid, gsize
 
 def owner_type(name, uid):
     n, u = name or '', uid or ''
@@ -45,12 +77,19 @@ def rows_from(parcels, block):
     for p in parcels:
         area = p.get('面積_平方公尺') or 0
         cur  = p.get('公告土地現值_元每平方公尺') or 0
+        gid, gsize = joint_groups(p.get('所有權人清單', []))
         rights_by_seq = {}
         for r in p.get('他項權利清單', []):
             rights_by_seq.setdefault(r.get('標的登記次序',''), []).append(
                 f"{r.get('權利種類','')}／{r.get('權利人','')}")
         for o in p.get('所有權人清單', []):
             f = frac(o.get('權利範圍'))
+            st = share_type(o.get('權利範圍'))
+            seq = o.get('登記次序','')
+            if st == '公同共有' and f is not None:
+                n = gsize.get(gid.get(seq), 1) or 1
+                f = f / n                      # 公同共有無應有部分，按人數均分推估
+                st = f'公同共有(全體{n}人)'
             sh_area = float(area) * float(f) if f else None
             uid = o.get('統一編號','')
             key = f"{p['段別']}|{p['地號全碼']}|{o.get('登記次序','')}|{uid}"
@@ -64,7 +103,7 @@ def rows_from(parcels, block):
                 '登記次序': o.get('登記次序',''), '所有權人': o.get('所有權人',''), '統一編號': uid,
                 '所有權人類型': owner_type(o.get('所有權人'), uid),
                 '管理者': o.get('管理者',''),
-                '權利範圍': o.get('權利範圍',''),
+                '權利範圍': o.get('權利範圍',''), '持分型態': st,
                 '持分比例': round(float(f),6) if f else None,
                 '持分面積(㎡)': round(sh_area,2) if sh_area is not None else None,
                 '持分面積(坪)': round(sh_area/PING,2) if sh_area is not None else None,
@@ -183,21 +222,32 @@ def main():
 
     # ===== 2. 地號彙總 =====
     H2 = ['區塊','段別','地號','地號全碼','宗地面積(㎡)','宗地面積(坪)','公告現值(元/㎡)',
-          '所有權人數','持分合計檢核','公私有別','他項權利筆數','已簽紙本人數','同意進度',
+          '所有權人數','持分型態','持分合計檢核','公私有別','他項權利筆數','已簽紙本人數','同意進度',
           '位置關鍵性','備註']
     ws2 = wb.create_sheet('地號彙總'); style_header(ws2, H2, ('位置關鍵性','備註'))
     par = {}
     for r in merged:
         k = (r['段別'], r['地號全碼'])
-        d = par.setdefault(k, {'r': r, 'n': 0, 'sum': Fraction(0), 'types': set()})
+        d = par.setdefault(k, {'r': r, 'n': 0, 'sum': Fraction(0), 'types': set(), 'jt': False})
         d['n'] += 1
+        st = r.get('持分型態','') or ''
         f = frac(r.get('權利範圍'))
-        if f: d['sum'] += f
+        if st.startswith('公同共有'):
+            gk = (r['段別'], r['地號全碼'], r.get('權利範圍'))
+            if gk not in d.setdefault('joint', set()):
+                d['joint'].add(gk)
+                if f: d['sum'] += f          # 整群只計一次
+        elif f:
+            d['sum'] += f
         d['types'].add(r.get('所有權人類型',''))
+        if st.startswith('公同共有'): d['jt'] = True
     rcount = {}
     for x in rights: rcount[str(x[2])] = rcount.get(str(x[2]), 0) + 1
     CL_NO = get_column_letter(HDR.index('地號全碼')+1)
     CL_ST = get_column_letter(HDR.index('同意書狀態')+1)
+    S_NO  = get_column_letter(H2.index('地號全碼')+1)      # 本表地號全碼欄
+    S_CNT = get_column_letter(H2.index('所有權人數')+1)
+    S_SGN = get_column_letter(H2.index('已簽紙本人數')+1)
     rn = 1
     for (seg, no), d in sorted(par.items()):
         r = d['r']; rn += 1
@@ -206,11 +256,12 @@ def main():
         kind = '公有' if pub and len(d['types']) == 1 else ('公私共有' if pub else '私有')
         ws2.append([r['區塊'], seg, r['地號'], no, r['宗地面積(㎡)'], r['宗地面積(坪)'],
                     r['公告現值(元/㎡)'], d['n'],
+                    '公同共有' if d.get('jt') else ('單獨所有' if d['n'] == 1 else '分別共有'),
                     '✔ 1/1' if abs(s-1) < 1e-9 else f'⚠ {s:.4f}',
                     kind, rcount.get(no, 0),
-                    f'=COUNTIFS(地主同意書總表!${CL_NO}:${CL_NO},$D{rn},地主同意書總表!${CL_ST}:${CL_ST},"已簽紙本")'
-                    f'+COUNTIFS(地主同意書總表!${CL_NO}:${CL_NO},$D{rn},地主同意書總表!${CL_ST}:${CL_ST},"已備印鑑")',
-                    f'=IF($H{rn}=0,"",$L{rn}&" / "&$H{rn})', '', ''])
+                    f'=COUNTIFS(地主同意書總表!${CL_NO}:${CL_NO},${S_NO}{rn},地主同意書總表!${CL_ST}:${CL_ST},"已簽紙本")'
+                    f'+COUNTIFS(地主同意書總表!${CL_NO}:${CL_NO},${S_NO}{rn},地主同意書總表!${CL_ST}:${CL_ST},"已備印鑑")',
+                    f'=IF(${S_CNT}{rn}=0,"",${S_SGN}{rn}&" / "&${S_CNT}{rn})', '', ''])
     for row in ws2.iter_rows(min_row=2, max_row=ws2.max_row, max_col=len(H2)):
         for c in row: c.border = THIN; c.font = Font(size=10)
     for h, fmt in [('宗地面積(㎡)','#,##0.00'),('宗地面積(坪)','#,##0.00'),('公告現值(元/㎡)','#,##0')]:
@@ -222,8 +273,8 @@ def main():
     autowidth(ws2, H2)
 
     # ===== 3. 地主彙總（＝同意書份數）=====
-    H3 = ['所有權人','統一編號','所有權人類型','管理者','持有筆數','合計持分面積(㎡)',
-          '合計持分面積(坪)','合計持分現值(元)','涉及地號','同意書狀態','紙本收件日',
+    H3 = ['所有權人','統一編號','所有權人類型','管理者','登記筆數','涉及地號數','合計持分面積(㎡)',
+          '合計持分面積(坪)','合計持分現值(元)','涉及地號','待釐清','同意書狀態','紙本收件日',
           '印鑑證明','聯絡方式','下次追蹤日','備註']
     ws3 = wb.create_sheet('地主彙總'); style_header(ws3, H3, ('同意書狀態','紙本收件日','印鑑證明','聯絡方式','下次追蹤日','備註'))
     own = {}
@@ -235,6 +286,7 @@ def main():
         d['a'] += r.get('持分面積(㎡)') or 0
         d['v'] += r.get('持分現值(元)') or 0
         d['lots'].append(r.get('地號',''))
+        d.setdefault('seq', []).append((r.get('地號',''), r.get('登記次序','')))
         d['st'].append(r.get('同意書狀態',''))
         for f in ('聯絡方式','紙本收件日','印鑑證明','下次追蹤日','備註'):
             pass
@@ -245,8 +297,13 @@ def main():
         sts = set(d['st'])
         st = d['st'][0] if len(sts) == 1 else '各地號不一致'
         m = d.get('manual', {})
-        ws3.append([nm, uid, d['t'], d['mgr'], d['n'], round(d['a'], 2), round(d['a']/PING, 2),
-                    d['v'], '、'.join(sorted(set(d['lots']), key=lambda s: (len(s), s))),
+        lots = sorted(set(d['lots']), key=lambda s: (len(s), s))
+        dup = sorted({lot for lot, _ in d.get('seq', [])
+                      if sum(1 for l2, _ in d['seq'] if l2 == lot) > 1})
+        flag = ('地號 ' + '、'.join(dup) + ' 有多筆登記次序，遮罩統編相同；'
+                '須以第一類謄本確認是否同一人（影響同意書份數）') if dup else ''
+        ws3.append([nm, uid, d['t'], d['mgr'], d['n'], len(lots), round(d['a'], 2),
+                    round(d['a']/PING, 2), d['v'], '、'.join(lots), flag,
                     st, m.get('紙本收件日',''), m.get('印鑑證明','未備'), m.get('聯絡方式',''),
                     m.get('下次追蹤日',''), m.get('備註','')])
     for row in ws3.iter_rows(min_row=2, max_row=ws3.max_row, max_col=len(H3)):
@@ -291,7 +348,8 @@ def main():
         ('已建檔面積（坪）', round(total_area/PING, 2)),
         ('已建檔面積（公頃）', round(total_area/10000, 4)),
         ('所有權登記筆數（地號×所有權人）', n_owner_rows),
-        ('不重複地主人數（＝同意書份數）', n_persons),
+        ('不重複地主人數（依姓名＋遮罩統編歸戶）', n_persons),
+        ('同意書份數（估）', f'{n_persons} 份；遇「待釐清」註記者須先以第一類謄本確認是否同一人'),
         ('含公有地之地號數', pub_lots),
         ('他項權利（抵押權等）筆數', len(rights)),
         ('', ''),
@@ -319,6 +377,9 @@ def main():
         ('深藍色標題欄位', '謄本自動帶入，請勿手改（下批併檔會覆蓋）'),
         ('資料鍵值', '併檔比對用（段別|地號全碼|登記次序|統一編號），已隱藏'),
         ('持分合計檢核', '各地號權利範圍加總應為 1；顯示 ⚠ 表示謄本尚未收齊或解析需複核'),
+        ('公同共有的處理', '公同共有無應有部分，謄本每人皆載「公同共有 1分之1」。本檔持分合計以整群計 1 次；'
+                          '持分面積為「按公同共有人數均分」之推估值，僅供面積概算，不是應有部分。'
+                          '同意書仍須公同共有人全體簽署（民法 §828）。'),
         ('後續批次', '再上傳謄本 PDF 即可併入本檔，人工填寫欄位會自動保留'),
     ]
     ws5.column_dimensions['A'].width = 36; ws5.column_dimensions['B'].width = 86
