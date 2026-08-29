@@ -160,6 +160,19 @@ def main():
     src, out = sys.argv[1], sys.argv[2]
     block = sys.argv[3] if len(sys.argv) > 3 else 'A區'
     parcels = json.load(open(src))
+
+    # 同一地號若有多份謄本（重複上傳或不同期別），保留列印時間最新者
+    by_lot = {}
+    for p in parcels:
+        k = (p.get('段別'), p.get('地號全碼'))
+        prev = by_lot.get(k)
+        if prev is None or (p.get('謄本列印時間') or '') > (prev.get('謄本列印時間') or ''):
+            by_lot[k] = p
+    dropped = len(parcels) - len(by_lot)
+    parcels = list(by_lot.values())
+    if dropped:
+        print(f'  同地號重複謄本 {dropped} 份，各保留列印時間最新者')
+
     new = rows_from(parcels, block)
 
     # ---- 併入既有檔案（保留人工填寫欄位）----
@@ -186,8 +199,12 @@ def main():
     merged += list(keep.values())            # 既有但本批未含者保留
     merged.sort(key=lambda r: (str(r.get('段別')), str(r.get('地號全碼')), str(r.get('登記次序'))))
 
-    rights = right_rows(parcels, block)
-    seen = {tuple(map(str, x[1:6])) for x in rights}
+    rights, _seen_new = [], set()
+    for x in right_rows(parcels, block):
+        k = tuple(map(str, x[1:6]))
+        if k not in _seen_new:
+            _seen_new.add(k); rights.append(x)
+    seen = set(_seen_new)
     for x in old_rights:
         if tuple(map(str, x[1:6])) not in seen: rights.append(x)
     rights.sort(key=lambda x: (str(x[2]), str(x[3])))
