@@ -3,3 +3,7 @@
 *.xlsx
 *.json
 *.txt
+
+# Python 編譯快取
+__pycache__/
+*.pyc
