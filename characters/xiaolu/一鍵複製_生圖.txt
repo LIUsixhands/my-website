@@ -1,39 +1,161 @@
-==============================================
-小路 · Midjourney 一鍵複製（v1.0 / 2026-09-06）
-==============================================
+==================================================
+小路 · Gemini 一鍵複製（v2.0 / 2026-09-06）
+==================================================
 
-【步驟一：先建立基準臉，只做一次】
-把下面整行貼進 Midjourney，跑 4 次（共 16 張）。
-挑一張正面、光線平、表情自然的當基準圖 → 上傳拿網址 → 填回 flux.md。
+工具：gemini.google.com（免費版就能生圖，有每日額度）
 
-24-year-old Taiwanese woman, round face with soft cheeks, slightly downturned monolid eyes with dark brown irises, small rounded nose, thin upper lip with defined cupid's bow, straight low-set eyebrows, black shoulder-blade-length hair usually in a low messy ponytail with loose strands at temples, warm light skin with faint acne marks on left cheek, small mole on right side of chin, thin build 160cm, no makeup or minimal makeup, plain white short-sleeve shirt, black wide-leg trousers, small crossbody bag, roadside in Taichung, parked scooter, low-rise buildings, overcast sky, neutral expression, looking straight at camera, candid iPhone photo, slightly imperfect framing, available light only, no flash, sometimes slightly underexposed, neutral to slightly cool, low saturation, visible skin texture, mild digital noise, mostly deep focus like a phone camera, handheld, slight tilt, subject not perfectly centered --ar 9:16 --style raw --v 7 --no plastic skin, airbrushed, flawless complexion, heavy makeup, beauty filter, doll-like, deformed hands, watermark, text, logo
+==================================================
+【步驟一：建立基準臉】只做一次，不用附圖
+==================================================
 
+幫我生成一張照片。
 
-==============================================
-【步驟二：之後每張圖都在最後加這段】
-  --cref 你的基準圖網址 --cw 0
-  （換場景不換衣服 → --cw 100；換衣服 → --cw 0）
-==============================================
+人物：24 歲台灣女生，圓臉、臉頰帶點肉感，單眼皮、眼尾微微下垂，深棕色眼睛，
+鼻子小而圓潤，上唇薄下唇稍厚，眉毛平直且位置偏低，黑色及肩胛骨長髮綁成低馬尾、
+鬢角有幾根散落的頭髮，皮膚偏白帶暖調、左臉頰有淡淡的痘疤痕跡，右下巴有一顆小痣，
+身形偏瘦、身高約 160 公分，素顏。
 
---- W02 + S01 ---
-24-year-old Taiwanese woman, round face with soft cheeks, slightly downturned monolid eyes with dark brown irises, small rounded nose, thin upper lip with defined cupid's bow, straight low-set eyebrows, black shoulder-blade-length hair usually in a low messy ponytail with loose strands at temples, warm light skin with faint acne marks on left cheek, small mole on right side of chin, thin build 160cm, no makeup or minimal makeup, oversized grey hoodie, black jeans, white sneakers, small 5-ping studio apartment, single window, IKEA folding table, clothes rack, air conditioner unit, sitting at folding table editing video on laptop at night, candid iPhone photo, slightly imperfect framing, available light only, no flash, sometimes slightly underexposed, neutral to slightly cool, low saturation, visible skin texture, mild digital noise, mostly deep focus like a phone camera, handheld, slight tilt, subject not perfectly centered --ar 9:16 --style raw --v 7 --no plastic skin, airbrushed, flawless complexion, heavy makeup, beauty filter, doll-like, deformed hands, watermark, text, logo
+畫面：她穿著素面白色短袖襯衫和黑色寬管長褲，站在台中的路邊，旁邊停著一台機車，
+背景是低矮的舊公寓，陰天。表情自然，正面看著鏡頭。
 
---- W03 + S04 ---
-24-year-old Taiwanese woman, round face with soft cheeks, slightly downturned monolid eyes with dark brown irises, small rounded nose, thin upper lip with defined cupid's bow, straight low-set eyebrows, black shoulder-blade-length hair usually in a low messy ponytail with loose strands at temples, warm light skin with faint acne marks on left cheek, small mole on right side of chin, thin build 160cm, no makeup or minimal makeup, beige linen shirt over white tee, straight jeans, canvas tote, empty unfurnished apartment, bare walls, afternoon light through balcony door, standing in empty apartment looking up at the ceiling, candid iPhone photo, slightly imperfect framing, available light only, no flash, sometimes slightly underexposed, neutral to slightly cool, low saturation, visible skin texture, mild digital noise, mostly deep focus like a phone camera, handheld, slight tilt, subject not perfectly centered --ar 9:16 --style raw --v 7 --no plastic skin, airbrushed, flawless complexion, heavy makeup, beauty filter, doll-like, deformed hands, watermark, text, logo
+風格：像用手機隨手拍的生活照，只用現場自然光，沒有打燈也沒有閃光燈，
+顏色偏淡微冷不鮮豔，保留真實的毛孔與皮膚紋理（包含左臉的痘疤），
+人物不放正中間，畫面有一點點歪。
 
---- W02 + S02 ---
-24-year-old Taiwanese woman, round face with soft cheeks, slightly downturned monolid eyes with dark brown irises, small rounded nose, thin upper lip with defined cupid's bow, straight low-set eyebrows, black shoulder-blade-length hair usually in a low messy ponytail with loose strands at temples, warm light skin with faint acne marks on left cheek, small mole on right side of chin, thin build 160cm, no makeup or minimal makeup, oversized grey hoodie, black jeans, white sneakers, busy Taiwanese night market street, food stalls, scooters, neon signage, walking through night market holding phone, candid iPhone photo, slightly imperfect framing, available light only, no flash, sometimes slightly underexposed, neutral to slightly cool, low saturation, visible skin texture, mild digital noise, mostly deep focus like a phone camera, handheld, slight tilt, subject not perfectly centered --ar 9:16 --style raw --v 7 --no plastic skin, airbrushed, flawless complexion, heavy makeup, beauty filter, doll-like, deformed hands, watermark, text, logo
+重點：她的長相要是路上會遇到的普通女生，不是明星臉，不要修圖感。
 
---- W04 + S01 ---
-24-year-old Taiwanese woman, round face with soft cheeks, slightly downturned monolid eyes with dark brown irises, small rounded nose, thin upper lip with defined cupid's bow, straight low-set eyebrows, black shoulder-blade-length hair usually in a low messy ponytail with loose strands at temples, warm light skin with faint acne marks on left cheek, small mole on right side of chin, thin build 160cm, no makeup or minimal makeup, faded pink cotton tee, grey shorts, hair in low bun, small 5-ping studio apartment, single window, IKEA folding table, clothes rack, air conditioner unit, writing in a notebook with a calculator on the table, candid iPhone photo, slightly imperfect framing, available light only, no flash, sometimes slightly underexposed, neutral to slightly cool, low saturation, visible skin texture, mild digital noise, mostly deep focus like a phone camera, handheld, slight tilt, subject not perfectly centered --ar 9:16 --style raw --v 7 --no plastic skin, airbrushed, flawless complexion, heavy makeup, beauty filter, doll-like, deformed hands, watermark, text, logo
+比例：直式 9:16。
 
---- W05 + S06 ---
-24-year-old Taiwanese woman, round face with soft cheeks, slightly downturned monolid eyes with dark brown irises, small rounded nose, thin upper lip with defined cupid's bow, straight low-set eyebrows, black shoulder-blade-length hair usually in a low messy ponytail with loose strands at temples, warm light skin with faint acne marks on left cheek, small mole on right side of chin, thin build 160cm, no makeup or minimal makeup, dark green windbreaker, black jeans, helmet in hand, roadside in Taichung, parked scooter, low-rise buildings, overcast sky, putting on helmet next to a scooter, candid iPhone photo, slightly imperfect framing, available light only, no flash, sometimes slightly underexposed, neutral to slightly cool, low saturation, visible skin texture, mild digital noise, mostly deep focus like a phone camera, handheld, slight tilt, subject not perfectly centered --ar 9:16 --style raw --v 7 --no plastic skin, airbrushed, flawless complexion, heavy makeup, beauty filter, doll-like, deformed hands, watermark, text, logo
-
---- W01 + S03 ---
-24-year-old Taiwanese woman, round face with soft cheeks, slightly downturned monolid eyes with dark brown irises, small rounded nose, thin upper lip with defined cupid's bow, straight low-set eyebrows, black shoulder-blade-length hair usually in a low messy ponytail with loose strands at temples, warm light skin with faint acne marks on left cheek, small mole on right side of chin, thin build 160cm, no makeup or minimal makeup, plain white short-sleeve shirt, black wide-leg trousers, small crossbody bag, narrow tiled apartment stairwell, mailboxes, fluorescent tube light, walking down the stairwell checking mailbox, candid iPhone photo, slightly imperfect framing, available light only, no flash, sometimes slightly underexposed, neutral to slightly cool, low saturation, visible skin texture, mild digital noise, mostly deep focus like a phone camera, handheld, slight tilt, subject not perfectly centered --ar 9:16 --style raw --v 7 --no plastic skin, airbrushed, flawless complexion, heavy makeup, beauty filter, doll-like, deformed hands, watermark, text, logo
+→ 不滿意就直接跟 Gemini 講：「臉再圓一點」「太成熟了要更年輕」
+  「頭髮太整齊，要更亂」。調到滿意就下載，這張就是小路的臉。
 
 
+==================================================
+【步驟二：之後每一張】先上傳基準臉，再貼下面任一段
+==================================================
+
+─────────── W02 + S01 ───────────
+
+請用我附上的這張照片裡的同一個人，她的臉必須完全一致。
+特別注意保留：右下巴的小痣、左臉頰淡淡的痘疤、低馬尾配上鬢角散落的頭髮。
+
+人物特徵提醒：24 歲台灣女生，圓臉、臉頰帶點肉感，單眼皮、眼尾微微下垂，深棕色眼睛，鼻子小而圓潤，上唇薄下唇稍厚，眉毛平直且位置偏低，黑色及肩胛骨長髮通常綁成低馬尾、鬢角有幾根散落的頭髮，皮膚偏白帶暖調、左臉頰有淡淡的痘疤痕跡，右下巴有一顆小痣，身形偏瘦、身高約 160 公分，素顏或只有很淡的妝。
+
+幫我生成一張新的照片：
+她穿著寬鬆的灰色連帽上衣、黑色牛仔褲、白球鞋，場景是五坪大的小套房，只有一扇窗，一張折疊桌、一個曬衣架、牆上一台舊冷氣，她坐在折疊桌前用筆電剪片，夜晚。
+
+風格：像用手機隨手拍的生活照，構圖有點隨性、不刻意，只用現場的自然光，沒有打燈、沒有閃光燈，有時甚至偏暗，顏色偏淡、微冷，不鮮豔，保留真實的毛孔、紋理與細微瑕疵，前後景都算清楚，像手機拍的那種，人物不放正中間，畫面有一點點歪，直式 9:16（手機全螢幕）。
+
+重點：她的長相要是路上會遇到的普通女生，不是明星臉。保留真實的毛孔與皮膚紋理，包含左臉的痘疤。表情自然放鬆，不是擺拍。
+
+比例：直式 9:16。
+
+# 生成後務必比對基準臉，特別檢查右下巴的痣與左臉痘疤還在不在。
+# Gemini 常會自動美化把痘疤修掉 —— 修掉了就重生，不要將就。
+
+
+─────────── W03 + S04 ───────────
+
+請用我附上的這張照片裡的同一個人，她的臉必須完全一致。
+特別注意保留：右下巴的小痣、左臉頰淡淡的痘疤、低馬尾配上鬢角散落的頭髮。
+
+人物特徵提醒：24 歲台灣女生，圓臉、臉頰帶點肉感，單眼皮、眼尾微微下垂，深棕色眼睛，鼻子小而圓潤，上唇薄下唇稍厚，眉毛平直且位置偏低，黑色及肩胛骨長髮通常綁成低馬尾、鬢角有幾根散落的頭髮，皮膚偏白帶暖調、左臉頰有淡淡的痘疤痕跡，右下巴有一顆小痣，身形偏瘦、身高約 160 公分，素顏或只有很淡的妝。
+
+幫我生成一張新的照片：
+她穿著米色亞麻襯衫外搭在白T外面、直筒牛仔褲、帆布托特包，場景是完全沒有家具的空屋，白牆，午後的光從陽台門照進來，她站在空屋裡抬頭看天花板。
+
+風格：像用手機隨手拍的生活照，構圖有點隨性、不刻意，只用現場的自然光，沒有打燈、沒有閃光燈，有時甚至偏暗，顏色偏淡、微冷，不鮮豔，保留真實的毛孔、紋理與細微瑕疵，前後景都算清楚，像手機拍的那種，人物不放正中間，畫面有一點點歪，直式 9:16（手機全螢幕）。
+
+重點：她的長相要是路上會遇到的普通女生，不是明星臉。保留真實的毛孔與皮膚紋理，包含左臉的痘疤。表情自然放鬆，不是擺拍。
+
+比例：直式 9:16。
+
+# 生成後務必比對基準臉，特別檢查右下巴的痣與左臉痘疤還在不在。
+# Gemini 常會自動美化把痘疤修掉 —— 修掉了就重生，不要將就。
+
+
+─────────── W02 + S02 ───────────
+
+請用我附上的這張照片裡的同一個人，她的臉必須完全一致。
+特別注意保留：右下巴的小痣、左臉頰淡淡的痘疤、低馬尾配上鬢角散落的頭髮。
+
+人物特徵提醒：24 歲台灣女生，圓臉、臉頰帶點肉感，單眼皮、眼尾微微下垂，深棕色眼睛，鼻子小而圓潤，上唇薄下唇稍厚，眉毛平直且位置偏低，黑色及肩胛骨長髮通常綁成低馬尾、鬢角有幾根散落的頭髮，皮膚偏白帶暖調、左臉頰有淡淡的痘疤痕跡，右下巴有一顆小痣，身形偏瘦、身高約 160 公分，素顏或只有很淡的妝。
+
+幫我生成一張新的照片：
+她穿著寬鬆的灰色連帽上衣、黑色牛仔褲、白球鞋，場景是熱鬧的台灣夜市街道，兩旁小吃攤、停滿機車、招牌燈光，她走在夜市裡，手上拿著手機。
+
+風格：像用手機隨手拍的生活照，構圖有點隨性、不刻意，只用現場的自然光，沒有打燈、沒有閃光燈，有時甚至偏暗，顏色偏淡、微冷，不鮮豔，保留真實的毛孔、紋理與細微瑕疵，前後景都算清楚，像手機拍的那種，人物不放正中間，畫面有一點點歪，直式 9:16（手機全螢幕）。
+
+重點：她的長相要是路上會遇到的普通女生，不是明星臉。保留真實的毛孔與皮膚紋理，包含左臉的痘疤。表情自然放鬆，不是擺拍。
+
+比例：直式 9:16。
+
+# 生成後務必比對基準臉，特別檢查右下巴的痣與左臉痘疤還在不在。
+# Gemini 常會自動美化把痘疤修掉 —— 修掉了就重生，不要將就。
+
+
+─────────── W04 + S01 ───────────
+
+請用我附上的這張照片裡的同一個人，她的臉必須完全一致。
+特別注意保留：右下巴的小痣、左臉頰淡淡的痘疤、低馬尾配上鬢角散落的頭髮。
+
+人物特徵提醒：24 歲台灣女生，圓臉、臉頰帶點肉感，單眼皮、眼尾微微下垂，深棕色眼睛，鼻子小而圓潤，上唇薄下唇稍厚，眉毛平直且位置偏低，黑色及肩胛骨長髮通常綁成低馬尾、鬢角有幾根散落的頭髮，皮膚偏白帶暖調、左臉頰有淡淡的痘疤痕跡，右下巴有一顆小痣，身形偏瘦、身高約 160 公分，素顏或只有很淡的妝。
+
+幫我生成一張新的照片：
+她穿著洗到褪色的粉色棉T、灰色短褲、頭髮綁成低丸子頭，場景是五坪大的小套房，只有一扇窗，一張折疊桌、一個曬衣架、牆上一台舊冷氣，她在記帳，桌上放著計算機。
+
+風格：像用手機隨手拍的生活照，構圖有點隨性、不刻意，只用現場的自然光，沒有打燈、沒有閃光燈，有時甚至偏暗，顏色偏淡、微冷，不鮮豔，保留真實的毛孔、紋理與細微瑕疵，前後景都算清楚，像手機拍的那種，人物不放正中間，畫面有一點點歪，直式 9:16（手機全螢幕）。
+
+重點：她的長相要是路上會遇到的普通女生，不是明星臉。保留真實的毛孔與皮膚紋理，包含左臉的痘疤。表情自然放鬆，不是擺拍。
+
+比例：直式 9:16。
+
+# 生成後務必比對基準臉，特別檢查右下巴的痣與左臉痘疤還在不在。
+# Gemini 常會自動美化把痘疤修掉 —— 修掉了就重生，不要將就。
+
+
+─────────── W05 + S06 ───────────
+
+請用我附上的這張照片裡的同一個人，她的臉必須完全一致。
+特別注意保留：右下巴的小痣、左臉頰淡淡的痘疤、低馬尾配上鬢角散落的頭髮。
+
+人物特徵提醒：24 歲台灣女生，圓臉、臉頰帶點肉感，單眼皮、眼尾微微下垂，深棕色眼睛，鼻子小而圓潤，上唇薄下唇稍厚，眉毛平直且位置偏低，黑色及肩胛骨長髮通常綁成低馬尾、鬢角有幾根散落的頭髮，皮膚偏白帶暖調、左臉頰有淡淡的痘疤痕跡，右下巴有一顆小痣，身形偏瘦、身高約 160 公分，素顏或只有很淡的妝。
+
+幫我生成一張新的照片：
+她穿著墨綠色風衣、黑色牛仔褲、手上拿著安全帽，場景是台中的路邊，停著一台機車，背景是低矮的舊公寓，陰天，她正要戴上安全帽，旁邊是機車。
+
+風格：像用手機隨手拍的生活照，構圖有點隨性、不刻意，只用現場的自然光，沒有打燈、沒有閃光燈，有時甚至偏暗，顏色偏淡、微冷，不鮮豔，保留真實的毛孔、紋理與細微瑕疵，前後景都算清楚，像手機拍的那種，人物不放正中間，畫面有一點點歪，直式 9:16（手機全螢幕）。
+
+重點：她的長相要是路上會遇到的普通女生，不是明星臉。保留真實的毛孔與皮膚紋理，包含左臉的痘疤。表情自然放鬆，不是擺拍。
+
+比例：直式 9:16。
+
+# 生成後務必比對基準臉，特別檢查右下巴的痣與左臉痘疤還在不在。
+# Gemini 常會自動美化把痘疤修掉 —— 修掉了就重生，不要將就。
+
+
+─────────── W01 + S03 ───────────
+
+請用我附上的這張照片裡的同一個人，她的臉必須完全一致。
+特別注意保留：右下巴的小痣、左臉頰淡淡的痘疤、低馬尾配上鬢角散落的頭髮。
+
+人物特徵提醒：24 歲台灣女生，圓臉、臉頰帶點肉感，單眼皮、眼尾微微下垂，深棕色眼睛，鼻子小而圓潤，上唇薄下唇稍厚，眉毛平直且位置偏低，黑色及肩胛骨長髮通常綁成低馬尾、鬢角有幾根散落的頭髮，皮膚偏白帶暖調、左臉頰有淡淡的痘疤痕跡，右下巴有一顆小痣，身形偏瘦、身高約 160 公分，素顏或只有很淡的妝。
+
+幫我生成一張新的照片：
+她穿著素面白色短袖襯衫、黑色寬管長褲、小斜背包，場景是狹窄的磁磚樓梯間，牆上一排信箱，天花板一根日光燈管，她走下樓梯，順手看了一下信箱。
+
+風格：像用手機隨手拍的生活照，構圖有點隨性、不刻意，只用現場的自然光，沒有打燈、沒有閃光燈，有時甚至偏暗，顏色偏淡、微冷，不鮮豔，保留真實的毛孔、紋理與細微瑕疵，前後景都算清楚，像手機拍的那種，人物不放正中間，畫面有一點點歪，直式 9:16（手機全螢幕）。
+
+重點：她的長相要是路上會遇到的普通女生，不是明星臉。保留真實的毛孔與皮膚紋理，包含左臉的痘疤。表情自然放鬆，不是擺拍。
+
+比例：直式 9:16。
+
+# 生成後務必比對基準臉，特別檢查右下巴的痣與左臉痘疤還在不在。
+# Gemini 常會自動美化把痘疤修掉 —— 修掉了就重生，不要將就。
+
+
+==================================================
 衣櫃：W01上班 W02下班拍片 W03週末看屋 W04居家記帳 W05騎車
 場景：S01租的套房 S02一中商圈 S03樓梯間 S04空屋 S05便利商店 S06路邊
 要別的組合，跟我說「小路 W03 + S02」就好。
+==================================================

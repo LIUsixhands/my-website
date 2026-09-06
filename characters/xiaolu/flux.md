@@ -1,76 +1,86 @@
-# flux.md — 外觀與影像規格（小路 · Midjourney）
+# flux.md — 外觀與影像規格（小路 · Gemini 版）
 
-> 檔名沿用 `flux.md`（系統固定的欄位名），但本角色用 **Midjourney** 生圖，參數已全部改成 MJ 語法。
-
----
-
-## ⚠️ 先做這件事：建立角色參考圖（--cref）
-
-Midjourney 鎖臉靠 `--cref`。你**現在還沒有參考圖**，所以流程分兩階段：
-
-**階段一（只做一次）**
-1. 用下面 §1 的 Identity Lock ＋ `--ar 9:16 --style raw` 跑 4 次，共 16 張
-2. 從裡面挑**一張正面、光線平、表情自然**的當「基準臉」
-3. 把那張圖上傳（IG 私帳、Imgur、Google Drive 公開連結都行），複製圖片網址
-4. 把網址填到下面的「基準圖 URL」欄
-
-**階段二（之後每一張圖）**
-在 prompt 最後加上：`--cref <基準圖網址> --cw <數值>`
-
-| 情境 | --cw 數值 | 原因 |
-|------|----------|------|
-| 同一套衣服、換場景 | `--cw 100` | 臉＋髮型＋衣服全鎖 |
-| 換衣服、只要臉一樣 | `--cw 0` ～ `--cw 30` | 只鎖臉，衣服才換得掉 |
-
-**基準圖 URL**：`（階段一做完後填這裡）`
+> 檔名沿用 `flux.md`（系統固定欄位名），實際用 **Google Gemini** 生圖。
+> Midjourney 版備份在 `備用_其他工具/flux_Midjourney版.md`，想換回去隨時可以。
 
 ---
 
-## 1. Identity Lock
+## ⚠️ Gemini 跟 Midjourney 的三個關鍵差異
+
+| | Midjourney | **Gemini** |
+|---|---|---|
+| 怎麼下指令 | 逗號分隔的英文標籤 | **完整的中文句子**，像在跟人講話 |
+| 參數 | `--ar 9:16 --style raw` | **沒有參數**，用文字描述或介面選項 |
+| 怎麼鎖臉 | `--cref 圖片網址` | **直接把基準臉圖片一起上傳**，然後說「用這張圖裡的同一個人」 |
+
+> **最重要**：Gemini 不太吃「不要 XXX」這種否定句，講「不要美肌」有時反而會強化。
+> 所以下面所有規格都改成**正面描述**：不是「不要塑膠臉」，是「保留真實的毛孔與皮膚紋理」。
+
+---
+
+## 🚀 先做這件事：建立基準臉
+
+**階段一（只做一次，免費）**
+
+1. 打開 **gemini.google.com**（用 Google 帳號登入，免費版就能生圖，有每日額度）
+2. 貼上 §6 的「基準臉指令」
+3. 生出來的圖不滿意就直接跟它講：「臉再圓一點」「年紀看起來太大」「頭髮要更亂一點」——**Gemini 可以用對話慢慢調**，這是它比 Midjourney 好用的地方
+4. 調到滿意 → **下載那張圖** → 這就是小路的基準臉
+
+**階段二（之後每一張）**
+
+上傳基準臉 ＋ 貼上新的場景指令。Gemini 會保持同一個人。
+
+**基準圖檔案位置**：`（存好後填這裡，例如：桌面/小路_基準臉.png）`
+
+---
+
+## 1. Identity Lock（每次都要附在指令裡）
 
 <!-- BLOCK:LOCK -->
-24-year-old Taiwanese woman, round face with soft cheeks, slightly downturned monolid eyes with dark brown irises, small rounded nose, thin upper lip with defined cupid's bow, straight low-set eyebrows, black shoulder-blade-length hair usually in a low messy ponytail with loose strands at temples, warm light skin with faint acne marks on left cheek, small mole on right side of chin, thin build 160cm, no makeup or minimal makeup
+24 歲台灣女生，圓臉、臉頰帶點肉感，單眼皮、眼尾微微下垂，深棕色眼睛，鼻子小而圓潤，上唇薄下唇稍厚，眉毛平直且位置偏低，黑色及肩胛骨長髮通常綁成低馬尾、鬢角有幾根散落的頭髮，皮膚偏白帶暖調、左臉頰有淡淡的痘疤痕跡，右下巴有一顆小痣，身形偏瘦、身高約 160 公分，素顏或只有很淡的妝
 <!-- /BLOCK:LOCK -->
 
-**識別特徵**
-- 右下巴一顆小痣
-- 左臉頰淡淡的痘疤（**不要修掉**，這是真實感來源）
-- 低馬尾，鬢角有幾根散落的頭髮
+## 1-2. 識別特徵（人眼認人靠這三個，每次都要講）
 
-> **為什麼要留痘疤**：TikTok 受眾對「完美臉」極度敏感，一眼認出是 AI。瑕疵是這個角色最重要的資產。
+<!-- BLOCK:KEYMARKS -->
+右下巴的小痣、左臉頰淡淡的痘疤、低馬尾配上鬢角散落的頭髮
+<!-- /BLOCK:KEYMARKS -->
+
+> **為什麼堅持留痘疤**：TikTok 觀眾對完美臉極度敏感，一眼認出是 AI。
+> 瑕疵是這個角色最重要的資產，不是缺點。Gemini 有時會自動「美化」，**發現痘疤不見了就要重生**。
 
 ---
 
-## 2. 影像風格
+## 2. 影像風格（用白話文寫，正面描述）
 
 <!-- BLOCK:STYLE -->
 | 項目 | 設定 |
 |------|------|
-| 影像類型 | candid iPhone photo, slightly imperfect framing |
-| 光線 | available light only, no flash, sometimes slightly underexposed |
-| 色調 | neutral to slightly cool, low saturation |
-| 質地 | visible skin texture, mild digital noise |
-| 景深 | mostly deep focus like a phone camera |
-| 構圖 | handheld, slight tilt, subject not perfectly centered |
-| Midjourney 參數 | --ar 9:16 --style raw --v 7 |
+| 整體感覺 | 像用手機隨手拍的生活照，構圖有點隨性、不刻意 |
+| 光線 | 只用現場的自然光，沒有打燈、沒有閃光燈，有時甚至偏暗 |
+| 色調 | 顏色偏淡、微冷，不鮮豔 |
+| 皮膚 | 保留真實的毛孔、紋理與細微瑕疵 |
+| 對焦 | 前後景都算清楚，像手機拍的那種 |
+| 構圖 | 人物不放正中間，畫面有一點點歪 |
+| 比例 | 直式 9:16（手機全螢幕） |
 <!-- /BLOCK:STYLE -->
 
-> 若你的帳號還在 v6.1，把 `--v 7` 改成 `--v 6.1`。
+> 比例：如果你用的介面有「長寬比」選項就直接選 9:16；沒有的話指令裡寫「直式 9:16」，
+> 生出來若比例不對，用手機內建的裁切功能裁成直式即可。
 
 ---
 
-## 3. 衣櫃
-
-> 只有 5 套，而且要**重複穿**。真人不會每支影片換新衣服。
+## 3. 衣櫃（只有 5 套，要重複穿）
 
 <!-- BLOCK:WARDROBE -->
-| ID | 名稱 | prompt 片段 |
-|----|------|------------|
-| W01 | 上班（最常出現） | plain white short-sleeve shirt, black wide-leg trousers, small crossbody bag |
-| W02 | 下班拍片 | oversized grey hoodie, black jeans, white sneakers |
-| W03 | 週末看屋 | beige linen shirt over white tee, straight jeans, canvas tote |
-| W04 | 居家記帳 | faded pink cotton tee, grey shorts, hair in low bun |
-| W05 | 騎車 | dark green windbreaker, black jeans, helmet in hand |
+| ID | 名稱 | 描述 |
+|----|------|------|
+| W01 | 上班（最常出現） | 素面白色短袖襯衫、黑色寬管長褲、小斜背包 |
+| W02 | 下班拍片 | 寬鬆的灰色連帽上衣、黑色牛仔褲、白球鞋 |
+| W03 | 週末看屋 | 米色亞麻襯衫外搭在白T外面、直筒牛仔褲、帆布托特包 |
+| W04 | 居家記帳 | 洗到褪色的粉色棉T、灰色短褲、頭髮綁成低丸子頭 |
+| W05 | 騎車 | 墨綠色風衣、黑色牛仔褲、手上拿著安全帽 |
 <!-- /BLOCK:WARDROBE -->
 
 ---
@@ -78,73 +88,102 @@ Midjourney 鎖臉靠 `--cref`。你**現在還沒有參考圖**，所以流程�
 ## 4. 場景庫
 
 <!-- BLOCK:SCENES -->
-| ID | 名稱 | prompt 片段 |
-|----|------|------------|
-| S01 | 租的套房 | small 5-ping studio apartment, single window, IKEA folding table, clothes rack, air conditioner unit |
-| S02 | 一中商圈街上 | busy Taiwanese night market street, food stalls, scooters, neon signage |
-| S03 | 老公寓樓梯間 | narrow tiled apartment stairwell, mailboxes, fluorescent tube light |
-| S04 | 空屋看屋現場 | empty unfurnished apartment, bare walls, afternoon light through balcony door |
-| S05 | 便利商店 | Taiwanese convenience store interior at night, fluorescent lighting, drink fridge |
-| S06 | 機車上／路邊 | roadside in Taichung, parked scooter, low-rise buildings, overcast sky |
+| ID | 名稱 | 描述 |
+|----|------|------|
+| S01 | 租的套房 | 五坪大的小套房，只有一扇窗，一張折疊桌、一個曬衣架、牆上一台舊冷氣 |
+| S02 | 一中商圈街上 | 熱鬧的台灣夜市街道，兩旁小吃攤、停滿機車、招牌燈光 |
+| S03 | 老公寓樓梯間 | 狹窄的磁磚樓梯間，牆上一排信箱，天花板一根日光燈管 |
+| S04 | 空屋看屋現場 | 完全沒有家具的空屋，白牆，午後的光從陽台門照進來 |
+| S05 | 便利商店 | 台灣便利商店的夜晚內部，日光燈很亮，旁邊是飲料冰櫃 |
+| S06 | 機車上／路邊 | 台中的路邊，停著一台機車，背景是低矮的舊公寓，陰天 |
 <!-- /BLOCK:SCENES -->
 
 ---
 
-## 5. Negative（Midjourney 寫成 `--no`）
+## 5. 要避免的效果（Gemini 版：改成正面說法）
 
 <!-- BLOCK:NEGATIVE -->
-plastic skin, airbrushed, flawless complexion, heavy makeup, beauty filter, doll-like, glamour lighting, studio backdrop, deformed hands, extra fingers, watermark, text, logo, oversaturated, model pose
+不要說「不要磨皮」，要說：保留真實的毛孔與皮膚紋理，包含左臉頰的痘疤。
+不要說「不要濃妝」，要說：素顏，或只有很淡的妝。
+不要說「不要棚拍感」，要說：只用現場的自然光，像手機隨手拍的。
+不要說「不要像模特兒」，要說：表情自然放鬆，姿勢隨意，不是擺拍。
+不要說「不要太漂亮」，要說：長相是路上會遇到的普通女生，不是明星臉。
 <!-- /BLOCK:NEGATIVE -->
-
-用法：把上面整串接在 prompt 最後，寫成 `--no plastic skin, airbrushed, ...`
 
 ---
 
-## 6. 技術參數紀錄
+## 6. 基準臉指令（第一次用，直接複製）
+
+不用附圖，直接貼進 Gemini：
+
+```
+幫我生成一張照片。
+
+人物：24 歲台灣女生，圓臉、臉頰帶點肉感，單眼皮、眼尾微微下垂，深棕色眼睛，
+鼻子小而圓潤，上唇薄下唇稍厚，眉毛平直且位置偏低，黑色及肩胛骨長髮綁成低馬尾、
+鬢角有幾根散落的頭髮，皮膚偏白帶暖調、左臉頰有淡淡的痘疤痕跡，右下巴有一顆小痣，
+身形偏瘦、身高約 160 公分，素顏。
+
+畫面：她穿著素面白色短袖襯衫和黑色寬管長褲，站在台中的路邊，旁邊停著一台機車，
+背景是低矮的舊公寓，陰天。表情自然，正面看著鏡頭。
+
+風格：像用手機隨手拍的生活照，只用現場自然光，沒有打燈也沒有閃光燈，
+顏色偏淡微冷不鮮豔，保留真實的毛孔與皮膚紋理（包含左臉的痘疤），
+人物不放正中間，畫面有一點點歪。
+
+重點：她的長相要是路上會遇到的普通女生，不是明星臉，不要修圖感。
+
+比例：直式 9:16。
+```
+
+不滿意就直接跟 Gemini 講：「臉再圓一點」「看起來太成熟，要再年輕一點」「頭髮太整齊了，要更亂」。
+
+---
+
+## 7. 技術參數紀錄
 
 | 項目 | 值 |
 |------|-----|
-| 工具 | Midjourney |
-| 版本 | v7（帳號若為 v6.1 則用 v6.1） |
-| 一致性機制 | `--cref` 角色參考圖 ＋ Identity Lock 文字 |
-| 基準圖 URL | （待填） |
-| 風格參考 | `--sref`（可選，選定後填這裡固定住整體調性） |
-| 比例 | `--ar 9:16`（TikTok 全螢幕） |
-| 風格化 | `--style raw`（越低越像真實照片） |
+| 工具 | Google Gemini（gemini.google.com） |
+| 方案 | 先用免費版（有每日額度）；不夠再考慮付費 |
+| 一致性機制 | 上傳基準臉圖片 ＋ 文字強調識別特徵 |
+| 基準圖 | （待建立） |
+| 比例 | 直式 9:16 |
 
-> **鐵則**：基準圖一旦選定就不能換。換基準圖 = 換臉，老觀眾會發現。
+> **鐵則**：基準圖一旦選定就不能換。換基準圖 = 換臉。
 
 ---
 
-## 7. 一致性檢查表（每批抽 3 張比對基準圖）
+## 8. 一致性檢查表（每批抽 3 張比對基準圖）
 
 - [ ] 臉型圓度
-- [ ] 眼型（單眼皮、微下垂）
+- [ ] 眼型（單眼皮、眼尾微下垂）
 - [ ] 鼻子大小
 - [ ] 嘴唇厚度
 - [ ] 髮型（低馬尾＋鬢角散髮）
-- [ ] 右下巴痣位置
-- [ ] 左臉痘疤還在（沒被修掉）
-- [ ] 皮膚有質感（不是塑膠臉）
+- [ ] **右下巴的痣還在**
+- [ ] **左臉痘疤還在（Gemini 最容易自動修掉這個）**
+- [ ] 皮膚有毛孔質感
 - [ ] 手部沒崩
 - [ ] 沒有真實品牌 logo、沒有可辨識的真人
 
-**任一項不過 → 整批重生，不要挑圖。**
+**任一項不過 → 重生，不要挑圖。**
 
 ---
 
-## 8. 影像倫理紅線
+## 9. 影像倫理紅線
 
-- 不使用任何真實人物的臉作為參考來源（`--cref` 只能餵自己生成的圖）
+- 不上傳任何真實人物的照片當參考（只能用自己生成的圖）
 - 不生成未成年外觀
 - 不生成性暗示 / 裸露內容
-- 不偽造真實在場證明（例：假造在某建案現場的合照）
+- 不偽造真實在場證明
 - 不拍到可辨識的真實門牌、車牌、住戶
 
 ---
 
-## 9. 版本紀錄
+## 10. 版本紀錄
 
 | 版本 | 日期 | 工具 | 改了什麼 | 一致性檢查 |
 |------|------|------|---------|-----------|
-| v1.0 | 2026-09-06 | Midjourney v7 | 初版，基準圖待建立 | 待做 |
+| v1.0 | 2026-09-06 | Midjourney | 初版（已備份到 備用_其他工具/） | 未執行 |
+| v2.0 | 2026-09-06 | Gemini | 改成中文白話指令、正面描述、上傳基準臉鎖人 | 待做 |

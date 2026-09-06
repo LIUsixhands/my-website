@@ -5,9 +5,12 @@
     python3 build_prompt.py characters/xiaoyou --mode chat
     python3 build_prompt.py characters/xiaoyou --mode chat --user @example_user
 
-生圖用（組 flux.md 的 Lock + 風格 + 衣櫃 + 場景）：
+生圖用 — Midjourney 等英文標籤型工具：
     python3 build_prompt.py characters/xiaoyou --mode image --outfit W01 --scene S02
     python3 build_prompt.py characters/xiaoyou --mode image --outfit W01 --scene S02 --extra "holding a paper cup"
+
+生圖用 — Gemini（中文白話指令，需一併上傳基準臉圖片）：
+    python3 build_prompt.py characters/xiaolu --mode gemini --outfit W02 --scene S01
 """
 import argparse
 import re
@@ -118,10 +121,66 @@ def build_image(d, outfit, scene, extra):
     return "\n".join(out)
 
 
+def build_gemini(d, outfit, scene, extra):
+    """Gemini 用：輸出中文白話指令，靠上傳基準臉維持一致性。"""
+    flux = read(d, "flux.md")
+    if not flux:
+        sys.exit("✗ 缺少 flux.md")
+
+    lock = strip_todo(block(flux, "LOCK") or "").replace("\n", "")
+    if not lock:
+        sys.exit("✗ flux.md 的 Identity Lock 還沒填")
+    marks = strip_todo(block(flux, "KEYMARKS") or "").replace("\n", "")
+
+    wear = lookup(block(flux, "WARDROBE"), outfit) if outfit else None
+    where = lookup(block(flux, "SCENES"), scene) if scene else None
+    if outfit and (not wear or "[TODO" in wear):
+        sys.exit(f"✗ 衣櫃裡沒有 {outfit}（或還沒填）")
+    if scene and (not where or "[TODO" in where):
+        sys.exit(f"✗ 場景庫裡沒有 {scene}（或還沒填）")
+
+    style = "，".join(c[-1] for c in table_rows(block(flux, "STYLE")) if "[TODO" not in c[-1])
+
+    lines = [
+        "【先把基準臉圖片一起上傳，再貼下面這段】",
+        "",
+        "請用我附上的這張照片裡的同一個人，她的臉必須完全一致。",
+    ]
+    if marks:
+        lines.append(f"特別注意保留：{marks}。")
+    lines += [
+        "",
+        f"人物特徵提醒：{lock}。",
+        "",
+        "幫我生成一張新的照片：",
+    ]
+    body = []
+    if wear:
+        body.append(f"她穿著{wear}")
+    if where:
+        body.append(f"場景是{where}")
+    if extra:
+        body.append(extra)
+    lines.append("，".join(body) + "。" if body else "（請描述你要的畫面）")
+    lines += [
+        "",
+        f"風格：{style}。",
+        "",
+        "重點：她的長相要是路上會遇到的普通女生，不是明星臉。"
+        "保留真實的毛孔與皮膚紋理，包含左臉的痘疤。表情自然放鬆，不是擺拍。",
+        "",
+        "比例：直式 9:16。",
+        "",
+        "# 生成後務必比對基準臉，特別檢查右下巴的痣與左臉痘疤還在不在。",
+        "# Gemini 常會自動美化把痘疤修掉 —— 修掉了就重生，不要將就。",
+    ]
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("char_dir")
-    ap.add_argument("--mode", choices=("chat", "image"), required=True)
+    ap.add_argument("--mode", choices=("chat", "image", "gemini"), required=True)
     ap.add_argument("--user", help="chat 模式：帶入這位互動者的記憶")
     ap.add_argument("--outfit", help="image 模式：衣櫃編號，例 W01")
     ap.add_argument("--scene", help="image 模式：場景編號，例 S02")
@@ -132,7 +191,12 @@ def main():
     if not d.is_dir():
         sys.exit(f"✗ 找不到角色資料夾：{d}")
 
-    print(build_chat(d, a.user) if a.mode == "chat" else build_image(d, a.outfit, a.scene, a.extra))
+    if a.mode == "chat":
+        print(build_chat(d, a.user))
+    elif a.mode == "gemini":
+        print(build_gemini(d, a.outfit, a.scene, a.extra))
+    else:
+        print(build_image(d, a.outfit, a.scene, a.extra))
 
 
 if __name__ == "__main__":

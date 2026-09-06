@@ -91,7 +91,8 @@ def check_lock(texts, r):
     lock = strip_todo(block(t, "LOCK") or "")
     if not lock:
         return
-    feats = [x for x in lock.replace("\n", ",").split(",") if x.strip()]
+    # 中英文標點都要能斷（中文寫的 Lock 用「，」「、」，英文用 ","）
+    feats = [x for x in re.split(r"[,\uff0c\u3001;\uff1b\n]+", lock) if x.strip()]
     if len(feats) < 6:
         r.err(f"flux.md：Identity Lock 只有 {len(feats)} 項特徵，至少要 8 項才鎖得住臉")
     elif len(feats) < 8:
