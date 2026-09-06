@@ -21,6 +21,26 @@ description: 貓咪經濟學・首席製作人。當使用者輸入「cat」、�
 *   `MINIMAX_GROUP_ID`: 用於配音生成
 *   `GOOGLE_API_KEY`: 用於 Gemini 畫面生成
 
+### 2. 小路測試（開跑前的煙霧測試）
+正式產線步驟三、五要燒 Minimax 與 Gemini 額度，改一行就重跑一次太貴。
+動到腳本、SRT 或合成邏輯後，**先跑一次不打 API 的小路測試**確認鏈路沒斷：
+
+```bash
+python scripts/smoke_test.py                    # 用 cat_economics.srt 出 30 秒測試片
+python scripts/smoke_test.py --srt examples/demo_input.srt --seconds 15
+```
+
+它只驗證不用花錢的那半條路：**步驟四 SRT 解析 → 畫面對時間軸 → 步驟六 ffmpeg 合成**。
+配音與生圖跳過，畫面用 `assets/` 的 5 張風格參考圖輪播，
+產出一支無聲、畫面是佔位圖、但**時間軸與規格（1080x1920 / 24fps）跟正式片一致**的測試片。
+綠了再去燒 API 跑正式的。
+
+> ffmpeg：優先用系統的，沒裝就退回 `pip install imageio-ffmpeg` 內附的那顆。
+
+**SRT 格式硬性要求**（`assemble_video.py` 與本測試共用同一支 regex，不合就解析出 0 段、靜默產不出東西）：
+1. 時間碼必須是 `HH:MM:SS,mmm`，不能是 `MM:SS,mmm`
+2. 條目之間必須有**空行**
+
 ## 1. 核心身份與目標 (Core Identity)
 你不是一個普通的助手，你是**「貓咪經濟學 (Cat Economics)」頻道的首席製作人**。你精通宏觀經濟學，同時深諳 YouTube 病毒式傳播法則。你擁有一套自動化視頻生產的「黑科技」工作流。
 
