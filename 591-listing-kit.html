@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>591 上架工作台｜賣房刊登自動化 SOP - 助哥七期房地產</title>
+<meta name="description" content="要把房子刊登到 591，怎麼做才最省時間？三條上架路線比較（永慶系統同步／591 店家方案／半自動文案產生），一次填物件資料自動產出 591 標題、特色標籤、物件描述與 FB／LINE 版本，附廣告合規紅線掃描。">
+<meta name="keywords" content="591上架,591刊登,591自動上架,賣房刊登,591物件描述,房仲文案,591標題,台中七期賣房">
+<meta name="author" content="助哥｜七期房地產．房仲土仲">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://sixhands-studio.netlify.app/591-listing-kit.html">
+<meta name="theme-color" content="#1F3A2E">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sixhands Studio｜助哥七期房地產">
+<meta property="og:title" content="591 上架工作台｜賣房刊登自動化 SOP">
+<meta property="og:description" content="三條 591 上架路線比較 + 一次填完自動產出所有欄位文案，附廣告合規紅線掃描。">
+<meta property="og:url" content="https://sixhands-studio.netlify.app/591-listing-kit.html">
+<meta property="og:image" content="https://sixhands-studio.netlify.app/photos/qiqi-view.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 86 92'><g stroke='%231F3A2E' stroke-width='4' fill='none' stroke-linecap='square'><line x1='14' y1='20' x2='14' y2='68'/><line x1='26' y1='14' x2='26' y2='74'/><line x1='38' y1='20' x2='38' y2='68'/><line x1='50' y1='14' x2='50' y2='74'/><line x1='62' y1='20' x2='62' y2='68'/><line x1='74' y1='14' x2='74' y2='74'/><line x1='8' y1='82' x2='80' y2='82' stroke-width='3'/></g></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --brown-dark:#182b21;--brown:#1F3A2E;--brown-mid:#2C4E3D;
+  --gold:#B08D3F;--gold-light:#D8BC7E;
+  --cream:#F3EEE2;--cream-dark:#F1E6CF;--cream-mid:#F4EFE2;
+  --red:#8B1E2F;--green:#4A6B3F;
+  --text:#22271F;--text-mute:#565c50;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;color:var(--text);line-height:1.7;background:var(--cream)}
+h1,h2,h3,h4{font-family:'Noto Serif TC','PingFang TC',serif;font-weight:700;line-height:1.35}
+a{color:var(--brown);text-decoration:none}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+
+header{background:var(--brown);color:var(--cream);padding:52px 0 44px}
+header .tag{display:inline-block;border:1px solid var(--gold-light);color:var(--gold-light);font-size:12px;letter-spacing:2px;padding:4px 12px;border-radius:2px;margin-bottom:18px}
+header h1{font-size:clamp(26px,5vw,40px);color:#fff}
+header p{margin-top:14px;max-width:660px;color:#e6ded0;font-size:15px}
+header .back{display:inline-block;margin-top:22px;font-size:13px;color:var(--gold-light);border-bottom:1px solid rgba(216,188,126,.4)}
+
+section{padding:52px 0}
+section.alt{background:var(--cream-dark)}
+h2.sec{font-size:clamp(20px,3.6vw,28px);margin-bottom:8px}
+.sec-sub{color:var(--text-mute);font-size:14px;margin-bottom:28px}
+
+.routes{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.route{background:#fff;border:1px solid #e3d9c6;border-radius:6px;padding:22px}
+.route .badge{display:inline-block;font-size:11px;letter-spacing:1px;padding:3px 9px;border-radius:2px;margin-bottom:12px}
+.b-a{background:#e8f0e4;color:var(--green)}
+.b-b{background:#f5ecd8;color:var(--gold)}
+.b-c{background:var(--brown);color:var(--gold-light)}
+.route h3{font-size:18px;margin-bottom:6px}
+.route .meta{font-size:12px;color:var(--text-mute);margin-bottom:12px}
+.route ul{list-style:none;font-size:14px}
+.route li{padding-left:16px;position:relative;margin-bottom:7px}
+.route li:before{content:"—";position:absolute;left:0;color:var(--gold)}
+.route .verdict{margin-top:14px;padding-top:12px;border-top:1px dashed #e0d5bf;font-size:13px;color:var(--brown-mid);font-weight:500}
+
+.warn{margin-top:24px;background:#fdf3f2;border-left:4px solid var(--red);padding:16px 18px;border-radius:0 4px 4px 0;font-size:14px}
+.warn strong{color:var(--red)}
+
+.grid2{display:grid;gap:26px;grid-template-columns:1fr 1fr}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+
+.panel{background:#fff;border:1px solid #e3d9c6;border-radius:6px;padding:22px}
+.panel h3{font-size:16px;margin-bottom:4px}
+.panel .hint{font-size:12px;color:var(--text-mute);margin-bottom:16px}
+fieldset{border:none;margin-bottom:18px}
+legend{font-size:12px;letter-spacing:1px;color:var(--gold);font-weight:700;margin-bottom:10px}
+.f{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+.f.one{grid-template-columns:1fr}
+label{display:block;font-size:12px;color:var(--text-mute);margin-bottom:4px}
+input,select,textarea{width:100%;font-family:inherit;font-size:14px;color:var(--text);padding:8px 10px;border:1px solid #ded3bd;border-radius:4px;background:#fdfbf6}
+textarea{min-height:64px;resize:vertical;line-height:1.6}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold)}
+
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+button{font-family:inherit;cursor:pointer;border:none;border-radius:4px;padding:11px 20px;font-size:14px;font-weight:500}
+.primary{background:var(--brown);color:var(--cream)}
+.primary:hover{background:var(--brown-mid)}
+.ghost{background:transparent;border:1px solid #ccc0a8;color:var(--text-mute)}
+
+.out{background:#fff;border:1px solid #e3d9c6;border-radius:6px;padding:18px;margin-bottom:14px}
+.out .oh{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+.out .oh h4{font-size:15px}
+.out .oh .len{font-size:11px;color:var(--text-mute)}
+.copy{background:var(--cream-dark);color:var(--brown);padding:6px 12px;font-size:12px;border-radius:3px}
+.copy.done{background:var(--green);color:#fff}
+pre.body{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:14px;line-height:1.75;color:var(--text)}
+.tags span{display:inline-block;background:var(--cream-dark);border:1px solid #e3d9c6;color:var(--brown-mid);font-size:13px;padding:4px 10px;border-radius:3px;margin:0 6px 6px 0}
+.empty{color:var(--text-mute);font-size:14px;background:#fff;border:1px dashed #ded3bd;border-radius:6px;padding:28px;text-align:center}
+
+.scan{border-radius:6px;padding:16px 18px;margin-bottom:14px;font-size:14px}
+.scan.ok{background:#eef4ea;border:1px solid #cfe0c5;color:var(--green)}
+.scan.bad{background:#fdf3f2;border:1px solid #f0d3d3;color:var(--red)}
+.scan ul{margin:10px 0 0 18px}
+.scan li{margin-bottom:5px}
+
+ol.sop{counter-reset:s;list-style:none;max-width:760px}
+ol.sop li{counter-increment:s;position:relative;padding-left:44px;margin-bottom:18px;font-size:15px}
+ol.sop li:before{content:counter(s);position:absolute;left:0;top:0;width:28px;height:28px;background:var(--brown);color:var(--gold-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-family:'Noto Serif TC',serif}
+ol.sop b{display:block;font-size:15px;margin-bottom:2px}
+ol.sop span{font-size:14px;color:var(--text-mute)}
+
+table{width:100%;border-collapse:collapse;font-size:14px;background:#fff;border:1px solid #e3d9c6}
+th,td{padding:10px 12px;border-bottom:1px solid #eee3cf;text-align:left;vertical-align:top}
+th{background:var(--cream-mid);font-weight:700;font-size:13px}
+tr:last-child td{border-bottom:none}
+.tbl-wrap{overflow-x:auto}
+
+footer{background:var(--brown-dark);color:#c9c2b4;padding:32px 0;font-size:13px}
+footer a{color:var(--gold-light)}
+.disclaimer{font-size:12px;color:var(--text-mute);margin-top:18px;line-height:1.8}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="tag">SELLER TOOLKIT</span>
+    <h1>591 上架工作台</h1>
+    <p>把房子刊登到 591，真正花時間的不是「按送出」，而是把同一份物件資料反覆填成標題、特色、描述、貼文。這頁把三條上架路線講清楚，並提供一次填完、自動產出所有欄位的產生器（含廣告合規紅線掃描）。</p>
+    <a class="back" href="./qiqi-realestate.html">← 回七期房地產主頁</a>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2 class="sec">先分清楚：哪一種才叫「自動上架」</h2>
+    <p class="sec-sub">591 沒有對一般賣方開放的公開 API。所謂自動，實際上只有三條路，難易度與可控性差很多。</p>
+
+    <div class="routes">
+      <div class="route">
+        <span class="badge b-a">路線 A</span>
+        <h3>店頭系統同步刊登</h3>
+        <div class="meta">適合：加盟／直營體系經紀人</div>
+        <ul>
+          <li>物件在公司內部刊登系統登錄一次，由公司統一派送到合作平台曝光。</li>
+          <li>真正意義上的「一次登錄、多平台上架」，也最不會出現一屋多價、資料不一致。</li>
+          <li>要先跟店長或資訊窗口確認：你的帳號有沒有開通平台同步、同步欄位有哪些、幾小時更新一次。</li>
+        </ul>
+        <div class="verdict">先問這條。能開通就不用自己搞。</div>
+      </div>
+
+      <div class="route">
+        <span class="badge b-b">路線 B</span>
+        <h3>591 店家／仲介方案</h3>
+        <div class="meta">適合：自營、想自己掌握後台</div>
+        <ul>
+          <li>向 591 業務窗口洽談仲介／店家身分的刊登方案，問清楚三件事：物件是否可批次匯入、是否提供資料介接、同一組帳號可掛幾筆。</li>
+          <li>這類介接屬於商業合作，需簽約與費用，不是註冊就有。</li>
+          <li>洽詢窗口：<a href="https://www.591.com.tw/" target="_blank" rel="noopener">591 官網</a>客服信箱與服務專線（以官網公告為準）。</li>
+        </ul>
+        <div class="verdict">要花錢、要等窗口，但拿到後最省人力。</div>
+      </div>
+
+      <div class="route">
+        <span class="badge b-c">路線 C</span>
+        <h3>半自動：資料一次填，文案全產出</h3>
+        <div class="meta">適合：今天就要上架、不等任何人</div>
+        <ul>
+          <li>不碰 591 後台自動化，只把「重複打字」這段自動掉。</li>
+          <li>一份物件資料 → 標題、特色標籤、物件描述、必揭露段、FB／Threads／LINE 版本一次生出來。</li>
+          <li>零權限、零費用、零封號風險。就是下面這個工具。</li>
+        </ul>
+        <div class="verdict">A、B 沒到位之前，實務上都靠這條。</div>
+      </div>
+    </div>
+
+    <div class="warn">
+      <strong>不要做的事：</strong>用爬蟲或 RPA 腳本模擬登入 591 自動填表送件。平台使用條款禁止自動化存取，帳號會被停權，物件也會被下架；何況登入有簡訊／圖形驗證，維護成本遠高於省下的時間。要自動化，走 A 或 B 的正式管道。
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2 class="sec">物件上架產生器</h2>
+    <p class="sec-sub">填一次，下面所有欄位自動生成。資料只存在你自己的瀏覽器（localStorage），不會上傳。</p>
+
+    <div class="grid2">
+      <div class="panel">
+        <h3>物件資料</h3>
+        <div class="hint">標 * 為必填；其餘留白會自動略過，不會產出空洞句子。</div>
+
+        <fieldset>
+          <legend>基本</legend>
+          <div class="f">
+            <div><label>社區／路段名稱 *</label><input id="name" placeholder="例：市政queen"></div>
+            <div><label>行政區 *</label><input id="area" placeholder="例：台中市西屯區"></div>
+            <div><label>物件類型</label>
+              <select id="type">
+                <option>電梯大樓</option><option>華廈</option><option>公寓</option>
+                <option>透天厝</option><option>店面</option><option>辦公室</option><option>土地</option><option>廠房</option>
+              </select>
+            </div>
+            <div><label>屋齡（年）</label><input id="age" type="number" placeholder="例：12"></div>
+            <div><label>樓層</label><input id="floor" placeholder="例：8"></div>
+            <div><label>總樓層</label><input id="floorTotal" placeholder="例：15"></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>價格與坪數</legend>
+          <div class="f">
+            <div><label>總價（萬）*</label><input id="price" type="number" placeholder="例：2280"></div>
+            <div><label>權狀坪數 *</label><input id="ping" type="number" step="0.01" placeholder="例：48.6"></div>
+            <div><label>主建物坪數</label><input id="pingMain" type="number" step="0.01" placeholder="例：28.4"></div>
+            <div><label>附屬建物坪數</label><input id="pingSub" type="number" step="0.01" placeholder="例：4.2"></div>
+            <div><label>公設坪數</label><input id="pingPub" type="number" step="0.01" placeholder="例：16.0"></div>
+            <div><label>管理費（元／月）</label><input id="fee" type="number" placeholder="例：3800"></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>格局與車位</legend>
+          <div class="f">
+            <div><label>格局</label><input id="layout" placeholder="例：3房2廳2衛"></div>
+            <div><label>朝向</label><input id="facing" placeholder="例：座北朝南"></div>
+            <div><label>車位</label>
+              <select id="parking">
+                <option value="">無車位</option>
+                <option>平面式車位</option><option>機械式車位</option><option>坡道平面</option><option>塔式車位</option>
+              </select>
+            </div>
+            <div><label>車位是否含在總價</label>
+              <select id="parkingIn"><option value="含">含於總價</option><option value="不含">不含於總價</option></select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>賣點與機能</legend>
+          <div class="f one">
+            <div><label>三個賣點（每行一個）</label><textarea id="points" placeholder="邊間三面採光&#10;客廳面公園第一排&#10;去年全室翻新"></textarea></div>
+            <div><label>生活機能（每行一個）</label><textarea id="life" placeholder="步行 5 分鐘到全聯&#10;車程 6 分鐘到市政公園&#10;鄰近惠文國小學區（請自行向學校查證）"></textarea></div>
+            <div class="f">
+              <div><label>最近捷運／車站</label><input id="mrt" placeholder="例：文心森林公園站"></div>
+              <div><label>步行分鐘數</label><input id="mrtMin" type="number" placeholder="例：8"></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>法定揭露（不填會被合規掃描擋下）</legend>
+          <div class="f">
+            <div><label>經紀人姓名 *</label><input id="agent" placeholder="例：劉○○"></div>
+            <div><label>經紀人證號 *</label><input id="license" placeholder="例：(○)字第○○○○○○號"></div>
+            <div><label>所屬店名</label><input id="store" placeholder="例：永慶不動產 台中○○加盟店"></div>
+            <div><label>服務費收費標準</label><input id="feeRate" placeholder="例：買方最高 2%、賣方最高 4%"></div>
+          </div>
+        </fieldset>
+
+        <div class="btnrow">
+          <button class="primary" id="gen">產生所有欄位</button>
+          <button class="ghost" id="demo">填入範例</button>
+          <button class="ghost" id="clear">清空</button>
+        </div>
+      </div>
+
+      <div class="panel" style="background:var(--cream-mid)">
+        <h3>產出結果</h3>
+        <div class="hint">每一塊都能單獨複製，直接貼進 591 對應欄位。</div>
+        <div id="scan"></div>
+        <div id="output"><div class="empty">左邊填完按「產生所有欄位」，這裡會出現標題、特色標籤、物件描述、揭露段與社群版本。</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="sec">上架 SOP：照這個順序做，一間 20 分鐘</h2>
+    <p class="sec-sub">文案自動化只解決一半，另一半是照片與節奏。</p>
+    <ol class="sop">
+      <li><b>先簽妥委託、確認可刊登內容</b><span>委託書、屋主同意刊登範圍（可否露門牌、可否拍鄰居公設）、產權與坪數以謄本為準，不要用屋主口述數字。</span></li>
+      <li><b>拍照：15–25 張，順序固定</b><span>外觀 → 大門／梯廳 → 客廳（廣角、靠角落拍）→ 餐廚 → 主臥 → 次臥 → 衛浴 → 陽台視野 → 公設 → 周邊機能。同一時段拍、白天開燈、地板收乾淨。</span></li>
+      <li><b>資料填進上面的產生器，一次生完所有文案</b><span>先跑合規掃描，紅字全部改完再貼。</span></li>
+      <li><b>貼上 591 並補齊必填欄位</b><span>坪數拆分、車位含不含價、屋齡、管理費、經紀人證號與服務費，一個都別留空——這幾格是最常被檢舉的。</span></li>
+      <li><b>同一份文案同步發 FB／Threads／LINE</b><span>產生器已給對應版本，不要三個平台各寫一次。</span></li>
+      <li><b>第 7、14、30 天回頭看數據</b><span>看瀏覽數與詢問數：瀏覽低＝標題與封面照的問題；瀏覽高但沒詢問＝價格或坪效資訊的問題。先換照片與標題，再談調價。</span></li>
+    </ol>
+
+    <div class="tbl-wrap" style="margin-top:26px">
+      <table>
+        <thead><tr><th style="width:34%">狀況</th><th>先動哪一格</th></tr></thead>
+        <tbody>
+          <tr><td>上架 7 天瀏覽數偏低</td><td>換封面照（用客廳或視野，不要用外觀）＋改標題賣點順序。</td></tr>
+          <tr><td>瀏覽正常、零詢問</td><td>檢查價格是否高於同社區近期成交、坪數與車位資訊是否寫得讓人看不懂。</td></tr>
+          <tr><td>有詢問、約不到看屋</td><td>問題多半在看屋時段太窄，或屋況照片與現場落差。</td></tr>
+          <tr><td>看了幾組都不出價</td><td>回到定價，不是回到文案。這時候調的是價，不是形容詞。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="disclaimer">
+      本頁工具僅產出文案草稿，不代表任何平台的官方功能，也不取代法定揭露義務與公司內部託播審查流程。刊登前請依《不動產經紀業管理條例》揭露經紀人姓名、證號與服務費收費標準，坪數區分主建物／附屬建物／公設，價格標明含或不含車位，交通描述標示實際距離或步行時間。路線 A、B 的開通條件與費用，請分別向所屬公司窗口與 591 官方業務確認，以其公告為準。
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>助哥｜七期房地產．房仲土仲 — 不賣房子，賣判斷</div>
+    <div style="margin-top:8px"><a href="./qiqi-realestate.html">七期房地產主頁</a> ・ <a href="./blog/index.html">文章列表</a></div>
+  </div>
+</footer>
+
+<script>
+var BAN = [
+  {w:"最便宜", fix:"改為可查證的比較，如「低於同社區近三個月成交均價 X%（實價登錄）」"},
+  {w:"最低價", fix:"同上，避免絕對性用語"},
+  {w:"全區最", fix:"刪除或改為具體數據"},
+  {w:"全台最", fix:"刪除或改為具體數據"},
+  {w:"絕對", fix:"刪除"},
+  {w:"保證", fix:"刪除；任何保證字樣都踩公平法"},
+  {w:"100%", fix:"刪除"},
+  {w:"唯一", fix:"改為「目前同社區在售中少見的格局」等可查證說法"},
+  {w:"穩賺", fix:"刪除；涉投資獲利承諾"},
+  {w:"不賠", fix:"刪除；涉投資獲利承諾"},
+  {w:"包賺", fix:"刪除"},
+  {w:"獲利", fix:"避免提及投報，改談自住條件"},
+  {w:"投報", fix:"避免；租金投報屬投資招攬用語"},
+  {w:"必漲", fix:"刪除"},
+  {w:"增值保證", fix:"改為「具增值潛力」並附依據"},
+  {w:"零風險", fix:"刪除"},
+  {w:"只剩這間", fix:"非真實即屬誤導性廣告，刪除"},
+  {w:"隨時可入學", fix:"學區以教育局公告為準，改為「鄰近○○國小，入學以主管機關公告為準」"}
+];
+
+function $(id){return document.getElementById(id)}
+function v(id){var e=$(id);return e?String(e.value||"").trim():""}
+function lines(id){return v(id).split("\n").map(function(s){return s.trim()}).filter(Boolean)}
+function num(id){var n=parseFloat(v(id));return isNaN(n)?null:n}
+
+var FIELDS=["name","area","type","age","floor","floorTotal","price","ping","pingMain","pingSub","pingPub","fee","layout","facing","parking","parkingIn","points","life","mrt","mrtMin","agent","license","store","feeRate"];
+
+function collect(){var o={};FIELDS.forEach(function(f){o[f]=v(f)});return o}
+function save(){try{localStorage.setItem("listing591",JSON.stringify(collect()))}catch(e){}}
+function load(){
+  try{
+    var raw=localStorage.getItem("listing591");if(!raw)return;
+    var o=JSON.parse(raw);FIELDS.forEach(function(f){if($(f)&&o[f]!=null)$(f).value=o[f]});
+  }catch(e){}
+}
+
+function unitPrice(){
+  var p=num("price"),g=num("ping");
+  if(!p||!g)return null;
+  return Math.round(p/g*10)/10;
+}
+
+function buildTitles(){
+  var name=v("name"),layout=v("layout"),floor=v("floor"),total=v("floorTotal"),park=v("parking");
+  var pts=lines("points");
+  var t1=[name,layout,(floor&&total?floor+"/"+total+"樓":floor?floor+"樓":""),park].filter(Boolean).join(" ");
+  var t2=[name,(pts[0]||""),layout].filter(Boolean).join("｜");
+  return [t1,t2].filter(Boolean);
+}
+
+function buildTags(){
+  var t=[],pts=lines("points"),g=num("ping"),age=num("age");
+  if(v("parking"))t.push(v("parking"));
+  if(v("facing"))t.push(v("facing"));
+  if(v("layout"))t.push(v("layout"));
+  if(age!=null&&age<=5)t.push("屋齡 5 年內");
+  else if(age!=null&&age<=15)t.push("屋齡 15 年內");
+  if(g)t.push("權狀 "+g+" 坪");
+  if(v("mrt")&&v("mrtMin"))t.push("步行 "+v("mrtMin")+" 分到"+v("mrt"));
+  pts.slice(0,3).forEach(function(p){if(p.length<=12)t.push(p)});
+  if(v("fee"))t.push("管理費 "+v("fee")+" 元／月");
+  return t.slice(0,10);
+}
+
+function buildDesc(){
+  var s=[],pts=lines("points"),life=lines("life");
+  var head=[v("area"),v("name")].filter(Boolean).join("・");
+  var base=[];
+  if(v("type"))base.push(v("type"));
+  if(v("layout"))base.push(v("layout"));
+  if(v("floor")&&v("floorTotal"))base.push(v("floor")+"／"+v("floorTotal")+"樓");
+  if(v("age"))base.push("屋齡 "+v("age")+" 年");
+  if(base.length)s.push("【物件概況】\n"+head+(head?"，":"")+base.join("、")+"。");
+
+  if(pts.length)s.push("【這間房子的三個重點】\n"+pts.slice(0,3).map(function(p,i){return (i+1)+". "+p}).join("\n"));
+
+  if(life.length||v("mrt")){
+    var l=life.slice(0,4).map(function(x){return "・"+x});
+    if(v("mrt"))l.unshift("・"+(v("mrtMin")?"步行約 "+v("mrtMin")+" 分鐘至":"鄰近")+v("mrt"));
+    s.push("【生活機能】\n"+l.join("\n"));
+  }
+
+  s.push("【適合誰】\n"+(v("layout")||"此格局")+"，適合"+ (num("ping")&&num("ping")>=40?"換屋自住的家庭":"首購或小家庭") +"。想看屋或想先看同社區近期成交行情，都可以直接聯絡我。");
+  return s.join("\n\n");
+}
+
+function buildDisclosure(){
+  var s=[];
+  var g=num("ping"),m=num("pingMain"),sub=num("pingSub"),pub=num("pingPub"),up=unitPrice();
+  var pr=[];
+  if(num("price"))pr.push("總價 "+v("price")+" 萬");
+  if(up)pr.push("單價約 "+up+" 萬／坪");
+  if(v("parking"))pr.push("車位（"+v("parking")+"）"+v("parkingIn")+"於總價");
+  else pr.push("本件無車位");
+  if(pr.length)s.push("【價格】"+pr.join("；"));
+
+  var pg=[];
+  if(g)pg.push("權狀 "+g+" 坪");
+  if(m)pg.push("主建物 "+m+" 坪");
+  if(sub)pg.push("附屬建物 "+sub+" 坪");
+  if(pub)pg.push("公設 "+pub+" 坪");
+  if(g&&pub)pg.push("公設比約 "+Math.round(pub/g*1000)/10+"%");
+  if(pg.length)s.push("【坪數】"+pg.join("／"));
+  if(v("fee"))s.push("【管理費】每月 "+v("fee")+" 元");
+
+  var who=[];
+  if(v("agent"))who.push("經紀人："+v("agent"));
+  if(v("license"))who.push("證號："+v("license"));
+  if(v("store"))who.push(v("store"));
+  if(who.length)s.push("【經紀人】"+who.join("｜"));
+  if(v("feeRate"))s.push("【服務費】"+v("feeRate"));
+  s.push("※ 坪數與產權以土地／建物登記謄本為準；交通時間為實地步行估算，實際依現場為準。");
+  return s.join("\n");
+}
+
+function buildSocial(){
+  var pts=lines("points"),up=unitPrice();
+  var fb="["+v("area")+"] "+v("name")+" "+v("layout")+"\n\n"
+    +(pts.length?pts.slice(0,3).map(function(p){return "・"+p}).join("\n")+"\n\n":"")
+    +"總價 "+v("price")+" 萬"+(up?"，單價約 "+up+" 萬／坪":"")+"。\n"
+    +"坪數與公設比、車位含不含價，我都寫在物件頁上，先看清楚再約看屋比較省時間。\n\n"
+    +"想看同社區近三個月成交，私訊我。\n"
+    +(v("agent")?"—— "+v("agent")+(v("license")?"（"+v("license")+"）":""):"");
+  var th=v("name")+" "+v("layout")+"，"+v("price")+" 萬。\n"
+    +(pts[0]?pts[0]+"。\n":"")
+    +"要不要買，先看同社區近期成交再說。";
+  var line="【新物件】"+v("area")+" "+v("name")+"\n"
+    +v("layout")+"／權狀 "+v("ping")+" 坪／總價 "+v("price")+" 萬\n"
+    +(v("parking")?v("parking")+"（"+v("parkingIn")+"於總價）\n":"無車位\n")
+    +"方便看屋的時間回我，我幫您安排。";
+  return {fb:fb,th:th,line:line};
+}
+
+function scanText(txt){
+  var hits=[];
+  BAN.forEach(function(b){if(txt.indexOf(b.w)>=0)hits.push(b)});
+  var missing=[];
+  if(!v("agent")||!v("license"))missing.push("未填經紀人姓名或證號 —《不動產經紀業管理條例》要求揭露");
+  if(!v("feeRate"))missing.push("未填服務費收費標準 — 房源廣告須揭露");
+  if(!num("pingMain")&&!num("pingPub"))missing.push("坪數未拆分主建物／附屬建物／公設 — 只寫權狀坪數易被認定標示不清");
+  if(v("mrt")&&!v("mrtMin"))missing.push("寫了車站卻沒標步行分鐘數 — 「捷運旁」類描述須標實際距離");
+  return {hits:hits,missing:missing};
+}
+
+function card(title,body,extra){
+  var len=body.replace(/\s/g,"").length;
+  return '<div class="out"><div class="oh"><h4>'+title+'</h4><div style="display:flex;gap:10px;align-items:center">'
+    +'<span class="len">'+(extra||("約 "+len+" 字"))+'</span>'
+    +'<button class="copy" data-copy="'+encodeURIComponent(body)+'">複製</button></div></div>'
+    +'<pre class="body">'+body.replace(/&/g,"&amp;").replace(/</g,"&lt;")+'</pre></div>';
+}
+
+function render(){
+  if(!v("name")||!v("area")||!v("price")||!v("ping")){
+    $("scan").innerHTML='<div class="scan bad">請至少填入社區名稱、行政區、總價、權狀坪數。</div>';
+    return;
+  }
+  var titles=buildTitles(),tags=buildTags(),desc=buildDesc(),disc=buildDisclosure(),soc=buildSocial();
+  var all=[titles.join("\n"),tags.join(" "),desc,disc,soc.fb,soc.th,soc.line].join("\n");
+  var r=scanText(all);
+
+  var scanHtml;
+  if(r.hits.length===0&&r.missing.length===0){
+    scanHtml='<div class="scan ok">✓ 合規掃描通過：未偵測到絕對性用語，法定揭露欄位齊全。仍請依公司託播流程送審。</div>';
+  }else{
+    var li="";
+    r.hits.forEach(function(h){li+="<li><b>「"+h.w+"」</b> → "+h.fix+"</li>"});
+    r.missing.forEach(function(m){li+="<li>"+m+"</li>"});
+    scanHtml='<div class="scan bad"><b>合規掃描：'+(r.hits.length+r.missing.length)+' 項需處理</b><ul>'+li+"</ul></div>";
+  }
+  $("scan").innerHTML=scanHtml;
+
+  var html="";
+  titles.forEach(function(t,i){
+    var n=t.replace(/\s/g,"").length;
+    html+=card("591 標題 版本 "+(i+1),t,n+" 字"+(n>30?"（偏長，建議壓在 30 字內）":""));
+  });
+  html+='<div class="out"><div class="oh"><h4>特色標籤</h4><button class="copy" data-copy="'+encodeURIComponent(tags.join("、"))+'">複製</button></div><div class="tags">'+tags.map(function(t){return "<span>"+t+"</span>"}).join("")+"</div></div>";
+  html+=card("物件描述（591 內文）",desc);
+  html+=card("必揭露段（接在描述後面）",disc);
+  html+=card("Facebook 版",soc.fb);
+  html+=card("Threads 版",soc.th);
+  html+=card("LINE 推播版",soc.line);
+  $("output").innerHTML=html;
+  save();
+}
+
+document.addEventListener("click",function(e){
+  var b=e.target.closest("[data-copy]");
+  if(!b)return;
+  var txt=decodeURIComponent(b.getAttribute("data-copy"));
+  navigator.clipboard.writeText(txt).then(function(){
+    b.textContent="已複製";b.classList.add("done");
+    setTimeout(function(){b.textContent="複製";b.classList.remove("done")},1600);
+  }).catch(function(){
+    b.textContent="複製失敗";
+    setTimeout(function(){b.textContent="複製"},1600);
+  });
+});
+
+$("gen").addEventListener("click",render);
+$("clear").addEventListener("click",function(){
+  FIELDS.forEach(function(f){if($(f))$(f).value=""});
+  $("output").innerHTML='<div class="empty">已清空。</div>';$("scan").innerHTML="";
+  try{localStorage.removeItem("listing591")}catch(e){}
+});
+$("demo").addEventListener("click",function(){
+  var d={name:"市政 One Park",area:"台中市西屯區",type:"電梯大樓",age:"9",floor:"12",floorTotal:"22",
+    price:"2380",ping:"52.4",pingMain:"30.1",pingSub:"3.6",pingPub:"18.7",fee:"4200",
+    layout:"3房2廳2衛",facing:"座北朝南",parking:"平面式車位",parkingIn:"含",
+    points:"邊間三面採光，客廳整日不用開燈\n客廳面市政公園，前方為公園用地\n2024 年全室重新裝修，家具可議",
+    life:"步行 4 分鐘到全聯\n車程 5 分鐘到台中市政府\n鄰近惠文國小，入學以教育局公告為準",
+    mrt:"文心森林公園站",mrtMin:"9",agent:"劉○○",license:"(112)字第 000000 號",
+    store:"永慶不動產 台中○○加盟店",feeRate:"買方最高 2%、賣方最高 4%，實際依委託契約"};
+  Object.keys(d).forEach(function(k){if($(k))$(k).value=d[k]});
+  render();
+});
+
+FIELDS.forEach(function(f){var e=$(f);if(e)e.addEventListener("change",save)});
+load();
+</script>
+</body>
+</html>
