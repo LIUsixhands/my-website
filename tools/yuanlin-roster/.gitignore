@@ -1,0 +1,9 @@
+# 個資鐵律：謄本原檔、解析結果、名冊 Excel 一律不入庫
+*.pdf
+*.xlsx
+*.json
+*.txt
+
+# Python 編譯快取
+__pycache__/
+*.pyc
