@@ -6,7 +6,11 @@
 必填環境變數：
     HEYGEN_API_KEY        HeyGen 後台 Settings → API 取得（付費方案）
 選填環境變數：
-    HEYGEN_AVATAR_ID      主播角色 ID（用 list_heygen_assets.py 查）
+    HEYGEN_AVATAR_ID      現成主播角色 ID（用 list_heygen_assets.py 查）
+    HEYGEN_TALKING_PHOTO_ID
+                          自訂 Photo Avatar ID（用 upload_talking_photo.py 建立）。
+                          有設定時優先於 HEYGEN_AVATAR_ID —— 這是讓虛擬人物用
+                          「自己的臉」而不是跟別人共用現成主播的方式。
     HEYGEN_VOICE_ID       聲音 ID（挑中文/台灣女聲）
     HEYGEN_WIDTH          預設 720
     HEYGEN_HEIGHT         預設 1280（9:16 直式；橫式可設 1280x720）
@@ -29,6 +33,7 @@ except ImportError:
 API = "https://api.heygen.com"
 API_KEY = os.getenv("HEYGEN_API_KEY")
 AVATAR_ID = os.getenv("HEYGEN_AVATAR_ID")
+TALKING_PHOTO_ID = os.getenv("HEYGEN_TALKING_PHOTO_ID")
 VOICE_ID = os.getenv("HEYGEN_VOICE_ID")
 WIDTH = int(os.getenv("HEYGEN_WIDTH", "720"))
 HEIGHT = int(os.getenv("HEYGEN_HEIGHT", "1280"))
@@ -38,14 +43,29 @@ def headers():
     return {"X-Api-Key": API_KEY, "Content-Type": "application/json"}
 
 
-def submit(text):
-    if not (AVATAR_ID and VOICE_ID):
-        print("❌ 請先設定 HEYGEN_AVATAR_ID 與 HEYGEN_VOICE_ID（用 list_heygen_assets.py 查）。")
+def character(photo_id=None):
+    """Photo Avatar（自己的臉）優先；沒有才用現成主播。"""
+    tp = photo_id or TALKING_PHOTO_ID
+    if tp:
+        return {"type": "talking_photo", "talking_photo_id": tp}
+    return {"type": "avatar", "avatar_id": AVATAR_ID, "avatar_style": "normal"}
+
+
+def submit(text, photo_id=None):
+    if not VOICE_ID:
+        print("❌ 請先設定 HEYGEN_VOICE_ID（用 list_heygen_assets.py 查）。")
         sys.exit(1)
+    if not (photo_id or TALKING_PHOTO_ID or AVATAR_ID):
+        print("❌ 請設定 HEYGEN_TALKING_PHOTO_ID（自訂人物，用 upload_talking_photo.py 建立）"
+              "或 HEYGEN_AVATAR_ID（現成主播）。")
+        sys.exit(1)
+    char = character(photo_id)
+    kind = "自訂 Photo Avatar" if char["type"] == "talking_photo" else "現成主播"
+    print(f"🎭 使用{kind}")
     body = {
         "video_inputs": [
             {
-                "character": {"type": "avatar", "avatar_id": AVATAR_ID, "avatar_style": "normal"},
+                "character": char,
                 "voice": {"type": "text", "input_text": text, "voice_id": VOICE_ID},
             }
         ],
@@ -93,6 +113,7 @@ def main():
     p.add_argument("script", nargs="?", help="腳本檔路徑")
     p.add_argument("--text", help="直接給文字（優先於 script）")
     p.add_argument("output", nargs="?", default="heygen_video.mp4")
+    p.add_argument("--photo-id", help="這次改用指定的 Photo Avatar ID（蓋過環境變數）")
     args = p.parse_args()
 
     if args.text:
@@ -107,7 +128,7 @@ def main():
     if len(text) > 1500:
         print(f"⚠️ 文字 {len(text)} 字，HeyGen 單次上限約 1500 字，可能需分段。先嘗試送出…")
 
-    vid = submit(text)
+    vid = submit(text, args.photo_id)
     wait_and_download(vid, os.path.join(os.getcwd(), args.output))
 
 
