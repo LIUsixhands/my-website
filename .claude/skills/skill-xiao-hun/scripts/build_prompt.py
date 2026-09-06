@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from charlib import block, lookup, read, strip_todo  # noqa: E402
+from charlib import block, lookup, read, strip_todo, table_rows  # noqa: E402
 
 
 def memory_of(brain, handle):
@@ -83,17 +83,8 @@ def build_image(d, outfit, scene, extra):
 
     seg = [lock.replace("\n", " ")]
 
-    style = block(flux, "STYLE") or ""
-    style_bits = [
-        cells[-1]
-        for cells in (
-            [c.strip() for c in ln.strip("|").split("|")]
-            for ln in style.splitlines()
-            if ln.strip().startswith("|")
-        )
-        if len(cells) >= 2 and cells[0] not in ("項目",) and set("".join(cells)) > set("-: ")
-    ]
-    style_bits = [s for s in style_bits if s and "[TODO" not in s and s != "設定"]
+    style_bits = [c[-1] for c in table_rows(block(flux, "STYLE"))]
+    style_bits = [s for s in style_bits if s and "[TODO" not in s]
 
     if outfit:
         frag = lookup(block(flux, "WARDROBE"), outfit)
@@ -111,7 +102,13 @@ def build_image(d, outfit, scene, extra):
 
     negative = " ".join((block(flux, "NEGATIVE") or "").split())
 
-    out = ["POSITIVE:", ", ".join(s.strip().rstrip(",") for s in seg if s.strip())]
+    parts = [s.strip().rstrip(",") for s in seg if s.strip()]
+    flags = [s for s in parts if s.startswith("--")]
+    words = [s for s in parts if not s.startswith("--")]
+    line = ", ".join(words)
+    if flags:
+        line += " " + " ".join(flags)
+    out = ["POSITIVE:", line]
     if negative:
         out += ["", "NEGATIVE:", negative]
     out += [
