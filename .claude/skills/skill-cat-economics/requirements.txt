@@ -10,3 +10,5 @@ google-api-python-client
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
+# 小路測試（scripts/smoke_test.py）：系統沒裝 ffmpeg 時的備援二進位
+imageio-ffmpeg
