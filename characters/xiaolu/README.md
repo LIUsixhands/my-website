@@ -25,3 +25,26 @@ AI 生成虛擬人物 — 建立於 2026-09-06
 - `drafts/` — 產出的文案草稿，check_consistency.py 會掃這裡的禁用詞
 - `memory/` — 互動者記憶檔（若量大，從 brain.md §3 拆出來）
 - `images/` — 生成圖與一致性檢查紀錄
+
+## 產片指令
+
+```bash
+python3 .claude/skills/skill-bobo/scripts/heygen_generate.py \
+    characters/xiaolu/drafts/test01_逐字稿.txt \
+    xiaolu_test01.mp4 --minimax
+```
+
+> ⚠️ **只餵 `_逐字稿.txt`，不要餵 `.md`。**
+> .md 檔裡有表格、檢查表、驗算，TTS 會把「項目 算式 結果」整排唸出來。
+> 每支影片都維持這個慣例：`.md` 給人看（含驗算與自檢），`_逐字稿.txt` 給機器唸。
+
+## 環境變數
+
+| 變數 | 用途 |
+|------|------|
+| `HEYGEN_API_KEY` | 播播既有 |
+| `HEYGEN_TALKING_PHOTO_ID` | 小路的 avatar ID（待填） |
+| `MINIMAX_API_KEY` | 貓咪經濟學既有 |
+| `MINIMAX_VOICE_ID` | 預設 `female-shaonv` 台灣女聲 |
+
+網路白名單需含 `*.heygen.com`、`*.minimax.io`。
