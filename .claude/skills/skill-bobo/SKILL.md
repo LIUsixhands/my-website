@@ -24,6 +24,7 @@ description: 播播 — HeyGen AI 主播影片製作 + 自動上架 YouTube。�
 ```
 *.heygen.com
 *.heygen.ai
+*.minimax.io
 ```
 （YouTube 走 `*.googleapis.com` / `accounts.google.com`，已在預設白名單）
 
@@ -62,10 +63,28 @@ python scripts/upload_talking_photo.py 小路_基準臉.png
 > 角色的語氣則由 `voice.md` 決定，寫逐字稿時要照著走。
 
 ### 步驟三：生成主播影片
+
+**台灣角色請一律加 `--minimax`：**
 ```bash
-python scripts/heygen_generate.py 腳本.txt heygen_video.mp4
+python3 scripts/heygen_generate.py 腳本.txt heygen_video.mp4 --minimax
 ```
-會送出生成、輪詢狀態、完成後下載 mp4。
+
+一個指令跑完三件事：Minimax 產台灣腔配音 → 上傳 HeyGen → avatar 對嘴 → 下載 mp4。
+
+> ⚠️ **為什麼不用 HeyGen 內建中文聲音**：它們幾乎都是大陸腔。
+> 台灣觀眾對「垃圾（ㄌㄚ ㄐㄧ vs ㄌㄜˋ ㄙㄜˋ）」「和（ㄏㄜˊ vs ㄏㄢˋ）」極度敏感，
+> 一秒出戲，比臉不像還傷。配音對了才值得做這條產線。
+
+其他寫法：
+```bash
+python3 scripts/heygen_generate.py 腳本.txt out.mp4                    # HeyGen 內建聲音
+python3 scripts/heygen_generate.py 腳本.txt out.mp4 --audio 我的配音.mp3  # 用現成音檔
+python3 scripts/minimax_tts.py 腳本.txt voiceover.mp3                  # 只產配音不產片
+```
+
+**Minimax 環境變數**（與 `skill-cat-economics` 共用同一組）：
+`MINIMAX_API_KEY`、`MINIMAX_VOICE_ID`（預設 `female-shaonv` 台灣女聲）、
+`MINIMAX_SPEED`（短影音可調 1.05~1.15）。
 
 ### 步驟四：自動上傳 YouTube
 ```bash
