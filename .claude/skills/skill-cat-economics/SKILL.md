@@ -1,6 +1,6 @@
 ---
 name: skill-cat-economics
-description: 貓咪經濟學・首席製作人。當使用者輸入「cat」、「貓咪經濟學」、「叫貓咪經濟學」，或計劃製作貓咪經濟學相關的 YouTube 長影片（9:16 火柴人風格心理學／經濟學科普短視頻）時，必須使用此 skill。涵蓋選題定調、腳本撰寫、配音生成（Minimax）、畫面繪製（Gemini）到視頻合成的完整六步 SOP。
+description: 貓咪經濟學・首席製作人。當使用者輸入「cat」、「貓咪經濟學」、「叫貓咪經濟學」，或計劃製作貓咪經濟學相關的 YouTube 長影片（9:16 火柴人風格心理學／經濟學科普短視頻）時，必須使用此 skill。涵蓋選題定調、腳本撰寫、配音生成（Gemini TTS）、畫面繪製（Gemini）到視頻合成的完整六步 SOP。
 ---
 
 # 貓咪經濟學・首席製作人
@@ -9,7 +9,9 @@ description: 貓咪經濟學・首席製作人。當使用者輸入「cat」、�
 此 Skill 專門用於自動化製作 **9:16 火柴人風格心理學/經濟學科普短視頻**。從腳本撰寫、配音生成、畫面繪製到視頻合成，提供完整的標準化工作流（SOP）。
 
 ## 核心配置
-*   **Voice ID**: `female-shaonv` (Minimax Speech-01 模型，對應 "貓咪經濟學" 經典台灣女生音色)
+*   **配音引擎**: Google Gemini TTS（`gemini-3.1-flash-tts-preview`），voice 預設 `Kore`，語氣靠自然語言指示調成台灣女生口吻
+    *   *為何不是 Minimax*：Minimax 開發者平台依地區把台灣使用者導向中國站，註冊需中國手機號或微信，台灣帳號進不去。改用 Gemini 後全線只需一把 `GOOGLE_API_KEY`。
+    *   *音色差異*：與早期幾集的 Minimax `female-shaonv` 不同，換不回來，已確認可接受。
 *   **Image Style**: 簡單手繪火柴人，扁平上色，黑色粗線條 (Reference images in `assets/`)
 *   **Video Format**: 1080x1920 (9:16), 24fps
 
@@ -17,17 +19,18 @@ description: 貓咪經濟學・首席製作人。當使用者輸入「cat」、�
 
 ### 1. 環境準備
 確保已設置以下環境變量：
-*   `MINIMAX_API_KEY`: 用於配音生成
-*   `MINIMAX_GROUP_ID`: 用於配音生成
-*   `GOOGLE_API_KEY`: 用於 Gemini 畫面生成
+*   `GOOGLE_API_KEY`: **配音（步驟三）與畫面生成（步驟五）共用這一把**
+
+網路白名單只需 `generativelanguage.googleapis.com`（Claude Code on web 預設已通）。
 
 ### 2. 小路測試（開跑前的煙霧測試）
-正式產線步驟三、五要燒 Minimax 與 Gemini 額度，改一行就重跑一次太貴。
+正式產線步驟三、五要燒 Gemini 額度，改一行就重跑一次太貴。
 動到腳本、SRT 或合成邏輯後，**先跑一次不打 API 的小路測試**確認鏈路沒斷：
 
 ```bash
 python scripts/smoke_test.py                    # 用 cat_economics.srt 出 30 秒測試片
 python scripts/smoke_test.py --srt examples/demo_input.srt --seconds 15
+python scripts/smoke_test.py --audio voiceover.mp3   # 配上真配音，片長跟著音檔走
 ```
 
 它只驗證不用花錢的那半條路：**步驟四 SRT 解析 → 畫面對時間軸 → 步驟六 ffmpeg 合成**。
@@ -81,20 +84,30 @@ python scripts/smoke_test.py --srt examples/demo_input.srt --seconds 15
     *   每一句話都必須是直接念給觀眾聽的台詞。
 3.  **結構要求**：符合「黃金30秒」原則與「三段式結構」。
 4.  **多音字修正 (Polyphonic Correction)**：
-    *   **必須**檢查腳本中的多音字（如「乾」、「行」、「重」等），並將其替換為**對應正確讀音的單音字**或**同音字**（例如：將「小魚乾」改為「小魚干」，確保 Minimax 讀音正確）。
+    *   **必須**檢查腳本中的多音字（如「乾」、「行」、「重」等），並將其替換為**對應正確讀音的單音字**或**同音字**（例如：將「小魚乾」改為「小魚干」，確保 TTS 讀音正確）。
     *   此步驟為硬性規定，用於避免 TTS 引擎讀錯音。
 
 ### 步驟三：語音生成 (Voiceover Generation)
 **任務**：將逐字稿轉化為音頻文件（MP3）。
 **執行標準**：
 1.  **試聽確認 (Demo First)**：
-    *   在生成全長配音前，**必須先生成一段 10-20 秒的試聽音頻 (Demo)**。
-    *   **優先使用 Minimax MCP 工具** (`mcp_MiniMax_text_to_audio`) 進行生成。
-    *   將試聽音頻發送給用戶確認音色和語速。只有用戶輸入「確認」後，才可繼續生成全長配音。
-2.  **輸入清洗 (Input Sanitization)**：**極端重要！** 在發送給 API/MCP 之前，必須進行二次檢查，確保文本中**完全不包含**任何非口播內容。
-3.  **引擎指定**：**Minimax** (優先調用 MCP，若不可用則使用 Python 腳本調用 API)。
-4.  **音色指定**：必須使用 **台灣女生 (Taiwanese Female)** 音色（與首期影片一致，Voice ID 參考：`male-qn-qingse` 或其他確認後的 ID）。
-5.  **輸出格式**：MP3。
+    *   在生成全長配音前，**必須先生成試聽音頻**：
+        ```bash
+        python scripts/gen_voice_gemini.py --demo      # 只念前 60 字
+        ```
+    *   把試聽檔發給用戶確認音色與語速。**只有用戶輸入「確認」後**，才可生成全長。
+2.  **輸入清洗 (Input Sanitization)**：腳本已自動移除 `[畫面：…]`、`(旁白)`、`（…）`
+    與 Markdown 標題符號，但送出前仍應人工掃一眼，確保沒有非口播內容。
+3.  **引擎**：Google Gemini TTS。全長生成：
+    ```bash
+    python scripts/gen_voice_gemini.py                              # → voiceover.mp3
+    python scripts/gen_voice_gemini.py --voice Aoede --style "冷靜、帶點嘲諷"
+    ```
+4.  **語氣指定**：此模型吃自然語言的語氣指示（`--style`），這是它取代 Minimax
+    固定音色的關鍵 —— 音色本身換不回來，但語氣可以往頻道調性靠。
+5.  **長稿自動分段**：超過 1200 字會自動切段送出再接起來，切點一律落在句末，
+    不會把一句話切兩半。
+6.  **輸出格式**：MP3。
 
 ### 步驟四：時間戳同步 (Timestamping)
 **任務**：**關鍵步驟！** 利用配音文件生成含精確時間戳的字幕文件（SRT）。
@@ -153,96 +166,9 @@ python scripts/smoke_test.py --srt examples/demo_input.srt --seconds 15
 *   **Python Libraries**: `google-genai` (繪圖), `moviepy` (剪輯), `re` (解析), `json` (狀態管理).
 *   **兼容性**: 針對 `moviepy` v1 和 v2 版本差異，必須編寫 `try-except` 兼容代碼，特別是 `ImageClip` 和 `set_duration` 方法。
 
-### 6.3 語音生成腳本 (`generate_voice.py`)
-*功能：調用 Minimax API 生成台灣女生配音。*
-
-```python
-import os
-import requests
-import json
-
-# Config
-API_KEY = os.getenv("MINIMAX_API_KEY")
-GROUP_ID = os.getenv("MINIMAX_GROUP_ID")
-# 替換為具體的台灣女生 Voice ID
-VOICE_ID = "female-shaonv" # 貓咪經濟學專屬克隆音色 (對應 demo 音色)
-OUTPUT_FILE = "voiceover.mp3"
-DEMO_FILE = "voiceover_demo.mp3"
-SCRIPT_PATH = "貓咪經濟學腳本.txt"
-
-def generate_voice(demo_mode=False):
-    if not API_KEY or not GROUP_ID:
-        print("Error: MINIMAX_API_KEY or MINIMAX_GROUP_ID not set.")
-        return
-
-    url = f"https://api.minimax.chat/v1/text_to_speech?GroupId={GROUP_ID}"
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    # Read script (remove timestamps if present, just raw text)
-    with open(SCRIPT_PATH, 'r', encoding='utf-8') as f:
-        text = f.read()
-    
-    # ---------------------------------------------------------
-    # 安全過濾 (Safety Filter)
-    # 確保只發送口播內容，過濾掉可能殘留的 [畫面描述] 或 (備註)
-    # ---------------------------------------------------------
-    import re
-    # 移除 [] 和 () 內的內容
-    text = re.sub(r'\[.*?\]', '', text)
-    text = re.sub(r'\(.*?\)', '', text)
-    # 移除 Markdown 標題符號 (#, ##)
-    text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)
-    text = text.strip()
-
-    if len(text) < 100 and not demo_mode:
-        print("Warning: Script text is suspiciously short. Please check input.")
-    
-    # Demo Mode: Only take the first 50 characters or first sentence
-    if demo_mode:
-        text = text[:60] + "..."
-        print(f"Generating DEMO audio for: {text}")
-        current_output = DEMO_FILE
-    else:
-        print("Generating FULL audio...")
-        current_output = OUTPUT_FILE
-
-    payload = {
-        "voice_id": VOICE_ID,
-        "text": text,
-        "model": "speech-01",
-        "speed": 1.0,
-        "vol": 1.0,
-        "pitch": 0
-    }
-
-    print(f"Calling Minimax API (Demo={demo_mode})...")
-    response = requests.post(url, headers=headers, json=payload)
-    
-    if response.status_code == 200:
-        if "audio/mpeg" in response.headers.get("Content-Type", ""):
-             with open(current_output, "wb") as f:
-                f.write(response.content)
-             print(f"Saved to {current_output}")
-             if demo_mode:
-                 print("請播放 demo 音頻確認音色。確認無誤後，請再次運行腳本生成完整版 (修改 demo_mode=False)。")
-        else:
-            # Handle JSON response (trace_id, etc) or error
-            res_json = response.json()
-            if 'base_resp' in res_json and res_json['base_resp']['status_code'] != 0:
-                print(f"Error: {res_json['base_resp']['status_msg']}")
-            else:
-                # Sometimes audio is in data
-                print(f"Check response format: {res_json.keys()}")
-    else:
-        print(f"Request failed: {response.status_code} - {response.text}")
-
-if __name__ == "__main__":
-    # 默認先生成 Demo，用戶確認後需手動修改此處為 False
-    generate_voice(demo_mode=True)
-```
+### 6.3 語音生成腳本
+*已獨立成檔：`scripts/gen_voice_gemini.py`（Google Gemini TTS）。*
+*舊的 Minimax 版本已移除 —— 該平台台灣帳號註冊不了，留著只會誤導。*
 
 ## 7. 附錄
 *如果當前環境缺少以下腳本，請根據下方代碼自動創建。*

@@ -55,6 +55,16 @@ def find_ffmpeg():
     return imageio_ffmpeg.get_ffmpeg_exe()
 
 
+def audio_duration(path):
+    """用 ffmpeg 讀音檔長度 —— 只為了這個裝 moviepy 不划算。"""
+    result = subprocess.run([find_ffmpeg(), '-i', path], capture_output=True, text=True)
+    match = re.search(r'Duration: (\d+):(\d+):(\d+\.?\d*)', result.stderr)
+    if not match:
+        sys.exit(f"讀不出 {path} 的長度")
+    hours, minutes, seconds = match.groups()
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+
+
 def build_timeline(segments, total_seconds, frames, slot_seconds):
     """照「黃金 30 秒每 3 秒一張」的節奏規定切 slot，圖片輪播補位。"""
     slots = []
@@ -78,8 +88,13 @@ def main():
     parser.add_argument('--seconds', type=float, default=30.0, help="測試片長度，預設 30 秒")
     parser.add_argument('--slot', type=float, default=3.0, help="每張畫面秒數，預設 3 秒")
     parser.add_argument('--frames', default=ASSETS_DIR, help="佔位圖目錄，預設 assets/")
+    parser.add_argument('--audio', help="可選：配上這個音檔（如 voiceover.mp3），"
+                                        "片長改由音檔決定")
     parser.add_argument('--out', default=os.path.join(BASE_DIR, 'smoke_test_output.mp4'))
     args = parser.parse_args()
+
+    if args.audio and not os.path.exists(args.audio):
+        sys.exit(f"找不到音檔：{args.audio}")
 
     segments = parse_srt(args.srt)
     if not segments:
@@ -94,8 +109,14 @@ def main():
         sys.exit(f"{args.frames} 裡沒有 PNG 佔位圖")
     print(f"[2/4] 佔位圖：{len(frames)} 張")
 
-    slots = build_timeline(segments, args.seconds, frames, args.slot)
-    print(f"[3/4] 時間軸：{len(slots)} 個 slot / {args.seconds:.0f}s，每 {args.slot:.0f} 秒一張")
+    total_seconds = args.seconds
+    if args.audio:
+        total_seconds = audio_duration(args.audio)
+        print(f"      配音 {os.path.basename(args.audio)}：{total_seconds:.1f}s"
+              f"（片長改由音檔決定，忽略 --seconds）")
+
+    slots = build_timeline(segments, total_seconds, frames, args.slot)
+    print(f"[3/4] 時間軸：{len(slots)} 個 slot / {total_seconds:.0f}s，每 {args.slot:.0f} 秒一張")
     for i, slot in enumerate(slots, 1):
         print(f"      {i:>2}. {slot['duration']:.1f}s  {os.path.basename(slot['image'])}  "
               f"「{slot['text'][:18]}…」")
@@ -107,10 +128,16 @@ def main():
         # concat demuxer 會忽略最後一個 duration，要把最後一張再寫一次它才算得對
         f.write(f"file '{slots[-1]['image']}'\n")
 
-    cmd = [find_ffmpeg(), '-y', '-f', 'concat', '-safe', '0', '-i', concat_path,
-           '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,'
-                  'pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=white,fps=24',
-           '-c:v', 'libx264', '-pix_fmt', 'yuv420p', args.out]
+    cmd = [find_ffmpeg(), '-y', '-f', 'concat', '-safe', '0', '-i', concat_path]
+    if args.audio:
+        cmd += ['-i', args.audio]
+    cmd += ['-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,'
+                   'pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=white,fps=24',
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p']
+    if args.audio:
+        # -shortest 讓畫面與聲音誰先結束就收尾，避免尾巴黑屏或無聲
+        cmd += ['-c:a', 'aac', '-b:a', '128k', '-shortest']
+    cmd += [args.out]
     result = subprocess.run(cmd, capture_output=True, text=True)
     os.remove(concat_path)
     if result.returncode != 0:
@@ -118,7 +145,7 @@ def main():
         sys.exit("ffmpeg 合成失敗")
 
     print(f"[4/4] 合成完成：{args.out} ({os.path.getsize(args.out) / 1024:.0f} KB) "
-          f"1080x1920 / 24fps / 無聲")
+          f"1080x1920 / 24fps / {'含配音' if args.audio else '無聲'}")
 
 
 if __name__ == '__main__':
