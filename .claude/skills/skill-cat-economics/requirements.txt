@@ -1,5 +1,6 @@
 # 貓咪經濟學 skill 步驟三~六所需套件
-# 步驟三 配音：呼叫 Minimax TTS API
+# 步驟三 配音：Gemini TTS（gen_voice_gemini.py 只用標準庫，無額外依賴）
+# requests 供 gen_taiwan_speech.py（Minimax 備選路線）與其他腳本使用
 requests
 # 步驟五 畫面：呼叫 Gemini 影像生成
 google-genai
@@ -10,3 +11,5 @@ google-api-python-client
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
+# 小路測試（scripts/smoke_test.py）：系統沒裝 ffmpeg 時的備援二進位
+imageio-ffmpeg
