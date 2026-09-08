@@ -71,9 +71,27 @@ python3 scripts/heygen_generate.py 腳本.txt heygen_video.mp4 --minimax
 
 一個指令跑完三件事：Minimax 產台灣腔配音 → 上傳 HeyGen → avatar 對嘴 → 下載 mp4。
 
-> ⚠️ **為什麼不用 HeyGen 內建中文聲音**：它們幾乎都是大陸腔。
+> ⚠️ **為什麼首選不是 HeyGen 內建中文聲音**：它們**大部分**是大陸腔。
 > 台灣觀眾對「垃圾（ㄌㄚ ㄐㄧ vs ㄌㄜˋ ㄙㄜˋ）」「和（ㄏㄜˊ vs ㄏㄢˋ）」極度敏感，
 > 一秒出戲，比臉不像還傷。配音對了才值得做這條產線。
+
+**但 HeyGen 確實有台灣腔（zh-TW）聲音，Minimax 掛掉時用這幾個備援：**
+
+| voice_id | 名字 | 性別 |
+|---|---|---|
+| `4158cf2ef85d4ccc856aacb1c47dbb0c` | HsiaoChen - Friendly | 女 |
+| `6fc81c412a6d46a688cfb4dd659c1ab6` | HsiaoYu - Natural | 女 |
+| `3b1633a466c44379bf8b5a2884727588` | YunJhe - Natural | 男 |
+
+`list_heygen_assets.py` 把 zh-TW 與 zh-CN 一律標成 `Chinese`，光看清單分不出來 ——
+名字是 **Hsiao/Yun-Jhe 這種威妥瑪拼法**的才是台灣腔；Xiao 開頭（Xiaoxin、Xiaoyan…）是大陸腔。
+`HiuMaan` 是粵語，不要用。
+
+備援用法（不加 `--minimax`）：
+```bash
+HEYGEN_VOICE_ID=4158cf2ef85d4ccc856aacb1c47dbb0c \
+  python3 scripts/heygen_generate.py 腳本.txt out.mp4
+```
 
 其他寫法：
 ```bash
@@ -93,6 +111,15 @@ python scripts/youtube_upload.py heygen_video.mp4 \
   --tags "經濟學,科普" --privacy private
 ```
 （OAuth 設定見 SETUP.md；未審核 app 上傳預設為私人，需手動改公開）
+
+## 已知待辦
+
+- ⏳ **`v2/video/generate` 是 legacy，HeyGen 公告 2026-10-31 移除**，屆時 `heygen_generate.py`
+  會整支失效。要改成 `POST /v3/videos`（文件：developers.heygen.com）。
+  改完必須實際跑一支驗證，不能只看文件改。
+- 額度歸零時 HeyGen 回 `HTTP 402 insufficient_credit`、Minimax 回 `1008 insufficient balance`，
+  兩個都不是程式錯誤，是要去後台充值。查 HeyGen 餘額：
+  `GET https://api.heygen.com/v2/user/remaining_quota`
 
 ## 影片規格
 - 直式 9:16 預設 720x1280（可用 `HEYGEN_WIDTH/HEIGHT` 改；橫式設 1280x720）

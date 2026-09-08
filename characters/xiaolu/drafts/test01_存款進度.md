@@ -53,3 +53,36 @@
 
 🤖 小路是 AI 生成的虛擬人物，不是真人。影像與文字由 AI 產生，
 內容由 Sixhands Studio 企劃營運，房產專業內容由合作的執業房仲提供。
+
+---
+
+## 產片紀錄
+
+| 日期 | 結果 |
+|------|------|
+| 2026-09-08 | ❌ 沒出片 —— HeyGen 與 Minimax 兩邊額度都是 0 |
+
+當天查到的事實（充值後直接照這個跑，不用重查）：
+
+- 小路的 Photo Avatar 存在，`talking_photo_id = 23942339949b4cba85c0f8d342392105`
+- `HEYGEN_API_KEY` 有效；`/v2/user/remaining_quota` → `remaining_quota: 0`，
+  送生成回 `HTTP 402 insufficient_credit`
+- `MINIMAX_API_KEY` 有效且屬國際版（`api.minimax.io`），但餘額 0（`1008 insufficient balance`）；
+  `api.minimaxi.com` / `api.minimax.chat` 回 `2049 invalid api key`，確定不是打錯區域
+- 環境變數 `MINIMAX_GROUP_ID` 與這把金鑰不相符（`1004 token not match group`），應該移除
+
+充值後的指令：
+
+```bash
+python3 .claude/skills/skill-bobo/scripts/heygen_generate.py \
+    characters/xiaolu/drafts/test01_逐字稿.txt \
+    xiaolu_test01.mp4 --minimax
+```
+
+Minimax 若還是沒額度，用 HeyGen 的 zh-TW 備援聲音先驗證對嘴（見 skill-bobo SKILL.md）：
+
+```bash
+HEYGEN_VOICE_ID=4158cf2ef85d4ccc856aacb1c47dbb0c \
+  python3 .claude/skills/skill-bobo/scripts/heygen_generate.py \
+    characters/xiaolu/drafts/test01_逐字稿.txt xiaolu_test01.mp4
+```

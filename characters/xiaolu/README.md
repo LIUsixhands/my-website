@@ -43,8 +43,10 @@ python3 .claude/skills/skill-bobo/scripts/heygen_generate.py \
 | 變數 | 用途 |
 |------|------|
 | `HEYGEN_API_KEY` | 播播既有 |
-| `HEYGEN_TALKING_PHOTO_ID` | 小路的 avatar ID（待填） |
+| `HEYGEN_TALKING_PHOTO_ID` | `23942339949b4cba85c0f8d342392105`（小路的 Photo Avatar，已建立） |
 | `MINIMAX_API_KEY` | 貓咪經濟學既有 |
 | `MINIMAX_VOICE_ID` | 預設 `female-shaonv` 台灣女聲 |
+| `MINIMAX_GROUP_ID` | **不要設。** 國際版（`api.minimax.io`）帶了會回 1004 token not match group |
+| `HEYGEN_VOICE_ID` | 備援聲音，Minimax 沒額度時用 `4158cf2ef85d4ccc856aacb1c47dbb0c`（HsiaoChen，zh-TW） |
 
 網路白名單需含 `*.heygen.com`、`*.minimax.io`。
