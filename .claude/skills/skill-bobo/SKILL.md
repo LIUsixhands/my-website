@@ -117,9 +117,15 @@ python scripts/youtube_upload.py heygen_video.mp4 \
 - ⏳ **`v2/video/generate` 是 legacy，HeyGen 公告 2026-10-31 移除**，屆時 `heygen_generate.py`
   會整支失效。要改成 `POST /v3/videos`（文件：developers.heygen.com）。
   改完必須實際跑一支驗證，不能只看文件改。
-- 額度歸零時 HeyGen 回 `HTTP 402 insufficient_credit`、Minimax 回 `1008 insufficient balance`，
-  兩個都不是程式錯誤，是要去後台充值。查 HeyGen 餘額：
-  `GET https://api.heygen.com/v2/user/remaining_quota`
+- **HeyGen 的訂閱額度餵不動 API**：訂閱 credits（App／網頁版用）與 API 的 usd wallet
+  是兩個錢包。App 顯示還有幾百 credits，API 一樣會回 `HTTP 402 insufficient_credit`。
+  要查的是錢包餘額，不是 credits：
+  ```bash
+  curl -H "X-Api-Key: $HEYGEN_API_KEY" https://api.heygen.com/v3/users/me
+  # wallet.remaining_balance = 0.0 → 去後台儲值 API wallet（或開 auto_reload），
+  # 不是升級訂閱方案
+  ```
+- Minimax 回 `1008 insufficient balance` 同理，是後台要儲值，不是程式錯誤。
 
 ## 影片規格
 - 直式 9:16 預設 720x1280（可用 `HEYGEN_WIDTH/HEIGHT` 改；橫式設 1280x720）

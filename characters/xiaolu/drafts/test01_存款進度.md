@@ -60,13 +60,19 @@
 
 | 日期 | 結果 |
 |------|------|
-| 2026-09-08 | ❌ 沒出片 —— HeyGen 與 Minimax 兩邊額度都是 0 |
+| 2026-09-08 | ❌ 沒出片 —— HeyGen API 錢包沒錢、Minimax 餘額 0 |
 
 當天查到的事實（充值後直接照這個跑，不用重查）：
 
 - 小路的 Photo Avatar 存在，`talking_photo_id = 23942339949b4cba85c0f8d342392105`
-- `HEYGEN_API_KEY` 有效；`/v2/user/remaining_quota` → `remaining_quota: 0`，
-  送生成回 `HTTP 402 insufficient_credit`
+- `HEYGEN_API_KEY` 有效，且確實是 sixhands2001@gmail.com 這個帳號
+- ⚠️ **HeyGen 訂閱額度與 API 額度是兩個錢包，不通用**：
+  `/v3/users/me` → `billing_type: wallet`、`subscription: null`、`wallet.remaining_balance: 0.0`
+  `/v2/user/remaining_quota` → 頂層 `remaining_quota: 0`，但 `details.plan_credit: 501`
+  也就是 Creator 訂閱那 501 credits 是給 App／網頁版用的，**API 走的是另一個 usd wallet**，
+  該錢包 $0 所以送生成回 `HTTP 402 insufficient_credit`。
+  解法是去 HeyGen 後台儲值 API wallet（或開 auto-reload），不是升級訂閱方案。
+  看 App 的 credits 數字會誤判成「還有額度」，要看 `wallet.remaining_balance`
 - `MINIMAX_API_KEY` 有效且屬國際版（`api.minimax.io`），但餘額 0（`1008 insufficient balance`）；
   `api.minimaxi.com` / `api.minimax.chat` 回 `2049 invalid api key`，確定不是打錯區域
 - 環境變數 `MINIMAX_GROUP_ID` 與這把金鑰不相符（`1004 token not match group`），應該移除
