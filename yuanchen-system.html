@@ -1225,15 +1225,20 @@ function buildPrompt(fd) {
 // ════════════════════════════════
 //  CALL OPENAI
 // ════════════════════════════════
-async function callOpenAI(prompt) {
-  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+// 首選模型。Groq 會不定期汰換模型（llama-3.3-70b-versatile 已於 2026-06
+// 對免費與開發者方案停用），因此下方保留一段自動改用線上可用模型的邏輯，
+// 之後再遇到汰換就不必改碼。
+const PREFERRED_MODEL = 'openai/gpt-oss-120b';
+
+async function postCompletion(model, prompt) {
+  return fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model,
       messages: [
         { role: 'system', content: '你是專業的命格策略分析師，請嚴格按照指定JSON格式輸出，不要有任何其他文字。' },
         { role: 'user', content: prompt }
@@ -1243,10 +1248,45 @@ async function callOpenAI(prompt) {
       response_format: { type: 'json_object' }
     })
   });
+}
+
+// 向 Groq 詢問這把金鑰目前可用的模型，挑一個能做 chat completion 的。
+async function pickAvailableModel() {
+  const resp = await fetch('https://api.groq.com/openai/v1/models', {
+    headers: { 'Authorization': `Bearer ${apiKey}` }
+  });
+  if (!resp.ok) return null;
+  const ids = ((await resp.json()).data || []).map(m => m.id);
+  // 排除語音與嵌入類模型，它們不能用於 chat completions
+  const chat = ids.filter(id => !/whisper|tts|guard|embed/i.test(id));
+  for (const re of [/gpt-oss-120b/, /gpt-oss/, /qwen/, /llama.*70b/, /llama/]) {
+    const hit = chat.find(id => re.test(id));
+    if (hit) return hit;
+  }
+  return chat[0] || null;
+}
+
+async function callOpenAI(prompt) {
+  let resp = await postCompletion(PREFERRED_MODEL, prompt);
+
+  // 首選模型被下架時，改用線上清單裡實際存在的模型重試一次
+  if (!resp.ok && (resp.status === 404 || resp.status === 400)) {
+    const fallback = await pickAvailableModel();
+    if (fallback && fallback !== PREFERRED_MODEL) {
+      resp = await postCompletion(fallback, prompt);
+    }
+  }
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `HTTP ${resp.status}`);
+    const msg = err?.error?.message || `HTTP ${resp.status}`;
+    const e = new Error(msg);
+    // 區分「金鑰問題」與「模型問題」，避免把模型下架誤報成金鑰錯誤
+    e.kind = (resp.status === 401 || resp.status === 403) ? 'auth'
+           : /model/i.test(msg) ? 'model'
+           : resp.status === 429 ? 'rate'
+           : 'other';
+    throw e;
   }
 
   const data = await resp.json();
@@ -1418,7 +1458,13 @@ async function generateReport() {
     goTo(2);
     const errBox = document.getElementById('s2-error');
     errBox.style.display = 'block';
-    errBox.textContent = `⚠️ 生成失敗：${err.message}。請確認 Groq API Key 正確（gsk_ 開頭），或重試。`;
+    const hint = {
+      auth:  '請確認 Groq API Key 正確（gsk_ 開頭），或到 console.groq.com 重新申請。',
+      model: 'Groq 已汰換此模型，且自動改用其他模型也未成功。請回報給助哥處理，這不是你的金鑰問題。',
+      rate:  '已達 Groq 免費額度上限，請稍候幾分鐘再試。',
+      other: '請稍後重試；若持續失敗請回報給助哥。'
+    }[err.kind || 'other'];
+    errBox.textContent = `⚠️ 生成失敗：${err.message}。${hint}`;
     btn.disabled = false;
   }
 }
