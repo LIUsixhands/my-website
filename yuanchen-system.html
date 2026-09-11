@@ -1244,7 +1244,9 @@ async function postCompletion(model, prompt) {
         { role: 'user', content: prompt }
       ],
       temperature: 0.8,
-      max_tokens: 1800,
+      // gpt-oss 是推理型模型，推理 token 會佔用 completion 額度。沿用舊模型的
+      // 1800 容易在 JSON 還沒收尾就被截斷，導致 JSON.parse 失敗，故放寬。
+      max_tokens: 4096,
       response_format: { type: 'json_object' }
     })
   });
@@ -1290,7 +1292,23 @@ async function callOpenAI(prompt) {
   }
 
   const data = await resp.json();
-  return JSON.parse(data.choices[0].message.content);
+  const choice = data.choices?.[0];
+
+  // 輸出被 max_tokens 截斷時，內容會是不完整的 JSON，直接 parse 只會丟出
+  // 看不懂的 SyntaxError，這裡先攔下來給明確訊息。
+  if (choice?.finish_reason === 'length') {
+    const e = new Error('模型輸出過長被截斷');
+    e.kind = 'truncated';
+    throw e;
+  }
+
+  try {
+    return JSON.parse(choice.message.content);
+  } catch {
+    const e = new Error('模型回傳的內容不是完整的 JSON');
+    e.kind = 'parse';
+    throw e;
+  }
 }
 
 // ════════════════════════════════
@@ -1462,6 +1480,8 @@ async function generateReport() {
       auth:  '請確認 Groq API Key 正確（gsk_ 開頭），或到 console.groq.com 重新申請。',
       model: 'Groq 已汰換此模型，且自動改用其他模型也未成功。請回報給助哥處理，這不是你的金鑰問題。',
       rate:  '已達 Groq 免費額度上限，請稍候幾分鐘再試。',
+      truncated: '請直接重試一次；若連續多次都這樣，請回報給助哥。',
+      parse: '請直接重試一次；若連續多次都這樣，請回報給助哥。',
       other: '請稍後重試；若持續失敗請回報給助哥。'
     }[err.kind || 'other'];
     errBox.textContent = `⚠️ 生成失敗：${err.message}。${hint}`;
