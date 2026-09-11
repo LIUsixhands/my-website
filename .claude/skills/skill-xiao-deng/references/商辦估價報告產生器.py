@@ -19,7 +19,7 @@ D = {
  "案名":"聯聚中雍大廈 The Landmark",
  "地址":"臺中市西屯區市政北七路 98 號",
  "副標":"七期頂級企業總部商辦 · 全棟行情分析暨建議售價",
- "報告編號":"LJZY-2026-0911",
+ "報告編號":"LJZY-2026-0911-v2",
  "日期":"2026/09/11",
  "撈取日":"2026-09-11",
  "查詢區間":"101/01 ~ 115/07",
@@ -326,23 +326,24 @@ p6=f"""<div class="page"><div class="pad">
 
  <div class="serif" style="font-size:11.5pt;color:#0E2233;font-weight:700;margin-bottom:2.5mm">2. 同級競品位階</div>
  <table style="margin-bottom:1.5mm">
-  <tr><th>等級</th><th>案名</th><th class="num">坪數規劃</th><th class="num">單價（萬/坪）</th><th>資料性質</th></tr>
-  <tr class="hl"><td>頂級企業總部級</td><td>聯聚中雍大廈（本案）</td><td class="num">225–450</td><td class="num">{S['md']:.2f}（中位）／{S['mx']:.2f}（最高）</td><td>實價登錄 {S['n']} 筆</td></tr>
-  <tr><td>頂級企業總部級</td><td>聯聚中維大廈</td><td class="num">—</td><td class="num">—</td><td>尚未建檔</td></tr>
-  <tr><td>進階級</td><td>NTC 國家商貿中心</td><td class="num">—</td><td class="num">—</td><td>未揭露</td></tr>
-  <tr><td>進階級</td><td>CBD 時代廣場</td><td class="num">50–300</td><td class="num">42–58</td><td>同業公開資訊</td></tr>
-  <tr><td>進階級</td><td>豐邑市政都心廣場</td><td class="num">—</td><td class="num">約 44</td><td>同業公開資訊</td></tr>
-  <tr><td>入門～中階</td><td>市政壹號廣場</td><td class="num">25–48</td><td class="num">—</td><td>同業公開資訊</td></tr>
+  <tr><th style="width:15%">等級</th><th style="width:37%">案名</th><th class="num" style="width:13%">坪數規劃</th><th class="num" style="width:21%">單價（萬/坪）</th><th style="width:14%">資料狀態</th></tr>
+  <tr class="hl"><td style="white-space:nowrap">頂級總部級</td><td>聯聚中雍大廈（本案）</td><td class="num" style="white-space:nowrap">225–450</td><td class="num" style="white-space:nowrap">{S['md']:.2f} 中位／{S['mx']:.2f} 最高</td><td>實價登錄 {S['n']} 筆</td></tr>
+  <tr><td style="white-space:nowrap">頂級總部級</td><td>聯聚中維大廈</td><td class="num">80–120</td><td class="num">—</td><td style="white-space:nowrap">興建中・待實登</td></tr>
+  <tr><td>進階級</td><td>NTC 國家商貿中心</td><td class="num">—</td><td class="num">—</td><td>待實登</td></tr>
+  <tr><td>進階級</td><td>CBD 時代廣場</td><td class="num">—</td><td class="num">—</td><td>待實登</td></tr>
+  <tr><td>進階級</td><td>豐邑市政都心廣場</td><td class="num">—</td><td class="num">—</td><td>待實登</td></tr>
+  <tr><td style="white-space:nowrap">入門～中階</td><td>市政壹號・親家T3・T-POWER・鼎盛BHW</td><td class="num">—</td><td class="num">—</td><td>待實登</td></tr>
  </table>
  <div style="font-size:7.6pt;color:#777;margin-bottom:4mm">
-  競品單價引自同業公開網頁（darren-chang.com，2025 年更新），<span class="b">非實價登錄，僅供相對位階參考，不得作為報價依據</span>。
-  本案數據則全數來自實價登錄。
+  本表僅列<span class="b">實價登錄</span>數據。競品尚未取得實登者不列數字，
+  <span class="b">且不以坊間或同業公開資訊替代</span>，以確保本報告全部數據口徑一致。
  </div>
  <div class="note" style="margin-bottom:5mm">
-  <span class="b g">◆ 位階驗算：</span>本案中位 {S['md']:.2f} ÷ CBD 中位 50 ＝ <span class="b">1.30 倍</span>；
-  ÷ 豐邑 44 ＝ <span class="b">1.48 倍</span>。本案價格較同區進階級商辦高出約 <span class="b">30–50%</span>。<br>
-  <span class="b">真正的分級機制是最小坪數而非單價</span>：25–48 坪 → 50–300 坪 → 225–450 坪，
-  坪數門檻即客群篩選器。需求 40 坪的企業不會成為本案買方，因產品不存在。
+  <span class="b g">◆ 分級的實質機制是「最小坪數」。</span>
+  本案 225–450 坪、聯聚中維 80–120 坪，入門級微型商辦更小。
+  <span class="b">坪數門檻即客群篩選器</span>——需求 40 坪的企業不會成為本案買方，因為產品不存在。<br>
+  <span class="b">對屋主的意義：</span>本案買方池天生受坪數門檻限制，<span class="b">客群窄，但替代品也少</span>；
+  訂價應對標<span class="b">本棟自身成交紀錄</span>，而非其他等級商辦。
  </div>
 
  <div class="serif" style="font-size:11.5pt;color:#0E2233;font-weight:700;margin-bottom:2.5mm">3. 訂價與銷售策略</div>
@@ -373,7 +374,6 @@ p7=f"""<div class="page"><div class="pad">
    <tr><td>買賣成交 {S['total']} 筆</td><td>內政部不動產交易實價查詢服務網</td><td>{D['查詢區間']}／{D['撈取日']}</td></tr>
    <tr><td>租賃成交 5 筆</td><td>內政部不動產交易實價查詢服務網</td><td>{D['查詢區間']}／{D['撈取日']}</td></tr>
    <tr><td>建物基本資料、公設比、管理費</td><td>樂居 leju.com.tw 公開資料</td><td>撈取日 {D['撈取日']}</td></tr>
-   <tr><td>競品單價、產品分級</td><td>同業公開網頁 darren-chang.com</td><td>頁面標示 2025 年更新</td></tr>
    <tr><td>持有稅率、空置率、議價幅度</td><td>業界慣例推估值</td><td>非實測數據</td></tr>
   </table>
  </div>
@@ -386,6 +386,7 @@ p7=f"""<div class="page"><div class="pad">
    <li>預售（104 年，早於 107/06 完工）與成屋轉售分列，估價採成屋轉售組。</li>
    <li>經檢視，全部 {S['total']} 筆備註欄均無「親友／員工／共有人／特殊關係」等註記，無排除筆數。</li>
    <li>樣本數少於 10 筆之樓層帶已於表中標示，其統計值僅供參考。</li>
+   <li><b>本報告所有價格與租金數字一律來自內政部實價登錄，未採用任何同業或坊間公開資訊。</b></li>
   </ul>
  </div>
 
@@ -398,7 +399,7 @@ p7=f"""<div class="page"><div class="pad">
   三、本報告所載歷史價格走勢僅為既有資料之描述，
   <span class="b">不構成對未來價格之預測，亦無任何增值或投資報酬之保證或暗示</span>。<br>
   四、投報率試算之租金、稅費、空置率等參數載於本報告，實際收益因租約條件而異，<span class="b">不保證達成</span>。<br>
-  五、本報告引用之同業公開資訊僅供相對位階參考，其正確性由該來源自負，本公司不為其真實性背書。<br>
+  五、本報告未採用任何同業或坊間公開資訊作為價格依據；競品尚未取得實價登錄者一律列為「待實登」而不填數字。<br>
   六、本報告所載資料截至 {D['撈取日']}；實價登錄有申報作業期間，最新交易可能尚未揭露。
  </div>
 
