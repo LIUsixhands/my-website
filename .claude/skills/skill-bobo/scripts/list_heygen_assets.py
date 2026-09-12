@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""列出 HeyGen 可用的「主播角色」與「聲音」，方便挑 ID 設定。
+"""列出 HeyGen 可用的角色與聲音，方便挑 ID 設定。
+
+會列出兩種角色：
+  ⭐ 你自己的 Photo Avatar（talking_photos）—— 虛擬人物 IP 要用這個
+     臉只有你有，用 HeyGen 網頁 Avatar → Create a virtual character 建立
+  現成主播（avatars）—— 臉與其他 HeyGen 用戶共用
+
+不要從網址列抄 ID：那串是網頁用的，且人眼容易把 0/O、1/l 看錯。
+用本工具查出來的才是 API 要的 ID。
 
 預設只列出中文/台灣相關的聲音，方便找台灣女聲。
 
@@ -42,11 +50,24 @@ def list_voices(all_voices=False):
 
 
 def list_avatars(limit=20):
+    """/v2/avatars 同時回傳現成主播(avatars)與自訂 Photo Avatar(talking_photos)。"""
     r = requests.get(f"{API}/v2/avatars", headers=headers(), timeout=180)
-    avatars = r.json().get("data", {}).get("avatars", [])
-    print(f"\n=== 主播角色(共 {len(avatars)} 個，顯示前 {limit}) ===")
+    data = r.json().get("data", {}) or {}
+
+    # 自訂 Photo Avatar 先列 —— 虛擬人物 IP 要用的是這個，不是共用的現成主播
+    photos = data.get("talking_photos", []) or []
+    print(f"\n=== ⭐ 你自己的 Photo Avatar(共 {len(photos)} 個) ===")
+    if photos:
+        for t in photos:
+            name = t.get("talking_photo_name") or "(未命名)"
+            print(f"  HEYGEN_TALKING_PHOTO_ID={t.get('talking_photo_id')} ｜ {name}")
+    else:
+        print("  （沒有。用 HeyGen 網頁 Avatar → Create a virtual character 建立）")
+
+    avatars = data.get("avatars", []) or []
+    print(f"\n=== 現成主播(共 {len(avatars)} 個，顯示前 {limit}；臉與其他用戶共用) ===")
     for a in avatars[:limit]:
-        print(f"  avatar_id={a.get('avatar_id')} ｜ {a.get('avatar_name')}")
+        print(f"  HEYGEN_AVATAR_ID={a.get('avatar_id')} ｜ {a.get('avatar_name')}")
 
 
 def main():
@@ -56,7 +77,8 @@ def main():
     all_voices = "--all-voices" in sys.argv
     list_voices(all_voices)
     list_avatars()
-    print("\n挑好後，把 avatar_id 和 voice_id 設成環境變數 HEYGEN_AVATAR_ID / HEYGEN_VOICE_ID。")
+    print("\n把上面印出來的整行（例如 HEYGEN_TALKING_PHOTO_ID=xxx）設進環境設定即可。")
+    print("台灣角色的聲音建議走 Minimax（見 SKILL.md），不用設 HEYGEN_VOICE_ID。")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 700" width="960" height="700" font-family="'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif">
+<defs>
+<linearGradient id="unit" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#fdfbf5"/><stop offset="100%" stop-color="#ece5d3"/>
+</linearGradient>
+<style>
+.t{fill:#f2efe6}.g{fill:#c9a961}.m{fill:#8d9a86}.d{fill:#1d2b22}
+.h1{font-size:30px;font-weight:700}.h2{font-size:15px}
+.lbl{font-size:13px;letter-spacing:.08em}.num{font-size:12px}
+.unit-t{font-size:34px;font-weight:700}.unit-s{font-size:15px}
+</style>
+</defs>
+
+<rect width="960" height="700" fill="#16241c"/>
+
+<text x="56" y="62" class="t h1">聯聚中雍大廈 · 標準層棟別圖</text>
+<text x="56" y="90" class="m h2">The Landmark｜臺中市西屯區市政北七路 98 號｜地上 39 層・地下 7 層｜總戶數 73 戶</text>
+<text x="56" y="112" class="g h2">雙拼配置・每層 2 戶　｜　依實價登錄 10 筆（111/02 ~ 115/07）重繪</text>
+<line x1="56" y1="132" x2="904" y2="132" stroke="#c9a961" stroke-width="1" opacity=".45"/>
+
+<!-- 北向 -->
+<g transform="translate(842,206)">
+<circle r="40" fill="none" stroke="#c9a961" stroke-width="2"/>
+<path d="M0,-24 L9,10 L0,3 L-9,10 Z" fill="#c9a961"/>
+<text x="0" y="30" class="g lbl" text-anchor="middle">北</text>
+</g>
+
+<!-- 梯間 -->
+<rect x="404" y="196" width="152" height="62" rx="7" fill="#c9a961"/>
+<text x="480" y="226" class="d" font-size="19" font-weight="700" text-anchor="middle">梯　間</text>
+<text x="480" y="247" class="d" font-size="11.5" text-anchor="middle">專有梯廳 1.55 坪／戶</text>
+
+<!-- D 棟 -->
+<rect x="212" y="282" width="244" height="176" rx="10" fill="url(#unit)"/>
+<text x="334" y="336" class="d unit-t" text-anchor="middle">D</text>
+<text x="334" y="362" class="d unit-s" text-anchor="middle" font-weight="600">98 號 - 2</text>
+<line x1="248" y1="380" x2="420" y2="380" stroke="#1d2b22" stroke-width="1" opacity=".22"/>
+<text x="334" y="402" class="d num" text-anchor="middle">主建物 約 132.4 坪</text>
+<text x="334" y="422" class="d num" text-anchor="middle">權狀（扣車位）約 220.4 坪</text>
+<text x="334" y="442" class="d num" text-anchor="middle" opacity=".72">實登樓別：11F · 12F · 13F · 14F · 15F</text>
+
+<!-- C 棟 -->
+<rect x="504" y="282" width="244" height="176" rx="10" fill="url(#unit)"/>
+<text x="626" y="336" class="d unit-t" text-anchor="middle">C</text>
+<text x="626" y="362" class="d unit-s" text-anchor="middle" font-weight="600">98 號 - 1</text>
+<line x1="540" y1="380" x2="712" y2="380" stroke="#1d2b22" stroke-width="1" opacity=".22"/>
+<text x="626" y="402" class="d num" text-anchor="middle">主建物 約 132.4 坪</text>
+<text x="626" y="422" class="d num" text-anchor="middle">權狀（扣車位）約 220.4 坪</text>
+<text x="626" y="442" class="d num" text-anchor="middle" opacity=".72">實登樓別：11F · 12F · 13F · 15F</text>
+
+<!-- 合併虛線 -->
+<path d="M456,370 L504,370" stroke="#c9a961" stroke-width="2" stroke-dasharray="6 5"/>
+
+<!-- 道路 -->
+<rect x="212" y="496" width="536" height="16" rx="8" fill="#c9a961" opacity=".92"/>
+<text x="480" y="538" class="g" font-size="17" letter-spacing="6" text-anchor="middle">市 政 北 七 路</text>
+
+<!-- 整層合併註記 -->
+<rect x="212" y="566" width="536" height="44" rx="8" fill="#22382c" stroke="#c9a961" stroke-width="1" opacity=".95"/>
+<text x="480" y="584" class="g" font-size="13" font-weight="700" text-anchor="middle">⚑ C ＋ D 可整層合併 ≈ 441 坪（扣車位）</text>
+<text x="480" y="602" class="t" font-size="11.5" text-anchor="middle" opacity=".82">實登佐證：15F 之1・之2 同日同價成交；11F 之1・之2 亦同日同價</text>
+
+<!-- 右側數據欄 -->
+<g transform="translate(56,196)">
+<text x="0" y="0" class="g lbl">建物數據（實登／樂居交叉驗證）</text>
+<text x="0" y="26" class="t num">構造　SC 鋼骨造</text>
+<text x="0" y="48" class="t num">完工　107/06（屋齡 8 年）</text>
+<text x="0" y="70" class="t num">基地　1,086 坪</text>
+<text x="0" y="92" class="t num">車位　430 席・坡道平面</text>
+<text x="0" y="114" class="t num">　　　9.65 坪／席</text>
+<text x="0" y="136" class="t num">管理費　160 元／坪／月</text>
+<text x="0" y="166" class="g lbl">公設比</text>
+<text x="0" y="194" class="g" font-size="26" font-weight="700">39.96%</text>
+<text x="0" y="214" class="m num">實登反推 132.35÷220.42</text>
+<text x="0" y="230" class="m num">＝樂居揭露 39.95% ✓</text>
+<text x="0" y="260" class="g lbl">土地使用分區</text>
+<text x="0" y="284" class="t num">第四種新市政中心專用區</text>
+<text x="0" y="304" class="t num">惠國段 92 地號</text>
+</g>
+
+<line x1="56" y1="640" x2="904" y2="640" stroke="#c9a961" stroke-width="1" opacity=".3"/>
+<text x="56" y="662" class="m" font-size="11">資料來源：內政部不動產交易實價查詢服務網（撈取日 2026-09-11，查詢區間 101/01–115/07，樓層別 10–15F）＋ 樂居基本資料</text>
+<text x="56" y="680" class="m" font-size="11">※ 本圖為棟別示意，非按實際比例與地籍界線；方位依原始示意圖重繪，實際座向請以現場與地籍圖為準。坪數為實登所載，個別戶可能不同。</text>
+<text x="904" y="680" class="g" font-size="11" text-anchor="end">小登 · Sixhands Studio</text>
+</svg>

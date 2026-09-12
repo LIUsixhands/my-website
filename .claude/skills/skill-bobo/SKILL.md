@@ -24,6 +24,7 @@ description: 播播 — HeyGen AI 主播影片製作 + 自動上架 YouTube。�
 ```
 *.heygen.com
 *.heygen.ai
+*.minimax.io
 ```
 （YouTube 走 `*.googleapis.com` / `accounts.google.com`，已在預設白名單）
 
@@ -32,17 +33,76 @@ description: 播播 — HeyGen AI 主播影片製作 + 自動上架 YouTube。�
 ### 步驟一：準備逐字稿
 口語化純文字（同 cat skill 的逐字稿可直接拿來用）。HeyGen 單次約上限 1500 字，過長要分段。
 
-### 步驟二：挑主播與聲音（第一次設定時）
+### 步驟二：挑聲音與「誰來講」（第一次設定時）
 ```bash
-python scripts/list_heygen_assets.py        # 列出中文聲音 + 主播角色
+python scripts/list_heygen_assets.py        # 列出中文聲音 + 現成主播角色
 ```
-挑一個台灣/中文女聲與一個主播角色，把 ID 設成 `HEYGEN_VOICE_ID` / `HEYGEN_AVATAR_ID`。
+挑一個台灣/中文女聲，設成 `HEYGEN_VOICE_ID`。
+
+**「誰來講」有兩條路：**
+
+| | 現成主播 | **自訂 Photo Avatar** |
+|---|---|---|
+| 設定 | `HEYGEN_AVATAR_ID` | `HEYGEN_TALKING_PHOTO_ID` |
+| 臉 | 跟其他 HeyGen 用戶共用 | 只有你有 |
+| 適合 | 純知識口播、不建立人物 IP | **虛擬人物 IP（小魂的角色）** |
+
+兩個都設時，**Photo Avatar 優先**。
+
+**建立自訂 Photo Avatar：**
+```bash
+python scripts/upload_talking_photo.py 小路_基準臉.png
+```
+會印出 `talking_photo_id`，設成 `HEYGEN_TALKING_PHOTO_ID` 即可。
+
+> ⚠️ 只能上傳你有權使用的臉：AI 生成的虛擬人物、或你自己。
+> 別人的照片、名人、網路抓的圖都不行 —— 違反 HeyGen 條款，也違法。
+
+> **與小魂的接法**：`skill-xiao-hun` 產出角色的 `flux.md`（外觀規格）→ 用 Gemini 之類的工具
+> 生出基準臉 → 上傳成 Photo Avatar → 這條產線就有了固定的臉。
+> 角色的語氣則由 `voice.md` 決定，寫逐字稿時要照著走。
 
 ### 步驟三：生成主播影片
+
+**台灣角色請一律加 `--minimax`：**
 ```bash
-python scripts/heygen_generate.py 腳本.txt heygen_video.mp4
+python3 scripts/heygen_generate.py 腳本.txt heygen_video.mp4 --minimax
 ```
-會送出生成、輪詢狀態、完成後下載 mp4。
+
+一個指令跑完三件事：Minimax 產台灣腔配音 → 上傳 HeyGen → avatar 對嘴 → 下載 mp4。
+
+> ⚠️ **為什麼首選不是 HeyGen 內建中文聲音**：它們**大部分**是大陸腔。
+> 台灣觀眾對「垃圾（ㄌㄚ ㄐㄧ vs ㄌㄜˋ ㄙㄜˋ）」「和（ㄏㄜˊ vs ㄏㄢˋ）」極度敏感，
+> 一秒出戲，比臉不像還傷。配音對了才值得做這條產線。
+
+**但 HeyGen 確實有台灣腔（zh-TW）聲音，Minimax 掛掉時用這幾個備援：**
+
+| voice_id | 名字 | 性別 |
+|---|---|---|
+| `4158cf2ef85d4ccc856aacb1c47dbb0c` | HsiaoChen - Friendly | 女 |
+| `6fc81c412a6d46a688cfb4dd659c1ab6` | HsiaoYu - Natural | 女 |
+| `3b1633a466c44379bf8b5a2884727588` | YunJhe - Natural | 男 |
+
+`list_heygen_assets.py` 把 zh-TW 與 zh-CN 一律標成 `Chinese`，光看清單分不出來 ——
+名字是 **Hsiao/Yun-Jhe 這種威妥瑪拼法**的才是台灣腔；Xiao 開頭（Xiaoxin、Xiaoyan…）是大陸腔。
+`HiuMaan` 是粵語，不要用。
+
+備援用法（不加 `--minimax`）：
+```bash
+HEYGEN_VOICE_ID=4158cf2ef85d4ccc856aacb1c47dbb0c \
+  python3 scripts/heygen_generate.py 腳本.txt out.mp4
+```
+
+其他寫法：
+```bash
+python3 scripts/heygen_generate.py 腳本.txt out.mp4                    # HeyGen 內建聲音
+python3 scripts/heygen_generate.py 腳本.txt out.mp4 --audio 我的配音.mp3  # 用現成音檔
+python3 scripts/minimax_tts.py 腳本.txt voiceover.mp3                  # 只產配音不產片
+```
+
+**Minimax 環境變數**（與 `skill-cat-economics` 共用同一組）：
+`MINIMAX_API_KEY`、`MINIMAX_VOICE_ID`（預設 `female-shaonv` 台灣女聲）、
+`MINIMAX_SPEED`（短影音可調 1.05~1.15）。
 
 ### 步驟四：自動上傳 YouTube
 ```bash
@@ -51,6 +111,21 @@ python scripts/youtube_upload.py heygen_video.mp4 \
   --tags "經濟學,科普" --privacy private
 ```
 （OAuth 設定見 SETUP.md；未審核 app 上傳預設為私人，需手動改公開）
+
+## 已知待辦
+
+- ⏳ **`v2/video/generate` 是 legacy，HeyGen 公告 2026-10-31 移除**，屆時 `heygen_generate.py`
+  會整支失效。要改成 `POST /v3/videos`（文件：developers.heygen.com）。
+  改完必須實際跑一支驗證，不能只看文件改。
+- **HeyGen 的訂閱額度餵不動 API**：訂閱 credits（App／網頁版用）與 API 的 usd wallet
+  是兩個錢包。App 顯示還有幾百 credits，API 一樣會回 `HTTP 402 insufficient_credit`。
+  要查的是錢包餘額，不是 credits：
+  ```bash
+  curl -H "X-Api-Key: $HEYGEN_API_KEY" https://api.heygen.com/v3/users/me
+  # wallet.remaining_balance = 0.0 → 去後台儲值 API wallet（或開 auto_reload），
+  # 不是升級訂閱方案
+  ```
+- Minimax 回 `1008 insufficient balance` 同理，是後台要儲值，不是程式錯誤。
 
 ## 影片規格
 - 直式 9:16 預設 720x1280（可用 `HEYGEN_WIDTH/HEIGHT` 改；橫式設 1280x720）
