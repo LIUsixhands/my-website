@@ -88,7 +88,7 @@ def row(d):
     return (f'<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:{c};margin-right:4px"></span>'
             f'<span class="b">{d["n"]}</span></td><td>{d["addr"]}</td><td>{d["dev"]}</td>'
             f'<td class="num">{age}</td><td class="num">{d["fl"]}</td><td class="num">{d["hh"]}</td>'
-            f'<td class="num b">{d["p"]:.1f}<br><span style="font-size:7pt;font-weight:400;color:#8a7a60">{d["gross"]:.1f}</span></td>'
+            f'<td class="num b" style="line-height:1.35">{d["p"]:.1f}<br><span style="font-size:7.6pt;font-weight:400;color:#a06a3c">含車位 {d["gross"]:.1f}</span></td>'
             f'<td class="num">{d["ping"]:.0f}<br><span style="font-size:7pt;color:#8a7a60">{usable(d)}</span></td>'
             f'<td class="num b">{tot}</td><td class="num">{y}</td></tr>')
 tbl="".join(row(d) for d in D)
@@ -151,7 +151,7 @@ p2=f"""<div class="page"><div class="pad">
 
  <table>
   <tr><th>建案</th><th>位置</th><th>建設公司</th><th class="num">屋齡</th><th class="num">樓</th><th class="num">戶數</th>
-      <th class="num">單價 萬/坪<br><span style="font-weight:400;opacity:.75">不含車位／含車位</span></th><th class="num">坪數中位<br><span style="font-weight:400;opacity:.75">實際可用</span></th><th class="num">典型總價<br><span style="font-weight:400;opacity:.75">房屋</span></th><th class="num">毛<br>投報</th></tr>
+      <th class="num">單價<br>萬/坪</th><th class="num">坪數中位<br><span style="font-weight:400;opacity:.75">實際可用</span></th><th class="num">典型總價<br><span style="font-weight:400;opacity:.75">房屋</span></th><th class="num">毛<br>投報</th></tr>
   {tbl}
  </table>
  <div style="font-size:7.4pt;color:#8a7a60;margin-top:1.5mm">
@@ -318,7 +318,15 @@ p5=f"""<div class="page"><div class="pad">
   <span class="b">單價決定每坪成本，總價決定你進不進得來。</span>
  </div>
 
- <div style="margin-top:6mm" class="ch">交 屋 潮 ≠ 行 情 ： 估 價 必 分 的 兩 組 數 字</div>
+ <div style="margin-top:5mm" class="warn">
+  <span class="b">◆ 客戶說「我在網路上看到才 XX 萬」時，先確認他看的是哪一種單價。</span><br>
+  <span class="b">不含車位</span>＝（總價 − 車位價）÷（總面積 − 車位面積）── <span class="b">估價與議價用的真實房屋單價</span><br>
+  <span class="b">含車位</span>＝ 總價 ÷ 總面積 ── <span class="b">樂居、591 與實登原始欄位多為此口徑</span><br>
+  兩者最大差到 <span class="b">10.4%</span>（聯聚中維 73.5 vs 66.6）。車位席數越多、車位價越高，差越大。
+  <span class="b">本報告第一章表格兩個數字都列出來了</span>，可以直接對照。
+ </div>
+
+ <div style="margin-top:5mm" class="ch">交 屋 潮 ≠ 行 情 ： 估 價 必 分 的 兩 組 數 字</div>
  <div style="font-size:8.5pt;color:#6b5c46;line-height:1.8;margin-bottom:2mm">
   新案交屋那幾年會出現一批「建商銷售的成交」，價格遠低於今天的行情。
   把交屋潮那批算進平均，會<span class="b">嚴重低估行情——最誇張的鼎盛 BHW 差到 1.77 倍</span>。
