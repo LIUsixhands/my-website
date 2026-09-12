@@ -105,7 +105,7 @@ for nm,y in EW:
     gy+=f'<line x1="86" y1="{y}" x2="574" y2="{y}" stroke="#d9cdb4" stroke-width="2"/>'
     gy+=f'<text x="80" y="{y+3.5}" font-size="9" fill="#8a7a60" text-anchor="end">{nm}</text>'
 for nm,x in NS:
-    gy+=f'<line x1="{x}" y1="28" x2="{x}" y2="296" stroke="#e4dac4" stroke-width="1.5"/>'
+    gy+=f'<line x1="{x}" y1="28" x2="{x}" y2="296" stroke="#d9cdb4" stroke-width="2"/>'
     gy+=f'<text x="{x}" y="310" font-size="9" fill="#8a7a60" text-anchor="middle">{nm}</text>'
 
 # 每案座標＋標籤避讓（dx, dy, anchor）
@@ -113,13 +113,24 @@ for nm,x in NS:
 #    助哥是七期在地經紀人，其標註為最終權威，優先於門牌推估與網路資料。
 POS={"市政壹號廣場":      (440, 46, 0,-12,"middle"),   # 臺灣大道三段，近惠中路（助哥標）
      "親家T-POWER":       (285,108, 0,-12,"middle"),   # 市政北七路186（河南路～惠來路間，助哥標）
-     "聯聚中雍大廈":      (390,108, 0,-12,"middle"),   # 市政北七路98（惠來路～惠中路間，助哥標）
+     "聯聚中雍大廈":      (390,108, 0, 19,"middle"),   # 市政北七路98（惠來路～惠中路間，助哥標）
      "NTC國家商貿中心":   (145,170, 0,-12,"middle"),   # 市政北二路282 × 朝富路口
      "鼎盛BHW":           (214,170, 0,-12,"middle"),   # 市政北二路236/238 × 河南路口
      "CBD時代廣場":       (108,212,13,  4,"start" ),   # 朝富路213
      "聯聚中維大廈":      (415,218, 0,-12,"middle"),   # 市政北一路／市政路，近惠中路（助哥標）
      "親家T3市政國際中心":(275,274, 0,-12,"middle"),   # 市政路500（河南路～惠來路間，助哥標）
      "豐邑市政都心廣場":  (383,274, 0,-12,"middle")}   # 市政路386（惠來路東側，助哥標）
+# 地標層（灰色空心方塊，刻意弱於建案色點）
+LM=[("秋紅谷",       108, 46, 13,  4,"start" ),  # 朝富路30・臺灣大道×朝富路口
+    ("大遠百・新光", 405, 77,  0, 16,"middle"),  # 臺灣大道三段251/301・惠來～惠中間
+    ("臺中市政府",   505, 77,  0, 16,"middle"),  # 臺灣大道三段99・惠中路～文心路間
+    ("國家歌劇院",   322,170,  0,-13,"middle")]  # 惠來路二段101（對街聯聚仁愛88＝市政北二路口）
+for nm,x,y,dx,dy,anc in LM:
+    gy+=(f'<rect x="{x-5}" y="{y-5}" width="10" height="10" rx="2" '
+         f'fill="#FAF7F0" stroke="#a9997a" stroke-width="2"/>')
+    gy+=(f'<text x="{x+dx}" y="{y+dy}" font-size="8.6" fill="#8a7a60" '
+         f'text-anchor="{anc}">{nm}</text>')
+
 for d in D:
     x,y,dx,dy,anc=POS[d["n"]]; c=TIER[d["tier"]]
     gy+=f'<circle cx="{x}" cy="{y}" r="6" fill="{c}" stroke="#FAF7F0" stroke-width="2"/>'
@@ -134,7 +145,8 @@ p2=f"""<div class="page"><div class="pad">
 
  <div class="lg"><span><i style="background:{TIER['入門']}"></i>入門</span>
   <span><i style="background:{TIER['中階']}"></i>中階</span>
-  <span><i style="background:{TIER['頂級']}"></i>頂級總部</span></div>
+  <span><i style="background:{TIER['頂級']}"></i>頂級總部</span>
+  <span><i style="background:#FAF7F0;border:2px solid #a9997a"></i>地標</span></div>
 
  <table>
   <tr><th>建案</th><th>位置</th><th>建設公司</th><th class="num">屋齡</th><th class="num">樓</th><th class="num">戶數</th>
