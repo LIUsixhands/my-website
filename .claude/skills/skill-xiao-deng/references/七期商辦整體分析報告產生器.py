@@ -88,7 +88,7 @@ def row(d):
     return (f'<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:{c};margin-right:4px"></span>'
             f'<span class="b">{d["n"]}</span></td><td>{d["addr"]}</td><td>{d["dev"]}</td>'
             f'<td class="num">{age}</td><td class="num">{d["fl"]}</td><td class="num">{d["hh"]}</td>'
-            f'<td class="num b">{d["p"]:.1f}</td>'
+            f'<td class="num b">{d["p"]:.1f}<br><span style="font-size:7pt;font-weight:400;color:#8a7a60">{d["gross"]:.1f}</span></td>'
             f'<td class="num">{d["ping"]:.0f}<br><span style="font-size:7pt;color:#8a7a60">{usable(d)}</span></td>'
             f'<td class="num b">{tot}</td><td class="num">{y}</td></tr>')
 tbl="".join(row(d) for d in D)
@@ -151,11 +151,11 @@ p2=f"""<div class="page"><div class="pad">
 
  <table>
   <tr><th>建案</th><th>位置</th><th>建設公司</th><th class="num">屋齡</th><th class="num">樓</th><th class="num">戶數</th>
-      <th class="num">單價<br>萬/坪</th><th class="num">坪數中位<br><span style="font-weight:400;opacity:.75">實際可用</span></th><th class="num">典型總價<br><span style="font-weight:400;opacity:.75">房屋</span></th><th class="num">毛<br>投報</th></tr>
+      <th class="num">單價 萬/坪<br><span style="font-weight:400;opacity:.75">不含車位／含車位</span></th><th class="num">坪數中位<br><span style="font-weight:400;opacity:.75">實際可用</span></th><th class="num">典型總價<br><span style="font-weight:400;opacity:.75">房屋</span></th><th class="num">毛<br>投報</th></tr>
   {tbl}
  </table>
  <div style="font-size:7.4pt;color:#8a7a60;margin-top:1.5mm">
-  單價＝淨單價（總價與面積皆已扣除車位），<b>一律只採民國 113–115 年（近三年）成交</b>——行情逐年變動，跨年平均會嚴重失準。成屋案另已排除建商交屋期那批低價；預售案（聯聚中維、市政壹號）為建商銷售成交價，不宜與成屋案直接比較。坪數為扣車位後之權狀坪（<b>含公設</b>），採全部中古轉售樣本之中位（坪數為產品屬性，不隨行情變動）；<b>典型總價＝單價 × 坪數，為房屋部分，車位另計</b>。
+  單價＝淨單價（總價與面積皆已扣除車位），<b>一律只採民國 113–115 年（近三年）成交</b>——行情逐年變動，跨年平均會嚴重失準。成屋案另已排除建商交屋期那批低價；預售案（聯聚中維、市政壹號）為建商銷售成交價，不宜與成屋案直接比較。單價上排為<b>不含車位</b>（估價基準），下排灰字為<b>含車位</b>（總價÷總面積，坊間網站與實登原始欄位多為此口徑，兩者差 −0.7%～+10.4%）。坪數為扣車位後之權狀坪（<b>含公設</b>），採全部中古轉售樣本之中位；<b>典型總價＝單價 × 坪數，為房屋部分，車位另計</b>。
   聯聚中維、市政壹號為預售案，尚無租賃實登故無投報率。
  </div>
 
@@ -580,6 +580,7 @@ def yf(d): return "—" if not d["y"] else f'{d["y"]:.2f}%'
 
 sr="".join(f'<tr><td class="b">{d["n"]}</td><td>{d["src"]}</td>'
            f'<td class="num b">{d["p"]:.2f}</td>'
+           f'<td class="num">{d["gross"]:.2f}</td>'
            f'<td class="num">{(str(d["rn"])+" 筆"+("（全期）" if d.get("rnote") else "")) if d["rn"] else "—"}</td>'
            f'<td class="num">{rentf(d)}</td>'
            f'<td class="num">{yf(d)}</td></tr>' for d in D)
@@ -591,23 +592,24 @@ p11=f"""<div class="page"><div class="pad">
  並<span class="b">限定近三年（民國 113–115 年）成交</span>，以反映現行行情。</div>
 
  <div class="ch">處 理 方 法（ 五 道 修 正 ）</div>
- <table style="margin-bottom:6mm">
-  <tr><th style="width:26%">修正項目</th><th>做法與理由</th></tr>
-  <tr><td class="b">① 扣除車位</td><td>實登「單價」欄<span class="b">只在車位價格有揭露時才扣車位</span>，口徑不一致。
-   本報告一律重算：淨單價 ＝（總價 − 車位價）÷（總面積 − 車位面積）。車位面積逐案由車位分頁加總，
-   因坡道平面（約 9.63 坪）與坡道機械（約 3.47 坪）差距達 2.8 倍。</td></tr>
+ <table style="margin-bottom:4mm;font-size:7.9pt">
+  <tr><th style="width:22%">修正項目</th><th>做法與理由</th></tr>
+  <tr><td class="b">① 扣除車位<br>（兩種都給）</td><td>實登「單價」欄<span class="b">只在車位價格有揭露時才扣車位</span>，口徑不一致。
+   本報告一律重算並<span class="b">同時揭露兩個數字</span>：<b>不含車位（估價基準）</b>＝（總價 − 車位價）÷（總面積 − 車位面積）；<b>含車位</b>＝ 總價 ÷ 總面積。
+   兩者相差 <span class="b">−0.7% 至 +10.4%</span>。坊間網站與實登原始欄位多採含車位口徑，<span class="b">比價前務必先確認對方用哪一種</span>。
+   車位面積逐案由車位分頁加總，因坡道平面（約 9.63 坪）與坡道機械（約 3.47 坪）差距達 2.8 倍。</td></tr>
   <tr><td class="b">② 排除非常規交易</td><td>排除親友、員工、共有人、特殊關係人交易，以及已解約案件。</td></tr>
   <tr><td class="b">③ 分離交屋潮</td><td>新案交屋期的建商銷售成交與日後屋主轉售分列統計，
    兩者最大差距達 <span class="b">1.77 倍</span>（鼎盛 BHW：交屋潮 28.51 → 現行 50.44）。<span class="b">本報告一律只採屋主中古轉售組。</span></td></tr>
-  <tr><td class="b">④ 限定近三年</td><td><span class="b">行情逐年變動，跨多年平均會嚴重失準。</span>本報告單價一律只取<span class="b">民國 113–115 年</span>成交之中位數。以親家 T3 為例：108 年中位 23.0、114 年已達 41.7，八年平均會得到 27.7，<span class="b">比現行行情低估三成以上</span>。坪數則相反，屬產品屬性、不隨行情變動，採全樣本以提高穩定度。</td></tr>
+  <tr><td class="b">④ 限定近三年</td><td><span class="b">行情逐年變動，跨多年平均會嚴重失準。</span>單價一律只取<span class="b">民國 113–115 年</span>成交中位數。以親家 T3 為例：108 年 23.0、114 年已達 41.7，八年平均得 27.7，<span class="b">低估三成以上</span>。坪數則相反，屬產品屬性、不隨行情變動，採全樣本以提高穩定度。</td></tr>
   <tr><td class="b">⑤ 不設查詢條件</td><td>撈取時<span class="b">不勾選樓層別、坪數區間、建物型態</span>，避免樣本偏誤。
    另：商辦認定<span class="b">只認「主要用途＝辦公用」</span>，不採建物型態欄
    （同一棟樓在買賣與租賃兩套登錄中的型態欄可能不同）。</td></tr>
  </table>
 
  <div class="ch">各 案 樣 本 基 準</div>
- <table>
-  <tr><th>案名</th><th>單價基準樣本</th><th>淨單價<br>（萬/坪）</th><th>租金樣本</th><th>租金<br>（元/坪/月）</th><th>毛投報</th></tr>
+ <table style="font-size:7.9pt">
+  <tr><th>案名</th><th>單價基準樣本</th><th>不含車位<br>（萬/坪）</th><th>含車位<br>（萬/坪）</th><th>租金樣本</th><th>租金<br>（元/坪/月）</th><th>毛投報</th></tr>
   {sr}
  </table>
  <div style="font-size:7.4pt;color:#8a7a60;margin-top:1.5mm">

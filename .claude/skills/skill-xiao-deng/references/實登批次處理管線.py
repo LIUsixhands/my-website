@@ -16,6 +16,8 @@
      ※ 例外：坪數是「產品屬性」不隨行情變動 → 坪數採全部中古轉售樣本，樣本越多越穩
   8. 一律用【中位數】，不用平均數（平均會被大坪數特例拉動）
   9. 毛投報 ＝ 租金 × 12 ÷（單價 × 10,000）：房屋對房屋，兩邊都已扣車位
+ 10. 對外行情數字一律經 headline() 產出 —— 它會強制你指定年份窗口，
+     並同時吐出【不含車位】與【含車位】兩個單價。不要繞過它自己 median。
 用法：BUILD 清單填入標的與檔案，執行本檔。
 """
 import xlrd, re, json, statistics as st, collections, sys, os
@@ -107,6 +109,34 @@ def recompute(rows):
             x['val']=(x['tot']-pv)/base
         out.append(x)
     return out, MA, MV
+
+class 口徑違規(Exception):
+    """口徑錯誤直接擋下來，不讓它流到客戶手上。"""
+
+def headline(rows, window=None, allow_full=False, name="", min_n=10):
+    """⛔ 產出【對外行情數字】的唯一入口。寫在 md 的規則擋不住人，所以寫成會 raise 的程式碼。
+
+    強制三件事（2026-09-12 助哥第二次指正後加上，第一次只寫了註解，沒擋住）：
+      1. 必須指定 window=(起年, 迄年)；想用全期必須明寫 allow_full=True，逼你自己承認
+      2. 一律同時回傳【不含車位】與【含車位】兩個單價，不得只給一個
+      3. 樣本數不足會標 thin=True，呼叫端必須把警語印出去
+    """
+    if window is None and not allow_full:
+        raise 口徑違規(
+            f"{name}：沒有指定年份窗口。行情逐年變動，跨多年平均會嚴重失準"
+            "（親家T3 108年 23.0 → 114年 41.7，八年平均低估三成）。"
+            "請給 window=(113,115)；真要全期請明寫 allow_full=True。")
+    g = rows if window is None else [x for x in rows if window[0] <= x['yr'] <= window[1]]
+    if not g:
+        raise 口徑違規(f"{name}：{window} 區間內沒有任何成交。")
+    net   = st.median([x['val'] for x in g])                    # 不含車位（淨單價）＝估價基準
+    gross = st.median([x['tot']/x['area'] for x in g])          # 含車位（總價÷總面積）＝坊間常見口徑
+    return dict(name=name, window=window or "全期", n=len(g),
+                net=round(net,2), gross=round(gross,2),
+                gap_pct=round((net/gross-1)*100,1),
+                ping=round(st.median([x['base'] for x in g]),1),
+                thin=len(g) < min_n,
+                note=f"⚠ 樣本僅 {len(g)} 筆，行情帶寬較寬，議價前逐戶核對" if len(g)<min_n else "")
 
 def bands(rows, key='val', cuts=None):
     cuts = cuts or [(2,9,'低'),(10,17,'中'),(18,25,'中高'),(26,99,'高')]
