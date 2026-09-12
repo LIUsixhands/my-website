@@ -30,6 +30,7 @@ th{background:#3A2E1C;color:#FAF7F0;padding:5px 6px;text-align:left;font-weight:
 td{padding:5px 6px;border-bottom:1px solid #e6dcc8}
 tr:nth-child(even) td{background:#f5efe2}
 .hl td{background:#B8924F!important;color:#fff;font-weight:700}
+.hl td span{color:#fdf3dc!important}
 .num{font-variant-numeric:tabular-nums;text-align:right}
 .foot{position:absolute;bottom:0;left:0;right:0;height:12mm;background:#3A2E1C;color:#cbbfa6;font-size:6.5pt;
  display:flex;align-items:center;justify-content:space-between;padding:0 15mm}
@@ -76,6 +77,9 @@ p1=f"""<div class="page" style="background:#3A2E1C">
 </div>{foot(1)}</div>"""
 
 # ── P2 第一章 全貌 ──
+def usable(d):
+    """扣除公設後之實際可用坪。七期商辦公設比 36%–42%，取 0.58–0.64 區間估算。"""
+    return f'{round(d["ping"]*0.58)}–{round(d["ping"]*0.64)}'
 def row(d):
     tot = f'{d["tot"]/10000:.2f} 億' if d["tot"] and d["tot"]>=10000 else (f'{d["tot"]:,.0f} 萬' if d["tot"] else '—')
     age = d["age"] if isinstance(d["age"],str) else f'{d["age"]} 年'
@@ -84,26 +88,41 @@ def row(d):
     return (f'<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:{c};margin-right:4px"></span>'
             f'<span class="b">{d["n"]}</span></td><td>{d["addr"]}</td><td>{d["dev"]}</td>'
             f'<td class="num">{age}</td><td class="num">{d["fl"]}</td><td class="num">{d["hh"]}</td>'
-            f'<td class="num b">{d["p"]:.1f}</td><td class="num">{d["ping"]:.0f}</td>'
+            f'<td class="num b">{d["p"]:.1f}</td>'
+            f'<td class="num">{d["ping"]:.0f}<br><span style="font-size:7pt;color:#8a7a60">{usable(d)}</span></td>'
             f'<td class="num b">{tot}</td><td class="num">{y}</td></tr>')
 tbl="".join(row(d) for d in D)
 
-# 地理示意
-roads=[("臺灣大道三段",40,"H"),("市政北七路",95,"H"),("市政北二路",150,"H"),("市政北一路",190,"H"),("市政路",250,"H")]
+# ── 地理示意（2026-09-12 校正：依實登門牌與路口實查重繪）──
+# 東西向道路由北而南：臺灣大道三段 → 市政北七路 → 市政北二路 → 市政北一路 → 市政路
+# 南北向道路由西而東：朝富路 → 河南路 → 惠來路 → 惠中路 → 文心路
+#   （市政北七路自東向西序：惠中路→惠來路→惠民路→河南路→朝富路，故朝富路最西）
+#   （市政路、市政北各路門牌皆自東端起編，號碼越大越偏西）
+EW=[("臺灣大道三段",46),("市政北七路",108),("市政北二路",170),("市政北一路",218),("市政路",274)]
+NS=[("朝富路",108),("河南路",212),("惠來路",342),("惠中路",452),("文心路",558)]
 gy=""
-for nm,y,_ in roads:
-    gy+=f'<line x1="70" y1="{y}" x2="560" y2="{y}" stroke="#d9cdb4" stroke-width="2"/>'
-    gy+=f'<text x="64" y="{y+3}" font-size="9" fill="#8a7a60" text-anchor="end">{nm}</text>'
-gy+='<line x1="120" y1="25" x2="120" y2="270" stroke="#d9cdb4" stroke-width="2"/><text x="120" y="285" font-size="9" fill="#8a7a60" text-anchor="middle">朝富路</text>'
-gy+='<line x1="545" y1="25" x2="545" y2="270" stroke="#d9cdb4" stroke-width="2"/><text x="545" y="285" font-size="9" fill="#8a7a60" text-anchor="middle">文心路</text>'
-POS={"市政壹號廣場":(300,40),"親家T-POWER":(250,95),"聯聚中雍大廈":(430,95),
-     "鼎盛BHW":(300,150),"NTC國家商貿中心":(430,150),"聯聚中維大廈":(360,190),
-     "CBD時代廣場":(120,215),"豐邑市政都心廣場":(280,250),"親家T3市政國際中心":(450,250)}
+for nm,y in EW:
+    gy+=f'<line x1="86" y1="{y}" x2="574" y2="{y}" stroke="#d9cdb4" stroke-width="2"/>'
+    gy+=f'<text x="80" y="{y+3.5}" font-size="9" fill="#8a7a60" text-anchor="end">{nm}</text>'
+for nm,x in NS:
+    gy+=f'<line x1="{x}" y1="28" x2="{x}" y2="296" stroke="#e4dac4" stroke-width="1.5"/>'
+    gy+=f'<text x="{x}" y="310" font-size="9" fill="#8a7a60" text-anchor="middle">{nm}</text>'
+
+# 每案座標＋標籤避讓（dx, dy, anchor）
+POS={"市政壹號廣場":      (342, 46, 0,-12,"middle"),   # 臺灣大道三段 × 惠來路口
+     "親家T-POWER":       (315,108, 0,-12,"middle"),   # 市政北七路186（惠來路西側）
+     "聯聚中雍大廈":      (405,108, 0,-12,"middle"),   # 市政北七路98（近惠中路）
+     "NTC國家商貿中心":   (132,170, 0,-12,"middle"),   # 市政北二路282 × 朝富路口
+     "鼎盛BHW":           (222,170, 0,-12,"middle"),   # 市政北二路236/238 × 河南路口
+     "CBD時代廣場":       (108,212,13,  4,"start" ),   # 朝富路213
+     "聯聚中維大廈":      (446,218, 0,-12,"middle"),   # 市政北一路（惠國段178，近惠中路）
+     "親家T3市政國際中心":(330,274, 0,-12,"middle"),   # 市政路500（近惠來路）
+     "豐邑市政都心廣場":  (452,274, 0, 19,"middle")}   # 市政路386（惠國段，近惠中路）
 for d in D:
-    x,y=POS[d["n"]]; c=TIER[d["tier"]]
+    x,y,dx,dy,anc=POS[d["n"]]; c=TIER[d["tier"]]
     gy+=f'<circle cx="{x}" cy="{y}" r="6" fill="{c}" stroke="#FAF7F0" stroke-width="2"/>'
-    anc="middle"; dy=-11
-    gy+=f'<text x="{x}" y="{y+dy}" font-size="9.5" fill="#3A2E1C" text-anchor="{anc}" font-weight="700">{d["n"]}</text>'
+    gy+=(f'<text x="{x+dx}" y="{y+dy}" font-size="9.5" fill="#3A2E1C" '
+         f'text-anchor="{anc}" font-weight="700">{d["n"]}</text>')
 
 p2=f"""<div class="page"><div class="pad">
  <div class="ch">第 一 章</div><div class="ttl">七期商辦全貌：九大建案</div>
@@ -117,17 +136,17 @@ p2=f"""<div class="page"><div class="pad">
 
  <table>
   <tr><th>建案</th><th>位置</th><th>建設公司</th><th class="num">屋齡</th><th class="num">樓</th><th class="num">戶數</th>
-      <th class="num">單價<br>萬/坪</th><th class="num">坪數<br>中位</th><th class="num">總價<br>中位</th><th class="num">毛<br>投報</th></tr>
+      <th class="num">單價<br>萬/坪</th><th class="num">坪數中位<br><span style="font-weight:400;opacity:.75">實際可用</span></th><th class="num">總價<br>中位</th><th class="num">毛<br>投報</th></tr>
   {tbl}
  </table>
  <div style="font-size:7.4pt;color:#8a7a60;margin-top:1.5mm">
-  單價＝淨單價（已扣車位）；成屋案採中古轉售組，預售案採建商銷售價。坪數為扣除車位後之權狀坪。
+  單價＝淨單價（總價與面積皆已扣除車位）。<b>成屋案採「屋主中古轉售」成交，已排除建商交屋期那批低價；預售案（聯聚中維、市政壹號）為建商銷售成交價，非市場轉售價，不宜與成屋案直接比較。</b>坪數為扣車位後之權狀坪，<b>含公設</b>；「實際可用」為扣除公設後之估算值。
   聯聚中維、市政壹號為預售案，尚無租賃實登故無投報率。
  </div>
 
  <div style="margin-top:6mm" class="ch">位 置 分 布</div>
- <svg viewBox="0 0 600 300" style="width:100%;height:62mm">{gy}</svg>
- <div style="font-size:7.4pt;color:#8a7a60">※ 示意圖，非按實際比例與相對距離；僅表達主要幹道與建案之相對關係。</div>
+ <svg viewBox="0 0 600 318" style="width:100%;height:67mm">{gy}</svg>
+ <div style="font-size:7.4pt;color:#8a7a60">※ 示意圖，非按實際比例與距離，僅表達主要幹道與各案之相對關係。為求清晰，市政北三／五／六路與惠民路、惠文路未繪（七期無市政北四路）。各案定位依實登門牌與路口實查校正（2026-09-12）。</div>
 
  <div style="margin-top:5mm" class="note">
   <span class="b g">◆ 一句話認識七期商辦：</span>
@@ -229,11 +248,11 @@ p4=f"""<div class="page"><div class="pad">
  <div style="margin-top:5mm" class="ch">依 坪 數 需 求 找 建 案</div>
  <table>
   <tr><th>你需要的坪數</th><th>可選建案</th><th>備註</th></tr>
-  <tr><td class="b">25 – 35 坪</td><td>市政壹號廣場</td><td>全區唯一的小坪數新案（預售）</td></tr>
-  <tr><td class="b">60 – 75 坪</td><td>親家 T3、親家 T-POWER、NTC 國家商貿中心</td><td>選擇最多的區間</td></tr>
-  <tr><td class="b">80 – 105 坪</td><td>鼎盛 BHW、CBD 時代廣場、豐邑市政都心廣場</td><td>中大型辦公需求</td></tr>
-  <tr><td class="b">130 – 160 坪</td><td>聯聚中維大廈</td><td>亦有 80 坪級小戶型</td></tr>
-  <tr class="hl"><td class="b">220 坪以上／整層</td><td>聯聚中雍大廈</td><td>可兩戶合併約 441 坪，全區唯一</td></tr>
+  <tr><td class="b">25 – 35 坪<br><span style="font-weight:400;font-size:7.2pt;color:#8a7a60">可用約 15–22 坪</span></td><td>市政壹號廣場</td><td>全區唯一的小坪數新案（預售）</td></tr>
+  <tr><td class="b">60 – 75 坪<br><span style="font-weight:400;font-size:7.2pt;color:#8a7a60">可用約 35–48 坪</span></td><td>親家 T3、親家 T-POWER、NTC 國家商貿中心</td><td>選擇最多的區間</td></tr>
+  <tr><td class="b">80 – 105 坪<br><span style="font-weight:400;font-size:7.2pt;color:#8a7a60">可用約 46–67 坪</span></td><td>鼎盛 BHW、CBD 時代廣場、豐邑市政都心廣場</td><td>中大型辦公需求</td></tr>
+  <tr><td class="b">130 – 160 坪<br><span style="font-weight:400;font-size:7.2pt;color:#8a7a60">可用約 75–102 坪</span></td><td>聯聚中維大廈</td><td>亦有 80 坪級小戶型</td></tr>
+  <tr class="hl"><td class="b">220 坪以上／整層<br><span style="font-weight:400;font-size:7.2pt;color:#8a7a60">可用約 128 坪以上</span></td><td>聯聚中雍大廈</td><td>可兩戶合併約 441 坪，全區唯一</td></tr>
  </table>
  <div style="font-size:7.4pt;color:#8a7a60;margin-top:1.5mm">
   ※ 上表為各案「主力坪數」。NTC 與 CBD 另有大坪數戶（實登最大分別達 838 坪、456 坪），屬少數特例。
@@ -285,7 +304,7 @@ p5=f"""<div class="page"><div class="pad">
 
  <div style="margin-top:6mm" class="ch">交 屋 潮 ≠ 行 情 ： 估 價 必 分 的 兩 組 數 字</div>
  <div style="font-size:8.5pt;color:#6b5c46;line-height:1.8;margin-bottom:2mm">
-  新案交屋那幾年會出現一批「建商定價的成交」，價格明顯低於日後的中古轉售。
+  新案交屋那幾年會出現一批「建商銷售的成交」，價格明顯低於日後的中古轉售。
   把兩者混在一起平均，會<span class="b">嚴重低估行情（最多差 37.5%）</span>。本報告一律只採中古轉售組。</div>
  <table>
   <tr><th>案名</th><th>交屋潮年度</th><th>交屋潮均價</th><th>中古轉售均價</th><th>價差</th></tr>
@@ -396,7 +415,7 @@ p7=f"""<div class="page"><div class="pad">
 CASES=[
  ("市政壹號廣場","26 坪｜80.6 萬／坪｜2,338 萬｜預售 2028",
   ["全區<b>唯一的小坪數新案</b>，26 坪即可入手","新案中<b>總價門檻最低</b>，2,338 萬","臺灣大道三段門牌，辨識度高","樓層溢價僅 +3.4%，<b>買低樓層最划算</b>"],
-  ["單價 80.6 萬／坪為<b>全場最高</b>","890 戶為全區最多，<b>未來轉售與出租競爭最激烈</b>","預售案，2028 年才交屋，<b>無租金可驗證投報</b>","預售價是建商定價，不等於日後市場轉售價"]),
+  ["單價 80.6 萬／坪為<b>全場最高</b>","890 戶為全區最多，<b>未來轉售與出租競爭最激烈</b>","預售案，2028 年才交屋，<b>無租金可驗證投報</b>","預售價是建商銷售成交價，不等於日後市場轉售價"]),
  ("聯聚中維大廈","132 坪｜69.3 萬／坪｜9,255 萬｜興建中",
   ["<b>42 樓為全區最高</b>，天際線地標","聯聚品牌，七期頂級商辦的既有認知","<b>81 坪小戶型與 131–161 坪大戶並存</b>，彈性高","樓層溢價 +22.4% 全場最高 → 高樓層具稀缺性"],
   ["興建中，<b>尚無租賃實績可驗證投報</b>","總價逼近一億，買方池極小","<b>高低樓層價差大</b>，議價前務必先確認樓層基準","與聯聚中雍在同一買方池中彼此替代"]),
@@ -536,7 +555,7 @@ p11=f"""<div class="page"><div class="pad">
    本報告一律重算：淨單價 ＝（總價 − 車位價）÷（總面積 − 車位面積）。車位面積逐案由車位分頁加總，
    因坡道平面（約 9.63 坪）與坡道機械（約 3.47 坪）差距達 2.8 倍。</td></tr>
   <tr><td class="b">② 排除非常規交易</td><td>排除親友、員工、共有人、特殊關係人交易，以及已解約案件。</td></tr>
-  <tr><td class="b">③ 分離交屋潮</td><td>新案交屋期的建商定價成交與日後中古轉售分列統計，
+  <tr><td class="b">③ 分離交屋潮</td><td>新案交屋期的建商銷售成交與日後中古轉售分列統計，
    兩者最大差距達 +37.5%。<span class="b">本報告採用的行情一律為中古轉售組。</span></td></tr>
   <tr><td class="b">④ 不設查詢條件</td><td>撈取時<span class="b">不勾選樓層別、坪數區間、建物型態</span>，避免樣本偏誤。
    另：商辦認定<span class="b">只認「主要用途＝辦公用」</span>，不採建物型態欄
