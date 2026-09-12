@@ -91,15 +91,33 @@ def clean(rows):
     return keep, drop
 
 def recompute(rows):
-    """統一口徑重算：買賣/預售→net(萬/坪)；租賃→rent(元/坪/月)"""
+    """統一口徑重算：買賣/預售→net(萬/坪)；租賃→rent(元/坪/月)
+
+    ⚠️ 2026-09-12 助哥抓出的坑：車位價估算必須【逐車位類別】，不可用全域中位。
+    親家T-POWER 原本用 全域面積中位 3.56 坪（機械車位拉低）× 全域價格中位 170 萬（平面車位拉高），
+    兩個中位數來自不同類別，湊出 47.8 萬/坪的假車位單價，比房屋單價 43.3 還貴，
+    導致「扣車位後單價反而比含車位低」。改為逐類別估算後才正確。
+    """
     va=[x['pk_area']/x['pk_n'] for x in rows if x['pk_n'] and x['pk_area']>0]
     vv=[(x['pk_val'] or x['pkv_row'] or 0)/x['pk_n'] for x in rows if x['pk_n'] and (x['pk_val']>0 or x['pkv_row'])]
     MA=st.median(va) if va else 0.0
     MV=st.median(vv) if vv else 0.0
+    # 逐類別單席價格中位：只採「該案車位類別單純」者，價格才歸屬得了
+    byk=collections.defaultdict(list)
+    for x in rows:
+        if not x['pk_n']: continue
+        ks=set(x['kinds'])
+        if len(ks)!=1: continue
+        v=(x['pk_val'] or x['pkv_row'] or 0)
+        if v>0: byk[ks.pop()].append(v/x['pk_n'])
+    KV={k:st.median(v) for k,v in byk.items() if v}
     out=[]
     for x in rows:
         pa = x['pk_area'] if x['pk_area']>0 else x['npark']*MA
-        pv = x['pk_val'] if x['pk_val']>0 else (x['pkv_row'] if x['pkv_row'] else x['npark']*MV)
+        if x['pk_val']>0:   pv = x['pk_val']
+        elif x['pkv_row']:  pv = x['pkv_row']
+        elif x['kinds']:    pv = sum(KV.get(k, MV) for k in x['kinds'])   # ← 逐類別估算
+        else:               pv = x['npark']*MV
         base = (x['area'] or 0) - pa
         if base<=0: continue
         x['base']=base
@@ -131,8 +149,10 @@ def headline(rows, window=None, allow_full=False, name="", min_n=10):
         raise 口徑違規(f"{name}：{window} 區間內沒有任何成交。")
     net   = st.median([x['val'] for x in g])                    # 不含車位（淨單價）＝估價基準
     gross = st.median([x['tot']/x['area'] for x in g])          # 含車位（總價÷總面積）＝坊間常見口徑
+    if gross > net:   # 含車位竟高於不含車位 → 車位估價偏高，多半是類別配錯
+        print(f"⚠️ {name}：含車位({gross:.2f}) > 不含車位({net:.2f})，請檢查車位價估算是否逐類別。")
     return dict(name=name, window=window or "全期", n=len(g),
-                net=round(net,2), gross=round(gross,2),
+                net=round(net,2), gross=round(gross,2), anomaly=gross>net,
                 gap_pct=round((net/gross-1)*100,1),
                 ping=round(st.median([x['base'] for x in g]),1),
                 thin=len(g) < min_n,
