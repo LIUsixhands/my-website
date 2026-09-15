@@ -100,6 +100,27 @@ def to_url(rel):
     return SITE + urllib.parse.quote(path, safe="/")
 
 
+def warn_if_shallow():
+    """淺層 clone 會讓 lastmod 靜默取到過舊的日期，出聲警告。
+
+    `git log -1 -- <檔案>` 只看得到 clone 深度內的 commit。深度不足時它不會報錯，
+    而是回傳一個更舊的日期，產出的 sitemap 會把頁面的異動時間往回推——對搜尋引擎
+    等於謊報。這種錯誤沒有任何外顯症狀，所以在這裡擋一下。
+    """
+    out = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if out == "true":
+        print(
+            "警告：這是淺層 clone，lastmod 可能取到過舊的日期。\n"
+            "      請先執行 `git fetch --unshallow` 再重跑，否則產出的 sitemap\n"
+            "      會把頁面異動時間往回推。",
+            file=sys.stderr,
+        )
+
+
 def git_date(rel):
     """該檔案最後一次被 commit 的日期；沒有紀錄就用今天。"""
     out = subprocess.run(
@@ -118,6 +139,7 @@ def defaults_for(rel):
 
 
 def main():
+    warn_if_shallow()
     order, meta = read_existing(SITEMAP)
     pages = find_pages()
 
