@@ -155,10 +155,10 @@ bcards = "".join(
  (f'<a class="bcard" href="office/{SLUG[d["n"]]}.html">' if d["n"] in LIVE else '<div class="bcard">')
  + f'<div class="nm"><span style="font-size:12px;color:var(--mute);font-family:\'Noto Sans TC\';font-weight:400;display:block;margin-bottom:3px">{dot(d["tier"])}</span>{d["n"]}</div>'
    f'<div class="mt">{d["addr"]}｜{d["ping"]:.0f} 坪｜{d["fl"]} 樓</div>'
-   f'<div class="pr">{d["p"]:.1f} <span style="font-size:13px;color:var(--mute);font-family:\'Noto Sans TC\'">萬/坪</span></div>'
+   f'<div class="pr">{money(d["tot"])}<span style="font-size:12.5px;color:var(--mute);font-family:\'Noto Sans TC\';font-weight:400;display:block;margin-top:2px">典型總價　·　{d["p"]:.1f} 萬/坪</span></div>'
  + (f'<div class="mt" style="color:var(--gold);margin-top:6px">看完整分析 →</div></a>'
     if d["n"] in LIVE else '<div class="soon" style="margin-top:6px">完整分析即將上線</div></div>')
- for d in D)
+ for d in sorted(D, key=lambda x: x["tot"]))      # ← 依典型總價由低到高：買方先看門檻
 
 # 位置分佈圖（沿用報告產生器的座標）
 gsrc = open(HERE / "七期商辦整體分析報告產生器.py", encoding="utf-8").read()
@@ -264,7 +264,7 @@ home += f"""
 
 <section id="buildings"><div class="wrap">
  <div class="sec-tag">NINE BUILDINGS</div><h2 class="sec-title">逐案分析</h2>
- <p class="sec-lead">每一棟的完整實登明細、逐年行情、交屋潮對照、樓層溢價與優劣分析。</p>
+ <p class="sec-lead">依<b>典型總價由低到高</b>排列——決定你進不進得來的是總價，不是單價。<br>每一棟有完整實登明細、逐年行情、交屋潮對照、樓層溢價與優劣分析。</p>
  <div class="bldg">{bcards}</div>
 </div></section>
 
@@ -305,12 +305,15 @@ NARR = {
 
 def sub(d):
     N = NARR[d["n"]]; slug = SLUG[d["n"]]
+    ys = sorted(d["yrs"].items())
     ymax = max(v[1] for v in d["yrs"].values()) if d["yrs"] else 1
+    y0, yN = ys[0], ys[-1]
+    grow = f'{y0[0]} 年 {y0[1][1]:.1f} → {yN[0]} 年 {yN[1][1]:.1f} 萬／坪，<b>{(yN[1][1]/y0[1][1]-1)*100:+.1f}%</b>'
     ybars = "".join(
      f'<div class="yrow"><span>{y} 年</span>'
      f'<span class="bar" style="width:{v[1]/ymax*100:.0f}%;background:{TIER[d["tier"]]};opacity:{.45+.55*(int(y)-107)/8:.2f}"></span>'
      f'<span class="num"><b>{v[1]:.1f}</b> <span style="font-size:11px;color:var(--mute)">n={v[0]}</span></span></div>'
-     for y, v in sorted(d["yrs"].items()))
+     for y, v in ys)
     pros = "".join(f"<li>{x}</li>" for x in N["pros"])
     cons = "".join(f"<li>{x}</li>" for x in N["cons"])
     who = "".join(f'<div class="card"><h3>{a}</h3><p>{b}</p></div>' for a, b in N["who"])
@@ -343,7 +346,9 @@ def sub(d):
  <div class="sec-tag">PRICE TREND</div><h2 class="sec-title">逐年行情：這就是為什麼不能用「平均」</h2>
  <p class="sec-lead">屋主中古轉售的淨單價中位數（已扣車位、已排除建商交屋期）。
  行情逐年變動，把多年平均在一起會嚴重失真——本站一律只採近三年。</p>
- <div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 24px">{ybars}</div>
+ <div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 24px">{ybars}
+  <div style="border-top:1px solid #ece4d4;margin-top:14px;padding-top:12px;font-size:14px">{grow}</div></div>
+ <p style="font-size:12.5px;color:var(--mute);margin-top:9px">長條自 0 起算，未截斷座標軸——所以視覺上的差距就是實際的差距。</p>
  <div class="note" style="margin-top:20px">
   <b>◆ 交屋潮 ≠ 行情。</b>本案建商交屋期（民國 {N["wave"][0]} 年、{N["wave"][1]} 筆）成交中位僅
   <b>{N["wave"][2]:.2f} 萬/坪</b>，與現行行情 <b>{d["p"]:.1f} 萬/坪</b> 相差 <b>{N["wave"][3]:.2f} 倍</b>。
@@ -374,9 +379,21 @@ def sub(d):
 <section style="background:#faf7ef"><div class="wrap">
  <div class="sec-tag">WHO FITS</div><h2 class="sec-title">這棟適合誰</h2>
  <div class="cards">{who}</div>
- <div class="cards" style="margin-top:18px">
-  <div class="note"><b>◆ 如果你是買方</b><br>{N["buyer"]}</div>
-  <div class="note"><b>◆ 如果你是屋主</b><br>{N["owner"]}</div>
+</div></section>
+
+<section><div class="wrap">
+ <div class="sec-tag">TWO SIDES</div><h2 class="sec-title">同一份數據，兩種用法</h2>
+ <p class="sec-lead">買方跟屋主看的是同一組實登數字，但該把重點放在哪裡完全不同。<br>
+ 這一段是我帶看時真正會講的話。</p>
+ <div class="cards">
+  <div class="card" style="border-top:3px solid var(--t2)">
+   <div class="sec-tag" style="color:var(--t2)">如果你是買方</div>
+   <h3 style="margin:8px 0 10px">你的籌碼在哪</h3>
+   <p style="font-size:15px;line-height:1.85">{N["buyer"]}</p></div>
+  <div class="card" style="border-top:3px solid var(--t3)">
+   <div class="sec-tag" style="color:var(--t3)">如果你是屋主</div>
+   <h3 style="margin:8px 0 10px">你該主打什麼</h3>
+   <p style="font-size:15px;line-height:1.85">{N["owner"]}</p></div>
  </div>
 </div></section>
 
