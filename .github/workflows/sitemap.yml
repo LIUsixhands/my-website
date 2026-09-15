@@ -1,0 +1,43 @@
+name: 更新 sitemap
+
+# HTML 有異動時重新產生 sitemap.xml，讓新頁面自動進入搜尋引擎的檢索佇列，
+# 並讓 lastmod 反映實際修改日（過期的 lastmod 會抑制 Google 重新檢索）。
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.html'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sitemap-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sitemap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gen_sitemap.py 用 `git log` 取每個檔案的最後異動日，需要完整歷史
+          fetch-depth: 0
+
+      - name: 產生 sitemap.xml
+        run: python3 scripts/gen_sitemap.py
+
+      - name: 有變動才提交
+        run: |
+          if git diff --quiet -- sitemap.xml; then
+            echo "sitemap.xml 無變動，結束。"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sitemap.xml
+          git commit -m "chore(seo): 自動更新 sitemap.xml"
+          # 本 workflow 只在 **.html 異動時觸發，這個 commit 僅碰 sitemap.xml，
+          # 不會再次觸發自己。Netlify 會據此重新部署，讓新 sitemap 實際上線。
+          git push

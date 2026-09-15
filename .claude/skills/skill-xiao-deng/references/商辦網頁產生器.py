@@ -93,7 +93,15 @@ footer a{color:#c8c0ae}
 """
 
 def head(title, desc, url, keywords, ld=""):
-    return f"""<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8">
+    return f"""<!DOCTYPE html><html lang="zh-Hant"><head>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-Z2BTZV5V2P"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){{dataLayer.push(arguments);}}
+  gtag('js', new Date());
+  gtag('config', 'G-Z2BTZV5V2P');
+</script>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{desc}">
