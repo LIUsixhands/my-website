@@ -2,7 +2,21 @@ name: 更新 sitemap
 
 # HTML 有異動時重新產生 sitemap.xml，讓新頁面自動進入搜尋引擎的檢索佇列，
 # 並讓 lastmod 反映實際修改日（過期的 lastmod 會抑制 Google 重新檢索）。
+#
+# 為什麼主要跑在 PR 上：
+# Netlify 免費方案的正式部署要消耗額度，deploy preview 則不限量。若等合併到
+# main 之後才產生 sitemap，機器人的提交會再觸發第二次正式部署，一篇文章耗掉
+# 兩次額度。改成在 PR 分支就先產好，合併時一併帶進去，同一篇文章只需一次
+# 正式部署。
+#
+# push 到 main 的觸發保留為保險（例如有人不走 PR 直接推）。正常流程下 PR 已
+# 經把 sitemap 更新完，main 上這一輪會判定無變動而不提交，因此不會多花額度。
 on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**.html'
   push:
     branches: [main]
     paths:
@@ -13,15 +27,21 @@ permissions:
   contents: write
 
 concurrency:
-  group: sitemap-${{ github.ref }}
+  group: sitemap-${{ github.event.pull_request.head.ref || github.ref }}
   cancel-in-progress: false
 
 jobs:
   sitemap:
     runs-on: ubuntu-latest
+    # 同倉庫分支才寫得回去；外部 fork 的 PR 沒有寫入權限，直接跳過
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
         with:
+          # PR 事件預設檢出的是合併結果（detached HEAD），指定 head_ref 才能提交回分支
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           # gen_sitemap.py 用 `git log` 取每個檔案的最後異動日，需要完整歷史
           fetch-depth: 0
 
@@ -38,6 +58,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add sitemap.xml
           git commit -m "chore(seo): 自動更新 sitemap.xml"
-          # 本 workflow 只在 **.html 異動時觸發，這個 commit 僅碰 sitemap.xml，
-          # 不會再次觸發自己。Netlify 會據此重新部署，讓新 sitemap 實際上線。
+          # 這個提交只碰 sitemap.xml，不符合 **.html 的觸發條件，不會遞迴觸發自己。
+          # 在 PR 上提交只會重建 deploy preview（不限量）；正式部署留給合併那一次。
           git push
