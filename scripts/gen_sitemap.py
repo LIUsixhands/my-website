@@ -25,6 +25,12 @@ SITEMAP = "sitemap.xml"
 # 不掃描的目錄
 SKIP_DIRS = {".git", ".github", "scripts", "node_modules", "assets"}
 
+# 樞紐頁（Hub）：串起一整條動線的指南文，權重高於一般 supporting 文
+HUB_PAGES = {
+    "blog/qiqi-sell-guide.html",  # 賣方四步
+    "blog/qiqi-buy-guide.html",   # 買方四步
+}
+
 # 新頁面的預設值；既有頁面不套用這裡，一律沿用原本的設定
 DEFAULTS = [
     # (判斷函式, priority, changefreq)
@@ -32,6 +38,7 @@ DEFAULTS = [
     (lambda p: p == "qiqi-office.html", "0.9", "weekly"),
     (lambda p: p.startswith("office/"), "0.8", "monthly"),
     (lambda p: p == "blog/index.html", "0.8", "weekly"),
+    (lambda p: p in HUB_PAGES, "0.8", "monthly"),
     (lambda p: p.startswith("blog/"), "0.7", "monthly"),
     (lambda p: True, "0.5", "monthly"),
 ]
