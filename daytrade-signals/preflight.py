@@ -155,6 +155,22 @@ def check_opening_range(broker) -> Result:
                                       f"高 {rng[0]:.2f} / 低 {rng[1]:.2f}")
 
 
+def check_ca(broker) -> Result:
+    """電子憑證。真錢模式下，帳務查詢（也就是整個風控）都靠它。"""
+    if config.SIMULATION:
+        return Result(OK, "電子憑證", "模擬模式不需要憑證（切到 SIMULATION=0 前再確認一次）")
+    if not config.CA_PATH:
+        return Result(FAIL, "電子憑證",
+                      "真錢模式但沒設定 SHIOAJI_CA_PATH。帳務查不到 → "
+                      "風控會直接關閘停手。請在 e-Leader 下載憑證後填進 .env。")
+    from pathlib import Path as _P
+    if not _P(config.CA_PATH).exists():
+        return Result(FAIL, "電子憑證", f"檔案不存在：{config.CA_PATH}")
+    if not config.PERSON_ID:
+        return Result(WARN, "電子憑證", "沒有設定 SHIOAJI_PERSON_ID，啟用可能會被拒")
+    return Result(OK, "電子憑證", f"已載入 {_P(config.CA_PATH).name}（登入時啟用成功）")
+
+
 def check_pnl(broker) -> Result:
     """風控最重要的一項：日虧上限與連敗停手都建立在這裡。"""
     rows = broker.realized_pnl_rows_today()
@@ -166,7 +182,7 @@ def check_pnl(broker) -> Result:
         return Result(FAIL, "已實現損益",
                       "真錢模式查不到損益 → 日虧上限與連敗停手都失效，"
                       "風控閘門會在第一個訊號時直接關閘停手。"
-                      "請確認電子憑證已安裝、帳號有查詢權限。")
+                      "最常見原因是電子憑證沒啟用（見上一項），其次是帳號沒有查詢權限。")
     return Result(OK, "已實現損益",
                   f"查得到，今日 {len(rows)} 筆平倉，合計 {sum(rows):,.0f} 元")
 
@@ -198,7 +214,8 @@ def check_telegram(_broker=None) -> Result:
 
 
 CHECKS = (check_config, check_contracts, check_day_trade_flag, check_snapshots,
-          check_kbars, check_opening_range, check_pnl, check_trades, check_telegram)
+          check_kbars, check_opening_range, check_ca, check_pnl, check_trades,
+          check_telegram)
 
 
 def main():

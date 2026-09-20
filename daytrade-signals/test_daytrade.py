@@ -964,6 +964,54 @@ class TestBrokerWrappers(unittest.TestCase):
 
         self.assertEqual(Broker(api=Boom()).trades_today(), [])
 
+    def test_activate_ca_skipped_in_simulation(self):
+        orig = config.SIMULATION
+        config.SIMULATION = True
+        try:
+            self.assertIsNone(Broker(api=FakeApi()).activate_ca())
+        finally:
+            config.SIMULATION = orig
+
+    def test_activate_ca_warns_when_live_without_cert(self):
+        orig = (config.SIMULATION, config.CA_PATH)
+        config.SIMULATION, config.CA_PATH = False, ""
+        try:
+            b = Broker(api=FakeApi())
+            with self.assertLogs("broker", level="WARNING") as cm:
+                self.assertIsNone(b.activate_ca())
+            self.assertIn("關閘停手", "".join(cm.output))
+        finally:
+            config.SIMULATION, config.CA_PATH = orig
+
+    def test_activate_ca_raises_on_rejection(self):
+        """憑證被拒要在登入時就炸開，不要等到盤中查不到損益才發現。"""
+        orig = (config.SIMULATION, config.CA_PATH)
+        config.SIMULATION, config.CA_PATH = False, "/tmp/x.pfx"
+        try:
+            api = FakeApi()
+            api.activate_ca = lambda **kw: False
+            with self.assertRaises(RuntimeError) as cm:
+                Broker(api=api).activate_ca()
+            self.assertIn("憑證", str(cm.exception))
+        finally:
+            config.SIMULATION, config.CA_PATH = orig
+
+    def test_activate_ca_passes_credentials(self):
+        orig = (config.SIMULATION, config.CA_PATH, config.CA_PASSWD, config.PERSON_ID)
+        config.SIMULATION, config.CA_PATH = False, "/tmp/x.pfx"
+        config.CA_PASSWD, config.PERSON_ID = "pw", "A123456789"
+        got = {}
+        try:
+            api = FakeApi()
+            api.activate_ca = lambda **kw: got.update(kw) or True
+            self.assertTrue(Broker(api=api).activate_ca())
+            self.assertEqual(got["ca_path"], "/tmp/x.pfx")
+            self.assertEqual(got["ca_passwd"], "pw")
+            self.assertEqual(got["person_id"], "A123456789")
+        finally:
+            (config.SIMULATION, config.CA_PATH,
+             config.CA_PASSWD, config.PERSON_ID) = orig
+
     def test_ensure_session_relogins_after_20h(self):
         from datetime import timedelta
         b = Broker(api=FakeApi())
@@ -1117,6 +1165,42 @@ class TestPreflight(unittest.TestCase):
             self.assertIn("關閘停手", r.detail)
         finally:
             config.SIMULATION = original
+
+    def test_ca_not_needed_in_simulation(self):
+        orig = config.SIMULATION
+        config.SIMULATION = True
+        try:
+            self.assertEqual(preflight.check_ca(None).status, preflight.OK)
+        finally:
+            config.SIMULATION = orig
+
+    def test_ca_missing_path_is_failure_when_live(self):
+        orig = (config.SIMULATION, config.CA_PATH)
+        config.SIMULATION, config.CA_PATH = False, ""
+        try:
+            r = preflight.check_ca(None)
+            self.assertEqual(r.status, preflight.FAIL)
+            self.assertIn("關閘停手", r.detail)
+        finally:
+            config.SIMULATION, config.CA_PATH = orig
+
+    def test_ca_nonexistent_file_is_failure(self):
+        orig = (config.SIMULATION, config.CA_PATH)
+        config.SIMULATION, config.CA_PATH = False, "/nonexistent/Sinopac.pfx"
+        try:
+            self.assertEqual(preflight.check_ca(None).status, preflight.FAIL)
+        finally:
+            config.SIMULATION, config.CA_PATH = orig
+
+    def test_ca_present_is_ok(self):
+        orig = (config.SIMULATION, config.CA_PATH, config.PERSON_ID)
+        with tempfile.NamedTemporaryFile(suffix=".pfx") as f:
+            config.SIMULATION, config.CA_PATH = False, f.name
+            config.PERSON_ID = "A123456789"
+            try:
+                self.assertEqual(preflight.check_ca(None).status, preflight.OK)
+            finally:
+                config.SIMULATION, config.CA_PATH, config.PERSON_ID = orig
 
     def test_trades_empty_is_warning(self):
         api = FakeApi(stocks=self._stocks())

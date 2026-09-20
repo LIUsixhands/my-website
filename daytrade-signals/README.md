@@ -39,14 +39,30 @@ SHIOAJI_SECRET_KEY=xxx
 SHIOAJI_SIMULATION=1       # 前三個月不要改成 0
 TELEGRAM_BOT_TOKEN=xxx     # Line Notify 已停止服務，改 Telegram
 TELEGRAM_CHAT_ID=xxx
+
+# 只有真錢模式需要（見下方「電子憑證」）
+SHIOAJI_CA_PATH=
+SHIOAJI_CA_PASSWD=
+SHIOAJI_PERSON_ID=
 ```
 
 金鑰在永豐官網申請，需先簽署 API 服務條款與風險預告書。
+**Secret Key 建立後只會顯示一次**，當下沒存就只能重新申請一把。
+
+### 電子憑證
+
+帳務查詢需要電子憑證（從永豐電腦版下單軟體 e-Leader 下載的 `.pfx`）。
+本系統不下單，但**風控的日虧上限與連敗停手都建立在帳務查詢上** ——
+真錢模式沒有憑證就查不到損益，閘門會在第一個訊號直接關閘停手。
+
+`broker.login()` 會在真錢模式自動啟用憑證，被拒就當場拋出例外。
+寧可在登入時炸開，也不要等到盤中才發現整套風控沒有作用。
+模擬模式不需要憑證。
 
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 118 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 126 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -175,7 +191,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 118 項離線測試 |
+| `test_daytrade.py` | 126 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。

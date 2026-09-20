@@ -51,6 +51,38 @@ class Broker:
         self.api.login(api_key=config.API_KEY, secret_key=config.SECRET_KEY)
         self._login_at = datetime.now()
         log.info("Shioaji 登入完成（simulation=%s）", config.SIMULATION)
+        self.activate_ca()
+
+    def activate_ca(self) -> bool | None:
+        """啟用電子憑證。回傳 True/False，模擬模式或未設定則回傳 None。
+
+        帳務查詢要憑證，而風控的日虧上限與連敗停手都建立在帳務上。
+        真錢模式沒有憑證 → 查不到損益 → 閘門在第一個訊號就關閘停手。
+        與其讓你盤中才發現，不如在登入時就講清楚。
+        """
+        if config.SIMULATION:
+            return None
+        if not config.CA_PATH:
+            log.warning(
+                "真錢模式但沒有設定 SHIOAJI_CA_PATH，帳務查詢會失敗 —— "
+                "風控查不到損益會直接關閘停手。請在 .env 補上憑證設定。")
+            return None
+        try:
+            ok = self.api.activate_ca(
+                ca_path=config.CA_PATH,
+                ca_passwd=config.CA_PASSWD,
+                person_id=config.PERSON_ID,
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"電子憑證啟用失敗：{e}。請確認 SHIOAJI_CA_PATH 指向 e-Leader 下載的 "
+                f".pfx、密碼與身分證字號正確。") from e
+        if ok is False:
+            raise RuntimeError(
+                "電子憑證啟用被拒（activate_ca 回傳 False）。憑證可能已過期，"
+                "或與這個帳號不符 —— 請在 e-Leader 重新下載。")
+        log.info("電子憑證已啟用")
+        return True
 
     def ensure_session(self):
         """超過 20 小時就重登，避免撞到 24 小時上限。"""
