@@ -7,7 +7,7 @@ broker.py — 永豐 Shioaji 連線封裝。
 """
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import config
 
@@ -235,9 +235,19 @@ class Broker:
 
 
 def _bar_time(ts):
-    """把 kbars 的 ts 轉成 datetime。ts 可能是 datetime、秒或奈秒 epoch。"""
+    """把 kbars 的 ts 轉成**台北牆上時間**（naive datetime）。
+
+    Shioaji 的 ts 是奈秒，而且編碼的是「台北牆上時間當成 UTC」——
+    pandas.to_datetime(kb.ts) 直接得到台北時間就是這個道理。
+
+    所以這裡必須用 UTC 解讀。用 datetime.fromtimestamp() 會**再套一次
+    本地時區偏移**：在台灣的電腦上，09:00 的 K 棒會變成 17:00，
+    opening_range() 於是在 09:00~09:15 找不到任何 K 棒，永遠補算不到區間。
+
+    這個 bug 在 UTC 的機器上看不出來（偏移為 0）—— 實機實測才抓到的。
+    """
     if isinstance(ts, datetime):
-        return ts
+        return ts.replace(tzinfo=None) if ts.tzinfo else ts
     try:
         v = float(ts)
     except (TypeError, ValueError):
@@ -246,7 +256,7 @@ def _bar_time(ts):
     while v > 1e11:
         v /= 1000.0
     try:
-        return datetime.fromtimestamp(v)
+        return datetime.fromtimestamp(v, tz=timezone.utc).replace(tzinfo=None)
     except (OverflowError, OSError, ValueError):
         return None
 

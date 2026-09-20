@@ -162,17 +162,28 @@ def check_kbars(broker) -> Result:
     last_day = max(t.date() for t in valid)
     first_of_day = min(t for t in valid if t.date() == last_day)
     hhmm = first_of_day.strftime("%H:%M")
-    if hhmm == "09:00":
-        note = "ts 是該分鐘的『起點』，與 opening_range() 的半開區間假設一致 ✓"
-    elif hhmm == "09:01":
-        note = ("⚠️ 第一根是 09:01 → ts 可能是該分鐘的『終點』。"
-                "opening_range() 會少收 09:00 那一分鐘、多收 09:15，需要修正。")
+    mark = config.symbol("⚠️", "[!]")
+    if hhmm in ("09:00", "09:01"):
+        note = (f"落在開盤第一分鐘，時區解讀正確，"
+                f"opening_range() 的 09:00~09:15 抓得到 {config.symbol('✓', 'OK')}")
+    elif 9 <= first_of_day.hour < 14:
+        note = (f"{mark} 在盤中但不是 09:00 —— 這檔可能開盤前幾分鐘沒成交，"
+                f"通常無妨；若每檔都這樣請回報。")
     else:
-        note = (f"⚠️ 第一根是 {hhmm}，不是預期的 09:00 —— "
-                f"請確認 ts 語意與盤別，opening_range() 的區間可能取錯。")
+        note = (f"{mark} 落在 {hhmm}，完全不在台股盤中（09:00~13:30）—— "
+                f"時區解讀錯誤。差 8 小時就是 ts 被當成本地時間再加一次偏移。")
+    # 印出原始值與兩種解讀，時區問題一眼可判
+    raw = ts[0]
+    from datetime import timezone as _tz
+    try:
+        as_utc = datetime.fromtimestamp(float(raw) / 1e9, tz=_tz.utc).replace(tzinfo=None)
+        as_local = datetime.fromtimestamp(float(raw) / 1e9)
+        probe = f"（首筆 ts={raw}；以 UTC 解 {as_utc:%m-%d %H:%M}、以本機時區解 {as_local:%m-%d %H:%M}）"
+    except Exception:
+        probe = f"（首筆 ts={raw!r}）"
     return Result(OK, "kbars",
                   f"{code} {span} 共 {len(ts)} 根；最後一個交易日 {last_day} "
-                  f"的第一根是 {first_of_day:%H:%M:%S}。{note}")
+                  f"的第一根是 {first_of_day:%H:%M:%S}。{note}{probe}")
 
 
 def check_opening_range(broker) -> Result:

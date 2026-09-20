@@ -9,12 +9,14 @@ test_daytrade.py — 離線測試。不需要 shioaji、不需要網路、不需
 import contextlib
 import io
 import json
+import os
 import sys
 import tempfile
 import threading
 import time
 import unittest
-from datetime import datetime, time as dtime, timedelta
+import unittest.mock
+from datetime import datetime, time as dtime, timedelta, timezone as dt_timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -864,7 +866,8 @@ class FakeStocks:
 class FakeKbars:
     def __init__(self, bars):
         # bars: [(datetime, high, low, volume)]
-        self.ts = [b[0].timestamp() * 1e9 for b in bars]
+        # 照 shioaji 的方式：台北牆上時間當成 UTC 編成奈秒（與本機時區無關）
+        self.ts = [b[0].replace(tzinfo=dt_timezone.utc).timestamp() * 1e9 for b in bars]
         self.High = [b[1] for b in bars]
         self.Low = [b[2] for b in bars]
         self.Volume = [b[3] for b in bars]
@@ -1271,17 +1274,43 @@ class TestPreflight(unittest.TestCase):
         self.assertIn("欄位名稱不符", r.detail)
         self.assertIn("timestamp", r.detail)      # 印出實際屬性幫助對照
 
-    def test_kbars_confirms_ts_is_bar_start(self):
+    def test_kbars_confirms_timezone_is_right(self):
         api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(self._bars(0)))
         r = preflight.check_kbars(Broker(api=api))
         self.assertEqual(r.status, preflight.OK)
-        self.assertIn("『起點』", r.detail)
+        self.assertIn("時區解讀正確", r.detail)
 
-    def test_kbars_flags_bar_end_semantics(self):
-        """第一根是 09:01 → ts 可能是終點，opening_range 會取錯區間。"""
-        api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(self._bars(1)))
+    def test_kbars_flags_timezone_shift(self):
+        """實機症狀：第一根出現在 17:03，差正好 8 小時 —— 時區解讀錯了。
+
+        這是整套程式唯一一個「只在非 UTC 機器上才會發生」的 bug，
+        體檢必須認得出它的長相。
+        """
+        d = datetime.now().date()
+        shifted = [(datetime.combine(d, dtime(17, 3 + i)), 101.0, 99.0, 100)
+                   for i in range(3)]
+        api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(shifted))
         r = preflight.check_kbars(Broker(api=api))
-        self.assertIn("終點", r.detail)
+        self.assertIn("時區解讀錯誤", r.detail)
+        self.assertIn("差 8 小時", r.detail)
+
+    def test_kbars_prints_both_interpretations(self):
+        """報告要印出原始 ts 與兩種解讀，時區問題才能一眼判定。"""
+        api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(self._bars(0)))
+        detail = preflight.check_kbars(Broker(api=api)).detail
+        self.assertIn("首筆 ts=", detail)
+        self.assertIn("以 UTC 解", detail)
+        self.assertIn("以本機時區解", detail)
+
+    def test_kbars_midsession_first_bar_is_tolerated(self):
+        """09:03 開始（開盤前幾分鐘沒成交）不是時區問題，不該誤報。"""
+        d = datetime.now().date()
+        bars = [(datetime.combine(d, dtime(9, 3 + i)), 101.0, 99.0, 100)
+                for i in range(3)]
+        api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(bars))
+        r = preflight.check_kbars(Broker(api=api))
+        self.assertEqual(r.status, preflight.OK)
+        self.assertIn("通常無妨", r.detail)
 
     def test_kbars_uses_last_trading_day(self):
         """回看十天會跨多日，要取最後一個交易日的第一根。"""
@@ -1455,14 +1484,61 @@ class TestPreflight(unittest.TestCase):
 
 
 class TestBarTime(unittest.TestCase):
-    def test_handles_datetime_and_epochs(self):
+    """ts 必須解成台北牆上時間，而且**與本機時區無關**。
+
+    實機在台灣（UTC+8）跑出來，09:00 的 K 棒變成 17:00；
+    我在 UTC 容器上測完全看不出來。所以這裡一律用 UTC 基準建構時間戳，
+    並由 CI 另外以 TZ=Asia/Taipei 再跑一次整包測試。
+    """
+
+    @staticmethod
+    def _shioaji_ns(wall: datetime) -> int:
+        """模擬 shioaji：把台北牆上時間當成 UTC 編成奈秒。"""
+        return int(wall.replace(tzinfo=dt_timezone.utc).timestamp() * 1_000_000_000)
+
+    def test_nanoseconds_give_back_the_wall_clock(self):
+        from broker import _bar_time
+        wall = datetime(2026, 9, 18, 9, 0)
+        self.assertEqual(_bar_time(self._shioaji_ns(wall)), wall)
+
+    def test_result_does_not_depend_on_local_timezone(self):
+        """同一個 ts，不管本機時區是什麼，都要解出同一個時間。"""
+        from broker import _bar_time
+        wall = datetime(2026, 9, 18, 9, 0)
+        ns = self._shioaji_ns(wall)
+        results = []
+        for tz in ("UTC", "Asia/Taipei", "America/New_York"):
+            with unittest.mock.patch.dict(os.environ, {"TZ": tz}):
+                if hasattr(time, "tzset"):
+                    time.tzset()
+                results.append(_bar_time(ns))
+        if hasattr(time, "tzset"):
+            time.tzset()                      # 還原
+        self.assertEqual(results, [wall] * 3, f"時區會影響結果：{results}")
+
+    def test_opening_bar_stays_in_session(self):
+        """09:00 的 K 棒解完必須還在盤中，不能跑到 17:00。"""
+        from broker import _bar_time
+        got = _bar_time(self._shioaji_ns(datetime(2026, 9, 18, 9, 0)))
+        self.assertTrue(9 <= got.hour < 14, f"{got:%H:%M} 不在台股盤中")
+
+    def test_accepts_seconds_and_milliseconds(self):
+        from broker import _bar_time
+        wall = datetime(2026, 9, 18, 9, 0)
+        ns = self._shioaji_ns(wall)
+        self.assertEqual(_bar_time(ns // 1_000_000_000), wall)   # 秒
+        self.assertEqual(_bar_time(ns // 1_000_000), wall)       # 毫秒
+        self.assertEqual(_bar_time(ns // 1_000), wall)           # 微秒
+
+    def test_passes_datetime_through(self):
         from broker import _bar_time
         expect = datetime(2026, 9, 20, 9, 5)
         self.assertEqual(_bar_time(expect), expect)
-        sec = expect.timestamp()
-        self.assertEqual(_bar_time(sec), expect)
-        self.assertEqual(_bar_time(sec * 1000), expect)          # 毫秒
-        self.assertEqual(_bar_time(int(sec * 1_000_000_000)), expect)  # 奈秒
+        aware = expect.replace(tzinfo=dt_timezone.utc)
+        self.assertEqual(_bar_time(aware), expect)               # 去掉 tzinfo
+
+    def test_rejects_garbage(self):
+        from broker import _bar_time
         self.assertIsNone(_bar_time("abc"))
         self.assertIsNone(_bar_time(None))
 

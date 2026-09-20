@@ -73,7 +73,7 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 145 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 150 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -171,6 +171,9 @@ per_trade_risk           2000   單筆風險 → 反推張數
 ## 已知限制
 
 - ORB 在跳空開高的日子容易假突破，這是策略本身的弱點，不是 bug
+- 分鐘 K 的 `ts` 是「台北牆上時間編成 UTC」，`_bar_time()` 必須以 UTC 解讀。
+  用本機時區解會在台灣的電腦上整整差 8 小時（09:00 的 K 棒變 17:00），
+  開盤區間永遠補算不到。CI 會同時以 UTC 與 Asia/Taipei 跑測試守住這件事
 - `volume_surge` 用 tick 累計量估算。取樣長度不足時回傳 0（等於不發訊號）而非硬算，
   但它終究是估算，不是交易所的分時量
 - 量比（`volume_ratio`）只對振幅前 60 名計算，其餘以 1.0 計 ——
@@ -202,7 +205,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 145 項離線測試 |
+| `test_daytrade.py` | 150 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。
