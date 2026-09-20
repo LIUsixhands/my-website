@@ -876,7 +876,8 @@ class FakeKbars:
 class FakeApi:
     def __init__(self, stocks=None, snaps=None, kbars=None,
                  pnl_rows=None, pnl_raises=False, trades=None,
-                 trades_raises=False, legacy_contracts_only=False):
+                 trades_raises=False, legacy_contracts_only=False,
+                 kbars_by_code=None):
         stocks = stocks or FakeStocks()
         # shioaji 1.7 起改用小寫 api.contracts；舊版只有 api.Contracts
         if not legacy_contracts_only:
@@ -886,6 +887,7 @@ class FakeApi:
         self.stock_account = "acct"
         self._snaps = snaps or []
         self._kbars = kbars
+        self._kbars_by_code = kbars_by_code
         self._pnl_rows = pnl_rows if pnl_rows is not None else []
         self._pnl_raises = pnl_raises
         self._trades = trades or []
@@ -897,6 +899,12 @@ class FakeApi:
         return [s for s in self._snaps if s.code in codes]
 
     def kbars(self, contract, start, end):
+        code = getattr(contract, "code", None)
+        if self._kbars_by_code is not None:
+            kb = self._kbars_by_code.get(code)
+            if kb is None:
+                raise RuntimeError(f"no kbars for {code}")
+            return kb
         if self._kbars is None:
             raise RuntimeError("no kbars")
         return self._kbars
@@ -1302,15 +1310,39 @@ class TestPreflight(unittest.TestCase):
         self.assertIn("以 UTC 解", detail)
         self.assertIn("以本機時區解", detail)
 
-    def test_kbars_midsession_first_bar_is_tolerated(self):
-        """09:03 開始（開盤前幾分鐘沒成交）不是時區問題，不該誤報。"""
+    @staticmethod
+    def _bars_from(minute, count=3):
         d = datetime.now().date()
-        bars = [(datetime.combine(d, dtime(9, 3 + i)), 101.0, 99.0, 100)
-                for i in range(3)]
-        api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(bars))
+        return FakeKbars([(datetime.combine(d, dtime(9, minute + i)), 101.0, 99.0, 100)
+                          for i in range(count)])
+
+    def test_kbars_same_start_across_stocks_means_data_origin(self):
+        """抽樣的每檔第一根都是 09:03 → 是全市場的資料起點，不是個股沒成交。
+
+        實機就是這個情況：0050 每個交易日都剛好 264 根、第一根都是 09:03。
+        """
+        codes = ("2330", "2331", "2332")
+        api = FakeApi(stocks=self._stocks(("DayTrade.Yes",) * 3),
+                      kbars_by_code={c: self._bars_from(3) for c in codes})
         r = preflight.check_kbars(Broker(api=api))
         self.assertEqual(r.status, preflight.OK)
-        self.assertIn("通常無妨", r.detail)
+        self.assertIn("全市場分鐘 K 的資料起點", r.detail)
+        self.assertIn("區間會略窄", r.detail)
+
+    def test_kbars_differing_starts_means_thin_opening(self):
+        """各檔開始時間不一致 → 只是個股開盤沒成交，正常。"""
+        api = FakeApi(stocks=self._stocks(("DayTrade.Yes",) * 3),
+                      kbars_by_code={"2330": self._bars_from(3),
+                                     "2331": self._bars_from(0),
+                                     "2332": self._bars_from(0)})
+        r = preflight.check_kbars(Broker(api=api))
+        self.assertEqual(r.status, preflight.OK)
+        self.assertIn("沒成交", r.detail)
+
+    def test_kbars_no_peers_to_compare(self):
+        api = FakeApi(stocks=self._stocks(), kbars=self._bars_from(3))
+        r = preflight.check_kbars(Broker(api=api))
+        self.assertIn("沒有其他檔可比對", r.detail)
 
     def test_kbars_uses_last_trading_day(self):
         """回看十天會跨多日，要取最後一個交易日的第一根。"""
