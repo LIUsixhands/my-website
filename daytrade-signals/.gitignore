@@ -1,0 +1,13 @@
+# 金鑰
+.env
+
+# 當日產出：每天都會變，而且是個人帳務資料
+state.json
+watchlist.json
+
+# 交易日誌含個人損益與持股，不進版控。
+# 要給 Claude 做跨日稽核時，直接把本機的 journal/ 目錄丟給它。
+journal/*.md
+
+__pycache__/
+*.pyc
