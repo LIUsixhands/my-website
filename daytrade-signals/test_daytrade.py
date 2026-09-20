@@ -9,6 +9,7 @@ test_daytrade.py — 離線測試。不需要 shioaji、不需要網路、不需
 import contextlib
 import io
 import json
+import sys
 import tempfile
 import threading
 import time
@@ -165,6 +166,53 @@ class TestTickSize(unittest.TestCase):
         for p in (10.0, 45.65, 99.5, 100.5, 283.0, 1200.0):
             for mode in ("up", "down", "nearest"):
                 self.assertAlmostEqual(config.round_to_tick(p, mode), p, msg=f"{p}/{mode}")
+
+
+class TestConsoleEncoding(unittest.TestCase):
+    """Windows 繁中主控台是 cp950，印 emoji 會直接讓程式當掉。"""
+
+    def setUp(self):
+        self._stdout = sys.stdout
+
+    def tearDown(self):
+        sys.stdout = self._stdout
+
+    @staticmethod
+    def _fake_stdout(encoding):
+        return SimpleNamespace(encoding=encoding)
+
+    def test_detects_cp950_cannot_encode_emoji(self):
+        sys.stdout = self._fake_stdout("cp950")
+        self.assertFalse(config.console_can_encode("✅"))
+        self.assertTrue(config.console_can_encode("當沖訊號"))   # 中文 cp950 印得出來
+
+    def test_detects_utf8_can_encode_everything(self):
+        sys.stdout = self._fake_stdout("utf-8")
+        self.assertTrue(config.console_can_encode("✅"))
+        self.assertTrue(config.console_can_encode("當沖訊號"))
+
+    def test_unknown_encoding_falls_back(self):
+        sys.stdout = self._fake_stdout("not-a-real-codec")
+        self.assertFalse(config.console_can_encode("✅"))
+        sys.stdout = SimpleNamespace()                 # 連 encoding 屬性都沒有
+        self.assertFalse(config.console_can_encode("✅"))
+
+    def test_symbol_picks_fallback_on_cp950(self):
+        sys.stdout = self._fake_stdout("cp950")
+        self.assertEqual(config.symbol("✅", "[ OK ]"), "[ OK ]")
+        sys.stdout = self._fake_stdout("utf-8")
+        self.assertEqual(config.symbol("✅", "[ OK ]"), "✅")
+
+    def test_enable_console_fallback_tolerates_odd_streams(self):
+        sys.stdout = io.StringIO()                     # 沒有 reconfigure
+        config.enable_console_fallback()               # 不應拋出
+        sys.stdout = SimpleNamespace(reconfigure=lambda **kw: (_ for _ in ()).throw(ValueError))
+        config.enable_console_fallback()               # 也不應拋出
+
+    def test_preflight_markers_are_printable(self):
+        """不管終端機是什麼編碼，體檢的狀態標記都要印得出來。"""
+        for marker in (preflight.OK, preflight.WARN, preflight.FAIL):
+            self.assertTrue(marker.strip(), "狀態標記不可為空")
 
 
 class TestOpeningRange(unittest.TestCase):

@@ -4,6 +4,7 @@ config.py — 所有參數集中在這裡。
 """
 import math
 import os
+import sys
 from pathlib import Path
 
 # ── 路徑 ──────────────────────────────────────────────
@@ -39,6 +40,46 @@ def load_env(path: Path = ENV_FILE) -> None:
 
 
 load_env()
+
+
+# ── 終端機編碼 ────────────────────────────────────────
+def enable_console_fallback() -> None:
+    """印不出來的字元換成替代字，而不是讓程式當掉。
+
+    Windows 繁中環境的主控台預設是 cp950，印 ✅ 這類符號會直接
+    UnicodeEncodeError —— 體檢報告第一行就掛掉，而且錯誤訊息
+    看起來像程式壞了，其實只是終端機編碼。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:          # 被導向到 StringIO 之類的物件
+            continue
+        try:
+            reconfigure(errors="replace")
+        except (ValueError, OSError):    # pragma: no cover - 取決於終端機
+            pass
+
+
+def console_can_encode(text: str) -> bool:
+    """這個終端機印得出這些字元嗎？"""
+    enc = getattr(sys.stdout, "encoding", None) or "ascii"
+    try:
+        text.encode(enc)
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+def symbol(preferred: str, fallback: str) -> str:
+    """終端機印得出就用 preferred，否則退回純 ASCII 的 fallback。
+
+    狀態符號（✅⚠️❌）本身就是資訊，退成「?」會讓體檢報告讀不懂，
+    所以這裡換成 [ OK ] / [WARN] / [FAIL] 而不是交給 errors='replace'。
+    """
+    return preferred if console_can_encode(preferred) else fallback
+
+
+enable_console_fallback()
 
 # ── 永豐 Shioaji 金鑰（放 .env，不要寫死在程式裡）────────
 API_KEY = os.getenv("SHIOAJI_API_KEY", "")

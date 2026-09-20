@@ -19,7 +19,10 @@ import config
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
 
-OK, WARN, FAIL = "✅", "⚠️ ", "❌"
+# 狀態符號：終端機印不出 emoji 時（Windows cp950）退回 ASCII 標記。
+OK = config.symbol("✅", "[ OK ]")
+WARN = config.symbol("⚠️ ", "[WARN]")
+FAIL = config.symbol("❌", "[FAIL]")
 
 SNAPSHOT_FIELDS = ("close", "high", "low", "total_volume", "average_price")
 KBAR_FIELDS = ("ts", "High", "Low", "Volume")
@@ -254,7 +257,7 @@ def main():
     if fails:
         print("\n不通過的項目（修好再上線）：")
         for r in fails:
-            print(f"  ❌ {r.name}")
+            print(f"  {FAIL} {r.name}")
         raise SystemExit(1)
     if warns:
         print("\n待確認的項目多半是「現在不是交易時段」造成的。"
