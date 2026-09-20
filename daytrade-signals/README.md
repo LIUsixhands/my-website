@@ -46,7 +46,7 @@ TELEGRAM_CHAT_ID=xxx
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 111 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 118 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -155,6 +155,8 @@ per_trade_risk           2000   單筆風險 → 反推張數
   在 `config.py` 打開它會被 `validate()` 擋下來，而不是讓你誤以為系統在看空單
 - Shioaji 每 24 小時需重新登入（`ensure_session()` 每 30 秒檢查，滿 20 小時主動重登）
 - 風控閘門只看**已實現**損益。手上還抱著的未實現虧損它看不到
+- `require_above_vwap` 在拿不到均價線時**不發訊號**（而不是把規則跳過）。
+  某檔整天都拿不到 `avg_price` 的話，它今天就不會有訊號，log 會講一次
 - 沒有訊號時，風控每 `RISK.poll_interval_sec`（預設 5 分鐘）才主動查一次帳務。
   縮短它會撞到 Shioaji 流量上限、被停用一分鐘 —— 那一分鐘你連行情都收不到
 - 訊號數與紀律稽核都假設 `max_signals_per_symbol = 1`（一檔 = 一筆來回）。
@@ -173,7 +175,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 111 項離線測試 |
+| `test_daytrade.py` | 118 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。
