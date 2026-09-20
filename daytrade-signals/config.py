@@ -45,6 +45,13 @@ API_KEY = os.getenv("SHIOAJI_API_KEY", "")
 SECRET_KEY = os.getenv("SHIOAJI_SECRET_KEY", "")
 SIMULATION = os.getenv("SHIOAJI_SIMULATION", "1") == "1"  # 預設模擬，正式跑再改 0
 
+# ── 電子憑證（只有真錢模式需要）────────────────────────
+# 下單與「帳務查詢」都要憑證。本系統不下單，但風控的日虧上限與連敗停手
+# 建立在 list_profit_loss 上 —— 沒有憑證就查不到損益，閘門會直接關閘停手。
+CA_PATH = os.getenv("SHIOAJI_CA_PATH", "")        # e-Leader 下載的 .pfx 路徑
+CA_PASSWD = os.getenv("SHIOAJI_CA_PASSWD", "")    # 憑證密碼（多半是身分證字號）
+PERSON_ID = os.getenv("SHIOAJI_PERSON_ID", "")    # 身分證字號
+
 # ── 推播（Line Notify 已停止服務，改用 Telegram）────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
