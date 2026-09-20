@@ -6,6 +6,8 @@ test_daytrade.py — 離線測試。不需要 shioaji、不需要網路、不需
 測的是「錯了不會報錯」的那些地方：訊號條件、風控閘門、量能基準、紀律稽核。
 這些邏輯算錯不會讓程式崩掉，它會安靜地給你一個看起來很專業的錯誤決策。
 """
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -435,6 +437,62 @@ class TestRiskGate(unittest.TestCase):
         self.assertEqual(f([100.0, -1.0, -2.0]), 2)
         self.assertEqual(f([-1.0, -2.0, 100.0]), 0)
         self.assertEqual(f([0.0, -1.0]), 1)          # 0 不算虧，打斷連敗
+
+
+class TestNotify(unittest.TestCase):
+    """推播是選配相依：缺 requests 仍要能跑，但不能安靜地吞掉訊號。"""
+
+    def setUp(self):
+        self._orig = (signals.requests, config.TELEGRAM_BOT_TOKEN,
+                      config.TELEGRAM_CHAT_ID, signals._push_warned)
+
+    def tearDown(self):
+        (signals.requests, config.TELEGRAM_BOT_TOKEN,
+         config.TELEGRAM_CHAT_ID, signals._push_warned) = self._orig
+
+    def test_prints_without_requests_installed(self):
+        signals.requests = None
+        config.TELEGRAM_BOT_TOKEN = config.TELEGRAM_CHAT_ID = ""
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            signals.notify("測試訊號")
+        self.assertIn("測試訊號", out.getvalue())
+
+    def test_logs_error_when_push_configured_but_requests_missing(self):
+        signals.requests = None
+        config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID = "tok", "chat"
+        signals._push_warned = False
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertLogs(signals.log, level="ERROR") as cm:
+                signals.notify("測試訊號")
+        self.assertIn("不會推到手機", "".join(cm.output))
+
+    def test_posts_when_requests_available(self):
+        sent = {}
+
+        class FakeRequests:
+            @staticmethod
+            def post(url, json, timeout):
+                sent.update(url=url, json=json, timeout=timeout)
+
+        signals.requests = FakeRequests
+        config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID = "tok", "chat"
+        with contextlib.redirect_stdout(io.StringIO()):
+            signals.notify("測試訊號")
+        self.assertIn("bottok/sendMessage", sent["url"])
+        self.assertEqual(sent["json"]["chat_id"], "chat")
+        self.assertEqual(sent["json"]["text"], "測試訊號")
+
+    def test_push_failure_does_not_raise(self):
+        class Boom:
+            @staticmethod
+            def post(*a, **k):
+                raise RuntimeError("網路斷了")
+
+        signals.requests = Boom
+        config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID = "tok", "chat"
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertLogs(signals.log, level="WARNING"):
+                signals.notify("測試訊號")     # 推播失敗不能讓引擎掛掉
 
 
 class TestRestoreSignaled(unittest.TestCase):

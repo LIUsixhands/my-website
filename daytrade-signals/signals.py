@@ -14,10 +14,16 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, time as dtime
 
-import requests
-
 import config
 from broker import Broker
+
+# requests 只有推播用得到。缺席時仍要能跑（訊號照樣印在 stdout），
+# 但如果你已經設好 Telegram 金鑰卻沒有 requests，那是「訊號發不出去」——
+# 必須吵，不能安靜地吞掉。
+try:
+    import requests
+except ImportError:                  # pragma: no cover - 取決於環境
+    requests = None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("signals")
@@ -274,15 +280,26 @@ def format_signal(sig: dict, ordinal: int) -> str:
     return "\n".join(lines)
 
 
+_push_warned = False
+
+
 def notify(text: str):
+    global _push_warned
     print("\n" + text + "\n")
-    if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID:
-        try:
-            requests.post(
-                f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
-                json={"chat_id": config.TELEGRAM_CHAT_ID, "text": text}, timeout=5)
-        except Exception as e:
-            log.warning("推播失敗：%s", e)
+    if not (config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID):
+        return
+    if requests is None:
+        if not _push_warned:
+            log.error("已設定 Telegram 金鑰但沒有安裝 requests，訊號只會印在畫面上、"
+                      "不會推到手機。請執行 pip install -r requirements.txt。")
+            _push_warned = True
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={"chat_id": config.TELEGRAM_CHAT_ID, "text": text}, timeout=5)
+    except Exception as e:
+        log.warning("推播失敗：%s", e)
 
 
 # ══════════════════════════════════════════════════════
