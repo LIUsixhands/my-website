@@ -13,7 +13,7 @@ preflight.py — 上線前的連線體檢。第一次跑、以及每次切換 SI
 """
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import config
 
@@ -112,34 +112,67 @@ def check_snapshots(broker) -> Result:
     return Result(OK, "snapshots", detail)
 
 
+KBAR_LOOKBACK_DAYS = 10
+
+
 def check_kbars(broker) -> Result:
-    """分鐘 K 的欄位與 ts 語意 —— 開盤區間補算與量比都靠它。"""
+    """分鐘 K 的欄位與 ts 語意 —— 開盤區間補算與量比都靠它。
+
+    回看十天而不是只查今天：週末或假日跑體檢時，只查今天必然是空的，
+    那樣什麼都驗不到。回看十天至少會涵蓋一個交易日。
+    """
     stocks = [c for c in broker.all_stocks()
               if getattr(c, "code", "").isdigit() and len(getattr(c, "code", "")) == 4]
     if not stocks:
         return Result(WARN, "kbars", "沒有商品檔可檢查")
     code = stocks[0].code
-    today = datetime.now().strftime("%Y-%m-%d")
+    end = datetime.now()
+    start = end - timedelta(days=KBAR_LOOKBACK_DAYS)
+    span = f"{start:%Y-%m-%d}~{end:%Y-%m-%d}"
     try:
-        kb = broker.kbars(code, today, today)
+        kb = broker.kbars(code, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
     except Exception as e:
-        return Result(WARN, "kbars",
-                      f"{code} 今日分鐘 K 取不到（{e}）。非交易日屬正常，開盤日要再跑一次。")
+        return Result(FAIL, "kbars", f"{code} {span} 分鐘 K 呼叫失敗：{e}")
 
-    missing = [f for f in KBAR_FIELDS if not list(getattr(kb, f, []) or [])]
-    if missing:
+    # 「欄位不存在」和「欄位存在但沒資料」是兩件事：
+    # 前者代表欄位名稱猜錯了（程式必壞），後者只是這段期間沒有交易資料。
+    absent = [f for f in KBAR_FIELDS if not hasattr(kb, f)]
+    if absent:
+        available = [a for a in dir(kb) if not a.startswith("_")][:12]
         return Result(FAIL, "kbars",
-                      f"缺少欄位 {missing}；opening_range() 與量比都會失效")
+                      f"欄位名稱不符，缺少 {absent}；opening_range() 與量比都會失效。"
+                      f"這個物件實際有的屬性：{available}")
+
+    ts = list(getattr(kb, "ts") or [])
+    if not ts:
+        return Result(WARN, "kbars",
+                      f"{code} 欄位名稱正確（{list(KBAR_FIELDS)} 都在），"
+                      f"但 {span} 沒有任何資料。連假或權限不足都可能 —— "
+                      f"開盤日再跑一次才能確認 ts 語意。")
 
     from broker import _bar_time
-    ts = list(kb.ts)
-    first = [_bar_time(t) for t in ts[:3]]
-    times = "、".join(t.strftime("%H:%M:%S") if t else "?" for t in first)
-    note = ("第一根是 09:00 → ts 是該分鐘的『起點』，與 opening_range() 的假設一致"
-            if first and first[0] and first[0].strftime("%H:%M") == "09:00"
-            else "⚠️ 第一根不是 09:00，請確認 ts 是起點還是終點 —— "
-                 "若是終點，opening_range() 的半開區間會少收第一分鐘、多收 09:15")
-    return Result(OK, "kbars", f"{code} 共 {len(ts)} 根，前三根 {times}。{note}")
+    times = [_bar_time(t) for t in ts]
+    valid = [t for t in times if t]
+    if not valid:
+        return Result(FAIL, "kbars",
+                      f"{code} 有 {len(ts)} 根 K，但 ts 解析不出時間（樣本：{ts[:3]}）。"
+                      f"_bar_time() 的時間戳假設需要修正。")
+
+    # 取最後一個交易日的第一根，用來判斷 ts 是該分鐘的起點還是終點
+    last_day = max(t.date() for t in valid)
+    first_of_day = min(t for t in valid if t.date() == last_day)
+    hhmm = first_of_day.strftime("%H:%M")
+    if hhmm == "09:00":
+        note = "ts 是該分鐘的『起點』，與 opening_range() 的半開區間假設一致 ✓"
+    elif hhmm == "09:01":
+        note = ("⚠️ 第一根是 09:01 → ts 可能是該分鐘的『終點』。"
+                "opening_range() 會少收 09:00 那一分鐘、多收 09:15，需要修正。")
+    else:
+        note = (f"⚠️ 第一根是 {hhmm}，不是預期的 09:00 —— "
+                f"請確認 ts 語意與盤別，opening_range() 的區間可能取錯。")
+    return Result(OK, "kbars",
+                  f"{code} {span} 共 {len(ts)} 根；最後一個交易日 {last_day} "
+                  f"的第一根是 {first_of_day:%H:%M:%S}。{note}")
 
 
 def check_opening_range(broker) -> Result:
@@ -192,6 +225,15 @@ def check_pnl(broker) -> Result:
 
 def check_trades(broker) -> Result:
     trades = broker.trades_today()
+    if trades is None:
+        if config.SIMULATION:
+            return Result(WARN, "成交紀錄",
+                          "查不到（多半是金鑰沒有帳務查詢權限）。模擬模式下風控會以 0 筆計算，"
+                          "但切到 SIMULATION=0 前必須讓這一項變成 ✅ —— "
+                          "否則「當日交易筆數上限」這條紅線等於沒有。")
+        return Result(FAIL, "成交紀錄",
+                      "真錢模式查不到成交紀錄 → 交易筆數上限失效，"
+                      "風控閘門會在第一個訊號時關閘停手。請確認金鑰的帳務查詢權限。")
     if not trades:
         return Result(WARN, "成交紀錄",
                       "今日無成交（沒下單就是正常的）。有下單的日子要再確認一次欄位。")

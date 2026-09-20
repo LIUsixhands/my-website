@@ -106,8 +106,13 @@ def _connect():
         return [], None, f"⚠️ 無法連線券商（{e}），成交與損益欄位為空，請自行補上。"
     trades = broker.trades_today()
     pnl = broker.realized_pnl_today()
-    note = "" if pnl is not None else "⚠️ 損益查詢失敗，當日實現損益未知（不是 0）。"
-    return trades, pnl, note
+    notes = []
+    if trades is None:
+        notes.append("⚠️ 成交查詢失敗，當日成交紀錄未知（不是「沒有成交」）。")
+        trades = []
+    if pnl is None:
+        notes.append("⚠️ 損益查詢失敗，當日實現損益未知（不是 0）。")
+    return trades, pnl, "　".join(notes)
 
 
 def render(signals: list[dict], trades: list, state: dict,
