@@ -10,6 +10,7 @@ signals.py — 盤中訊號引擎。09:00 啟動，13:30 自動收工。
 """
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, time as dtime
@@ -148,6 +149,7 @@ class SymbolState:
     total_volume: int = 0
     vol_marks: list = field(default_factory=list)   # (ts, total_volume) 用來算量能速率
     signaled: int = 0
+    vwap_warned: bool = False
 
     def lock_opening_range(self, high: float, low: float, source: str = "tick"):
         self.or_high, self.or_low = high, low
@@ -216,8 +218,17 @@ def evaluate(st: SymbolState, now: dtime | None = None) -> dict | None:
     trigger = st.or_high * (1 + cfg["breakout_buffer_pct"] / 100)
     if st.last_price < trigger:
         return None
-    if cfg["require_above_vwap"] and st.vwap and st.last_price < st.vwap:
-        return None
+    if cfg["require_above_vwap"]:
+        # 均價線拿不到時直接不發。原本寫成 `cfg[...] and st.vwap and ...`，
+        # vwap 為 0 會讓整個條件短路成 False —— 規則你以為開著，其實整天沒作用。
+        if not st.vwap:
+            if not st.vwap_warned:
+                log.warning("%s 沒有均價線（avg_price=0），require_above_vwap 無從判斷，"
+                            "本檔今日不發訊號", st.code)
+                st.vwap_warned = True
+            return None
+        if st.last_price < st.vwap:
+            return None
     surge = st.volume_surge()
     if surge < cfg["volume_surge_ratio"]:
         return None
@@ -281,6 +292,24 @@ def format_signal(sig: dict, ordinal: int) -> str:
 
 
 _push_warned = False
+
+
+def try_emit(st: SymbolState, gate: RiskGate, lock, sig: dict) -> str | None:
+    """在鎖內完成「再確認 → 過閘 → 記錄」，回傳要推播的訊息（或 None）。
+
+    行情回呼跑在背景執行緒上，多檔可能同時觸發。這幾步不是原子的話，
+    兩檔會雙雙通過 check() 再各自寫進 state.json —— 當日訊號上限就被繞過去了。
+    推播留在鎖外：網路請求不該卡住其他檔的行情處理。
+    """
+    with lock:
+        # 鎖內再確認一次：可能有另一條執行緒剛剛替這檔發過。
+        if st.signaled >= config.SIGNAL["max_signals_per_symbol"]:
+            return None
+        if not gate.check():
+            return None
+        st.signaled += 1
+        ordinal = gate.record(sig)
+    return format_signal(sig, ordinal)
 
 
 def notify(text: str):
@@ -366,6 +395,8 @@ def main():
     states = {i["code"]: SymbolState(i["code"], i["prev_close"]) for i in wl["items"]}
     restore_signaled(states, gate)
 
+    signal_lock = threading.Lock()
+
     @broker.api.on_tick_stk_v1()
     def on_tick(exchange, tick):
         st = states.get(tick.code)
@@ -373,10 +404,11 @@ def main():
             return
         st.update(tick)
         sig = evaluate(st)
-        if sig and gate.check():
-            st.signaled += 1
-            ordinal = gate.record(sig)
-            notify(format_signal(sig, ordinal))
+        if not sig:
+            return
+        msg = try_emit(st, gate, signal_lock, sig)
+        if msg:
+            notify(msg)
 
     import shioaji as sj  # 只有真的要訂閱行情時才需要
     for code in states:

@@ -10,6 +10,8 @@ import contextlib
 import io
 import json
 import tempfile
+import threading
+import time
 import unittest
 from datetime import datetime, time as dtime
 from pathlib import Path
@@ -312,6 +314,35 @@ class TestEvaluate(unittest.TestCase):
         st = ready_state(or_high=100.0, last=101.0, vwap=101.5)
         self.assertIsNone(evaluate(st, now=self.NOON))
 
+    def test_missing_vwap_blocks_instead_of_skipping_the_rule(self):
+        """均價線拿不到 → 不發訊號，而不是把這條規則靜靜跳過。
+
+        原本 `require_above_vwap and st.vwap and ...` 在 vwap=0 時整條短路，
+        規則你以為開著，其實整天沒作用。
+        """
+        st = ready_state(or_high=100.0, last=101.0, vwap=0.0)
+        self.assertTrue(config.SIGNAL["require_above_vwap"])
+        with self.assertLogs(signals.log, level="WARNING") as cm:
+            self.assertIsNone(evaluate(st, now=self.NOON))
+        self.assertIn("沒有均價線", "".join(cm.output))
+        self.assertTrue(st.vwap_warned)
+
+    def test_missing_vwap_warns_only_once(self):
+        st = ready_state(or_high=100.0, last=101.0, vwap=0.0)
+        with self.assertLogs(signals.log, level="WARNING"):
+            evaluate(st, now=self.NOON)
+        with self.assertNoLogs(signals.log, level="WARNING"):
+            self.assertIsNone(evaluate(st, now=self.NOON))
+
+    def test_missing_vwap_is_allowed_when_rule_is_off(self):
+        original = config.SIGNAL["require_above_vwap"]
+        config.SIGNAL["require_above_vwap"] = False
+        try:
+            st = ready_state(or_high=100.0, last=101.0, vwap=0.0)
+            self.assertIsNotNone(evaluate(st, now=self.NOON))
+        finally:
+            config.SIGNAL["require_above_vwap"] = original
+
     def test_blocked_on_weak_volume(self):
         st = ready_state(or_high=100.0, last=101.0, vwap=100.5, surge_ratio=1.2)
         self.assertIsNone(evaluate(st, now=self.NOON))
@@ -495,6 +526,89 @@ class TestNotify(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             with self.assertLogs(signals.log, level="WARNING"):
                 signals.notify("測試訊號")     # 推播失敗不能讓引擎掛掉
+
+
+class TestConcurrentEmit(unittest.TestCase):
+    """行情回呼在背景執行緒上跑 —— 訊號上限必須擋得住並行。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self._orig = config.STATE_FILE
+        config.STATE_FILE = Path(self._tmp.name) / "state.json"
+
+    def tearDown(self):
+        config.STATE_FILE = self._orig
+        self._tmp.cleanup()
+
+    @staticmethod
+    def _widen_race_window(gate):
+        """把延遲塞進 check() 與 record() 之間 —— 那才是真正的競態窗口。
+
+        不加這個，這些測試在真鎖與無鎖之下都會過（GIL 讓臨界區短到撞不上），
+        等於白測。實測：拿掉鎖時上限 5 個會變成發出 36 個。
+        """
+        real_check = gate.check
+
+        def slow_check():
+            ok = real_check()
+            time.sleep(0.002)
+            return ok
+
+        gate.check = slow_check
+        return gate
+
+    def _hammer(self, states, gate, threads=24):
+        self._widen_race_window(gate)
+        lock = threading.Lock()
+        sent = []
+        sent_lock = threading.Lock()
+        barrier = threading.Barrier(threads)
+
+        def worker(st):
+            sig = evaluate(st, now=dtime(10, 0))
+            barrier.wait()                       # 盡量讓大家同時進來
+            if sig:
+                msg = signals.try_emit(st, gate, lock, sig)
+                if msg:
+                    with sent_lock:
+                        sent.append(msg)
+
+        pool = [threading.Thread(target=worker, args=(states[i % len(states)],))
+                for i in range(threads)]
+        for t in pool:
+            t.start()
+        for t in pool:
+            t.join()
+        return sent
+
+    def test_one_symbol_emits_once_under_concurrency(self):
+        gate = RiskGate(FakeBroker(pnl_rows=[]))
+        st = ready_state("2330")
+        sent = self._hammer([st], gate)
+        self.assertEqual(len(sent), config.SIGNAL["max_signals_per_symbol"])
+        self.assertEqual(st.signaled, config.SIGNAL["max_signals_per_symbol"])
+        self.assertEqual(gate.state["signals_sent"], len(sent))
+
+    def test_daily_cap_holds_across_symbols_under_concurrency(self):
+        gate = RiskGate(FakeBroker(pnl_rows=[]))
+        cap = config.RISK["max_signals_per_day"]
+        states = [ready_state(str(2330 + i)) for i in range(cap + 4)]
+        sent = self._hammer(states, gate, threads=(cap + 4) * 4)
+        self.assertLessEqual(len(sent), cap)
+        self.assertLessEqual(gate.state["signals_sent"], cap)
+        self.assertEqual(len(gate.state["signals"]), gate.state["signals_sent"])
+
+    def test_ordinals_are_unique_and_sequential(self):
+        gate = RiskGate(FakeBroker(pnl_rows=[]))
+        states = [ready_state(str(2330 + i)) for i in range(4)]
+        sent = self._hammer(states, gate, threads=16)
+        ordinals = sorted(int(m.split("今日第 ")[1].split("/")[0]) for m in sent)
+        self.assertEqual(ordinals, list(range(1, len(sent) + 1)))
+
+    def test_closed_gate_emits_nothing(self):
+        gate = RiskGate(FakeBroker(pnl_rows=[]))
+        gate._close("測試")
+        self.assertEqual(self._hammer([ready_state("2330")], gate), [])
 
 
 class TestRestoreSignaled(unittest.TestCase):
