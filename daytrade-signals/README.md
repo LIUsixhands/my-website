@@ -28,6 +28,9 @@ pip install -r requirements.txt
 cp .env.template .env      # 填入金鑰
 ```
 
+`requests` 只有 Telegram 推播用得到，缺席時訊號照樣印在畫面上；但如果你已經
+設好金鑰卻沒裝它，`notify()` 會用 ERROR 級別吵你 —— 「訊號發不出去」不能安靜地發生。
+
 `.env`（`config.py` 啟動時會自動讀，不需要 source；已存在的環境變數優先）：
 
 ```
@@ -43,7 +46,7 @@ TELEGRAM_CHAT_ID=xxx
 ### 裝完先跑這兩個
 
 ```bash
-python3 test_daytrade.py   # 67 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 71 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 ```
 
@@ -156,7 +159,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `signals.py` | 盤中訊號引擎 + 風控閘門 → `state.json` + Telegram |
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
-| `test_daytrade.py` | 67 項離線測試 |
+| `test_daytrade.py` | 71 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。
