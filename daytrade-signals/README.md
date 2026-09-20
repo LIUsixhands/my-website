@@ -43,12 +43,21 @@ TELEGRAM_CHAT_ID=xxx
 
 金鑰在永豐官網申請，需先簽署 API 服務條款與風險預告書。
 
-### 裝完先跑這兩個
+### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 71 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 111 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
+python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
+
+`preflight.py` 是**上線前的守門人**。整套系統對 Shioaji 的回傳格式做了一堆假設
+（欄位叫什麼、`day_trade` 是什麼值、分鐘 K 的 `ts` 是起點還是終點、損益查不查得到），
+而那些假設錯了**盤中不會報錯** —— 你只會得到一個整天沉默、或安靜地用錯誤水位
+算停損的系統。它逐項印出實際看到的值讓你核對，有 ❌ 就以 exit code 1 結束。
+
+**切換 `SIMULATION=0` 之前一定要跑一次**，特別是「已實現損益」那一項：
+查不到的話風控會直接關閘停手（見下方「風控的煞車」）。
 
 `dryrun.py` 驗的是**管線**不是策略：訊號條件、風控閘門、覆盤版型有沒有真的串起來。
 每次改完 `config.py` 都跑一次，免得在真正的 09:00 才發現整天不會發訊號。
@@ -60,6 +69,7 @@ python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 
 | 時間 | 動作 |
 |------|------|
+| 首次／改 SIMULATION | `python preflight.py` → 連線體檢 |
 | 08:30 | `python screener.py` → 產出 20 檔候選池 |
 | 08:45 | **你自己刪到剩 5 檔**（題材、昨日型態、有沒有明天財報）— 直接編輯 `watchlist.json` 的 `items` |
 | 09:00 | `python signals.py` → 開始監看，訊號推 Telegram |
@@ -138,6 +148,9 @@ per_trade_risk           2000   單筆風險 → 反推張數
   但它終究是估算，不是交易所的分時量
 - 量比（`volume_ratio`）只對振幅前 60 名計算，其餘以 1.0 計 ——
   Shioaji 有流量上限，全市場每檔打一次 kbars 會被停用一分鐘
+- `day_trade` 旗標為 `OnlyBuy`（只能先買後賣）的標的**會被納入**，因為 v1 只做多。
+  要做空時它們就不能收 —— `is_day_tradable()` 依 `allow_short` 自動切換。
+  認不出來的旗標值一律當成不可當沖（寧可少看幾檔）；實際值分佈用 `preflight.py` 確認
 - 先賣後買（`allow_short`）**沒有實作**：`evaluate()` 只有多方分支。
   在 `config.py` 打開它會被 `validate()` 擋下來，而不是讓你誤以為系統在看空單
 - Shioaji 每 24 小時需重新登入（`ensure_session()` 每 30 秒檢查，滿 20 小時主動重登）
@@ -159,7 +172,8 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `signals.py` | 盤中訊號引擎 + 風控閘門 → `state.json` + Telegram |
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
-| `test_daytrade.py` | 71 項離線測試 |
+| `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
+| `test_daytrade.py` | 111 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。

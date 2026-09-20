@@ -23,14 +23,22 @@ log = logging.getLogger(__name__)
 
 
 class Broker:
-    def __init__(self):
+    def __init__(self, api=None):
+        """api 可注入，用來離線測試這些封裝對 Shioaji 回傳格式的假設。
+
+        注入時不登入 —— 測試不該打網路。正式使用一律不帶參數。
+        """
+        self._pnl_warned = False
+        if api is not None:
+            self.api = api
+            self._login_at = datetime.now()
+            return
         if sj is None:
             raise RuntimeError(
                 "未安裝 shioaji。請執行 pip install -r requirements.txt。"
                 "（離線跑測試不需要它，但盤前／盤中／盤後三支程式都需要。）")
         self.api = sj.Shioaji(simulation=config.SIMULATION)
         self._login_at = None
-        self._pnl_warned = False
         self.login()
 
     # ── 連線 ────────────────────────────────────────
@@ -67,10 +75,29 @@ class Broker:
                 out.extend(list(group))
         return out
 
-    def is_day_tradable(self, contract) -> bool:
-        """可現股當沖？處置股／全額交割通常會是 No。"""
+    @staticmethod
+    def day_trade_flag(contract) -> str:
+        """contract.day_trade 的值（Yes / No / OnlyBuy / 未知）。"""
         dt = getattr(contract, "day_trade", None)
-        return str(dt).endswith("Yes")
+        if dt is None:
+            return "未知"
+        name = str(dt).rsplit(".", 1)[-1]
+        return name if name in ("Yes", "No", "OnlyBuy") else "未知"
+
+    def is_day_tradable(self, contract, allow_short: bool | None = None) -> bool:
+        """可現股當沖？處置股／全額交割通常會是 No。
+
+        `OnlyBuy` 是「只能先買後賣」。v1 只做多（`allow_short=False`），
+        所以 OnlyBuy 完全可用 —— 原本只認 Yes 會把這一票合格標的默默篩掉。
+        要做空時 OnlyBuy 就不能收，因為先賣後買在這些標的上不被允許。
+
+        認不出來的值一律當成不可當沖（fail closed）：寧可少看幾檔，
+        也不要對一檔不能當沖的股票發訊號。
+        """
+        if allow_short is None:
+            allow_short = config.SIGNAL["allow_short"]
+        flag = self.day_trade_flag(contract)
+        return flag == "Yes" or (flag == "OnlyBuy" and not allow_short)
 
     # ── 行情 ────────────────────────────────────────
     def snapshots(self, contracts):

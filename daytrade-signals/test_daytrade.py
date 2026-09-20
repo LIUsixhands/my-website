@@ -16,7 +16,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import config
+import preflight
 import review
+from broker import Broker
 import screener
 import signals
 from signals import RiskGate, SymbolState, evaluate, format_signal
@@ -678,6 +680,388 @@ class TestLoadSignals(unittest.TestCase):
         signals_, state = review.load_signals()
         self.assertEqual(signals_, [])
         self.assertEqual(state, {})
+
+
+# ── 假的 Shioaji api，形狀依官方文件 ────────────────────
+class FakeContract:
+    def __init__(self, code, day_trade="DayTrade.Yes"):
+        self.code = code
+        self.day_trade = day_trade
+
+
+class FakeStocks:
+    def __init__(self, tse=(), otc=()):
+        self.TSE = list(tse)
+        self.OTC = list(otc)
+        self._all = {c.code: c for c in list(tse) + list(otc)}
+
+    def __getitem__(self, code):
+        return self._all[code]
+
+
+class FakeKbars:
+    def __init__(self, bars):
+        # bars: [(datetime, high, low, volume)]
+        self.ts = [b[0].timestamp() * 1e9 for b in bars]
+        self.High = [b[1] for b in bars]
+        self.Low = [b[2] for b in bars]
+        self.Volume = [b[3] for b in bars]
+
+
+class FakeApi:
+    def __init__(self, stocks=None, snaps=None, kbars=None,
+                 pnl_rows=None, pnl_raises=False, trades=None):
+        self.Contracts = SimpleNamespace(Stocks=stocks or FakeStocks())
+        self.stock_account = "acct"
+        self._snaps = snaps or []
+        self._kbars = kbars
+        self._pnl_rows = pnl_rows if pnl_rows is not None else []
+        self._pnl_raises = pnl_raises
+        self._trades = trades or []
+        self.snapshot_batches = []
+
+    def snapshots(self, contracts):
+        self.snapshot_batches.append(len(contracts))
+        codes = {c.code for c in contracts}
+        return [s for s in self._snaps if s.code in codes]
+
+    def kbars(self, contract, start, end):
+        if self._kbars is None:
+            raise RuntimeError("no kbars")
+        return self._kbars
+
+    def list_profit_loss(self, acct, begin_date, end_date):
+        if self._pnl_raises:
+            raise RuntimeError("需要電子憑證")
+        return [SimpleNamespace(pnl=v) for v in self._pnl_rows]
+
+    def update_status(self, acct):
+        pass
+
+    def list_trades(self):
+        return self._trades
+
+
+class TestBrokerWrappers(unittest.TestCase):
+    """這一層原本完全沒有測試，而它承載了所有對 Shioaji 回傳格式的假設。"""
+
+    def test_all_stocks_merges_tse_and_otc(self):
+        api = FakeApi(stocks=FakeStocks(tse=[FakeContract("2330")],
+                                        otc=[FakeContract("6488")]))
+        codes = [c.code for c in Broker(api=api).all_stocks()]
+        self.assertEqual(sorted(codes), ["2330", "6488"])
+
+    def test_all_stocks_tolerates_missing_exchange(self):
+        stocks = FakeStocks(tse=[FakeContract("2330")])
+        stocks.OTC = []
+        self.assertEqual(len(Broker(api=FakeApi(stocks=stocks)).all_stocks()), 1)
+
+    def test_day_trade_flag_parsing(self):
+        f = Broker.day_trade_flag
+        self.assertEqual(f(FakeContract("2330", "DayTrade.Yes")), "Yes")
+        self.assertEqual(f(FakeContract("2330", "DayTrade.No")), "No")
+        self.assertEqual(f(FakeContract("2330", "DayTrade.OnlyBuy")), "OnlyBuy")
+        self.assertEqual(f(FakeContract("2330", "Yes")), "Yes")        # 裸字串也認
+        self.assertEqual(f(FakeContract("2330", "DayTrade.Weird")), "未知")
+        self.assertEqual(f(SimpleNamespace(code="2330")), "未知")
+
+    def test_only_buy_is_tradable_for_a_long_only_system(self):
+        """OnlyBuy = 只能先買後賣。v1 只做多，所以它完全可用。"""
+        b = Broker(api=FakeApi())
+        only_buy = FakeContract("2330", "DayTrade.OnlyBuy")
+        self.assertTrue(b.is_day_tradable(only_buy, allow_short=False))
+        self.assertFalse(b.is_day_tradable(only_buy, allow_short=True))
+
+    def test_day_tradable_follows_config_by_default(self):
+        b = Broker(api=FakeApi())
+        original = config.SIGNAL["allow_short"]
+        try:
+            config.SIGNAL["allow_short"] = False
+            self.assertTrue(b.is_day_tradable(FakeContract("2330", "DayTrade.OnlyBuy")))
+            config.SIGNAL["allow_short"] = True
+            self.assertFalse(b.is_day_tradable(FakeContract("2330", "DayTrade.OnlyBuy")))
+        finally:
+            config.SIGNAL["allow_short"] = original
+
+    def test_unknown_flag_fails_closed(self):
+        b = Broker(api=FakeApi())
+        self.assertFalse(b.is_day_tradable(FakeContract("2330", "DayTrade.Weird")))
+        self.assertFalse(b.is_day_tradable(SimpleNamespace(code="2330")))
+        self.assertFalse(b.is_day_tradable(FakeContract("2330", "DayTrade.No")))
+
+    def test_snapshots_batches_at_500(self):
+        """一次最多 500 檔是官方限制；分批錯了會整批失敗。"""
+        contracts = [FakeContract(str(1000 + i)) for i in range(1201)]
+        api = FakeApi(snaps=[SimpleNamespace(code=c.code) for c in contracts])
+        out = Broker(api=api).snapshots(contracts)
+        self.assertEqual(api.snapshot_batches, [500, 500, 201])
+        self.assertEqual(len(out), 1201)
+
+    def test_snapshots_empty_input(self):
+        api = FakeApi()
+        self.assertEqual(Broker(api=api).snapshots([]), [])
+        self.assertEqual(api.snapshot_batches, [])
+
+    def _or_broker(self, bars):
+        return Broker(api=FakeApi(stocks=FakeStocks(tse=[FakeContract("2330")]),
+                                  kbars=FakeKbars(bars)))
+
+    def test_opening_range_uses_only_the_window(self):
+        d = datetime.now().date()
+        bars = [
+            (datetime.combine(d, dtime(8, 59)), 999.0, 998.0, 10),   # 盤前，不算
+            (datetime.combine(d, dtime(9, 0)), 101.0, 99.0, 100),
+            (datetime.combine(d, dtime(9, 14)), 102.0, 100.0, 100),
+            (datetime.combine(d, dtime(9, 15)), 500.0, 1.0, 100),    # 區間外，不算
+            (datetime.combine(d, dtime(10, 0)), 600.0, 2.0, 100),
+        ]
+        rng = self._or_broker(bars).opening_range("2330", "09:00:00", "09:15:00")
+        self.assertEqual(rng, (102.0, 99.0))
+
+    def test_opening_range_none_when_no_bars_in_window(self):
+        d = datetime.now().date()
+        bars = [(datetime.combine(d, dtime(10, 0)), 105.0, 104.0, 100)]
+        self.assertIsNone(self._or_broker(bars).opening_range("2330", "09:00:00", "09:15:00"))
+
+    def test_opening_range_none_when_kbars_raises(self):
+        api = FakeApi(stocks=FakeStocks(tse=[FakeContract("2330")]), kbars=None)
+        self.assertIsNone(Broker(api=api).opening_range("2330", "09:00:00", "09:15:00"))
+
+    def test_pnl_rows_sums_and_preserves_order(self):
+        b = Broker(api=FakeApi(pnl_rows=[300.0, -100.0, -250.0]))
+        self.assertEqual(b.realized_pnl_rows_today(), [300.0, -100.0, -250.0])
+        self.assertAlmostEqual(b.realized_pnl_today(), -50.0)
+
+    def test_pnl_empty_is_zero_not_unknown(self):
+        """沒有平倉紀錄 → 0 元（已知）；查詢失敗 → None（未知）。兩者不能混。"""
+        b = Broker(api=FakeApi(pnl_rows=[]))
+        self.assertEqual(b.realized_pnl_rows_today(), [])
+        self.assertEqual(b.realized_pnl_today(), 0.0)
+
+    def test_pnl_unknown_on_exception(self):
+        b = Broker(api=FakeApi(pnl_raises=True))
+        self.assertIsNone(b.realized_pnl_rows_today())
+        self.assertIsNone(b.realized_pnl_today())
+
+    def test_trades_today_survives_api_error(self):
+        class Boom(FakeApi):
+            def list_trades(self):
+                raise RuntimeError("查詢失敗")
+
+        self.assertEqual(Broker(api=Boom()).trades_today(), [])
+
+    def test_ensure_session_relogins_after_20h(self):
+        from datetime import timedelta
+        b = Broker(api=FakeApi())
+        b._login_at = datetime.now() - timedelta(hours=21)
+        calls = []
+        b.login = lambda: calls.append("login") or setattr(b, "_login_at", datetime.now())
+        b.api.logout = lambda: calls.append("logout")
+        b.ensure_session()
+        self.assertEqual(calls, ["logout", "login"])
+
+    def test_ensure_session_noop_when_fresh(self):
+        b = Broker(api=FakeApi())
+        b.login = lambda: self.fail("不該重新登入")
+        b.ensure_session()
+
+
+class TestPreflight(unittest.TestCase):
+    """preflight 是上線前的守門人 —— 它自己判斷錯了比沒有它更糟。"""
+
+    @staticmethod
+    def _stocks(flags=("DayTrade.Yes",)):
+        return FakeStocks(tse=[FakeContract(str(2330 + i), f)
+                               for i, f in enumerate(flags)])
+
+    @staticmethod
+    def _snap(code="2330", **over):
+        base = dict(close=100.0, high=104.0, low=99.0,
+                    total_volume=9000, average_price=101.0)
+        base.update(over)
+        return SimpleNamespace(code=code, **base)
+
+    @staticmethod
+    def _bars(first_minute=0):
+        d = datetime.now().date()
+        return [(datetime.combine(d, dtime(9, first_minute + i)),
+                 101.0 + i, 99.0 - i, 100) for i in range(3)]
+
+    def test_config_check_passes_and_fails(self):
+        self.assertEqual(preflight.check_config().status, preflight.OK)
+        original = config.SIGNAL["reward_risk"]
+        config.SIGNAL["reward_risk"] = -1
+        try:
+            r = preflight.check_config()
+            self.assertEqual(r.status, preflight.FAIL)
+            self.assertIn("reward_risk", r.detail)
+        finally:
+            config.SIGNAL["reward_risk"] = original
+
+    def test_contracts_empty_is_fail(self):
+        r = preflight.check_contracts(Broker(api=FakeApi()))
+        self.assertEqual(r.status, preflight.FAIL)
+
+    def test_contracts_counts_four_digit(self):
+        stocks = FakeStocks(tse=[FakeContract("2330"), FakeContract("00632R"),
+                                 FakeContract("2317")])
+        r = preflight.check_contracts(Broker(api=FakeApi(stocks=stocks)))
+        self.assertEqual(r.status, preflight.OK)
+        self.assertIn("四碼普通股 2 檔", r.detail)
+
+    def test_day_trade_all_unknown_is_fail(self):
+        """旗標認不出來 → screener 會篩出 0 檔，而且不會報錯。"""
+        api = FakeApi(stocks=self._stocks(("DayTrade.Weird", "DayTrade.Weird")))
+        r = preflight.check_day_trade_flag(Broker(api=api))
+        self.assertEqual(r.status, preflight.FAIL)
+        self.assertIn("篩出 0 檔", r.detail)
+
+    def test_day_trade_none_tradable_is_fail(self):
+        api = FakeApi(stocks=self._stocks(("DayTrade.No", "DayTrade.No")))
+        r = preflight.check_day_trade_flag(Broker(api=api))
+        self.assertEqual(r.status, preflight.FAIL)
+
+    def test_day_trade_reports_distribution(self):
+        api = FakeApi(stocks=self._stocks(("DayTrade.Yes", "DayTrade.No",
+                                           "DayTrade.OnlyBuy")))
+        r = preflight.check_day_trade_flag(Broker(api=api))
+        self.assertEqual(r.status, preflight.OK)
+        for part in ("Yes=1", "No=1", "OnlyBuy=1"):
+            self.assertIn(part, r.detail)
+
+    def test_snapshots_empty_is_fail(self):
+        api = FakeApi(stocks=self._stocks(), snaps=[])
+        self.assertEqual(preflight.check_snapshots(Broker(api=api)).status,
+                         preflight.FAIL)
+
+    def test_snapshots_missing_field_is_fail(self):
+        snap = SimpleNamespace(code="2330", close=100.0, high=104.0, low=99.0,
+                               total_volume=9000)          # 少了 average_price
+        api = FakeApi(stocks=self._stocks(), snaps=[snap])
+        r = preflight.check_snapshots(Broker(api=api))
+        self.assertEqual(r.status, preflight.FAIL)
+        self.assertIn("average_price", r.detail)
+
+    def test_snapshots_zero_field_is_warning(self):
+        api = FakeApi(stocks=self._stocks(), snaps=[self._snap(total_volume=0)])
+        r = preflight.check_snapshots(Broker(api=api))
+        self.assertEqual(r.status, preflight.WARN)
+        self.assertIn("total_volume", r.detail)
+
+    def test_snapshots_healthy_is_ok(self):
+        api = FakeApi(stocks=self._stocks(), snaps=[self._snap()])
+        self.assertEqual(preflight.check_snapshots(Broker(api=api)).status,
+                         preflight.OK)
+
+    def test_kbars_missing_fields_is_fail(self):
+        empty = FakeKbars([])
+        api = FakeApi(stocks=self._stocks(), kbars=empty)
+        r = preflight.check_kbars(Broker(api=api))
+        self.assertEqual(r.status, preflight.FAIL)
+
+    def test_kbars_confirms_ts_is_bar_start(self):
+        api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(self._bars(0)))
+        r = preflight.check_kbars(Broker(api=api))
+        self.assertEqual(r.status, preflight.OK)
+        self.assertIn("與 opening_range() 的假設一致", r.detail)
+
+    def test_kbars_flags_unexpected_first_bar(self):
+        """第一根不是 09:00 → ts 語意可能是終點，必須提醒。"""
+        api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(self._bars(1)))
+        r = preflight.check_kbars(Broker(api=api))
+        self.assertIn("請確認 ts 是起點還是終點", r.detail)
+
+    def test_kbars_unavailable_is_warning_not_failure(self):
+        api = FakeApi(stocks=self._stocks(), kbars=None)
+        self.assertEqual(preflight.check_kbars(Broker(api=api)).status,
+                         preflight.WARN)
+
+    def test_pnl_available_is_ok(self):
+        api = FakeApi(stocks=self._stocks(), pnl_rows=[300.0, -100.0])
+        r = preflight.check_pnl(Broker(api=api))
+        self.assertEqual(r.status, preflight.OK)
+        self.assertIn("200", r.detail)
+
+    def test_pnl_unknown_is_warning_in_simulation(self):
+        original = config.SIMULATION
+        config.SIMULATION = True
+        try:
+            api = FakeApi(stocks=self._stocks(), pnl_raises=True)
+            r = preflight.check_pnl(Broker(api=api))
+            self.assertEqual(r.status, preflight.WARN)
+        finally:
+            config.SIMULATION = original
+
+    def test_pnl_unknown_is_failure_when_live(self):
+        """真錢模式查不到損益 = 沒有煞車，這是最該擋下來的一項。"""
+        original = config.SIMULATION
+        config.SIMULATION = False
+        try:
+            api = FakeApi(stocks=self._stocks(), pnl_raises=True)
+            r = preflight.check_pnl(Broker(api=api))
+            self.assertEqual(r.status, preflight.FAIL)
+            self.assertIn("關閘停手", r.detail)
+        finally:
+            config.SIMULATION = original
+
+    def test_trades_empty_is_warning(self):
+        api = FakeApi(stocks=self._stocks())
+        self.assertEqual(preflight.check_trades(Broker(api=api)).status,
+                         preflight.WARN)
+
+    def test_trades_reports_fields(self):
+        trade = SimpleNamespace(
+            contract=SimpleNamespace(code="2330"),
+            order=SimpleNamespace(action="Buy", price=100.0),
+            status=SimpleNamespace(deal_quantity=1, status="Filled", deal_price=101.5))
+        api = FakeApi(stocks=self._stocks(), trades=[trade])
+        r = preflight.check_trades(Broker(api=api))
+        self.assertEqual(r.status, preflight.OK)
+        self.assertIn("101.50", r.detail)
+
+    def test_telegram_unconfigured_is_warning(self):
+        orig = (config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID)
+        config.TELEGRAM_BOT_TOKEN = config.TELEGRAM_CHAT_ID = ""
+        try:
+            self.assertEqual(preflight.check_telegram().status, preflight.WARN)
+        finally:
+            config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID = orig
+
+    def test_telegram_configured_without_requests_is_fail(self):
+        orig = (config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID, signals.requests)
+        config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID = "tok", "chat"
+        signals.requests = None
+        try:
+            self.assertEqual(preflight.check_telegram().status, preflight.FAIL)
+        finally:
+            (config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID,
+             signals.requests) = orig
+
+    def test_telegram_sends_test_message(self):
+        orig = (config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID, signals.requests)
+        sent = []
+
+        class FakeRequests:
+            @staticmethod
+            def post(url, json, timeout):
+                sent.append(json["text"])
+
+        config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID = "tok", "chat"
+        signals.requests = FakeRequests
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                r = preflight.check_telegram()
+            self.assertEqual(r.status, preflight.OK)
+            self.assertTrue(sent and "preflight" in sent[0])
+        finally:
+            (config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID,
+             signals.requests) = orig
+
+    def test_every_check_is_listed(self):
+        """新增檢查卻忘了掛進 CHECKS，體檢就會安靜地少做一項。"""
+        defined = {v for k, v in vars(preflight).items()
+                   if k.startswith("check_") and callable(v)}
+        self.assertEqual(defined, set(preflight.CHECKS))
 
 
 class TestBarTime(unittest.TestCase):
