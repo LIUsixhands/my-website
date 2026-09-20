@@ -29,6 +29,7 @@ class Broker:
         注入時不登入 —— 測試不該打網路。正式使用一律不帶參數。
         """
         self._pnl_warned = False
+        self._trades_warned = False
         if api is not None:
             self.api = api
             self._login_at = datetime.now()
@@ -95,14 +96,23 @@ class Broker:
             self.login()
 
     # ── 商品檔 ──────────────────────────────────────
+    def _stocks_root(self):
+        """shioaji 1.7 起 api.Contracts 已棄用（會噴 DeprecationWarning），
+        改用 api.contracts。保留舊路徑以相容更早的版本。"""
+        new = getattr(self.api, "contracts", None)
+        if new is not None and hasattr(new, "Stocks"):
+            return new.Stocks
+        return self.api.Contracts.Stocks
+
     def stock(self, code: str):
-        return self.api.Contracts.Stocks[code]
+        return self._stocks_root()[code]
 
     def all_stocks(self):
         """上市 + 上櫃全部股票合約。"""
+        root = self._stocks_root()
         out = []
         for exch in ("TSE", "OTC"):
-            group = getattr(self.api.Contracts.Stocks, exch, None)
+            group = getattr(root, exch, None)
             if group:
                 out.extend(list(group))
         return out
@@ -207,14 +217,21 @@ class Broker:
         rows = self.realized_pnl_rows_today()
         return None if rows is None else float(sum(rows))
 
-    def trades_today(self):
-        """當日成交明細，用來對照訊號與實際執行。"""
+    def trades_today(self) -> list | None:
+        """當日成交明細。查不到回傳 None，不是空清單。
+
+        實測金鑰權限不足時這裡會 401（Token doesn't have permission）。
+        回傳 [] 會讓「當日交易筆數上限」這條紅線永遠不觸發 ——
+        又是一條你以為開著、其實沒作用的規則。
+        """
         try:
             self.api.update_status(self.api.stock_account)
             return [t for t in self.api.list_trades()]
         except Exception as e:
-            log.warning("成交查詢失敗：%s", e)
-            return []
+            if not self._trades_warned:
+                log.warning("成交查詢失敗（風控將視為『未知』）：%s", e)
+                self._trades_warned = True
+            return None
 
 
 def _bar_time(ts):

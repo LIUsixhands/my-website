@@ -14,7 +14,7 @@ import tempfile
 import threading
 import time
 import unittest
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -872,8 +872,14 @@ class FakeKbars:
 
 class FakeApi:
     def __init__(self, stocks=None, snaps=None, kbars=None,
-                 pnl_rows=None, pnl_raises=False, trades=None):
-        self.Contracts = SimpleNamespace(Stocks=stocks or FakeStocks())
+                 pnl_rows=None, pnl_raises=False, trades=None,
+                 trades_raises=False, legacy_contracts_only=False):
+        stocks = stocks or FakeStocks()
+        # shioaji 1.7 起改用小寫 api.contracts；舊版只有 api.Contracts
+        if not legacy_contracts_only:
+            self.contracts = SimpleNamespace(Stocks=stocks)
+        self.Contracts = SimpleNamespace(Stocks=stocks)
+        self._trades_raises = trades_raises
         self.stock_account = "acct"
         self._snaps = snaps or []
         self._kbars = kbars
@@ -901,6 +907,8 @@ class FakeApi:
         pass
 
     def list_trades(self):
+        if self._trades_raises:
+            raise RuntimeError("StatusCode: 401, Detail: Token doesn't have permission")
         return self._trades
 
 
@@ -1005,12 +1013,16 @@ class TestBrokerWrappers(unittest.TestCase):
         self.assertIsNone(b.realized_pnl_rows_today())
         self.assertIsNone(b.realized_pnl_today())
 
-    def test_trades_today_survives_api_error(self):
+    def test_trades_today_unknown_on_api_error(self):
+        """查不到要回 None（未知），不是 []（沒成交）—— 兩者差很多。"""
         class Boom(FakeApi):
             def list_trades(self):
                 raise RuntimeError("查詢失敗")
 
-        self.assertEqual(Broker(api=Boom()).trades_today(), [])
+        self.assertIsNone(Broker(api=Boom()).trades_today())
+
+    def test_trades_today_empty_means_no_trades(self):
+        self.assertEqual(Broker(api=FakeApi(trades=[])).trades_today(), [])
 
     def test_activate_ca_skipped_in_simulation(self):
         orig = config.SIMULATION
@@ -1074,6 +1086,83 @@ class TestBrokerWrappers(unittest.TestCase):
         b = Broker(api=FakeApi())
         b.login = lambda: self.fail("不該重新登入")
         b.ensure_session()
+
+
+class TestContractsMigration(unittest.TestCase):
+    """shioaji 1.7 起 api.Contracts 已棄用，實測會噴 DeprecationWarning。"""
+
+    def test_prefers_new_lowercase_contracts(self):
+        api = FakeApi(stocks=FakeStocks(tse=[FakeContract("2330")]))
+        b = Broker(api=api)
+        self.assertIs(b._stocks_root(), api.contracts.Stocks)
+        self.assertEqual([c.code for c in b.all_stocks()], ["2330"])
+
+    def test_falls_back_to_legacy_contracts(self):
+        api = FakeApi(stocks=FakeStocks(tse=[FakeContract("2330")]),
+                      legacy_contracts_only=True)
+        self.assertFalse(hasattr(api, "contracts"))
+        b = Broker(api=api)
+        self.assertIs(b._stocks_root(), api.Contracts.Stocks)
+        self.assertEqual([c.code for c in b.all_stocks()], ["2330"])
+
+    def test_stock_lookup_uses_same_root(self):
+        api = FakeApi(stocks=FakeStocks(tse=[FakeContract("2330")]))
+        self.assertEqual(Broker(api=api).stock("2330").code, "2330")
+
+
+class TestTradesUnknown(unittest.TestCase):
+    """實測金鑰權限不足時 list_trades 會 401。
+
+    回傳 [] 會讓「當日交易筆數上限」永遠不觸發 —— 又是一條靜靜失效的規則。
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self._orig_state = config.STATE_FILE
+        self._orig_sim = config.SIMULATION
+        config.STATE_FILE = Path(self._tmp.name) / "state.json"
+        self._orig_notify = signals.notify
+        signals.notify = lambda t: None
+
+    def tearDown(self):
+        config.STATE_FILE = self._orig_state
+        config.SIMULATION = self._orig_sim
+        signals.notify = self._orig_notify
+        self._tmp.cleanup()
+
+    def test_broker_returns_none_on_401(self):
+        b = Broker(api=FakeApi(trades_raises=True))
+        self.assertIsNone(b.trades_today())
+
+    def test_broker_returns_list_when_available(self):
+        b = Broker(api=FakeApi(trades=[object()]))
+        self.assertEqual(len(b.trades_today()), 1)
+
+    def test_gate_halts_when_trades_unknown_and_live(self):
+        config.SIMULATION = False
+
+        class B:
+            def trades_today(self):
+                return None
+
+            def realized_pnl_rows_today(self):
+                return []
+
+        gate = RiskGate(B())
+        self.assertFalse(gate.check())
+        self.assertIn("交易筆數上限失效", gate.state["closed_reason"])
+
+    def test_gate_tolerates_unknown_trades_in_simulation(self):
+        config.SIMULATION = True
+
+        class B:
+            def trades_today(self):
+                return None
+
+            def realized_pnl_rows_today(self):
+                return []
+
+        self.assertTrue(RiskGate(B()).check())
 
 
 class TestPreflight(unittest.TestCase):
@@ -1163,28 +1252,61 @@ class TestPreflight(unittest.TestCase):
         self.assertEqual(preflight.check_snapshots(Broker(api=api)).status,
                          preflight.OK)
 
-    def test_kbars_missing_fields_is_fail(self):
-        empty = FakeKbars([])
-        api = FakeApi(stocks=self._stocks(), kbars=empty)
+    def test_kbars_empty_is_warning_not_failure(self):
+        """欄位在、只是週末沒資料 → 這是 WARN 不是 FAIL。
+
+        實測就是這樣誤判的：週日跑體檢，空清單被當成「欄位不存在」。
+        """
+        api = FakeApi(stocks=self._stocks(), kbars=FakeKbars([]))
+        r = preflight.check_kbars(Broker(api=api))
+        self.assertEqual(r.status, preflight.WARN)
+        self.assertIn("欄位名稱正確", r.detail)
+
+    def test_kbars_absent_fields_is_fail(self):
+        """欄位真的不存在才算失敗，而且要印出實際有哪些屬性。"""
+        api = FakeApi(stocks=self._stocks(),
+                      kbars=SimpleNamespace(timestamp=[], h=[], l=[], v=[]))
         r = preflight.check_kbars(Broker(api=api))
         self.assertEqual(r.status, preflight.FAIL)
+        self.assertIn("欄位名稱不符", r.detail)
+        self.assertIn("timestamp", r.detail)      # 印出實際屬性幫助對照
 
     def test_kbars_confirms_ts_is_bar_start(self):
         api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(self._bars(0)))
         r = preflight.check_kbars(Broker(api=api))
         self.assertEqual(r.status, preflight.OK)
-        self.assertIn("與 opening_range() 的假設一致", r.detail)
+        self.assertIn("『起點』", r.detail)
 
-    def test_kbars_flags_unexpected_first_bar(self):
-        """第一根不是 09:00 → ts 語意可能是終點，必須提醒。"""
+    def test_kbars_flags_bar_end_semantics(self):
+        """第一根是 09:01 → ts 可能是終點，opening_range 會取錯區間。"""
         api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(self._bars(1)))
         r = preflight.check_kbars(Broker(api=api))
-        self.assertIn("請確認 ts 是起點還是終點", r.detail)
+        self.assertIn("終點", r.detail)
 
-    def test_kbars_unavailable_is_warning_not_failure(self):
+    def test_kbars_uses_last_trading_day(self):
+        """回看十天會跨多日，要取最後一個交易日的第一根。"""
+        d = datetime.now().date()
+        bars = []
+        for day_offset in (5, 1):
+            day = d - timedelta(days=day_offset)
+            for m in range(3):
+                bars.append((datetime.combine(day, dtime(9, m)), 101.0, 99.0, 100))
+        api = FakeApi(stocks=self._stocks(), kbars=FakeKbars(bars))
+        r = preflight.check_kbars(Broker(api=api))
+        self.assertEqual(r.status, preflight.OK)
+        self.assertIn(str(d - timedelta(days=1)), r.detail)
+
+    def test_kbars_call_failure_is_fail(self):
         api = FakeApi(stocks=self._stocks(), kbars=None)
         self.assertEqual(preflight.check_kbars(Broker(api=api)).status,
-                         preflight.WARN)
+                         preflight.FAIL)
+
+    def test_kbars_unparseable_ts_is_fail(self):
+        api = FakeApi(stocks=self._stocks(),
+                      kbars=SimpleNamespace(ts=["abc"], High=[1], Low=[1], Volume=[1]))
+        r = preflight.check_kbars(Broker(api=api))
+        self.assertEqual(r.status, preflight.FAIL)
+        self.assertIn("解析不出時間", r.detail)
 
     def test_pnl_available_is_ok(self):
         api = FakeApi(stocks=self._stocks(), pnl_rows=[300.0, -100.0])
@@ -1254,6 +1376,28 @@ class TestPreflight(unittest.TestCase):
         api = FakeApi(stocks=self._stocks())
         self.assertEqual(preflight.check_trades(Broker(api=api)).status,
                          preflight.WARN)
+
+    def test_trades_unknown_is_warning_in_simulation(self):
+        orig = config.SIMULATION
+        config.SIMULATION = True
+        try:
+            api = FakeApi(stocks=self._stocks(), trades_raises=True)
+            r = preflight.check_trades(Broker(api=api))
+            self.assertEqual(r.status, preflight.WARN)
+            self.assertIn("等於沒有", r.detail)
+        finally:
+            config.SIMULATION = orig
+
+    def test_trades_unknown_is_failure_when_live(self):
+        orig = config.SIMULATION
+        config.SIMULATION = False
+        try:
+            api = FakeApi(stocks=self._stocks(), trades_raises=True)
+            r = preflight.check_trades(Broker(api=api))
+            self.assertEqual(r.status, preflight.FAIL)
+            self.assertIn("關閘停手", r.detail)
+        finally:
+            config.SIMULATION = orig
 
     def test_trades_reports_fields(self):
         trade = SimpleNamespace(

@@ -99,6 +99,15 @@ class RiskGate:
             return False
 
         trades = self.broker.trades_today()
+        if trades is None:
+            # 查不到成交 = 交易筆數上限這條線失效。與損益同一套處理：
+            # 真錢模式停手，模擬模式放行並警告。
+            if r["halt_when_pnl_unknown"] and not config.SIMULATION:
+                self._close("查不到當日成交紀錄，交易筆數上限失效 —— "
+                            "沒有煞車就不上路。請確認金鑰的帳務查詢權限。")
+                return False
+            log.warning("成交紀錄未知（simulation=%s），本次以 0 筆計算", config.SIMULATION)
+            trades = []
         if len(trades) >= r["max_trades_per_day"] * 2:  # 一筆當沖 = 兩次成交
             self._close(f"已達當日交易筆數上限 {r['max_trades_per_day']} 筆")
             return False
