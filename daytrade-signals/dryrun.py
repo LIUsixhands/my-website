@@ -131,7 +131,8 @@ def main():
                 print(format_signal(s, ordinal))
                 print()
 
-        status = "✔ 已鎖定" if st.or_locked else "✘ 未鎖定"
+        status = (config.symbol("✔ 已鎖定", "[鎖定]") if st.or_locked
+                  else config.symbol("✘ 未鎖定", "[未鎖]"))
         print(f"[{code}] 開盤區間 {status} {st.or_high:.2f}/{st.or_low:.2f}"
               f"  收 {st.last_price:.2f}  量能倍數 {st.volume_surge():.2f}x"
               f"  訊號 {st.signaled}")

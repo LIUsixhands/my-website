@@ -113,6 +113,7 @@ def check_snapshots(broker) -> Result:
 
 
 KBAR_LOOKBACK_DAYS = 10
+KBAR_SAMPLE_SIZE = 3          # 抽幾檔比對第一根的時間
 
 
 def check_kbars(broker) -> Result:
@@ -125,10 +126,11 @@ def check_kbars(broker) -> Result:
               if getattr(c, "code", "").isdigit() and len(getattr(c, "code", "")) == 4]
     if not stocks:
         return Result(WARN, "kbars", "沒有商品檔可檢查")
-    code = stocks[0].code
     end = datetime.now()
     start = end - timedelta(days=KBAR_LOOKBACK_DAYS)
     span = f"{start:%Y-%m-%d}~{end:%Y-%m-%d}"
+    sample = [c.code for c in stocks[:KBAR_SAMPLE_SIZE]]
+    code = sample[0]
     try:
         kb = broker.kbars(code, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
     except Exception as e:
@@ -163,15 +165,29 @@ def check_kbars(broker) -> Result:
     first_of_day = min(t for t in valid if t.date() == last_day)
     hhmm = first_of_day.strftime("%H:%M")
     mark = config.symbol("⚠️", "[!]")
-    if hhmm in ("09:00", "09:01"):
-        note = (f"落在開盤第一分鐘，時區解讀正確，"
-                f"opening_range() 的 09:00~09:15 抓得到 {config.symbol('✓', 'OK')}")
-    elif 9 <= first_of_day.hour < 14:
-        note = (f"{mark} 在盤中但不是 09:00 —— 這檔可能開盤前幾分鐘沒成交，"
-                f"通常無妨；若每檔都這樣請回報。")
-    else:
+    if not (9 <= first_of_day.hour < 14):
         note = (f"{mark} 落在 {hhmm}，完全不在台股盤中（09:00~13:30）—— "
                 f"時區解讀錯誤。差 8 小時就是 ts 被當成本地時間再加一次偏移。")
+    elif hhmm in ("09:00", "09:01"):
+        note = (f"落在開盤第一分鐘，時區解讀正確，"
+                f"opening_range() 的 09:00~09:15 抓得到 {config.symbol('✓', 'OK')}")
+    else:
+        # 抽樣其他檔：全部同一時間 = 全市場的資料起點，只有這檔 = 它開盤沒成交
+        others = _first_bar_times(broker, sample[1:], start, end)
+        same = [c for c, t in others.items() if t and t.strftime("%H:%M") == hhmm]
+        if others and len(same) == len(others):
+            note = (f"{mark} 抽樣的 {len(others) + 1} 檔第一根都是 {hhmm} —— "
+                    f"這是全市場分鐘 K 的資料起點，不是個股沒成交。"
+                    f"opening_range() 的 09:00~09:15 仍抓得到 "
+                    f"{first_of_day.strftime('%H:%M')}~09:14，區間會略窄於真實開盤區間。")
+        elif others:
+            detail = "、".join(f"{c} {t:%H:%M}" if t else f"{c} 無資料"
+                              for c, t in others.items())
+            note = (f"各檔第一根時間不一致（{code} {hhmm}；{detail}）—— "
+                    f"是個股開盤前幾分鐘沒成交，正常。")
+        else:
+            note = (f"{mark} 在盤中但不是 09:00，且沒有其他檔可比對。"
+                    f"開盤日再跑一次確認。")
     # 印出原始值與兩種解讀，時區問題一眼可判
     raw = ts[0]
     from datetime import timezone as _tz
@@ -184,6 +200,25 @@ def check_kbars(broker) -> Result:
     return Result(OK, "kbars",
                   f"{code} {span} 共 {len(ts)} 根；最後一個交易日 {last_day} "
                   f"的第一根是 {first_of_day:%H:%M:%S}。{note}{probe}")
+
+
+def _first_bar_times(broker, codes, start, end) -> dict:
+    """抽樣幾檔，各自取最後一個交易日的第一根 K 棒時間。"""
+    from broker import _bar_time, throttle
+    out = {}
+    for c in codes:
+        try:
+            kb = broker.kbars(c, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+            times = [t for t in (_bar_time(x) for x in list(getattr(kb, "ts", []) or [])) if t]
+            if times:
+                last_day = max(t.date() for t in times)
+                out[c] = min(t for t in times if t.date() == last_day)
+            else:
+                out[c] = None
+        except Exception:
+            out[c] = None
+        throttle(config.SCREEN["kbar_sleep_sec"])
+    return out
 
 
 def check_opening_range(broker) -> Result:
@@ -225,7 +260,7 @@ def check_pnl(broker) -> Result:
         if config.SIMULATION:
             return Result(WARN, "已實現損益",
                           "查不到。模擬模式下屬正常（模擬帳沒有損益），風控會以 0 計並警告。"
-                          "切到 SIMULATION=0 之前必須讓這一項變成 ✅。")
+                          f"切到 SIMULATION=0 之前必須讓這一項變成 {OK}。")
         return Result(FAIL, "已實現損益",
                       "真錢模式查不到損益 → 日虧上限與連敗停手都失效，"
                       "風控閘門會在第一個訊號時直接關閘停手。"
@@ -240,7 +275,7 @@ def check_trades(broker) -> Result:
         if config.SIMULATION:
             return Result(WARN, "成交紀錄",
                           "查不到（多半是金鑰沒有帳務查詢權限）。模擬模式下風控會以 0 筆計算，"
-                          "但切到 SIMULATION=0 前必須讓這一項變成 ✅ —— "
+                          f"但切到 SIMULATION=0 前必須讓這一項變成 {OK} —— "
                           "否則「當日交易筆數上限」這條紅線等於沒有。")
         return Result(FAIL, "成交紀錄",
                       "真錢模式查不到成交紀錄 → 交易筆數上限失效，"
