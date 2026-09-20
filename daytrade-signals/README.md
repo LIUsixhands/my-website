@@ -24,9 +24,11 @@ LLM 在 tick 級別沒有優勢：延遲、噪音、無法驗證推理、樣本�
 ## 安裝
 
 ```bash
-pip install -r requirements.txt
-cp .env.template .env      # 填入金鑰
+pip install -r requirements.txt   # shioaji 1.7.x + requests
+cp .env.template .env             # 填入金鑰
 ```
+
+Shioaji 官方支援 Python 3.7~3.14；本專案的 CI 測 3.10 / 3.11 / 3.12。
 
 `requests` 只有 Telegram 推播用得到，缺席時訊號照樣印在畫面上；但如果你已經
 設好金鑰卻沒裝它，`notify()` 會用 ERROR 級別吵你 —— 「訊號發不出去」不能安靜地發生。
