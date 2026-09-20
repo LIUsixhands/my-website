@@ -29,10 +29,22 @@ jobs:
 
       # 測試與 dry run 都只用標準庫，不裝 shioaji：
       # 它是專有套件，而且 CI 沒有金鑰也連不上。
-      - name: 離線測試
+      # runner 是 UTC，但使用者在台灣。分鐘 K 的時間戳解讀錯 8 小時這種 bug
+      # 只在非 UTC 的機器上才會發生 —— 實機抓到過一次，之後一律兩種時區都跑。
+      - name: 離線測試（UTC）
         working-directory: daytrade-signals
+        env:
+          TZ: UTC
         run: python3 test_daytrade.py
 
-      - name: 管線 dry run
+      - name: 離線測試（Asia/Taipei — 使用者的實際時區）
         working-directory: daytrade-signals
+        env:
+          TZ: Asia/Taipei
+        run: python3 test_daytrade.py
+
+      - name: 管線 dry run（Asia/Taipei）
+        working-directory: daytrade-signals
+        env:
+          TZ: Asia/Taipei
         run: python3 dryrun.py
