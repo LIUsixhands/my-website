@@ -1,7 +1,7 @@
 """
 test_daytrade.py — 離線測試。不需要 shioaji、不需要網路、不需要金鑰。
 
-    python3 test_daytrade.py
+    python3 test_daytrade.py        （Windows 是 python test_daytrade.py）
 
 測的是「錯了不會報錯」的那些地方：訊號條件、風控閘門、量能基準、紀律稽核。
 這些邏輯算錯不會讓程式崩掉，它會安靜地給你一個看起來很專業的錯誤決策。
@@ -204,6 +204,49 @@ class TestConsoleEncoding(unittest.TestCase):
         self.assertEqual(config.symbol("✅", "[ OK ]"), "[ OK ]")
         sys.stdout = self._fake_stdout("utf-8")
         self.assertEqual(config.symbol("✅", "[ OK ]"), "✅")
+
+    def test_console_text_keeps_original_on_utf8(self):
+        sys.stdout = self._fake_stdout("utf-8")
+        msg = "📌 2330 決策錨點｜09:23"
+        self.assertEqual(config.console_text(msg), msg)
+
+    def test_console_text_replaces_unprintable_symbols(self):
+        """推播訊息在 cp950 主控台上不該只剩一個問號。"""
+        sys.stdout = self._fake_stdout("cp950")
+        out = config.console_text("📌 2330 決策錨點\n⚠️ 這是規則觸發")
+        self.assertNotIn("📌", out)
+        self.assertNotIn("⚠", out)
+        self.assertIn("[訊號]", out)
+        self.assertIn("[注意]", out)
+        self.assertIn("決策錨點", out)      # 中文原樣保留
+        sys.stdout = self._fake_stdout("cp950")
+        self.assertTrue(config.console_can_encode(out))   # 換完真的印得出來
+
+    def test_notify_sends_original_text_but_prints_safe_one(self):
+        """手機要收到原本的符號，只有終端機顯示才降級。"""
+        sent = {}
+
+        class FakeRequests:
+            @staticmethod
+            def post(url, json=None, timeout=None):
+                sent["text"] = json["text"]
+
+        msg = "📌 2330 決策錨點"
+        buf = io.StringIO()
+        sys.stdout = self._fake_stdout("cp950")
+        safe = config.console_text(msg)
+        sys.stdout = buf
+        with unittest.mock.patch.object(signals, "requests", FakeRequests), \
+             unittest.mock.patch.object(config, "TELEGRAM_BOT_TOKEN", "t"), \
+             unittest.mock.patch.object(config, "TELEGRAM_CHAT_ID", "c"), \
+             unittest.mock.patch.object(config, "console_text", lambda _t: safe):
+            signals.notify(msg)
+        self.assertEqual(sent["text"], msg)              # 送出去的是原文
+        self.assertIn("[訊號]", buf.getvalue())          # 印出來的是降級版
+
+    def test_py_cmd_matches_platform(self):
+        """Windows 沒有 python3 這個命令，教學訊息不能叫使用者打 python3。"""
+        self.assertEqual(config.PY_CMD, "python" if os.name == "nt" else "python3")
 
     def test_enable_console_fallback_tolerates_odd_streams(self):
         sys.stdout = io.StringIO()                     # 沒有 reconfigure
