@@ -79,6 +79,33 @@ def symbol(preferred: str, fallback: str) -> str:
     return preferred if console_can_encode(preferred) else fallback
 
 
+# 推播訊息裡的符號，印不出來時換成看得懂的字（不影響送出去的內容）
+CONSOLE_FALLBACKS = (
+    ("\u26a0\ufe0f", "[注意]"),
+    ("\u26a0", "[注意]"),
+    ("\U0001f4cc", "[訊號]"),
+    ("\u2705", "[OK]"),
+    ("\u274c", "[FAIL]"),
+)
+
+
+def console_text(text: str) -> str:
+    """要印在終端機上的版本；送去 Telegram 的原文不經過這裡。
+
+    cp950 印不出 \U0001f4cc，errors='replace' 會把它變成「?」——
+    盤中訊號的第一行於是只剩一個問號，看不出那是訊號還是警告。
+    手機收到的仍是原本的符號，這裡只換終端機顯示。
+    """
+    if console_can_encode(text):
+        return text
+    for wide, plain in CONSOLE_FALLBACKS:
+        text = text.replace(wide, plain)
+    return text
+
+
+# 教學訊息裡的直譯器名稱：Windows 沒有 python3 這個命令
+PY_CMD = "python" if os.name == "nt" else "python3"
+
 enable_console_fallback()
 
 # ── 永豐 Shioaji 金鑰（放 .env，不要寫死在程式裡）────────

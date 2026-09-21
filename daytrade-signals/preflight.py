@@ -1,7 +1,7 @@
 """
 preflight.py — 上線前的連線體檢。第一次跑、以及每次切換 SIMULATION 時執行一次。
 
-    python3 preflight.py
+    python3 preflight.py        （Windows 是 python preflight.py）
 
 這支程式的存在理由：整套系統對 Shioaji 回傳格式做了一堆假設
 （欄位叫什麼、day_trade 是什麼值、分鐘 K 的 ts 是起點還是終點、
@@ -350,7 +350,7 @@ def main():
     if warns:
         print("\n待確認的項目多半是「現在不是交易時段」造成的。"
               "\n開盤日 09:15 之後再跑一次，warning 應該要自己消失。")
-    print("\n下一步：python3 dryrun.py 驗證管線，再照 README 的上線順序走。")
+    print(f"\n下一步：{config.PY_CMD} dryrun.py 驗證管線，再照 README 的上線順序走。")
 
 
 if __name__ == "__main__":

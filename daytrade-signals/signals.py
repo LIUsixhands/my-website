@@ -323,7 +323,8 @@ def try_emit(st: SymbolState, gate: RiskGate, lock, sig: dict) -> str | None:
 
 def notify(text: str):
     global _push_warned
-    print("\n" + text + "\n")
+    # 印出來的是終端機印得出的版本，送出去的是原文
+    print("\n" + config.console_text(text) + "\n")
     if not (config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID):
         return
     if requests is None:

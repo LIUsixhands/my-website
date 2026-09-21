@@ -73,10 +73,12 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 154 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 158 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
+
+Windows 的命令是 `python`，沒有 `python3`（打了會說「不是內部或外部命令」）。
 
 `preflight.py` 是**上線前的守門人**。整套系統對 Shioaji 的回傳格式做了一堆假設
 （欄位叫什麼、`day_trade` 是什麼值、分鐘 K 的 `ts` 是起點還是終點、損益查不查得到），
@@ -205,7 +207,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 154 項離線測試 |
+| `test_daytrade.py` | 158 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。

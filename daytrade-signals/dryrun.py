@@ -1,7 +1,7 @@
 """
 dryrun.py — 不連券商、不用金鑰，把一整天的 tick 灌進引擎跑一遍。
 
-    python3 dryrun.py
+    python3 dryrun.py        （Windows 是 python dryrun.py）
 
 用途是**驗證管線本身**，不是驗證策略賺不賺錢：
 訊號條件、風控閘門、覆盤版型有沒有真的串起來。
