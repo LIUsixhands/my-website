@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-Z2BTZV5V2P"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-Z2BTZV5V2P');
+</script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>房仲 AI 四引擎後台｜查證 × 剪輯 × 話術 × 追蹤 — Sixhands Studio</title>
+<meta name="description" content="查證、剪輯、話術、追蹤，四個引擎組成房仲的 AI 後台。含 8 組可複製指令，以及一台存在你瀏覽器本機的帶看追蹤台——補上最容易掉錢的那一格。">
+<meta name="theme-color" content="#1F3A2E">
+<meta name="keywords" content="房仲AI工具,房仲AI後台,實價登錄查證,帶看追蹤,房仲話術,AI剪輯,房仲提示詞">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://sixhands-studio.netlify.app/real-estate-ai-cockpit.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Sixhands Studio">
+<meta property="og:title" content="房仲 AI 四引擎後台｜查證 × 剪輯 × 話術 × 追蹤">
+<meta property="og:description" content="四個引擎，8 組可複製指令，外加一台帶看追蹤台。補上房仲 AI 後台最容易掉錢的那一格。">
+<meta property="og:url" content="https://sixhands-studio.netlify.app/real-estate-ai-cockpit.html">
+<meta property="og:image" content="https://sixhands-studio.netlify.app/photos/qiqi-view.jpg">
+<meta property="og:locale" content="zh_TW">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 86 92'><g stroke='%231F3A2E' stroke-width='4' fill='none' stroke-linecap='square'><line x1='14' y1='20' x2='14' y2='68'/><line x1='26' y1='14' x2='26' y2='74'/><line x1='38' y1='20' x2='38' y2='68'/><line x1='50' y1='14' x2='50' y2='74'/><line x1='62' y1='20' x2='62' y2='68'/><line x1='74' y1='14' x2='74' y2='74'/><line x1='8' y1='82' x2='80' y2='82' stroke-width='3'/></g></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --forest:#1F3A2E; --forest-2:#2C4E3D; --forest-3:#182b21;
+  --cream:#F3EEE2; --cream-2:#FAF7EF;
+  --brass:#B08D3F; --brass-lite:#D8BC7E; --ink:#22271F; --muted:#565c50;
+  --hot:#C96A4A; --warm:#C9A43A; --cold:#6E8B7B;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;color:var(--cream);background:var(--forest-3);line-height:1.75;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:"Noto Serif TC",serif}
+img{max-width:100%;display:block}
+a{text-decoration:none;color:inherit}
+.wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+
+/* NAV */
+.nav{position:fixed;top:0;left:0;right:0;z-index:60;background:rgba(24,43,33,.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(216,188,126,.22)}
+.nav-in{max-width:1000px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:11px}
+.brand svg{width:26px;height:28px;flex-shrink:0}
+.brand b{font-family:"Noto Serif TC",serif;font-weight:800;font-size:17px;color:var(--cream);letter-spacing:.02em}
+.brand small{display:block;font-size:10px;letter-spacing:.24em;color:var(--brass-lite);font-weight:400}
+.nav-links{display:flex;gap:24px;font-size:14px;color:#C6D2C6}
+.nav-links a:hover{color:var(--brass-lite)}
+.nav .cta{background:var(--brass);color:#fff;padding:8px 18px;border-radius:99px;font-weight:700;font-size:14px}
+.nav .cta:hover{background:var(--brass-lite);color:var(--forest)}
+@media(max-width:860px){.nav-links{display:none}}
+
+/* HERO */
+.hero{padding:140px 20px 70px;background:linear-gradient(180deg,#1b3227,var(--forest-3));border-bottom:1px solid rgba(216,188,126,.18)}
+.hero-in{max-width:1000px;margin:0 auto}
+.kicker{font-size:12px;letter-spacing:.38em;color:var(--brass-lite);font-weight:600;margin-bottom:20px}
+.hero h1{font-size:clamp(32px,6vw,58px);font-weight:900;line-height:1.18;color:var(--cream);margin-bottom:22px}
+.hero h1 .g{color:var(--brass-lite)}
+.hero .lead{font-size:clamp(16px,2.1vw,19px);color:#D7E0D6;max-width:720px;margin-bottom:16px;font-family:"Noto Serif TC",serif}
+.hero .sub{font-size:15.5px;color:#AEBBAE;max-width:720px}
+.hero-rule{width:56px;height:3px;background:var(--brass);margin:34px 0 0;border-radius:2px}
+
+/* SECTION */
+.sec{padding:72px 0;border-bottom:1px solid rgba(216,188,126,.12)}
+.sec-tag{font-size:11.5px;letter-spacing:.3em;color:var(--brass);font-weight:600;margin-bottom:12px}
+.sec h2{font-size:clamp(24px,4vw,36px);font-weight:800;line-height:1.3;margin-bottom:14px;color:var(--cream)}
+.sec h2 .g{color:var(--brass-lite)}
+.sec-lead{font-size:16px;color:#AEBBAE;max-width:760px;margin-bottom:34px}
+p{margin-bottom:14px}
+.sec p{color:#C6D2C6;font-size:15.5px}
+strong{color:var(--cream);font-weight:700}
+
+/* 對照表 */
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:26px}
+table.cmp{width:100%;min-width:660px;border-collapse:collapse;font-size:14.5px}
+table.cmp th{text-align:left;padding:13px 14px;background:rgba(216,188,126,.1);color:var(--brass-lite);font-weight:700;border-bottom:1px solid rgba(216,188,126,.3);font-family:"Noto Serif TC",serif}
+table.cmp td{padding:14px;border-bottom:1px solid rgba(216,188,126,.12);color:#C6D2C6;vertical-align:top}
+table.cmp td:first-child{color:var(--cream);font-weight:700;white-space:nowrap}
+.st{display:inline-block;font-size:12.5px;padding:3px 10px;border-radius:99px;white-space:nowrap;font-weight:700}
+.st-ok{background:rgba(110,139,123,.25);color:#A9C6B3;border:1px solid rgba(169,198,179,.35)}
+.st-gap{background:rgba(201,106,74,.2);color:#E0A188;border:1px solid rgba(224,161,136,.4)}
+
+/* 引擎卡 */
+.eng{background:rgba(44,78,61,.32);border:1px solid rgba(216,188,126,.2);border-left:3px solid var(--brass);border-radius:12px;padding:30px;margin-bottom:26px}
+.eng-no{font-size:11.5px;letter-spacing:.26em;color:var(--brass);font-weight:700;margin-bottom:8px}
+.eng h3{font-size:22px;font-weight:800;color:var(--cream);margin-bottom:6px}
+.eng .prob{font-size:15px;color:#D7E0D6;font-style:normal;border-left:2px solid rgba(216,188,126,.4);padding-left:14px;margin:16px 0 20px}
+.eng h4{font-size:15px;color:var(--brass-lite);margin:22px 0 8px;font-weight:700}
+.eng ul{margin:0 0 14px 20px;color:#C6D2C6;font-size:15px}
+.eng li{margin-bottom:7px}
+
+/* 提示詞 */
+.pr{background:rgba(24,43,33,.7);border:1px solid rgba(216,188,126,.22);border-radius:10px;margin:14px 0;overflow:hidden}
+.pr-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 15px;background:rgba(216,188,126,.08);border-bottom:1px solid rgba(216,188,126,.18)}
+.pr-t{font-size:14px;font-weight:700;color:var(--brass-lite);font-family:"Noto Serif TC",serif}
+.copy{background:transparent;border:1px solid rgba(216,188,126,.45);color:var(--brass-lite);font-family:inherit;font-size:12.5px;font-weight:700;padding:5px 13px;border-radius:99px;cursor:pointer;transition:.15s;white-space:nowrap}
+.copy:hover{background:var(--brass-lite);color:var(--forest)}
+.copy.done{background:#6E8B7B;border-color:#6E8B7B;color:#fff}
+.pr pre{padding:16px 15px;margin:0;white-space:pre-wrap;word-wrap:break-word;font-family:"SFMono-Regular",Consolas,"Noto Sans TC",monospace;font-size:13.5px;line-height:1.85;color:#D7E0D6}
+
+/* 提醒框 */
+.warn{background:rgba(201,106,74,.12);border:1px solid rgba(201,106,74,.4);border-radius:10px;padding:18px 20px;margin:20px 0}
+.warn b{display:block;color:#E0A188;font-size:14px;margin-bottom:6px;font-family:"Noto Serif TC",serif}
+.warn p{font-size:14.5px;color:#D7C9C0;margin:0}
+.note{background:rgba(216,188,126,.08);border:1px solid rgba(216,188,126,.28);border-radius:10px;padding:18px 20px;margin:20px 0}
+.note b{display:block;color:var(--brass-lite);font-size:14px;margin-bottom:6px;font-family:"Noto Serif TC",serif}
+.note p{font-size:14.5px;color:#C6D2C6;margin:0}
+
+/* 追蹤台 */
+.tracker{background:rgba(44,78,61,.4);border:1px solid rgba(216,188,126,.28);border-radius:14px;padding:26px;margin-top:8px}
+.tk-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.tk-form label{display:block;font-size:12px;color:var(--brass-lite);margin-bottom:5px;letter-spacing:.06em}
+.tk-form input,.tk-form select,.tk-form textarea{width:100%;background:rgba(24,43,33,.85);border:1px solid rgba(216,188,126,.3);border-radius:8px;color:var(--cream);font-family:inherit;font-size:14.5px;padding:9px 11px}
+.tk-form input:focus,.tk-form select:focus,.tk-form textarea:focus{outline:none;border-color:var(--brass-lite)}
+.tk-form .full{grid-column:1/-1}
+.tk-btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:22px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:11px 22px;border-radius:99px;font-weight:700;font-size:14.5px;transition:.18s;font-family:inherit;cursor:pointer;border:none}
+.btn-p{background:var(--brass);color:#fff}
+.btn-p:hover{background:var(--brass-lite);color:var(--forest)}
+.btn-g{background:transparent;color:var(--cream);border:1.5px solid rgba(216,188,126,.6)}
+.btn-g:hover{background:var(--brass-lite);color:var(--forest);border-color:var(--brass-lite)}
+.btn-sm{padding:6px 14px;font-size:12.5px}
+
+.tk-empty{text-align:center;color:#8fa08f;font-size:14.5px;padding:34px 16px;border:1px dashed rgba(216,188,126,.25);border-radius:10px}
+.tk-row{background:rgba(24,43,33,.6);border:1px solid rgba(216,188,126,.18);border-left:3px solid var(--cold);border-radius:10px;padding:15px 17px;margin-bottom:11px;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.tk-row.due{border-left-color:var(--hot);background:rgba(201,106,74,.1)}
+.tk-main{flex:1;min-width:210px}
+.tk-name{font-size:16px;font-weight:700;color:var(--cream);font-family:"Noto Serif TC",serif}
+.tk-obj{font-size:14px;color:#AEBBAE;margin-top:2px}
+.tk-next{font-size:14px;color:#D7E0D6;margin-top:7px}
+.tk-next span{color:var(--brass-lite)}
+.tk-memo{font-size:13.5px;color:#8fa08f;margin-top:5px;white-space:pre-wrap}
+.tk-meta{text-align:right;min-width:130px}
+.tk-days{font-size:26px;font-weight:900;font-family:"Noto Serif TC",serif;line-height:1.1;color:var(--cream)}
+.tk-row.due .tk-days{color:#E0A188}
+.tk-days small{display:block;font-size:11.5px;font-weight:400;color:#8fa08f;letter-spacing:.1em;margin-top:2px}
+.tag{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:99px;margin-bottom:7px}
+.tag-hot{background:rgba(201,106,74,.25);color:#E0A188}
+.tag-warm{background:rgba(201,164,58,.22);color:#DCC57E}
+.tag-cold{background:rgba(110,139,123,.25);color:#A9C6B3}
+.tk-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;justify-content:flex-end}
+.lnk{background:none;border:none;color:#8fa08f;font-family:inherit;font-size:12.5px;cursor:pointer;padding:3px 6px;border-radius:5px}
+.lnk:hover{color:var(--brass-lite);background:rgba(216,188,126,.1)}
+.lnk.del:hover{color:#E0A188;background:rgba(201,106,74,.12)}
+.tk-sum{display:flex;gap:18px;flex-wrap:wrap;font-size:13.5px;color:#8fa08f;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid rgba(216,188,126,.15)}
+.tk-sum b{color:var(--brass-lite)}
+
+/* 時間軸 */
+.tl{border-left:2px solid rgba(216,188,126,.3);padding-left:26px;margin-top:10px}
+.tl-it{position:relative;margin-bottom:28px}
+.tl-it::before{content:"";position:absolute;left:-33px;top:7px;width:11px;height:11px;border-radius:50%;background:var(--brass);border:2px solid var(--forest-3)}
+.tl-t{font-size:12px;letter-spacing:.2em;color:var(--brass);font-weight:700;margin-bottom:4px}
+.tl-it h4{font-size:17px;color:var(--cream);margin-bottom:5px;font-weight:700}
+.tl-it p{font-size:14.5px;color:#AEBBAE;margin:0}
+
+/* CTA */
+.cta-sec{padding:70px 20px;text-align:center;background:linear-gradient(180deg,var(--forest-3),#1b3227)}
+.cta-sec h2{font-size:clamp(24px,4.4vw,38px);font-weight:900;margin-bottom:14px;color:var(--cream)}
+.cta-sec h2 .g{color:var(--brass-lite)}
+.cta-sec p{color:#AEBBAE;max-width:560px;margin:0 auto 26px;font-size:15.5px}
+.cta-btns{display:flex;gap:13px;justify-content:center;flex-wrap:wrap}
+footer{padding:34px 20px;text-align:center;font-size:13px;color:#6f7f70;border-top:1px solid rgba(216,188,126,.14)}
+footer a{color:#8fa08f}
+footer a:hover{color:var(--brass-lite)}
+@media(max-width:640px){
+  .eng{padding:22px 18px}
+  .tracker{padding:20px 16px}
+  .tk-meta{text-align:left;min-width:0}
+  .tk-acts{justify-content:flex-start}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-in">
+    <a href="index.html" class="brand">
+      <svg viewBox="0 0 86 92"><g stroke="#D8BC7E" stroke-width="4" fill="none" stroke-linecap="square"><line x1="14" y1="20" x2="14" y2="68"/><line x1="26" y1="14" x2="26" y2="74"/><line x1="38" y1="20" x2="38" y2="68"/><line x1="50" y1="14" x2="50" y2="74"/><line x1="62" y1="20" x2="62" y2="68"/><line x1="74" y1="14" x2="74" y2="74"/><line x1="8" y1="82" x2="80" y2="82" stroke-width="3"/></g></svg>
+      <span><b>Sixhands Studio</b><small>助哥</small></span>
+    </a>
+    <div class="nav-links">
+      <a href="#compare">四引擎對照</a>
+      <a href="#engines">指令</a>
+      <a href="#tracker">帶看追蹤台</a>
+      <a href="#sop">一條龍</a>
+      <a href="index.html">回首頁</a>
+    </div>
+    <a href="https://line.me/R/ti/p/@080akczk" class="cta">加 LINE</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-in">
+    <div class="kicker">AI COCKPIT · 四引擎後台</div>
+    <h1>查證、剪輯、話術、追蹤<br><span class="g">四個引擎</span>裡，只有一格是空的</h1>
+    <p class="lead">網路上那份「房仲銷售全家桶」列了四個訂閱帳號。真正決定結果的不是帳號，是你餵進去的東西——你的實登庫、你的客戶名單、你踩過的坑。工具三個月換一輪，那些不會。</p>
+    <p class="sub">這頁把四個引擎攤開：每個引擎要解什麼問題、實際怎麼跑、附上可複製的指令。最後一格「追蹤」是最容易掉錢、也最常被略過的——所以直接做了一台可以用的追蹤台放在下面。</p>
+    <div class="hero-rule"></div>
+  </div>
+</section>
+
+<!-- 對照 -->
+<section class="sec" id="compare">
+  <div class="wrap">
+    <div class="sec-tag">THE FOUR ENGINES</div>
+    <h2>四個引擎，<span class="g">分別在解什麼</span></h2>
+    <p class="sec-lead">左邊是那份貼文列的通用工具，右邊是實際跑起來會長的樣子。差別不在工具名字，在於右邊那欄有「記憶」——它知道你在賣哪一區、上次那個客戶卡在哪。</p>
+
+    <div class="tbl-scroll">
+    <table class="cmp">
+      <thead>
+        <tr><th>引擎</th><th>通用做法</th><th>實際跑起來</th><th>狀態</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>查證</td>
+          <td>Perplexity 查實價登錄、政策變動，會附來源</td>
+          <td>兩層：Perplexity 查政策與新聞；自建實登庫查逐筆成交，每個數字標來源／期別／截止日</td>
+          <td><span class="st st-ok">已超車</span></td>
+        </tr>
+        <tr>
+          <td>剪輯</td>
+          <td>Fomofly 把帶看長片自動切成短影音</td>
+          <td>Fomofly 負責「撈出可用片段」，腳本決定「這支要講什麼」，兩件事不能混為一談</td>
+          <td><span class="st st-ok">已有</span></td>
+        </tr>
+        <tr>
+          <td>話術</td>
+          <td>ChatGPT 先把客戶疑慮的話術想好</td>
+          <td>28 組提示詞包打底，再加一道合規審稿把違法用語擋掉</td>
+          <td><span class="st st-ok">多一道關</span></td>
+        </tr>
+        <tr>
+          <td>追蹤</td>
+          <td>Notion AI 提醒誰看過哪間</td>
+          <td>開發端（地主是誰、上次敲門到哪）有人管；<strong>買方端「誰看過哪間、第幾天沒跟進」沒人管</strong></td>
+          <td><span class="st st-gap">這格是空的</span></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="note">
+      <b>為什麼是這一格掉錢</b>
+      <p>前三個引擎做壞了，結果是「這篇文案有點爛」「這支影片沒人看」——會痛，但看得見。第四個引擎壞掉不會有任何徵兆：客戶看完就安靜了，你以為他在考慮，其實他上週已經跟別人簽了。沒有任何人會來通知你漏掉了誰。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 引擎細節 -->
+<section class="sec" id="engines">
+  <div class="wrap">
+    <div class="sec-tag">PROMPTS · 可複製指令</div>
+    <h2>逐個引擎拆開，<span class="g">附指令</span></h2>
+    <p class="sec-lead">每組指令都留了要你自己填的空格。方括號裡的字一定要換掉——沒換掉的指令，AI 會自己編一個聽起來很合理的答案給你。</p>
+
+    <!-- 引擎 1 -->
+    <div class="eng">
+      <div class="eng-no">ENGINE 01</div>
+      <h3>查證引擎</h3>
+      <p class="prob">客戶當場問「這個價合理嗎」，你答不出數字就輸了。答得出但講錯，輸得更久。</p>
+
+      <h4>拆成兩層，不要混用</h4>
+      <ul>
+        <li><strong>第一層｜政策與新聞</strong>：貸款成數怎麼調、稅制怎麼改、哪個重劃區有新動作。這層用 Perplexity 這類會附來源的工具，因為你要的是「最近發生了什麼」。</li>
+        <li><strong>第二層｜逐筆成交</strong>：「這棟 11 樓去年幾月成交多少」。這層搜尋引擎給不了——台灣實登逐筆資料得自己撈、自己洗、自己對地號。這是自建資料庫的活，也是別人抄不走的部分。</li>
+      </ul>
+      <p>把兩層混在一起問，會得到一個「聽起來很像行情」的平均數。那個數字拿去跟屋主談，會被打回來。</p>
+
+      <div class="pr">
+        <div class="pr-h"><span class="pr-t">1-1　政策快查（丟給會附來源的搜尋型 AI）</span><button class="copy">複製</button></div>
+        <pre>請查 [主題，例如：2026 年第二戶房貸成數限制] 的現況，並依下列格式回答：
+
+1. 現行規定是什麼（一句話）
+2. 最近一次變動的日期，以及改了什麼
+3. 這個變動對「[買方類型，例如：首購自住／第二戶換屋／法人置產]」的實際影響，用具體數字舉例
+4. 目前有沒有討論中但尚未上路的修正案
+
+規則：
+- 每一點後面直接附上出處連結與該來源的發佈日期
+- 查不到出處的，寫「查無可靠出處」，不要用推測補
+- 若各來源說法不一致，把不一致的地方明確列出來，不要自行折衷</pre>
+      </div>
+
+      <div class="pr">
+        <div class="pr-h"><span class="pr-t">1-2　價格合理性驗算（貼上你自己的實登資料）</span><button class="copy">複製</button></div>
+        <pre>以下是我手上的實登成交資料（同社區／同路段）：
+[貼上成交明細：日期、樓層、坪數、總價、單價、車位]
+
+標的物件：[社區名]，[樓層]樓，[坪數]坪，屋齡[X]年，屋主開價[X]萬。
+
+請做四件事：
+1. 算出這批資料的單價中位數（不是平均數），並說明你排除了哪幾筆、為什麼排除
+2. 依樓層、屋齡、面向、有無車位，把標的校正到可比較的基礎，給出合理單價區間
+3. 用這個區間回推合理總價區間，並指出屋主開價落在區間的哪個位置
+4. 列出「這份資料回答不了」的三件事（例如：裝潢程度、漏水史、同棟待售戶數）
+
+規則：
+- 樣本數少於 5 筆就要明講「樣本不足，此結論僅供參考」
+- 不要拿其他社區的資料來補
+- 每個數字都要能追回到我貼的哪一筆</pre>
+      </div>
+
+      <div class="warn">
+        <b>講出口之前先確認這件事</b>
+        <p>任何行情數字，沒有「來源／期別／截止日」就不要講。客戶記得住的是你脫口而出的那個數字，不是你後面補的那句「這只是參考」。日後價格對不上，他不會怪資料，他會怪你。</p>
+      </div>
+    </div>
+
+    <!-- 引擎 2 -->
+    <div class="eng">
+      <div class="eng-no">ENGINE 02</div>
+      <h3>剪輯引擎</h3>
+      <p class="prob">帶看側錄 40 分鐘，剪不出來就爛在手機裡。素材不是不夠，是剪不動。</p>
+
+      <h4>兩件事分開做</h4>
+      <ul>
+        <li><strong>撈片段</strong>：Fomofly 這類工具負責從長片裡自動找出高光、加繁中字幕、切成直式。一小時的片大約 5–10 分鐘跑完，省的是體力活。</li>
+        <li><strong>決定要講什麼</strong>：這件事工具做不了。AI 挑出來的是「講話比較激動的段落」，不是「會讓買方私訊你的段落」。切點要你先定，工具再去執行。</li>
+      </ul>
+
+      <div class="pr">
+        <div class="pr-h"><span class="pr-t">2-1　帶看長片切點表（先定切點，再丟去剪）</span><button class="copy">複製</button></div>
+        <pre>這是一段 [X] 分鐘的帶看側錄逐字稿：
+[貼上逐字稿，含時間碼]
+
+物件背景：[社區／屋齡／坪數／總價帶／主打客群]
+
+請挑出 5 個適合做成 30-45 秒短影音的段落，每個段落給我：
+1. 起訖時間碼
+2. 這段在講什麼（一句話）
+3. 開頭 3 秒該用哪一句原話當鉤子（直接引用逐字稿的原句，不要改寫）
+4. 目標觀眾看完會產生的具體疑問（那就是留言區的開場）
+5. 這段有沒有拍到不該公開的畫面（門牌、屋主私人物品、可辨識的鄰居）
+
+排序規則：
+- 依「陌生人會不會看完」排序，不是依我講得順不順
+- 純粹報規格的段落（幾坪幾房幾衛）一律排最後，那種內容沒人看
+- 如果 5 段都找不出來，就誠實給我 3 段，不要硬湊</pre>
+      </div>
+
+      <div class="pr">
+        <div class="pr-h"><span class="pr-t">2-2　物件亮點短影音腳本（45 秒）</span><button class="copy">複製</button></div>
+        <pre>幫我寫一支 45 秒的直式短影音腳本。
+
+物件：[社區名／屋齡／坪數／格局／總價帶]
+真正的亮點：[一句話，寫最真實的那個，不要寫「地點優越」這種廢話]
+真正的缺點：[一句話，一定要寫]
+目標觀眾：[例如：小孩剛上小學、預算 1,800 萬內的換屋族]
+
+結構：
+- 0-3 秒：鉤子。用「缺點」開場，不要用優點開場
+- 3-15 秒：把缺點講完，講清楚它對誰是問題
+- 15-35 秒：轉折到亮點，說明這個缺點換來了什麼
+- 35-45 秒：收在一個問題，不要收在「快私訊我」
+
+輸出：逐句口白 + 每句對應的畫面指示 + 三個字幕重點
+
+禁止事項（會觸法或被檢舉）：
+- 不得出現「保證」「穩賺」「絕對」「最低價」「增值可期」這類絕對化用語
+- 不得承諾任何投資報酬率或未來漲幅
+- 不得使用未經同意的他人肖像或住家內部畫面
+- 不確定能不能講的，標註「[待確認]」，不要自己決定</pre>
+      </div>
+
+      <div class="warn">
+        <b>側錄前一定要先問</b>
+        <p>帶看側錄會拍到屋主的家、買方的臉、鄰居的聲音、門牌號碼。<strong>側錄前取得口頭同意，公開前打碼門牌與可識別物件。</strong>這件事沒有任何 AI 幫得上忙，只能你自己記得。一支影片的流量，換不回一件個資申訴。</p>
+      </div>
+    </div>
+
+    <!-- 引擎 3 -->
+    <div class="eng">
+      <div class="eng-no">ENGINE 03</div>
+      <h3>話術引擎</h3>
+      <p class="prob">客戶的疑慮永遠是那 20 句，但你每次都在現場臨場想。</p>
+
+      <h4>打底 + 審稿，兩道</h4>
+      <ul>
+        <li><strong>打底</strong>：房源文案、開發話術、社群貼文、跟進訊息、議價談判、市場分析——這六類的模板先備好，現場只要填空。<a href="real-estate-prompt-pack.html" style="color:var(--brass-lite);text-decoration:underline">28 組提示詞包在這裡</a>。</li>
+        <li><strong>審稿</strong>：這是通用 AI 不會幫你做的一道。《不動產經紀業管理條例》《公平交易法》擋的那些詞，ChatGPT 寫得很順手——「保證增值」「穩賺不賠」「絕對最低價」「投報率保證 X%」。寫完一定要再過一次。</li>
+      </ul>
+
+      <div class="pr">
+        <div class="pr-h"><span class="pr-t">3-1　疑慮預想表（帶看前 10 分鐘做）</span><button class="copy">複製</button></div>
+        <pre>物件：[社區名／屋齡／坪數／總價／已知缺點，全部照實寫]
+客戶背景：[年齡帶／家庭組成／預算／看過幾間／上次卡在哪]
+
+請預想這位客戶在現場最可能提出的 8 個疑慮，依「出現機率」排序。每個疑慮給我：
+
+1. 客戶可能怎麼開口（用他會用的口語，不要用書面語）
+2. 這句話底下真正在擔心什麼（表面問題 vs 真實顧慮）
+3. 一個誠實的回答（40 字內，可以直接講出口的那種）
+4. 這個疑慮如果是真的問題，該怎麼承認
+
+硬規則：
+- 缺點是真的就承認，不要教我閃躲或轉移話題
+- 不要出現「保證」「一定」「絕對」「穩賺」這類絕對化用語
+- 涉及法律、稅務、貸款額度的，一律寫「需請專業人士確認」，不要給具體承諾
+- 任何我答不出來的問題，給我一句誠實的過渡句（例如怎麼說「我回去查清楚再回你」才不尷尬）</pre>
+      </div>
+
+      <div class="pr">
+        <div class="pr-h"><span class="pr-t">3-2　合規審稿（所有對外文案發出前跑一次）</span><button class="copy">複製</button></div>
+        <pre>請以台灣不動產廣告法規的角度審查以下文案：
+[貼上文案]
+
+審查依據：《不動產經紀業管理條例》《公平交易法》《消費者保護法》《個人資料保護法》
+
+請逐項檢查並列表輸出：
+1. 絕對化用語（保證／穩賺／絕對／最低／唯一／第一／必漲）
+2. 未經證實的數據或比較性宣稱（含「投報率」「增值幅度」等推估）
+3. 坪數、格局、公設比、屋齡的描述是否與登記資料一致
+4. 有無涉及他人肖像、門牌、可識別住家內部的素材
+5. 有無應揭露而未揭露的事項（凶宅、海砂、輻射、重大瑕疵、目前租約狀態）
+
+輸出格式：
+| 問題句 | 觸犯哪一條 | 風險程度 | 建議改法 |
+
+規則：
+- 不確定的標「需人工判斷」，不要幫我放行
+- 只找問題，不要順便誇獎文案寫得好</pre>
+      </div>
+    </div>
+
+    <!-- 引擎 4 -->
+    <div class="eng" style="border-left-color:var(--hot)">
+      <div class="eng-no" style="color:#E0A188">ENGINE 04 · 缺口</div>
+      <h3>追蹤引擎</h3>
+      <p class="prob">誰看過哪間、第幾天了、下一步是什麼。這一格壞掉不會有任何徵兆。</p>
+
+      <h4>開發端有人管，買方端沒有</h4>
+      <ul>
+        <li><strong>開發端</strong>：地主是誰、誰已經賣了、上次敲門到哪——這件事有名冊在管，交叉實登就知道今天該敲誰的門。</li>
+        <li><strong>買方端</strong>：誰看過哪間、意向多熱、幾天沒跟進——<strong>這格是空的</strong>。而這格才是最接近成交的地方。</li>
+      </ul>
+      <p>Notion 可以做，但要先建資料庫、設好欄位、調好提醒，然後你得每天打開它。多數人撐不過第三週。所以下面這台是最小的版本：三個欄位，打開就能記，超時自己變紅。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 追蹤台 -->
+<section class="sec" id="tracker">
+  <div class="wrap">
+    <div class="sec-tag">TOOL · 實際可以用</div>
+    <h2>帶看追蹤台<span class="g">（補上第四格）</span></h2>
+    <p class="sec-lead">登記一次，之後它自己算天數。熱客超過 3 天、溫客超過 7 天、冷客超過 14 天沒跟進，那一列會變紅並排到最上面。跟進完按一下「今天跟進了」，天數歸零。</p>
+
+    <div class="note">
+      <b>資料存在哪裡</b>
+      <p>全部存在<strong>這台裝置的瀏覽器本機</strong>，沒有上傳到任何地方，關掉網頁也還在。但這裡放的是客戶個資——<strong>請勿在共用電腦使用</strong>；換裝置或要備份，用下方「匯出 CSV」。清除瀏覽器資料會一併清掉，重要名單請定期匯出。</p>
+    </div>
+
+    <div class="tracker">
+      <div class="tk-form">
+        <div><label for="f-name">客戶</label><input id="f-name" type="text" placeholder="王先生" maxlength="30"></div>
+        <div><label for="f-obj">帶看物件</label><input id="f-obj" type="text" placeholder="市政北二路 12F" maxlength="40"></div>
+        <div><label for="f-date">帶看日</label><input id="f-date" type="date"></div>
+        <div><label for="f-heat">意向</label>
+          <select id="f-heat">
+            <option value="hot">熱（3 天內要跟）</option>
+            <option value="warm" selected>溫（7 天內要跟）</option>
+            <option value="cold">冷（14 天內要跟）</option>
+          </select>
+        </div>
+        <div class="full"><label for="f-next">下一步是什麼</label><input id="f-next" type="text" placeholder="回報同棟 8F 的成交價，問他要不要再看一次" maxlength="100"></div>
+        <div class="full"><label for="f-memo">備註（卡在哪、在意什麼）</label><textarea id="f-memo" rows="2" placeholder="嫌採光，但沒說預算問題。太太還沒看過。" maxlength="300"></textarea></div>
+      </div>
+      <div class="tk-btns">
+        <button class="btn btn-p" id="add">加入追蹤</button>
+        <button class="btn btn-g btn-sm" id="export">匯出 CSV</button>
+        <button class="btn btn-g btn-sm" id="clear">清空全部</button>
+      </div>
+
+      <div class="tk-sum" id="summary" hidden></div>
+      <div id="list"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 一條龍 -->
+<section class="sec" id="sop">
+  <div class="wrap">
+    <div class="sec-tag">WORKFLOW · 一條龍</div>
+    <h2>帶看當天，<span class="g">四個引擎怎麼接起來</span></h2>
+    <p class="sec-lead">四個引擎分開看都很普通，接起來才是後台。這是一次帶看的完整動線。</p>
+
+    <div class="tl">
+      <div class="tl-it">
+        <div class="tl-t">帶看前 20 分鐘</div>
+        <h4>查證引擎</h4>
+        <p>撈同社區近一年成交，跑指令 1-2 算出合理區間；順手用 1-1 確認最近有沒有政策變動。把三個數字寫在手機備忘錄：單價中位數、合理總價區間、屋主開價的位置。</p>
+      </div>
+      <div class="tl-it">
+        <div class="tl-t">帶看前 10 分鐘</div>
+        <h4>話術引擎</h4>
+        <p>跑指令 3-1，把這位客戶最可能問的 8 句掃一遍。重點不是背答案，是不要在現場第一次聽到那個問題。</p>
+      </div>
+      <div class="tl-it">
+        <div class="tl-t">帶看中</div>
+        <h4>剪輯引擎的原料</h4>
+        <p>側錄前先問屋主與客戶。手機架著就好，不用管構圖——這段素材的用途是後面切短片，不是當作品。</p>
+      </div>
+      <div class="tl-it">
+        <div class="tl-t">當天晚上 30 分鐘</div>
+        <h4>剪輯引擎</h4>
+        <p>逐字稿丟進指令 2-1 選切點，再用 2-2 寫腳本，最後丟進自動剪輯工具產出。發之前過一次指令 3-2 的合規審稿。</p>
+      </div>
+      <div class="tl-it">
+        <div class="tl-t">隔天早上 2 分鐘</div>
+        <h4>追蹤引擎</h4>
+        <p>把客戶登記進追蹤台，「下一步」那欄一定要寫具體的事——不要寫「持續追蹤」，要寫「回報同棟 8F 成交價」。寫不出具體的下一步，代表這次帶看你其實沒問到東西。</p>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>這套東西真正屬於你的部分</b>
+      <p>四個訂閱帳號誰都能辦。會變成你的，是那個一年後長到 2,000 筆的實登庫、那份記得每個客戶卡在哪的追蹤名單、那幾句你試過會有回應的開場白。工具三個月換一輪，這些不會。<strong>所以重點從來不是換更好的工具，是今天開始往裡面存東西。</strong></p>
+    </div>
+  </div>
+</section>
+
+<section class="cta-sec">
+  <div class="wrap">
+    <h2>想把這套<span class="g">裝進自己的業務</span>？</h2>
+    <p>指令可以直接拿去用，追蹤台就存在你的瀏覽器裡。要聊怎麼接上自己的實登資料，或想看更完整的提示詞包，加 LINE 說一聲。</p>
+    <div class="cta-btns">
+      <a href="https://line.me/R/ti/p/@080akczk" class="btn btn-p">加 LINE 聊聊 →</a>
+      <a href="real-estate-prompt-pack.html" class="btn btn-g">看 28 組提示詞包</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Sixhands Studio｜助哥 — 不賣房子，賣判斷</p>
+  <p style="margin-top:8px"><a href="index.html">回首頁</a> ｜ <a href="qiqi-realestate.html">七期房地產</a> ｜ <a href="blog/index.html">文章</a></p>
+  <p style="margin-top:12px;font-size:12px;color:#5c6a5d">本頁指令與工具僅為作業輔助，不構成投資、法律或稅務建議。行情數字請以內政部實價登錄為準。</p>
+</footer>
+
+<script>
+/* ---------- 複製按鈕 ---------- */
+document.querySelectorAll('.copy').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var text = btn.closest('.pr').querySelector('pre').textContent;
+    var done = function(){
+      btn.textContent = '已複製';
+      btn.classList.add('done');
+      setTimeout(function(){ btn.textContent = '複製'; btn.classList.remove('done'); }, 1600);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+      fallback();
+    }
+    function fallback(){
+      // 非 HTTPS 或瀏覽器擋下 clipboard API 時的退路
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); }
+      catch (e) { btn.textContent = '請手動複製'; setTimeout(function(){ btn.textContent = '複製'; }, 2000); }
+      document.body.removeChild(ta);
+    }
+  });
+});
+
+/* ---------- 帶看追蹤台 ---------- */
+(function(){
+  var KEY = 'sixhands.viewing.tracker.v1';
+  // 意向決定「幾天沒跟進就該變紅」。這是整台工具唯一的邏輯。
+  var HEAT = {
+    hot:  { label:'熱', days:3,  cls:'tag-hot'  },
+    warm: { label:'溫', days:7,  cls:'tag-warm' },
+    cold: { label:'冷', days:14, cls:'tag-cold' }
+  };
+
+  var listEl = document.getElementById('list');
+  var sumEl  = document.getElementById('summary');
+  var f = {
+    name: document.getElementById('f-name'),
+    obj:  document.getElementById('f-obj'),
+    date: document.getElementById('f-date'),
+    heat: document.getElementById('f-heat'),
+    next: document.getElementById('f-next'),
+    memo: document.getElementById('f-memo')
+  };
+
+  function today(){ return new Date().toISOString().slice(0,10); }
+
+  function load(){
+    try {
+      var raw = localStorage.getItem(KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      // 無痕模式、封鎖 cookie、或資料壞掉：當成空的，頁面照樣能用
+      return [];
+    }
+  }
+
+  function save(rows){
+    try {
+      localStorage.setItem(KEY, JSON.stringify(rows));
+      return true;
+    } catch (e) {
+      alert('這個瀏覽器不允許儲存資料（無痕模式或已封鎖網站資料），這筆不會被記住。請改用一般視窗，或先匯出 CSV。');
+      return false;
+    }
+  }
+
+  function daysSince(dateStr){
+    var d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d)) return 0;
+    var t = new Date(today() + 'T00:00:00');
+    return Math.max(0, Math.round((t - d) / 86400000));
+  }
+
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function render(){
+    var rows = load();
+
+    if (!rows.length){
+      sumEl.hidden = true;
+      listEl.innerHTML = '<div class="tk-empty">還沒有追蹤中的客戶。<br>帶看完隔天花兩分鐘登記，這台才有意義。</div>';
+      return;
+    }
+
+    // 逾期的排最前面，其次比「離該跟進還剩幾天」
+    rows.forEach(function(r){
+      r._days = daysSince(r.lastTouch || r.date);
+      r._limit = (HEAT[r.heat] || HEAT.warm).days;
+      r._over = r._days - r._limit;
+    });
+    rows.sort(function(a,b){ return b._over - a._over; });
+
+    var due = rows.filter(function(r){ return r._over >= 0; }).length;
+    sumEl.hidden = false;
+    sumEl.innerHTML =
+      '追蹤中 <b>' + rows.length + '</b> 位' +
+      '　·　該跟進了 <b style="color:#E0A188">' + due + '</b> 位' +
+      (due ? '' : '　·　目前都在期限內');
+
+    listEl.innerHTML = rows.map(function(r){
+      var h = HEAT[r.heat] || HEAT.warm;
+      var overdue = r._over >= 0;
+      return '' +
+        '<div class="tk-row' + (overdue ? ' due' : '') + '">' +
+          '<div class="tk-main">' +
+            '<span class="tag ' + h.cls + '">' + h.label + '客 · ' + h.days + ' 天內</span>' +
+            '<div class="tk-name">' + esc(r.name) + '</div>' +
+            '<div class="tk-obj">' + esc(r.obj || '（未填物件）') + '　帶看 ' + esc(r.date) + '</div>' +
+            (r.next ? '<div class="tk-next">下一步：<span>' + esc(r.next) + '</span></div>' : '<div class="tk-next" style="color:#E0A188">下一步：還沒想好——這就是會漏掉的原因</div>') +
+            (r.memo ? '<div class="tk-memo">' + esc(r.memo) + '</div>' : '') +
+          '</div>' +
+          '<div class="tk-meta">' +
+            '<div class="tk-days">' + r._days + '<small>天沒跟進</small></div>' +
+            '<div class="tk-acts">' +
+              '<button class="lnk" data-touch="' + r.id + '">今天跟進了</button>' +
+              '<button class="lnk del" data-del="' + r.id + '">刪除</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  document.getElementById('add').addEventListener('click', function(){
+    var name = f.name.value.trim();
+    if (!name){ f.name.focus(); alert('至少要有客戶名稱。'); return; }
+    var date = f.date.value || today();
+    var rows = load();
+    rows.push({
+      id: String(Date.now()) + Math.random().toString(36).slice(2,7),
+      name: name,
+      obj:  f.obj.value.trim(),
+      date: date,
+      heat: f.heat.value,
+      next: f.next.value.trim(),
+      memo: f.memo.value.trim(),
+      lastTouch: date
+    });
+    if (!save(rows)) return;
+    f.name.value = ''; f.obj.value = ''; f.next.value = ''; f.memo.value = '';
+    render();
+  });
+
+  listEl.addEventListener('click', function(e){
+    var t = e.target.getAttribute && e.target.getAttribute('data-touch');
+    var d = e.target.getAttribute && e.target.getAttribute('data-del');
+    if (!t && !d) return;
+    var rows = load();
+    if (t){
+      rows.forEach(function(r){ if (r.id === t) r.lastTouch = today(); });
+    } else {
+      var victim = rows.filter(function(r){ return r.id === d; })[0];
+      if (!confirm('刪除「' + (victim ? victim.name : '這筆') + '」？刪掉就找不回來了。')) return;
+      rows = rows.filter(function(r){ return r.id !== d; });
+    }
+    save(rows);
+    render();
+  });
+
+  document.getElementById('clear').addEventListener('click', function(){
+    var rows = load();
+    if (!rows.length) return;
+    if (!confirm('清空全部 ' + rows.length + ' 筆追蹤紀錄？建議先匯出 CSV。')) return;
+    save([]);
+    render();
+  });
+
+  document.getElementById('export').addEventListener('click', function(){
+    var rows = load();
+    if (!rows.length){ alert('目前沒有資料可以匯出。'); return; }
+    var head = ['客戶','物件','帶看日','意向','上次跟進','幾天沒跟進','下一步','備註'];
+    var cell = function(v){ return '"' + String(v == null ? '' : v).replace(/"/g,'""') + '"'; };
+    var lines = [head.map(cell).join(',')];
+    rows.forEach(function(r){
+      lines.push([
+        r.name, r.obj, r.date,
+        (HEAT[r.heat] || HEAT.warm).label,
+        r.lastTouch || r.date,
+        daysSince(r.lastTouch || r.date),
+        r.next, r.memo
+      ].map(cell).join(','));
+    });
+    // BOM：沒有它 Excel 開中文會變亂碼
+    var blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    // 檔名維持 ASCII：中文檔名在部分瀏覽器會被丟掉，變成沒有副檔名的 download，
+    // 使用者按兩下打不開。內容有 BOM，Excel 開中文不會亂碼。
+    a.download = 'viewing-followup-' + today() + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  f.date.value = today();
+  render();
+})();
+</script>
+
+</body>
+</html>
