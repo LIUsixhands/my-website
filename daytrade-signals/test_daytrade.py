@@ -28,6 +28,10 @@ import screener
 import signals
 from signals import RiskGate, SymbolState, evaluate, format_signal
 
+# 風控在真錢模式查不到帳務時會重試幾次才關閘，每次之間會等。
+# 那個等待是為了讓連線喘口氣，不是要測的行為 —— 測試裡歸零，否則整套會慢 3 秒。
+signals.UNKNOWN_RETRY_WAIT = 0
+
 
 # ── 測試替身 ──────────────────────────────────────────
 class FakeBroker:
@@ -1191,6 +1195,79 @@ class TestTradesUnknown(unittest.TestCase):
     def test_broker_returns_list_when_available(self):
         b = Broker(api=FakeApi(trades=[object()]))
         self.assertEqual(len(b.trades_today()), 1)
+
+    def test_transient_failure_retries_and_does_not_halt(self):
+        """斷線重連後第一次查詢 timeout，不該報銷一整天。"""
+        config.SIMULATION = False
+
+        class B:
+            calls = 0
+
+            def trades_today(self):
+                B.calls += 1
+                return None if B.calls == 1 else []      # 第一次 timeout，之後正常
+
+            def realized_pnl_rows_today(self):
+                return []
+
+        gate = RiskGate(B())
+        self.assertTrue(gate.check())
+        self.assertFalse(gate.state["closed"])
+        self.assertEqual(B.calls, 2)
+
+    def test_persistent_failure_still_halts_after_retries(self):
+        """權限不足是每次都失敗 —— 重試幾次之後照樣關閘。"""
+        config.SIMULATION = False
+
+        class B:
+            calls = 0
+
+            def trades_today(self):
+                B.calls += 1
+                return None
+
+            def realized_pnl_rows_today(self):
+                return []
+
+        gate = RiskGate(B())
+        self.assertFalse(gate.check())
+        self.assertIn("交易筆數上限失效", gate.state["closed_reason"])
+        self.assertEqual(B.calls, 1 + signals.UNKNOWN_RETRIES)
+
+    def test_simulation_does_not_retry(self):
+        """模擬模式的 None 本來就放行，重試只是白白卡住鎖。"""
+        config.SIMULATION = True
+
+        class B:
+            calls = 0
+
+            def trades_today(self):
+                B.calls += 1
+                return None
+
+            def realized_pnl_rows_today(self):
+                return None
+
+        gate = RiskGate(B())
+        self.assertTrue(gate.check())
+        self.assertEqual(B.calls, 1)
+
+    def test_pnl_unknown_also_retries_before_halting(self):
+        config.SIMULATION = False
+
+        class B:
+            calls = 0
+
+            def trades_today(self):
+                return []
+
+            def realized_pnl_rows_today(self):
+                B.calls += 1
+                return None if B.calls == 1 else [100.0]
+
+        gate = RiskGate(B())
+        self.assertTrue(gate.check())
+        self.assertFalse(gate.state["closed"])
 
     def test_gate_halts_when_trades_unknown_and_live(self):
         config.SIMULATION = False
