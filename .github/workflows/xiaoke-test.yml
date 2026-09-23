@@ -1,0 +1,58 @@
+name: 小客 LINE 客服測試
+
+# 小客是給 Windows 電腦跑的，所以 Windows 一定要測：BOM、cp950、PowerShell 5.1
+# 這類問題在 Linux 上永遠看不到。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'xiaoke/**'
+      - '.github/workflows/xiaoke-test.yml'
+  pull_request:
+    paths:
+      - 'xiaoke/**'
+      - '.github/workflows/xiaoke-test.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 只用標準庫，不需要安裝任何套件
+      - name: 離線測試
+        working-directory: xiaoke
+        run: python test_xiaoke.py
+
+      # 沒金鑰會回 1。要確認是「體檢完說有問題」，不是印中文印到當掉（當掉也是回 1）
+      - name: 體檢指令跑到最後、不會因為編碼當掉
+        working-directory: xiaoke
+        shell: bash
+        run: |
+          set +e
+          python server.py --check > check.txt 2>&1
+          code=$?
+          cat check.txt
+          test $code -eq 1 && grep -q "\[FAIL\] GEMINI_API_KEY" check.txt && ! grep -q Traceback check.txt
+
+      # 使用者電腦上是 Windows PowerShell 5.1，不是 pwsh 7
+      - name: PowerShell 腳本語法檢查（Windows PowerShell 5.1）
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $bad = 0
+          foreach ($f in Get-ChildItem xiaoke\windows\*.ps1) {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $bad++; $errs | ForEach-Object { Write-Host "$($f.Name): $($_.Message)" } }
+          }
+          if ($bad) { exit 1 }
