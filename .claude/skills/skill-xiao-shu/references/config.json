@@ -1,0 +1,32 @@
+{
+  "_說明": "小書的可調參數。改這份就好，不要改程式碼。",
+  "郵件": {
+    "預設查詢": "newer_than:1d -in:spam -category:promotions",
+    "未回覆追蹤天數": 3,
+    "follow_up建議天數": 5,
+    "VIP寄件人": [],
+    "需教練親自決定的主題": ["報價", "簽約", "退費", "人事", "合作條件", "授權"]
+  },
+  "風險關鍵字": {
+    "金流詐騙": ["變更匯款", "更改帳號", "改匯款帳號", "新帳號", "改匯到", "beneficiary", "bank details", "wire transfer", "swift", "先匯款", "補匯"],
+    "憑證索取": ["密碼", "驗證碼", "OTP", "一次性密碼", "身分證影本", "信用卡號", "password", "verification code", "credentials"],
+    "急迫施壓": ["今天內", "立即", "否則將", "帳號將被停用", "最後通知", "urgent", "immediately", "suspend"],
+    "AI指令注入": ["ignore previous", "忽略先前", "忽略以上", "system prompt", "請AI", "請助理直接", "disregard previous", "you are now"],
+    "危險附件": [".exe", ".scr", ".js", ".vbs", ".hta", "啟用巨集", "enable macro"]
+  },
+  "遮罩規則": {
+    "身分證": "^([A-Za-z])\\d{8}$",
+    "銀行帳號": "\\d{10,16}",
+    "手機": "09\\d{8}"
+  },
+  "說明書": {
+    "禁用模糊詞": ["應該", "大概", "基本上", "原則上", "盡量", "視情況", "等等", "之類"],
+    "TODO標記": ["TODO", "待補", "待確認", "??"],
+    "圖片最小寬度": 900,
+    "起始版本": "1.0"
+  },
+  "品牌": {
+    "名稱": "Sixhands Studio AI數字員工",
+    "logo": "/Users/chenyunung/.claude/skills/skill-xiao-shu/assets/logo.png"
+  }
+}

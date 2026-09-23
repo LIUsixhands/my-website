@@ -1,0 +1,27 @@
+{
+  "code": "範例A123",
+  "type": "sale",
+  "title_area": "永康",
+  "highlight": "三房平車",
+  "ping": 32.4,
+  "layout": "3房2廳2衛",
+  "floor": "5F/12F",
+  "age": 8,
+  "price": "1288萬",
+  "walk": [
+    "家樂福 5 分鐘",
+    "永康國中 8 分鐘"
+  ],
+  "tags": [
+    "永康區",
+    "3房",
+    "平面車位",
+    "電梯大樓",
+    "屋齡10年內"
+  ],
+  "video": "/path/to/影片.mp4",
+  "agency": "（填經紀業名稱）",
+  "agent": "（填經紀人姓名）",
+  "agent_license": "（填證書字號）",
+  "owner_consent": false
+}

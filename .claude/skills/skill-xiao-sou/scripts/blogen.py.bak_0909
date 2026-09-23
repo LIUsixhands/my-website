@@ -1,0 +1,751 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+blogen.py — 小搜的部落格產線：Markdown 進，SEO 完整的 HTML 出。
+
+零第三方依賴，Mac / Windows / Linux 通用。
+
+指令：
+  new     產一份帶 front matter 的 Markdown 範本
+  build   把 Markdown 編譯成文章頁（含 Article / FAQPage / Breadcrumb schema）
+  index   重建部落格列表頁
+  rebase  全站換網域時，把 canonical / og:url / sitemap 換成新網址
+
+用法：
+  python3 blogen.py new ai-marketing-cost --dir ./posts
+  python3 blogen.py build ./posts --site ~/Desktop/講座報名網站_上線用 --base https://example.com
+  python3 blogen.py index --site ~/Desktop/講座報名網站_上線用 --base https://example.com
+  python3 blogen.py rebase --site ~/Desktop/講座報名網站_上線用 --old https://a.netlify.app --new https://example.com
+"""
+
+import argparse
+import html as _html
+import json
+import re
+import sys
+from datetime import date
+from pathlib import Path
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
+BRAND = "Sixhands Studio AI數字員工"
+BRAND_SHORT = "Sixhands Studio"   # title 後綴用短版，省下寬度給關鍵字
+BLOG_DIRNAME = "blog"
+
+CTA_PRESETS = {
+    "workshop": {
+        "eyebrow": "下一步",
+        "title": "想看 AI 真的動起來，不是聽人講",
+        "body": "4 小時實體講座，現場帶你做出第一個 AI 員工。台北・台中・台南每月開課，每場限額 45 位。",
+        "btn": "看講座場次與報名",
+        "href": "../workshop.html",
+    },
+    "gift": {
+        "eyebrow": "免費資源",
+        "title": "把這篇的指令直接帶走",
+        "body": "AI 行銷指令包體驗版，複製就能用的提示詞，讓 AI 幫你寫貼文、想標題、產文案。",
+        "btn": "免費領取指令包",
+        "href": "../gift.html",
+    },
+    "ai-check": {
+        "eyebrow": "免費工具",
+        "title": "先看看你的公司能交給 AI 多少事",
+        "body": "5 分鐘 AI 健診，回答幾個問題就知道哪些工作現在就能自動化，並拿到個人化建議。",
+        "btn": "開始免費健診",
+        "href": "../ai-check.html",
+    },
+    "courses": {
+        "eyebrow": "深入學習",
+        "title": "12 週，把 AI 員工真正養進公司",
+        "body": "從 Prompt 工程、AI 生圖生片到工作流自動化，全程實作，結訓帶走能用的系統。",
+        "btn": "看課程內容",
+        "href": "../courses.html",
+    },
+}
+
+
+# ---------------------------------------------------------------- front matter
+
+def parse_front_matter(text):
+    """支援 YAML 的常用子集：key: value、巢狀 faq 清單。不依賴 pyyaml。"""
+    if not text.startswith("---"):
+        return {}, text
+    end = text.find("\n---", 3)
+    if end < 0:
+        return {}, text
+    raw = text[3:end].strip("\n")
+    body = text[end + 4:].lstrip("\n")
+
+    meta, faq, cur = {}, [], None
+    for line in raw.split("\n"):
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        if re.match(r"^\s*-\s+q:", line):
+            if cur:
+                faq.append(cur)
+            cur = {"q": line.split("q:", 1)[1].strip().strip('"\'')}
+        elif re.match(r"^\s+a:", line) and cur is not None:
+            cur["a"] = line.split("a:", 1)[1].strip().strip('"\'')
+        elif re.match(r"^\s*-\s+", line) and meta.get("_list_key"):
+            meta.setdefault(meta["_list_key"], []).append(line.strip()[2:].strip().strip('"\''))
+        elif ":" in line and not line.startswith(" "):
+            k, v = line.split(":", 1)
+            k, v = k.strip(), v.strip().strip('"\'')
+            if v == "":
+                meta["_list_key"] = k
+            else:
+                meta.pop("_list_key", None)
+                meta[k] = v
+    if cur:
+        faq.append(cur)
+    meta.pop("_list_key", None)
+    if faq:
+        meta["faq"] = faq
+    return meta, body
+
+
+# ---------------------------------------------------------------- markdown
+
+def _inline(s):
+    s = _html.escape(s, quote=False)
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", s)
+    s = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", r'<a href="\2">\1</a>', s)
+    return s
+
+
+def md_to_html(md):
+    """Markdown 子集 → HTML，同時回傳 h2 清單供目錄使用。"""
+    out, toc = [], []
+    lines = md.split("\n")
+    i, n = 0, len(lines)
+    para = []
+
+    def flush():
+        if para:
+            out.append("<p>" + _inline(" ".join(para).strip()) + "</p>")
+            para.clear()
+
+    while i < n:
+        line = lines[i]
+        st = line.strip()
+
+        if not st:
+            flush()
+            i += 1
+            continue
+
+        if st.startswith("### "):
+            flush()
+            out.append(f"<h3>{_inline(st[4:])}</h3>")
+            i += 1
+            continue
+        if st.startswith("## "):
+            flush()
+            txt = st[3:]
+            slug = "h" + str(len(toc) + 1)
+            toc.append((slug, txt))
+            out.append(f'<h2 id="{slug}">{_inline(txt)}</h2>')
+            i += 1
+            continue
+        if st in ("---", "***"):
+            flush()
+            out.append("<hr>")
+            i += 1
+            continue
+        if st.startswith("> "):
+            flush()
+            buf = []
+            while i < n and lines[i].strip().startswith("> "):
+                buf.append(lines[i].strip()[2:])
+                i += 1
+            out.append("<blockquote>" + _inline(" ".join(buf)) + "</blockquote>")
+            continue
+        if st.startswith("```"):
+            flush()
+            i += 1
+            buf = []
+            while i < n and not lines[i].strip().startswith("```"):
+                buf.append(_html.escape(lines[i]))
+                i += 1
+            i += 1
+            out.append("<pre><code>" + "\n".join(buf) + "</code></pre>")
+            continue
+        if st.startswith("|") and i + 1 < n and re.match(r"^\s*\|[\s:|-]+\|\s*$", lines[i + 1]):
+            flush()
+            head = [c.strip() for c in st.strip("|").split("|")]
+            i += 2
+            rows = []
+            while i < n and lines[i].strip().startswith("|"):
+                rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")])
+                i += 1
+            t = ['<div class="tablewrap"><table><thead><tr>']
+            t += [f"<th>{_inline(c)}</th>" for c in head]
+            t.append("</tr></thead><tbody>")
+            for r in rows:
+                t.append("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in r) + "</tr>")
+            t.append("</tbody></table></div>")
+            out.append("".join(t))
+            continue
+        if re.match(r"^[-*]\s+", st):
+            flush()
+            items = []
+            while i < n and re.match(r"^[-*]\s+", lines[i].strip()):
+                items.append(_inline(re.sub(r"^[-*]\s+", "", lines[i].strip())))
+                i += 1
+            out.append("<ul>" + "".join(f"<li>{x}</li>" for x in items) + "</ul>")
+            continue
+        if re.match(r"^\d+\.\s+", st):
+            flush()
+            items = []
+            while i < n and re.match(r"^\d+\.\s+", lines[i].strip()):
+                items.append(_inline(re.sub(r"^\d+\.\s+", "", lines[i].strip())))
+                i += 1
+            out.append("<ol>" + "".join(f"<li>{x}</li>" for x in items) + "</ol>")
+            continue
+
+        para.append(st)
+        i += 1
+
+    flush()
+    return "\n".join(out), toc
+
+
+# ---------------------------------------------------------------- 版型
+
+NAV = """<nav class="navbar">
+  <a href="../index.html" class="navbar-logo-dark">
+    <span class="emoji">🦞</span>
+    <span class="grad-text">AI Employee</span>
+  </a>
+  <button class="hamburger" onclick="toggleMenu()" aria-label="選單">
+    <span></span><span></span><span></span>
+  </button>
+  <ul class="navbar-links" id="navMenu">
+    <li><a href="../index.html">首頁</a></li>
+    <li><a href="../about.html">關於我</a></li>
+    <li><a href="../courses.html">課程</a></li>
+    <li><a href="index.html" class="active">部落格</a></li>
+    <li><a href="../market.html">龍蝦超市</a></li>
+    <li><a href="../workshop.html" class="navbar-cta">講座報名</a></li>
+  </ul>
+</nav>"""
+
+FOOTER = """<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="brand-logo-wrap" style="display:inline-flex; margin-bottom:12px;"><span class="emoji" style="font-size:20px;">🦞</span><span class="brand-logo-text" style="font-size:20px;">AI Employee</span></div>
+      <p>台灣最實戰的 AI 數字員工培訓品牌。幫每一位企業主打造自己的 AI 員工團隊。</p>
+    </div>
+    <div class="footer-links">
+      <h4>頁面</h4>
+      <ul>
+        <li><a href="../index.html">首頁</a></li>
+        <li><a href="../workshop.html">實體講座</a></li>
+        <li><a href="../courses.html">課程介紹</a></li>
+        <li><a href="index.html">部落格</a></li>
+        <li><a href="../market.html">AI 龍蝦超市</a></li>
+        <li><a href="../ai-check.html">免費 AI 健診</a></li>
+      </ul>
+    </div>
+    <div class="footer-links">
+      <h4>聯絡</h4>
+      <ul>
+        <li><a href="https://www.instagram.com/jason.lobster.coach/" target="_blank" rel="noopener">IG @jason.lobster.coach</a></li>
+        <li><a href="mailto:jinwei09170327@gmail.com">Email 助哥</a></li>
+        <li><a href="../contact.html">聯絡我們</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 Sixhands Studio Lobster Academy. All rights reserved.</span>
+    <span>由 AI 數字員工協助維護 🦞</span>
+  </div>
+</footer>
+
+<script>
+function toggleMenu(){document.getElementById('navMenu').classList.toggle('open');}
+</script>"""
+
+ARTICLE_CSS = """<style>
+  .post-wrap{max-width:760px;margin:0 auto;padding:120px 22px 40px}
+  .crumb{font-size:13px;color:var(--text-muted);margin-bottom:18px}
+  .crumb a{color:var(--text-sub);text-decoration:none}
+  .crumb a:hover{text-decoration:underline}
+  .post-title{font-size:clamp(28px,5vw,40px);line-height:1.3;margin:0 0 16px;text-wrap:balance}
+  .post-meta{font-size:14px;color:var(--text-muted);padding-bottom:24px;border-bottom:1px solid var(--green-border);margin-bottom:8px}
+  .post-lede{font-size:18px;line-height:1.9;color:var(--text-sub);margin:24px 0 8px}
+  .toc{background:var(--green-light);border:1px solid var(--green-border);border-radius:12px;padding:18px 22px;margin:28px 0}
+  .toc h2{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin:0 0 10px}
+  .toc ol{margin:0;padding-left:20px}
+  .toc li{margin-bottom:6px;font-size:15px}
+  .toc a{color:var(--text-sub);text-decoration:none}
+  .toc a:hover{color:var(--green);text-decoration:underline}
+  .post-body{font-size:17px;line-height:1.95}
+  .post-body h2{font-size:24px;margin:44px 0 14px;line-height:1.4;scroll-margin-top:90px}
+  .post-body h3{font-size:19px;margin:30px 0 10px}
+  .post-body p{margin:0 0 18px}
+  .post-body ul,.post-body ol{margin:0 0 18px;padding-left:24px}
+  .post-body li{margin-bottom:8px}
+  .post-body a{color:var(--green);text-decoration:underline;text-underline-offset:3px}
+  .post-body blockquote{border-left:3px solid var(--green);background:var(--green-light);margin:22px 0;padding:14px 20px;border-radius:0 10px 10px 0;color:var(--text-sub)}
+  .post-body code{background:var(--green-light);border:1px solid var(--green-border);border-radius:5px;padding:1px 6px;font-size:14.5px}
+  .post-body pre{background:var(--green-light);border:1px solid var(--green-border);border-radius:10px;padding:16px 18px;overflow-x:auto}
+  .post-body pre code{border:none;background:none;padding:0}
+  .post-body hr{border:none;border-top:1px solid var(--green-border);margin:36px 0}
+  .tablewrap{overflow-x:auto;border:1px solid var(--green-border);border-radius:10px;margin:22px 0}
+  .tablewrap table{border-collapse:collapse;width:100%;min-width:480px;font-size:15px}
+  .tablewrap th{text-align:left;padding:12px 14px;background:var(--green-light);border-bottom:1px solid var(--green-border);font-size:13px;letter-spacing:.05em}
+  .tablewrap td{padding:12px 14px;border-bottom:1px solid var(--green-border);vertical-align:top}
+  .tablewrap tr:last-child td{border-bottom:none}
+  .post-faq{margin:48px 0 0}
+  .post-faq h2{font-size:24px;margin-bottom:16px}
+  .post-faq details{border:1px solid var(--green-border);border-radius:10px;background:var(--green-light);margin-bottom:10px;overflow:hidden}
+  .post-faq summary{cursor:pointer;padding:15px 18px;font-weight:700;list-style:none}
+  .post-faq summary::-webkit-details-marker{display:none}
+  .post-faq summary::after{content:"＋";float:right;color:var(--green)}
+  .post-faq details[open] summary::after{content:"－"}
+  .post-faq .a{padding:0 18px 16px;color:var(--text-sub);line-height:1.9}
+  .post-cta{margin:52px 0 0;border:1px solid var(--green-border);border-radius:14px;padding:32px 28px;background:var(--green-light);text-align:center}
+  .post-cta .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:10px}
+  .post-cta h2{font-size:23px;margin:0 0 10px;line-height:1.4}
+  .post-cta p{color:var(--text-sub);margin:0 auto 20px;max-width:46ch}
+  .post-cta a{display:inline-block;background:var(--green);color:#fff;font-weight:800;padding:13px 30px;border-radius:999px;text-decoration:none}
+  .post-more{margin:48px 0 0;padding-top:24px;border-top:1px solid var(--green-border)}
+  .post-more h2{font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin:0 0 12px}
+  .post-more ul{list-style:none;padding:0;margin:0}
+  .post-more li{margin-bottom:9px}
+  .post-more a{color:var(--text-sub);text-decoration:none}
+  .post-more a:hover{color:var(--green);text-decoration:underline}
+  .blog-list{max-width:820px;margin:0 auto;padding:120px 22px 40px}
+  .blog-list .post-card{display:block;border:1px solid var(--green-border);border-radius:14px;padding:24px 26px;margin-bottom:16px;text-decoration:none;color:inherit;transition:border-color .2s}
+  .blog-list .post-card:hover{border-color:var(--green)}
+  .blog-list .post-card .d{font-size:13px;color:var(--text-muted);margin-bottom:7px}
+  .blog-list .post-card h2{font-size:21px;margin:0 0 8px;line-height:1.45}
+  .blog-list .post-card p{color:var(--text-sub);margin:0;font-size:15px;line-height:1.8}
+</style>"""
+
+
+def page_shell(title, desc, canonical, og_img, ld_blocks, body, css=ARTICLE_CSS):
+    lds = "\n".join(
+        '<script type="application/ld+json">\n' + json.dumps(b, ensure_ascii=False, indent=2) + "\n</script>"
+        for b in ld_blocks
+    )
+    return f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{_html.escape(title)}</title>
+  <meta name="description" content="{_html.escape(desc)}">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦞</text></svg>">
+  <!-- SEO:小搜 -->
+  <link rel="canonical" href="{canonical}">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="{BRAND}">
+  <meta property="og:locale" content="zh_TW">
+  <meta property="og:title" content="{_html.escape(title)}">
+  <meta property="og:description" content="{_html.escape(desc)}">
+  <meta property="og:url" content="{canonical}">
+  <meta property="og:image" content="{og_img}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{_html.escape(title)}">
+  <meta name="twitter:description" content="{_html.escape(desc)}">
+  <meta name="twitter:image" content="{og_img}">
+{lds}
+{css}
+</head>
+<body>
+{NAV}
+{body}
+{FOOTER}
+</body>
+</html>
+"""
+
+
+
+# ---------------------------------------------------------------- llms.txt
+
+# 站點的固定頁面：給 AI 助理看的導覽。動的部分（文章）由 posts 自動帶入。
+LLMS_SITE = {
+    "brand": "Sixhands Studio AI數字員工",
+    "summary": (
+        "教台灣中小企業老闆把 AI 訓練成公司裡的行銷、廣告、客服員工的實戰培訓品牌。"
+        "創辦人為助哥，主打 4 小時實體講座與 12 週實戰課程，"
+        "台北、台中、台南每月開課，實體講座報名費 500 元、每場限額 45 位。"
+    ),
+    "sections": [
+        ("課程與講座", [
+            ("workshop.html", "老闆的 AI 行銷實戰講座",
+             "4 小時實體講座，教老闆用 AI 打造自動行銷部。台北・台中・台南每月開課，"
+             "每場限額 45 位，報名費 500 元。頁面含各場次日期、地址與常見問題。"),
+            ("courses.html", "AI 數字員工課程",
+             "12 週實戰班與半日 Workshop，涵蓋 Prompt 工程、AI 生圖生片、工作流自動化。"),
+            ("market.html", "AI 龍蝦超市",
+             "15 隻 AI 數字員工的型錄，涵蓋行銷、廣告、文案、客服、法務與財務。"),
+        ]),
+        ("關於", [
+            ("about.html", "關於助哥",
+             "Sixhands Studio創辦人，10 年企業管理經驗，專長是把 AI 導入中小企業的行銷與營運流程。"),
+            ("contact.html", "聯絡方式", "課程報名、講座場次與企業 AI 導入諮詢。"),
+        ]),
+        ("免費資源", [
+            ("ai-check.html", "免費 AI 健診",
+             "5 分鐘測出公司的 AI 成熟度，並拿到個人化的改善建議。"),
+            ("gift.html", "AI 行銷指令包（體驗版）",
+             "可直接複製使用的提示詞，讓 AI 產出貼文、標題與廣告文案。"),
+        ]),
+    ],
+}
+
+
+def write_llms_txt(site: Path, base: str, posts):
+    """產生 llms.txt：給 AI 助理的網站導覽（llmstxt.org 提案格式）。
+
+    這是 GEO 的一環——讓 ChatGPT、Perplexity 這類助理快速理解
+    這個網站是誰、賣什麼、哪幾頁值得引用。內容全部指向頁面上真的看得到的事實。
+    """
+    b = base.rstrip("/")
+    L = [f"# {LLMS_SITE['brand']}", "", f"> {LLMS_SITE['summary']}", ""]
+    for name, items in LLMS_SITE["sections"]:
+        L.append(f"## {name}")
+        for path, title, desc in items:
+            L.append(f"- [{title}]({b}/{path}): {desc}")
+        L.append("")
+    # 書籍精讀（由 lecture_pages.py 產生，直接從輸出的 HTML 讀回標題與描述）
+    books_dir = site / "books"
+    if books_dir.is_dir():
+        rows = []
+        for f in sorted(books_dir.glob("ep*.html")):
+            html_txt = f.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r"<title>(.*?)</title>", html_txt, re.S)
+            d = re.search(r'<meta name="description" content="(.*?)"', html_txt, re.S)
+            if not m:
+                continue
+            title = m.group(1).split("｜")[0].strip()
+            desc = (d.group(1).strip() if d else "")[:110]
+            rows.append(f"- [{title}]({b}/books/{f.stem}.html): {desc}")
+        if rows:
+            L.append(f"## 書籍精讀（{len(rows)} 本）")
+            L.append(f"每篇是 YouTube 影片的完整文字版，含影片、重點摘要與逐字稿全文。")
+            L += rows
+            L.append("")
+
+    if posts:
+        L.append("## 文章")
+        for p in posts:
+            L.append(f"- [{p['title']}]({b}/{BLOG_DIRNAME}/{p['slug']}.html): {p['description']}")
+        L.append("")
+    L += [
+        "## 說明",
+        f"- 內容語言為繁體中文（台灣）。",
+        f"- 引用時請以頁面上的日期、價格與場地為準，活動場次會隨月份更新。",
+        f"- 完整網址清單見 {b}/sitemap.xml",
+        "",
+    ]
+    (site / "llms.txt").write_text("\n".join(L), encoding="utf-8")
+    return len(posts)
+
+
+# ---------------------------------------------------------------- build
+
+def build_post(md_path: Path, site: Path, base: str, all_posts=None):
+    meta, md = parse_front_matter(md_path.read_text(encoding="utf-8"))
+    for k in ("title", "slug", "description"):
+        if not meta.get(k):
+            raise SystemExit(f"✗ {md_path.name} 缺少 front matter 欄位：{k}")
+
+    slug = meta["slug"]
+    title = meta["title"]
+    desc = meta["description"]
+    author = meta.get("author", "助哥")
+    pdate = meta.get("date", date.today().isoformat())
+    keyword = meta.get("keyword", "")
+    cta = CTA_PRESETS.get(meta.get("cta", "workshop"), CTA_PRESETS["workshop"])
+    canonical = f"{base.rstrip('/')}/{BLOG_DIRNAME}/{slug}.html"
+    og_img = meta.get("image", f"{base.rstrip('/')}/photos/jason-new.jpg")
+
+    body_html, toc = md_to_html(md)
+
+    toc_html = ""
+    if len(toc) >= 3:
+        items = "".join(f'<li><a href="#{sid}">{_html.escape(t)}</a></li>' for sid, t in toc)
+        toc_html = f'<div class="toc"><h2>這篇會講什麼</h2><ol>{items}</ol></div>'
+
+    faq_html = ""
+    faq_ld = None
+    faqs = meta.get("faq") or []
+    if faqs:
+        rows = "".join(
+            f'<details><summary>{_html.escape(f["q"])}</summary>'
+            f'<div class="a">{_html.escape(f.get("a",""))}</div></details>'
+            for f in faqs if f.get("q")
+        )
+        faq_html = f'<section class="post-faq"><h2>常見問題</h2>{rows}</section>'
+        faq_ld = {
+            "@context": "https://schema.org", "@type": "FAQPage",
+            "mainEntity": [
+                {"@type": "Question", "name": f["q"],
+                 "acceptedAnswer": {"@type": "Answer", "text": f.get("a", "")}}
+                for f in faqs if f.get("q")
+            ],
+        }
+
+    more_html = ""
+    if all_posts:
+        others = [p for p in all_posts if p["slug"] != slug][:4]
+        if others:
+            lis = "".join(f'<li><a href="{p["slug"]}.html">{_html.escape(p["title"])}</a></li>' for p in others)
+            more_html = f'<nav class="post-more"><h2>其他文章</h2><ul>{lis}</ul></nav>'
+
+    article_ld = {
+        "@context": "https://schema.org", "@type": "Article",
+        "headline": title[:110],
+        "description": desc,
+        "image": [og_img],
+        "datePublished": pdate,
+        "dateModified": meta.get("updated", pdate),
+        "inLanguage": "zh-TW",
+        "author": {"@type": "Person", "name": author},
+        "publisher": {"@type": "Organization", "name": BRAND,
+                      "url": base.rstrip("/") + "/"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": canonical},
+    }
+    if keyword:
+        article_ld["keywords"] = keyword
+    crumb_ld = {
+        "@context": "https://schema.org", "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "首頁", "item": base.rstrip("/") + "/"},
+            {"@type": "ListItem", "position": 2, "name": "部落格",
+             "item": f"{base.rstrip('/')}/{BLOG_DIRNAME}/"},
+            {"@type": "ListItem", "position": 3, "name": title, "item": canonical},
+        ],
+    }
+    lds = [article_ld, crumb_ld] + ([faq_ld] if faq_ld else [])
+
+    body = f"""
+<article class="post-wrap">
+  <div class="crumb"><a href="../index.html">首頁</a> ／ <a href="index.html">部落格</a></div>
+  <h1 class="post-title">{_html.escape(title)}</h1>
+  <div class="post-meta">{_html.escape(author)}　·　{pdate} 更新</div>
+  <p class="post-lede">{_html.escape(desc)}</p>
+  {toc_html}
+  <div class="post-body">
+{body_html}
+  </div>
+  {faq_html}
+  <section class="post-cta">
+    <div class="eyebrow">{cta['eyebrow']}</div>
+    <h2>{cta['title']}</h2>
+    <p>{cta['body']}</p>
+    <a href="{cta['href']}">{cta['btn']} →</a>
+  </section>
+  {more_html}
+</article>
+"""
+    out_dir = site / BLOG_DIRNAME
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / f"{slug}.html").write_text(
+        page_shell(f"{title}｜{BRAND_SHORT}", desc, canonical, og_img, lds, body),
+        encoding="utf-8")
+    return {"slug": slug, "title": title, "description": desc, "date": pdate}
+
+
+def collect_posts(posts_dir: Path, published_only=False, include=None):
+    """published_only 時只收 front matter 有 published 的稿子。
+    include 是本次正要發布的 slug——它還沒被標記，但要一起編譯。"""
+    include = set(include or [])
+    out = []
+    for f in sorted(posts_dir.glob("*.md")):
+        meta, _ = parse_front_matter(f.read_text(encoding="utf-8"))
+        if not meta.get("slug"):
+            continue
+        if published_only and not meta.get("published") and meta["slug"] not in include:
+            continue
+        out.append({"slug": meta["slug"], "title": meta.get("title", ""),
+                    "description": meta.get("description", ""),
+                    "date": meta.get("date", ""), "path": f})
+    out.sort(key=lambda p: p["date"], reverse=True)
+    return out
+
+
+def write_index(site: Path, base: str, posts):
+    canonical = f"{base.rstrip('/')}/{BLOG_DIRNAME}/"
+    cards = "".join(
+        f'<a class="post-card" href="{p["slug"]}.html">'
+        f'<div class="d">{p["date"]}</div>'
+        f'<h2>{_html.escape(p["title"])}</h2>'
+        f'<p>{_html.escape(p["description"])}</p></a>'
+        for p in posts
+    ) or '<p style="color:var(--text-muted)">還沒有文章。</p>'
+
+    ld = [{
+        "@context": "https://schema.org", "@type": "Blog",
+        "name": f"{BRAND} 部落格", "url": canonical, "inLanguage": "zh-TW",
+        "publisher": {"@type": "Organization", "name": BRAND, "url": base.rstrip("/") + "/"},
+        "blogPost": [
+            {"@type": "BlogPosting", "headline": p["title"], "datePublished": p["date"],
+             "url": f"{base.rstrip('/')}/{BLOG_DIRNAME}/{p['slug']}.html"}
+            for p in posts[:20]
+        ],
+    }, {
+        "@context": "https://schema.org", "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "首頁", "item": base.rstrip("/") + "/"},
+            {"@type": "ListItem", "position": 2, "name": "部落格", "item": canonical},
+        ],
+    }]
+
+    body = f"""
+<div class="blog-list">
+  <div class="crumb"><a href="../index.html">首頁</a> ／ 部落格</div>
+  <h1 class="post-title">老闆的 AI 實戰筆記</h1>
+  <p class="post-lede">寫給要做決定的人：AI 能幫公司省下哪些人力、怎麼開始、哪些錢不必花。每天一篇。</p>
+  <div style="margin-top:32px">{cards}</div>
+</div>
+"""
+    out = site / BLOG_DIRNAME
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "index.html").write_text(
+        page_shell(f"老闆的 AI 實戰筆記｜{BRAND_SHORT}",
+                   "AI 導入中小企業的實戰筆記：省下哪些人力、怎麼開始、哪些錢不必花。助哥每天一篇。",
+                   canonical, f"{base.rstrip('/')}/photos/jason-new.jpg", ld, body),
+        encoding="utf-8")
+    return len(posts)
+
+
+# ---------------------------------------------------------------- 指令
+
+TEMPLATE = """---
+title: 在這裡寫標題（含主關鍵字，30 個中文字內）
+slug: {slug}
+description: 一句話講清楚這篇回答什麼問題，50-80 個中文字，結尾給行動理由。
+keyword: 主關鍵字
+date: {today}
+author: 助哥
+cta: workshop
+faq:
+  - q: 第一個常見問題？
+    a: 答案。寫成完整句子，這段會同時進 FAQPage 結構化資料。
+  - q: 第二個常見問題？
+    a: 答案。
+---
+
+開頭 100 字內直接把答案講完——Google 的精選摘要和 AI 助理抓的就是這一段，不要鋪陳。
+
+## 用問句當小標，因為使用者就是這樣搜的
+
+段落內容。**粗體**、`程式碼`、[連結](../workshop.html) 都可以用。
+
+## 第二個問題
+
+- 清單項目
+- 清單項目
+
+| 欄位 | 說明 |
+|---|---|
+| 表格 | 容易被抓成精選摘要 |
+
+## 這件事怎麼用在你的生意上
+
+寫真實案例與數字。這是排贏 AI 灌水文章的唯一武器。
+"""
+
+
+def cmd_new(args):
+    d = Path(args.dir).expanduser()
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"{args.slug}.md"
+    if f.exists():
+        raise SystemExit(f"✗ 已存在：{f}")
+    f.write_text(TEMPLATE.format(slug=args.slug, today=date.today().isoformat()), encoding="utf-8")
+    print(f"[v] 已建立 {f}")
+
+
+def cmd_build(args):
+    src = Path(args.src).expanduser()
+    site = Path(args.site).expanduser()
+    posts_dir = src if src.is_dir() else src.parent
+    inc = [s for s in (args.include or "").split(",") if s]
+    all_posts = collect_posts(posts_dir, args.published_only, inc)
+    targets = [src] if src.is_file() else [p["path"] for p in all_posts]
+    for t in targets:
+        info = build_post(t, site, args.base, all_posts)
+        print(f"[v] {info['slug']}.html　←　{t.name}")
+    n = write_index(site, args.base, all_posts)
+    print(f"[v] blog/index.html（{n} 篇）")
+    write_llms_txt(site, args.base, all_posts)
+    print(f"[v] llms.txt（給 AI 助理的網站導覽，含 {n} 篇文章）")
+
+
+def cmd_index(args):
+    site = Path(args.site).expanduser()
+    posts = collect_posts(Path(args.src).expanduser(), args.published_only,
+                          [s for s in (args.include or "").split(",") if s])
+    n = write_index(site, args.base, posts)
+    write_llms_txt(site, args.base, posts)
+    print(f"[v] blog/index.html + llms.txt（{n} 篇）")
+
+
+def cmd_rebase(args):
+    site = Path(args.site).expanduser()
+    old, new = args.old.rstrip("/"), args.new.rstrip("/")
+    changed = 0
+    for f in list(site.glob("*.html")) + list(site.glob("*/*.html")) + \
+             list(site.glob("*.xml")) + list(site.glob("*.txt")):
+        s = f.read_text(encoding="utf-8", errors="replace")
+        if old in s:
+            f.write_text(s.replace(old, new), encoding="utf-8")
+            changed += 1
+            print(f"  {f.relative_to(site)}")
+    print(f"[v] 已換 {changed} 個檔案：{old} → {new}")
+    print("⚠ 別忘了在舊網址設 301 轉址，否則舊連結的權重不會過來。")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="小搜 · 部落格產線")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("new", help="產一份 Markdown 範本")
+    s.add_argument("slug")
+    s.add_argument("--dir", default="./posts")
+    s.set_defaults(func=cmd_new)
+
+    s = sub.add_parser("build", help="編譯文章")
+    s.add_argument("src", help="Markdown 檔或目錄")
+    s.add_argument("--site", required=True)
+    s.add_argument("--base", required=True)
+    s.add_argument("--published-only", action="store_true",
+                   help="只編譯 front matter 有 published 的稿子（草稿不上線）")
+    s.add_argument("--include", default="",
+                   help="逗號分隔的 slug：即使還沒標 published 也要編譯（本次要發的那篇）")
+    s.set_defaults(func=cmd_build)
+
+    s = sub.add_parser("index", help="只重建列表頁")
+    s.add_argument("--src", required=True)
+    s.add_argument("--site", required=True)
+    s.add_argument("--base", required=True)
+    s.add_argument("--published-only", action="store_true")
+    s.add_argument("--include", default="")
+    s.set_defaults(func=cmd_index)
+
+    s = sub.add_parser("rebase", help="換網域")
+    s.add_argument("--site", required=True)
+    s.add_argument("--old", required=True)
+    s.add_argument("--new", required=True)
+    s.set_defaults(func=cmd_rebase)
+
+    args = ap.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
