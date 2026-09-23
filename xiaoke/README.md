@@ -40,9 +40,9 @@
 ```powershell
 copy .env.template .env
 notepad .env                                          # 填 GEMINI_API_KEY
-python tools\new_tenant.py lobster --name "Sixhands Studio"
-notepad tenants\lobster\config.json                   # 填 channel_secret、channel_access_token
-notepad tenants\lobster\knowledge.md                  # 寫知識庫（格式見檔案裡的範本）
+python tools\new_tenant.py sixhands --name "Sixhands Studio"
+notepad tenants\sixhands\config.json                   # 填 channel_secret、channel_access_token
+notepad tenants\sixhands\knowledge.md                  # 寫知識庫（格式見檔案裡的範本）
 python server.py --check                              # 體檢，全部 [ OK ] 再往下
 ```
 
@@ -104,7 +104,7 @@ powershell -ExecutionPolicy Bypass -File windows\install_autostart.ps1 -AtStartu
 
 ```powershell
 python tools\report.py              # 全部租戶近 30 天
-python tools\report.py lobster 7    # 指定租戶近 7 天
+python tools\report.py sixhands 7    # 指定租戶近 7 天
 ```
 
 - **自動化率 < 50%** → 照「轉人工的原因」補知識庫

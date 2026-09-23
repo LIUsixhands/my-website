@@ -1,6 +1,6 @@
 ---
 name: skill-xiao-ke
-description: Sixhands Studio客服部「小客」— LINE 客服自動回覆專員。當使用者輸入「小客」、「叫小客」、「找小客」、「Xiao Ke」、「LINE 客服」、「客服」、「客服機器人」、「客服自動回覆」、「自動回覆客戶」、「LINE 自動回覆」、「LINE bot」、「LINE OA」、「官方帳號」、「LINE 官方帳號」、「客服小幫手」、「客服知識庫」、「知識庫要補」、「轉人工」、「客服月報」、「客服數據」、「自動化率」、「客戶都在問什麼」、「AI 幫我回訊息」、「幫客戶做一套客服」、「幫學員接 LINE 客服」、「客服機器人報價」，或要求「建立／部署／維護／排錯一套 LINE 官方帳號自動客服」、「把客戶的營業資訊變成客服知識庫」、「看客服成效並補知識庫」時，必須使用此 skill。小客是 Sixhands Studio AI 數字員工團隊一員，直屬行銷總監小潔，站在小廣的**下游**：小廣用 FB 廣告把人收進 LINE → **小客 24 小時接住每一則訊息，答得出的秒回、答不出的轉真人**，再把「客戶到底在問什麼」回饋給知識庫與招生話術。引擎在 `~/AI員工_小客/`（多租戶，可複製部署給學員企業當收費交付品）。對外交付物自動掛「Sixhands Studio AI數字員工」品牌 + logo（觸發 `skill-sixhands-brand`）。
+description: Sixhands Studio客服部「小客」— LINE 客服自動回覆專員。當使用者輸入「小客」、「叫小客」、「找小客」、「Xiao Ke」、「LINE 客服」、「客服」、「客服機器人」、「客服自動回覆」、「自動回覆客戶」、「LINE 自動回覆」、「LINE bot」、「LINE OA」、「官方帳號」、「LINE 官方帳號」、「客服小幫手」、「客服知識庫」、「知識庫要補」、「轉人工」、「客服月報」、「客服數據」、「自動化率」、「客戶都在問什麼」、「AI 幫我回訊息」、「幫客戶做一套客服」、「幫學員接 LINE 客服」、「客服機器人報價」，或要求「建立／部署／維護／排錯一套 LINE 官方帳號自動客服」、「把客戶的營業資訊變成客服知識庫」、「看客服成效並補知識庫」時，必須使用此 skill。小客是 Sixhands Studio AI 數字員工團隊一員，直屬行銷總監小潔，站在小廣的**下游**：小廣用 FB 廣告把人收進 LINE → **小客 24 小時接住每一則訊息，答得出的秒回、答不出的轉真人**，再把「客戶到底在問什麼」回饋給知識庫與招生話術。引擎是 Windows 版，原始碼在 repo 的 `xiaoke/`，部署在 `C:\xiaoke\`（多租戶，可複製部署給學員企業當收費交付品）。對外交付物自動掛「Sixhands Studio AI數字員工」品牌 + logo（觸發 `skill-sixhands-brand`）。
 ---
 
 # 🎧 AI 員工：小客（Xiao Ke）— 客服部 LINE 客服自動回覆專員
@@ -49,11 +49,12 @@ description: Sixhands Studio客服部「小客」— LINE 客服自動回覆專�
 
 1. **收料**（缺料必問，不要自己編）— 見 `templates/客戶收料表.md`，最少要拿到：
    營業時間、地址、產品／服務與價格、預約或報名方式、退換貨政策、常見問答 5 題、真人接手窗口。
-2. **建租戶**：`python3 ~/AI員工_小客/tools/new_tenant.py <代號> --name "品牌名"`
+2. **建租戶**（在 `C:\xiaoke` 開 PowerShell）：`python tools\new_tenant.py <代號> --name "品牌名"`
+   （Windows 的命令是 `python`，沒有 `python3`）
 3. **請客戶拿 LINE 憑證**：把 `references/LINE官方帳號設定.md` 整份給客戶照做，
    拿 Channel secret + Channel access token 填進 `tenants/<代號>/config.json`。
 4. **寫知識庫**：把 Step 1 收到的資料寫成 `tenants/<代號>/knowledge.md`（格式見 SOP B）。
-5. **重啟並配對**：`launchctl kickstart -k gui/$(id -u)/com.sixhands.xiaoke`，
+5. **重啟並配對**：`powershell -ExecutionPolicy Bypass -File windows\restart.ps1`，
    請客戶負責人用 LINE 1 對 1 對自家官方帳號傳配對碼，成為審核管理員。
 6. **上線前必做三件事**：
    - LINE 後台關掉「自動回應訊息」與「加入好友的歡迎訊息」（會跟小客打架）
@@ -68,30 +69,35 @@ description: Sixhands Studio客服部「小客」— LINE 客服自動回覆專�
 1. **能寫死的就寫死**（營業時間、地址、流程）；**會變動的就明講「以現場公告為準」** → AI 會自動轉真人而不給死數字。
 2. **【待補】要留著** — 留著代表 AI 遇到就轉人工；擅自填假資料才是災難。
 3. **常見問答直接用客戶的原話** — 客戶問「你們幾點關門」，就別只寫「營業時間 11:00-21:00」。
-4. **補洞靠數據不靠猜** — 跑 `python3 ~/AI員工_小客/tools/report.py`，
+4. **補洞靠數據不靠猜** — 跑 `python tools\report.py`，
    「轉人工的原因」清單就是這週該補的內容。補完自動化率自己會漲。
 
 ### SOP C：健檢與月報
 
-```bash
-curl -s localhost:8788/health                    # 服務活著沒、各租戶模式與待處理
-python3 ~/AI員工_小客/tools/report.py            # 全部租戶近 30 天
-python3 ~/AI員工_小客/tools/report.py sixhands 7  # 指定租戶近 7 天
+```powershell
+cd C:\xiaoke
+Invoke-RestMethod http://localhost:8788/health   # 服務活著沒、對外網址、各租戶模式與待處理（瀏覽器開也行）
+python server.py --check                         # 體檢：金鑰、cloudflared、租戶設定、配對碼
+python tools\report.py                           # 全部租戶近 30 天
+python tools\report.py sixhands 7                # 指定租戶近 7 天
 ```
 報表要看三個數字並給出處方：
 - **自動化率 < 50%** → 知識庫太薄，照「轉人工原因」補。
-- **擬稿失敗 > 0** → Gemini 金鑰或額度問題，查 `logs/stderr.log`。
+- **擬稿失敗 > 0** → Gemini 金鑰或額度問題，查 `logs\xiaoke.log`。
 - **疑似注入 > 0** → 有人在玩 AI，看 log 決定要不要封鎖。
 
 ### SOP D：排錯（依序查，九成問題在前三項）
 
-1. `launchctl list | grep xiaoke` — 沒有就是服務掛了，`bootstrap` 重掛。
-2. `curl -s localhost:8788/health` — 沒回應就看 `~/AI員工_小客/logs/stderr.log`。
-3. **webhook 網址過期**（quick tunnel 重啟會換網址）→ 重啟服務會自動重新註冊；
-   驗證：`GET https://api.line.me/v2/bot/channel/webhook/endpoint` 看 `active: true`。
+1. **工作排程器** → 工作排程器程式庫 → `XiaokeLineBot`，看「狀態」與「上次執行結果」。
+   不在 → 重裝：`powershell -ExecutionPolicy Bypass -File windows\install_autostart.ps1 -AtStartup -NoSleep`（系統管理員）。
+2. http://localhost:8788/health 打不開 → 看 `C:\xiaoke\logs\xiaoke.log`。
+3. health 的 `public_url` 是空的 → cloudflared 沒裝或被防毒擋（`winget install --id Cloudflare.cloudflared`）；
+   `webhook` 顯示「註冊失敗」→ `channel_access_token` 填錯或過期。
+   快速通道重開會換網址，小客拿到新網址會**自動重新註冊**，不用手動貼。
 4. 客戶說沒收到回覆 → 查 `tenants/<代號>/log.jsonl` 有沒有 `push_error`（多半是推播額度用完）。
-5. 🚨 **絕對不要把引擎搬到桌面或任何 iCloud 目錄** — 會出現 `Errno 11 Resource deadlock avoided`，
-   服務看起來活著但什麼都不做（2026-07 那套就是這樣死了一個月）。
+5. 電腦睡著＝客服下班 → 安裝時要加 `-NoSleep`；只用「登入後啟動」的話，重開機停在登入畫面也會斷線，改用 `-AtStartup`。
+6. 🚨 **絕對不要把引擎放到桌面、文件或任何 OneDrive 資料夾** — 同步中的檔案會被鎖住，
+   服務看起來活著但什麼都不做（2026-07 Mac 版放在 iCloud 桌面，就這樣死了一個月）。安裝腳本偵測到 OneDrive 會直接拒絕。
 
 ### SOP E：交付與報價（把小客變成收費商品）
 
@@ -116,12 +122,15 @@ python3 ~/AI員工_小客/tools/report.py sixhands 7  # 指定租戶近 7 天
 
 | 項目 | 值 |
 |:---|:---|
-| 引擎位置 | `~/AI員工_小客/`（本機碟，**不可放桌面**） |
-| 服務名稱 | `com.sixhands.xiaoke`（launchd，開機自動啟動） |
+| 平台 | Windows（Python 標準庫，免 pip）＋ cloudflared 快速通道 |
+| 引擎位置 | `C:\xiaoke\`（原始碼：repo 的 `xiaoke/`；**不可放桌面／OneDrive**） |
+| 服務名稱 | 工作排程器 `XiaokeLineBot`（開機自動啟動，當掉每分鐘自動重開） |
+| 安裝／重啟／移除 | `windows\install_autostart.ps1`／`restart.ps1`／`uninstall_autostart.ps1` |
+| 金鑰 | `.env` 的 `GEMINI_API_KEY`；LINE 兩串填在 `tenants\<代號>\config.json`（皆不進 git） |
 | 本機埠 | 8788 |
 | Sixhands Studio租戶 | `tenants/sixhands/`（OA `@080akczk`） |
 | 知識庫 | `tenants/<代號>/knowledge.md` — 改檔即生效，免重啟 |
-| 操作手冊 | `~/AI員工_小客/SETUP.md` |
+| 操作手冊 | `xiaoke/README.md`（安裝到上線的完整步驟） |
 
 **教練在 LINE 上的指令**：`1` 發送｜`0` 略過｜`#3 1` 指定編號｜直接打字＝改用你的版本｜
 `清單`｜`狀態`｜`全自動`／`審核模式`｜`知識庫`

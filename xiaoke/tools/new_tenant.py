@@ -46,7 +46,7 @@ def create(code: str, name: str, root: Path = engine.TENANTS_DIR) -> Path:
 def main() -> None:
     engine.safe_console()
     ap = argparse.ArgumentParser(description="開一套新客服")
-    ap.add_argument("code", help="租戶代號，例：lobster")
+    ap.add_argument("code", help="租戶代號，例：sixhands")
     ap.add_argument("--name", required=True, help="品牌名稱")
     a = ap.parse_args()
     d = create(a.code, a.name)

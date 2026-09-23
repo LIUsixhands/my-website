@@ -2,7 +2,7 @@
 report.py — 客服成效報表。
 
   python tools/report.py              全部租戶近 30 天
-  python tools/report.py lobster 7    指定租戶近 7 天
+  python tools/report.py sixhands 7    指定租戶近 7 天
 
 要看三個數字：
   自動化率 < 50%  → 知識庫太薄，照「轉人工的原因」補
