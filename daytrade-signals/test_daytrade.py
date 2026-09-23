@@ -7,6 +7,7 @@ test_daytrade.py — 離線測試。不需要 shioaji、不需要網路、不需
 這些邏輯算錯不會讓程式崩掉，它會安靜地給你一個看起來很專業的錯誤決策。
 """
 import contextlib
+import csv
 import io
 import json
 import os
@@ -24,6 +25,7 @@ import config
 import preflight
 import review
 from broker import Broker
+import outcome as oc
 import screener
 import signals
 from signals import RiskGate, SymbolState, evaluate, format_signal
@@ -781,6 +783,172 @@ class TestWatchlistPush(unittest.TestCase):
     def test_push_flag_defaults_off(self):
         self.assertFalse(screener.parse_args([]).push)
         self.assertTrue(screener.parse_args(["--push"]).push)
+
+
+def _kb(rows):
+    """把 (HH:MM, high, low, close) 做成 shioaji 形狀的假 kbars。
+
+    時間戳照 shioaji 的方式建：台北牆上時間當成 UTC 的納秒。
+    用 datetime.timestamp() 建會受本機時區影響，等於自己驗自己。
+    """
+    ts, highs, lows, closes = [], [], [], []
+    for hhmm, h, l, c in rows:
+        t = datetime(2026, 9, 24, int(hhmm[:2]), int(hhmm[3:]), tzinfo=dt_timezone.utc)
+        ts.append(int(t.timestamp() * 1e9))
+        highs.append(h); lows.append(l); closes.append(c)
+    return SimpleNamespace(ts=ts, High=highs, Low=lows, Close=closes)
+
+
+class FakeKbarBroker:
+    def __init__(self, kb):
+        self._kb = kb
+        self.calls = []
+
+    def kbars(self, code, start, end):
+        self.calls.append((code, start, end))
+        return self._kb
+
+
+class TestOutcome(unittest.TestCase):
+    """訊號發出後到底怎麼了 —— 沒有這一段，20 天跑完也算不出勝率。"""
+
+    DATE = "2026-09-24"
+    SIG = {"code": "2330", "time": "09:23:00", "entry": 121.0,
+           "stop": 119.5, "target": 123.5, "lots": 1}
+
+    def _resolve(self, rows):
+        return oc.resolve(FakeKbarBroker(_kb(rows)), self.SIG, self.DATE)
+
+    def test_target_hit_first(self):
+        o = self._resolve([("09:24", 121.5, 120.8, 121.2),
+                           ("09:25", 123.6, 121.0, 123.4)])
+        self.assertEqual(o.result, oc.TARGET)
+        self.assertEqual(o.exit_price, 123.5)
+        self.assertAlmostEqual(o.r_multiple, 1.67, places=2)
+        self.assertGreater(o.net_pct, 0)
+        self.assertTrue(o.is_win)
+
+    def test_stop_hit_first(self):
+        o = self._resolve([("09:24", 121.2, 119.4, 119.6)])
+        self.assertEqual(o.result, oc.STOP)
+        self.assertEqual(o.exit_price, 119.5)
+        self.assertAlmostEqual(o.r_multiple, -1.0, places=2)
+        self.assertFalse(o.is_win)
+
+    def test_same_bar_touches_both_counts_as_stop(self):
+        """分鐘 K 看不出一分鐘內誰先到 —— 往壞處算。"""
+        o = self._resolve([("09:24", 124.0, 119.0, 122.0)])
+        self.assertEqual(o.result, oc.STOP)
+
+    def test_neither_hit_flattens_at_close(self):
+        o = self._resolve([("09:24", 121.3, 120.9, 121.1),
+                           ("09:25", 121.4, 120.8, 121.25)])
+        self.assertEqual(o.result, oc.FLAT)
+        self.assertEqual(o.exit_price, 121.25)
+
+    def test_ignores_bars_before_entry(self):
+        """進場前的價格波動不算數 —— 否則會把還沒進場的低點記成停損。"""
+        o = self._resolve([("09:20", 121.0, 118.0, 120.0),   # 進場前就破停損價
+                           ("09:24", 123.6, 121.0, 123.4)])
+        self.assertEqual(o.result, oc.TARGET)
+
+    def test_ignores_bars_after_flatten_time(self):
+        """13:25 之後進尾盤集合競價，不保證出得掉 —— 一律當已平倉。"""
+        o = self._resolve([("09:24", 121.3, 120.9, 121.1),
+                           ("13:40", 130.0, 110.0, 129.0)])
+        self.assertEqual(o.result, oc.FLAT)
+        self.assertEqual(o.exit_price, 121.1)
+
+    def test_net_pct_subtracts_round_trip_cost(self):
+        o = self._resolve([("09:24", 123.6, 121.0, 123.4)])
+        self.assertAlmostEqual(o.gross_pct - o.net_pct,
+                               config.round_trip_cost_pct(), places=3)
+
+    def test_no_bars_returns_none(self):
+        self.assertIsNone(self._resolve([]))
+
+    def test_bad_time_returns_none(self):
+        bad = dict(self.SIG, time="不是時間")
+        with self.assertLogs("outcome", level="WARNING"):
+            self.assertIsNone(oc.resolve(FakeKbarBroker(_kb([])), bad, self.DATE))
+
+    def test_stop_above_entry_returns_none(self):
+        bad = dict(self.SIG, stop=999.0)
+        with self.assertLogs("outcome", level="WARNING"):
+            self.assertIsNone(oc.resolve(FakeKbarBroker(_kb([])), bad, self.DATE))
+
+    def test_one_bad_symbol_does_not_kill_the_batch(self):
+        class Flaky:
+            def kbars(self, code, start, end):
+                if code == "9999":
+                    raise RuntimeError("行情爆炸")
+                return _kb([("09:24", 123.6, 121.0, 123.4)])
+
+        sigs = [dict(self.SIG, code="9999"), self.SIG]
+        with self.assertLogs("outcome", level="WARNING"):
+            out = oc.resolve_all(Flaky(), sigs, self.DATE)
+        self.assertEqual([o.code for o in out], ["2330"])
+
+
+class TestOutcomeSummary(unittest.TestCase):
+    def _o(self, net, result):
+        return oc.Outcome(date="2026-09-24", code="1", time="09:23", entry=100.0,
+                          stop=99.0, target=101.5, lots=1, result=result,
+                          exit_price=101.5, r_multiple=1.5, gross_pct=net + 0.207,
+                          net_pct=net, bars=3)
+
+    def test_empty(self):
+        self.assertEqual(oc.summarise([]), {"n": 0})
+
+    def test_win_rate_counts_only_net_positive(self):
+        """毛賺但被成本吃光的那一筆，不算贏。"""
+        out = [self._o(1.0, oc.TARGET), self._o(-1.0, oc.STOP), self._o(-0.01, oc.FLAT)]
+        st = oc.summarise(out)
+        self.assertEqual(st["n"], 3)
+        self.assertEqual(st["wins"], 1)
+        self.assertAlmostEqual(st["win_rate"], 33.3, places=1)
+
+    def test_payoff_and_total(self):
+        st = oc.summarise([self._o(2.0, oc.TARGET), self._o(-1.0, oc.STOP)])
+        self.assertEqual(st["payoff"], 2.0)
+        self.assertAlmostEqual(st["total_net_pct"], 1.0, places=3)
+
+    def test_payoff_is_none_without_losses(self):
+        self.assertIsNone(oc.summarise([self._o(1.0, oc.TARGET)])["payoff"])
+
+
+class TestOutcomeCsv(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self._tmp.name) / "outcomes.csv"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _o(self, date, code):
+        return oc.Outcome(date=date, code=code, time="09:23", entry=100.0, stop=99.0,
+                          target=101.5, lots=1, result=oc.TARGET, exit_price=101.5,
+                          r_multiple=1.5, gross_pct=1.5, net_pct=1.3, bars=3)
+
+    def _rows(self):
+        with open(self.path, newline="", encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+
+    def test_appends_across_days(self):
+        oc.append_csv([self._o("2026-09-24", "1")], self.path)
+        oc.append_csv([self._o("2026-09-25", "2")], self.path)
+        self.assertEqual([r["date"] for r in self._rows()],
+                         ["2026-09-24", "2026-09-25"])
+
+    def test_rerunning_same_day_replaces_not_duplicates(self):
+        """review.py 跑兩次不該讓那天的樣本被算兩遍。"""
+        oc.append_csv([self._o("2026-09-24", "1")], self.path)
+        oc.append_csv([self._o("2026-09-24", "1")], self.path)
+        self.assertEqual(len(self._rows()), 1)
+
+    def test_empty_list_is_a_noop(self):
+        oc.append_csv([], self.path)
+        self.assertFalse(self.path.exists())
 
 
 class TestScreenerTopN(unittest.TestCase):

@@ -103,7 +103,7 @@ def _connect():
         broker = Broker()
     except Exception as e:
         log.warning("無法連線券商：%s", e)
-        return [], None, f"⚠️ 無法連線券商（{e}），成交與損益欄位為空，請自行補上。"
+        return [], None, f"⚠️ 無法連線券商（{e}），成交與損益欄位為空，請自行補上。", None
     trades = broker.trades_today()
     pnl = broker.realized_pnl_today()
     notes = []
@@ -112,11 +112,11 @@ def _connect():
         trades = []
     if pnl is None:
         notes.append("⚠️ 損益查詢失敗，當日實現損益未知（不是 0）。")
-    return trades, pnl, "　".join(notes)
+    return trades, pnl, "　".join(notes), broker
 
 
 def render(signals: list[dict], trades: list, state: dict,
-           pnl: float | None, note: str = "") -> list[str]:
+           pnl: float | None, note: str = "", outcomes: list | None = None) -> list[str]:
     """把覆盤內容算成 Markdown 行。抽出來讓 dryrun.py 也能用同一份版型。"""
     pnl_text = f"{pnl:,.0f} 元" if pnl is not None else "未知（查詢失敗）"
     if state.get("closed"):
@@ -150,7 +150,9 @@ def render(signals: list[dict], trades: list, state: dict,
     if not signals:
         lines.append("| — | — | — | — | — | — | — |")
 
-    lines += ["", "## 二、實際成交", "",
+    lines += outcome_section(signals, outcomes)
+
+    lines += ["", "## 三、實際成交", "",
               "| 代號 | 買賣 | 成交均價 | 成交量 | 狀態 |",
               "|------|------|----------|--------|------|"]
     for t in trades:
@@ -163,11 +165,11 @@ def render(signals: list[dict], trades: list, state: dict,
     if not trades:
         lines.append("| — | — | — | — | — |")
 
-    lines += ["", "## 三、紀律稽核（機器判定，不含情緒）", ""]
+    lines += ["", "## 四、紀律稽核（機器判定，不含情緒）", ""]
     lines += [f"- {i}" for i in audit(signals, trades, state)]
 
     lines += [
-        "", "## 四、手寫欄位（當天寫，隔天不算數）", "",
+        "", "## 五、手寫欄位（當天寫，隔天不算數）", "",
         "**今天最想凹的那一筆是哪一筆？當下在想什麼？**", "", "> ", "",
         "**如果重來一次，哪一個決定會改？**", "", "> ", "",
         "**明天只改一件事，是什麼？**", "", "> ", "",
@@ -175,6 +177,39 @@ def render(signals: list[dict], trades: list, state: dict,
         "*本紀錄為個人交易覆盤，非投資建議。*",
     ]
 
+    return lines
+
+
+def outcome_section(signals: list[dict], outcomes: list | None) -> list[str]:
+    """訊號後來怎麼了。沒有這一段，20 天跑完也算不出勝率。"""
+    lines = ["", "## 二、訊號結果（分鐘 K 回推，保守判定）", ""]
+    if outcomes is None:
+        lines.append("_未回推（未連線券商或未取得分鐘 K）。_")
+        return lines
+    if not outcomes:
+        lines.append("_今日無訊號，或分鐘 K 不足以判定。_"
+                     if signals else "_今日無訊號。_")
+        return lines
+
+    import outcome as oc
+    lines += ["| 代號 | 結果 | 出場價 | R | 毛報酬% | 扣成本後% | 持有K棒 |",
+              "|------|------|--------|---|---------|-----------|---------|"]
+    for o in outcomes:
+        lines.append(f"| {o.code} | {o.result} | {o.exit_price:.2f} | {o.r_multiple:+.2f} "
+                     f"| {o.gross_pct:+.3f} | {o.net_pct:+.3f} | {o.bars} |")
+
+    st = oc.summarise(outcomes)
+    payoff = f"{st['payoff']}" if st.get("payoff") else "—（今日無虧損樣本）"
+    lines += [
+        "",
+        f"- 勝率（扣成本後為正才算贏）：**{st['win_rate']}%**（{st['wins']}/{st['n']}）",
+        f"- 平均賺 {st['avg_win_pct']:+.3f}%　平均賠 {st['avg_loss_pct']:+.3f}%　賺賠比 {payoff}",
+        f"- 當日合計（扣成本後）：**{st['total_net_pct']:+.3f}%**　平均 {st['avg_r']:+.2f}R",
+        f"- 結局分佈：{st['by_result']}",
+        "",
+        "> 判定偏保守：同一根 K 同時觸及停損與目標時判停損；成交價以訊號價計，"
+        "未計滑價；13:25 前一律平倉。**實際成績只會比這裡差，不會更好。**",
+    ]
     return lines
 
 
@@ -188,9 +223,14 @@ def write_journal(lines: list[str], date: str | None = None) -> "Path":
 
 
 def main():
+    import outcome as oc
     signals, state = load_signals()
-    trades, pnl, note = _connect()
-    lines = render(signals, trades, state, pnl, note)
+    trades, pnl, note, broker = _connect()
+    outcomes = None
+    if broker is not None and signals:
+        outcomes = oc.resolve_all(broker, signals)
+        oc.append_csv(outcomes)
+    lines = render(signals, trades, state, pnl, note, outcomes)
     path = write_journal(lines)
     print("\n".join(lines))
     print(f"\n→ 已寫入 {path}")
