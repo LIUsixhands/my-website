@@ -745,6 +745,44 @@ class TestRestoreSignaled(unittest.TestCase):
         self.assertEqual(states["2330"].signaled, 0)
 
 
+class TestWatchlistPush(unittest.TestCase):
+    """名單要推到手機上，格式得在窄螢幕讀得懂，而且不能講成進場訊號。"""
+
+    PAYLOAD = {"date": "2026-09-24", "round_trip_cost_pct": 0.207}
+    ROWS = [
+        {"code": "3707", "prev_close": 74.0, "amplitude_pct": 7.57, "volume_ratio": 3.83},
+        {"code": "2498", "prev_close": 42.7, "amplitude_pct": 6.09, "volume_ratio": 2.88},
+    ]
+
+    def test_lists_every_code_in_rank_order(self):
+        text = screener.format_watchlist(self.PAYLOAD, self.ROWS)
+        self.assertIn("3707", text)
+        self.assertIn("2498", text)
+        self.assertLess(text.index("3707"), text.index("2498"))
+
+    def test_states_it_is_not_an_entry_signal(self):
+        """名單被誤讀成「可以買這 5 檔」是最貴的誤會。"""
+        text = screener.format_watchlist(self.PAYLOAD, self.ROWS)
+        self.assertIn("不是進場訊號", text)
+        self.assertIn("未經人工判斷", text)
+
+    def test_carries_cost_baseline_and_count(self):
+        text = screener.format_watchlist(self.PAYLOAD, self.ROWS)
+        self.assertIn("0.207", text)
+        self.assertIn("2 檔", text)
+
+    def test_push_goes_through_signals_notify(self):
+        sent = []
+        with unittest.mock.patch.object(signals, "notify", sent.append):
+            screener.push_watchlist(self.PAYLOAD, self.ROWS)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("3707", sent[0])
+
+    def test_push_flag_defaults_off(self):
+        self.assertFalse(screener.parse_args([]).push)
+        self.assertTrue(screener.parse_args(["--push"]).push)
+
+
 class TestScreenerTopN(unittest.TestCase):
     """--top N 是驗證期的關鍵：每天用同一條規則取前 N 檔，結果才可重現。"""
 

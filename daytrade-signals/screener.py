@@ -3,6 +3,7 @@ screener.py — 盤前選股。每天 08:30 跑一次。
 
     python3 screener.py              （Windows 是 python screener.py）
     python3 screener.py --top 5      只留量比最高的 5 檔
+    python3 screener.py --top 5 --push   同時把名單推到 Telegram
 
 輸出 watchlist.json：10~20 檔候選 + 每檔的關鍵水位（昨高、昨低、昨均價、量能基準）。
 這一層只做「收斂」，不做預測。把 1800 檔縮到你眼睛顧得住的數量，就是它全部的工作。
@@ -140,10 +141,33 @@ def screen(broker: Broker) -> list[dict]:
     return rows[: cfg["max_universe"]]
 
 
+def format_watchlist(payload: dict, rows: list) -> str:
+    """推到手機上的版本。窄螢幕看得懂就好，不要照搬終端機的表格。"""
+    lines = [f"\U0001f4cb {payload['date']} 今日觀察名單（{len(rows)} 檔）",
+             "────────────────"]
+    for i, r in enumerate(rows, 1):
+        lines.append(f"{i}. {r['code']}　昨收 {r['prev_close']:.2f}　"
+                     f"振幅 {r['amplitude_pct']:.1f}%　量比 {r['volume_ratio']:.2f}x")
+    lines += [
+        "────────────────",
+        f"來回成本基準 {payload['round_trip_cost_pct']}%",
+        "依量比排序自動選出，未經人工判斷。這是觀察名單，不是進場訊號。",
+    ]
+    return "\n".join(lines)
+
+
+def push_watchlist(payload: dict, rows: list) -> None:
+    """借用 signals 的推播管道，金鑰與節流邏輯都不必重寫一份。"""
+    from signals import notify
+    notify(format_watchlist(payload, rows))
+
+
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="盤前選股")
     ap.add_argument("--top", type=int, metavar="N",
                     help="只保留量比最高的 N 檔（不給就全部保留）")
+    ap.add_argument("--push", action="store_true",
+                    help="把名單推到 Telegram（配合排程用，人不用開電腦看）")
     args = ap.parse_args(argv)
     if args.top is not None and args.top < 1:
         ap.error("--top 至少要 1")
@@ -179,6 +203,9 @@ def main(argv=None):
     for r in watchlist:
         print(f"{r['code']:<8}{r['prev_close']:>9.2f}{r['amplitude_pct']:>9.2f}"
               f"{r['prev_volume']:>11,}{r['volume_ratio']:>8.2f}")
+    if args.push:
+        push_watchlist(payload, watchlist)
+
     if dropped:
         print(f"\n--top {args.top}：已捨去量比較低的 {len(dropped)} 檔"
               f"（{'、'.join(r['code'] for r in dropped)}）")
