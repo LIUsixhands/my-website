@@ -747,6 +747,43 @@ class TestRestoreSignaled(unittest.TestCase):
         self.assertEqual(states["2330"].signaled, 0)
 
 
+SIGNAL_FIXTURE = {
+    "time": "09:23:00", "code": "2330", "name": "", "direction": "做多",
+    "entry": 101.5, "stop": 100.0, "target": 103.75, "lots": 1,
+    "risk_per_lot": 1500, "oversized": False, "or_high": 101.0,
+    "vwap": 100.8, "volume_surge": 2.1,
+}
+
+
+class TestSymbolNames(unittest.TestCase):
+    """只有代號很難認。名稱拿不到時也不能印出怪字串。"""
+
+    def test_label_joins_code_and_name(self):
+        self.assertEqual(screener.label({"code": "3317", "name": "尼克森"}), "3317 尼克森")
+
+    def test_label_falls_back_to_code(self):
+        for row in ({"code": "3317"}, {"code": "3317", "name": ""},
+                    {"code": "3317", "name": "  "}, {"code": "3317", "name": None}):
+            self.assertEqual(screener.label(row), "3317")
+
+    def test_push_shows_name(self):
+        text = screener.format_watchlist(
+            {"date": "2026-09-24", "round_trip_cost_pct": 0.207},
+            [{"code": "3317", "name": "尼克森", "prev_close": 66.5,
+              "amplitude_pct": 5.1, "volume_ratio": 16.07}])
+        self.assertIn("3317 尼克森", text)
+
+    def test_signal_shows_name(self):
+        st = SymbolState("2330", 100.0, "台積電")
+        st.lock_opening_range(101.0, 99.0)
+        sig = dict(SIGNAL_FIXTURE, code="2330", name="台積電")
+        self.assertIn("2330 台積電", format_signal(sig, 1))
+
+    def test_signal_without_name_has_no_stray_space(self):
+        sig = dict(SIGNAL_FIXTURE, code="2330", name="")
+        self.assertIn("2330 決策錨點", format_signal(sig, 1))
+
+
 class TestWatchlistPush(unittest.TestCase):
     """名單要推到手機上，格式得在窄螢幕讀得懂，而且不能講成進場訊號。"""
 
