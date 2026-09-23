@@ -1,9 +1,17 @@
 """
 screener.py — 盤前選股。每天 08:30 跑一次。
 
+    python3 screener.py              （Windows 是 python screener.py）
+    python3 screener.py --top 5      只留量比最高的 5 檔
+
 輸出 watchlist.json：10~20 檔候選 + 每檔的關鍵水位（昨高、昨低、昨均價、量能基準）。
 這一層只做「收斂」，不做預測。把 1800 檔縮到你眼睛顧得住的數量，就是它全部的工作。
+
+--top N 存在的理由：驗證期要的是**可重現**。每天用同一條排序規則取前 N 檔，
+20 天之後那份數據才回答得了「這套規則有沒有效」。手挑的話，賺賠都不知道
+該歸因給規則還是歸因給當天的判斷，等於白跑。
 """
+import argparse
 import json
 import logging
 from datetime import datetime, timedelta
@@ -132,13 +140,28 @@ def screen(broker: Broker) -> list[dict]:
     return rows[: cfg["max_universe"]]
 
 
-def main():
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(description="盤前選股")
+    ap.add_argument("--top", type=int, metavar="N",
+                    help="只保留量比最高的 N 檔（不給就全部保留）")
+    args = ap.parse_args(argv)
+    if args.top is not None and args.top < 1:
+        ap.error("--top 至少要 1")
+    return args
+
+
+def main(argv=None):
+    args = parse_args(argv)
     errs = config.validate()
     if errs:
         raise SystemExit("config.py 參數有問題：\n" + "\n".join(f"  - {e}" for e in errs))
 
     broker = Broker()
     watchlist = screen(broker)
+    dropped = []
+    if args.top is not None and len(watchlist) > args.top:
+        # rows 已在 screen() 裡依 (量比, 振幅) 由高到低排好，直接取前 N 檔
+        watchlist, dropped = watchlist[:args.top], watchlist[args.top:]
 
     payload = {
         "date": datetime.now().strftime("%Y-%m-%d"),
@@ -156,8 +179,13 @@ def main():
     for r in watchlist:
         print(f"{r['code']:<8}{r['prev_close']:>9.2f}{r['amplitude_pct']:>9.2f}"
               f"{r['prev_volume']:>11,}{r['volume_ratio']:>8.2f}")
-    print("\n下一步：開盤前自己看一眼題材與昨日型態，刪到剩 5 檔再跑 signals.py。")
-    print(f"（直接編輯 {config.WATCHLIST_FILE.name} 的 items，留下要監看的那幾檔）")
+    if dropped:
+        print(f"\n--top {args.top}：已捨去量比較低的 {len(dropped)} 檔"
+              f"（{'、'.join(r['code'] for r in dropped)}）")
+        print(f"下一步：{config.PY_CMD} signals.py")
+    else:
+        print(f"\n下一步：開盤前自己看一眼題材與昨日型態，刪到剩 5 檔再跑 signals.py。")
+        print(f"（或直接跑 {config.PY_CMD} screener.py --top 5 讓程式照量比取前 5 檔）")
 
 
 if __name__ == "__main__":
