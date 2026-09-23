@@ -73,7 +73,7 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 167 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 172 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -99,12 +99,26 @@ Windows 的命令是 `python`，沒有 `python3`（打了會說「不是內部�
 | 時間 | 動作 |
 |------|------|
 | 首次／改 SIMULATION | `python preflight.py` → 連線體檢 |
-| 08:30 | `python screener.py --top 5` → 依量比取前 5 檔（**驗證期用這個**） |
+| 08:40 | `python screener.py --top 5 --push` → 依量比取前 5 檔並推到 Telegram（**驗證期用這個**；可用排程自動跑，見下） |
 | 08:45 | 或不加 `--top`，產出 20 檔候選池後**你自己刪到剩 5 檔**（題材、昨日型態、有沒有明天財報）— 直接編輯 `watchlist.json` 的 `items` |
 | 09:00 | `python signals.py` → 開始監看，訊號推 Telegram |
 | 13:30 | 自動收工 |
 | 14:00 | `python review.py` → 產出 `journal/YYYYMMDD.md` |
 | 每週日 | 把整個 `journal/` 丟給 Claude 做跨日稽核 |
+
+### 讓 Windows 自己在 08:40 跑
+
+`morning.bat` 就是為這件事準備的（內容只有一行：`python screener.py --top 5 --push`）。
+註冊成排程，平日 08:40 自動執行，名單直接到手機：
+
+```
+schtasks /create /tn "盤前選股" /tr "\"%CD%\morning.bat\"" /sc weekly /d MON,TUE,WED,THU,FRI /st 08:40 /f
+```
+
+（在 `daytrade-signals` 資料夾裡執行。要取消：`schtasks /delete /tn "盤前選股" /f`）
+
+**前提：電腦那個時間要是開機且未睡眠的狀態。** 筆電闔上蓋子排程不會跑 ——
+真要每天穩定執行，得讓它保持喚醒，或改放在一直開著的機器上。
 
 > **驗證期（前 20 個交易日）建議一律用 `--top 5`。**
 > 手挑的名單每天標準都不一樣，20 天之後賺賠都無法歸因 —— 不知道該記在規則頭上
@@ -212,7 +226,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 167 項離線測試 |
+| `test_daytrade.py` | 172 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。
