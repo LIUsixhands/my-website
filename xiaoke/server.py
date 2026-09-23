@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -272,21 +273,64 @@ def health() -> dict:
 
 
 # ── 對外網址與 webhook 註冊 ───────────────────────────
+REGISTER_TRIES = 8
+REGISTER_WAIT = 5        # 秒，每次失敗後等更久；測試會調成 0
+
+
+def wait_resolvable(url: str, timeout: float = 60) -> bool:
+    """快速通道的網址印出來時，DNS 往往還查不到。LINE 查不到就回「Invalid webhook
+    endpoint URL」（實機遇過），所以先等自己查得到再註冊。"""
+    host = url.split("://", 1)[-1].split("/", 1)[0]
+    deadline = time.time() + timeout
+    while True:
+        try:
+            socket.getaddrinfo(host, 443)
+            return True
+        except OSError:
+            if time.time() >= deadline:
+                return False
+            time.sleep(2)
+
+
 def register_webhooks(public_url: str) -> None:
     STATE["public_url"] = public_url
+    wait_resolvable(public_url)
     for code in engine.list_tenants():
         token = Tenant(code).config.get("channel_access_token", "")
         if not token:
             STATE["registered"][code] = "缺 channel_access_token"
             continue
         endpoint = f"{public_url.rstrip('/')}/webhook/{code}"
-        try:
-            clients.line_set_webhook(token, endpoint)
-            STATE["registered"][code] = endpoint
-            log.info("[%s] webhook 已註冊：%s", code, endpoint)
-        except clients.ApiError as e:
-            STATE["registered"][code] = f"註冊失敗：{e}"
-            log.error("[%s] webhook 註冊失敗：%s", code, e)
+        STATE["registered"][code] = "註冊中…"
+        for attempt in range(REGISTER_TRIES):
+            if STATE["public_url"] != public_url:
+                return                            # 通道又換網址了，交給新的那一輪
+            try:
+                clients.line_set_webhook(token, endpoint)
+                STATE["registered"][code] = endpoint
+                log.info("[%s] webhook 已註冊：%s", code, endpoint)
+                break
+            except clients.ApiError as e:
+                # 400 多半是新網址 LINE 還查不到，等一下就好；401 是 token 錯，重試也沒用
+                if e.status == 401 or attempt == REGISTER_TRIES - 1:
+                    STATE["registered"][code] = f"註冊失敗：{e}"
+                    log.error("[%s] webhook 註冊失敗：%s", code, e)
+                    break
+                log.warning("[%s] webhook 註冊第 %s 次失敗，稍後重試：%s", code, attempt + 1, e)
+                time.sleep(REGISTER_WAIT * (attempt + 1))
+
+
+def webhook_watchdog() -> None:
+    """每 10 分鐘看一次：有租戶沒註冊成功（或新加的租戶）就再註冊一次。"""
+    while True:
+        time.sleep(600)
+        url = STATE["public_url"]
+        if url and any(STATE["registered"].get(c, "") != f"{url}/webhook/{c}"
+                       for c in engine.list_tenants()):
+            try:
+                register_webhooks(url)
+            except Exception:
+                log.exception("webhook 重新註冊失敗")
 
 
 def find_cloudflared() -> str:
@@ -321,7 +365,9 @@ def run_quick_tunnel(exe: str) -> None:
         for line in proc.stderr:                  # cloudflared 把網址印在 stderr
             m = TUNNEL_URL.search(line)
             if m and m.group(0) != STATE["public_url"]:
-                register_webhooks(m.group(0))
+                STATE["public_url"] = m.group(0)
+                # 另開執行緒：註冊要等 DNS、要重試，不能卡住讀 cloudflared 的輸出
+                threading.Thread(target=register_webhooks, args=(m.group(0),), daemon=True).start()
         proc.wait()
         STATE["public_url"] = ""
         backoff = 5 if time.time() - started > 300 else min(backoff * 2, 300)
@@ -339,6 +385,7 @@ def start_public_url() -> None:
         log.error("找不到 cloudflared，LINE 打不進來。請先安裝：winget install --id Cloudflare.cloudflared")
         return
     threading.Thread(target=run_quick_tunnel, args=(exe,), daemon=True).start()
+    threading.Thread(target=webhook_watchdog, daemon=True).start()
 
 
 # ── 體檢 ──────────────────────────────────────────────

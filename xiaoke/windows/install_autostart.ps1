@@ -82,16 +82,21 @@ if ($NoSleep) {
 }
 
 Start-ScheduledTask -TaskName $TaskName
-Write-Host "啟動中，等 15 秒看健康狀態…"
-Start-Sleep -Seconds 15
-try {
-  $h = Invoke-RestMethod -Uri "http://localhost:8788/health" -TimeoutSec 5
-  Write-Host "[ OK ] 小客活著。對外網址：$($h.public_url)" -ForegroundColor Green
-  foreach ($p in $h.tenants.PSObject.Properties) {
-    Write-Host "       $($p.Name)：模式 $($p.Value.mode)、webhook $($p.Value.webhook)"
-  }
-  if (-not $h.public_url) { Write-Host "[WARN] 還沒拿到對外網址，再等一下或看 logs\xiaoke.log" -ForegroundColor Yellow }
-} catch {
+Write-Host "啟動中，最多等 90 秒看健康狀態…"
+# 最多等 90 秒：通道要先拿到網址，LINE 也要等新網址的 DNS 生效才收得下 webhook
+$h = $null
+for ($i = 0; $i -lt 18; $i++) {
+  Start-Sleep -Seconds 5
+  try { $h = Invoke-RestMethod -Uri "http://localhost:8788/health" -TimeoutSec 5 } catch { continue }
+  $pending = @($h.tenants.PSObject.Properties | Where-Object { $_.Value.webhook -in @("未註冊", "註冊中…") })
+  if ($h.public_url -and $pending.Count -eq 0) { break }
+}
+if (-not $h) {
   Write-Host "[FAIL] 連不到 http://localhost:8788/health，請看 $Root\logs\xiaoke.log" -ForegroundColor Red
   exit 1
 }
+Write-Host "[ OK ] 小客活著。對外網址：$($h.public_url)" -ForegroundColor Green
+foreach ($p in $h.tenants.PSObject.Properties) {
+  Write-Host "       $($p.Name)：模式 $($p.Value.mode)、webhook $($p.Value.webhook)"
+}
+if (-not $h.public_url) { Write-Host "[WARN] 還沒拿到對外網址，再等一下或看 logs\xiaoke.log" -ForegroundColor Yellow }

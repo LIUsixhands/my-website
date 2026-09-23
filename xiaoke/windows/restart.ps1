@@ -14,10 +14,20 @@ Get-CimInstance Win32_Process -Filter "Name='cloudflared.exe'" |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 Start-Sleep -Seconds 2
 Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 15
-try {
-  $h = Invoke-RestMethod -Uri "http://localhost:8788/health" -TimeoutSec 5
-  Write-Host "[ OK ] 已重啟。對外網址：$($h.public_url)"
-} catch {
+Write-Host "重啟中，最多等 90 秒…"
+# 最多等 90 秒：通道要先拿到網址，LINE 也要等新網址的 DNS 生效才收得下 webhook
+$h = $null
+for ($i = 0; $i -lt 18; $i++) {
+  Start-Sleep -Seconds 5
+  try { $h = Invoke-RestMethod -Uri "http://localhost:8788/health" -TimeoutSec 5 } catch { continue }
+  $pending = @($h.tenants.PSObject.Properties | Where-Object { $_.Value.webhook -in @("未註冊", "註冊中…") })
+  if ($h.public_url -and $pending.Count -eq 0) { break }
+}
+if (-not $h) {
   Write-Host "[FAIL] 重啟後連不到 health，請看 logs\xiaoke.log"
+  exit 1
+}
+Write-Host "[ OK ] 已重啟。對外網址：$($h.public_url)"
+foreach ($p in $h.tenants.PSObject.Properties) {
+  Write-Host "       $($p.Name)：webhook $($p.Value.webhook)"
 }
