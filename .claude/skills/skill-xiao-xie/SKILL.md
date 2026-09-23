@@ -164,7 +164,7 @@ python3 $SKILL/scripts/devicemgr.py report --dir "./器材資料" --period "2026
 
 | 需求 | 找誰 |
 |:---|:---|
-| 報表要做成 PPT／PDF 對外交付 | `skill-ai-lobster-brand`（自動掛品牌 + 🦞 logo） |
+| 報表要做成 PPT／PDF 對外交付 | `skill-sixhands-brand`（自動掛品牌 + Sixhands logo） |
 | 器材成本、庫存跌價、進口費用要進帳 | 小帳（財務部） |
 | 代理合約、獨家條款、押金與違約金 | 小辯（法務部） |
 | 產品要拍短影片、做官網、投廣告 | 小爆／小網／小廣 — ⚠️ 醫材廣告有事前核准制，一律先過法規窗口 |

@@ -212,10 +212,10 @@ Windows 使用者把 `python3` 換成 `python`。
 ## 7. 品牌規範
 
 所有對外交付物（組織圖、制度說明、招商簡報、教育訓練教材）
-一律掛 **「Sixhands Studio AI數字員工 🦞」** 品牌與 `assets/logo.png`（觸發 `skill-ai-lobster-brand`）。
+一律掛 **「Sixhands Studio AI數字員工 🦞」** 品牌與 `assets/logo.png`（觸發 `skill-sixhands-brand`）。
 
 **例外**：交付給天麗保養品當作**公司內部正式制度文件**（要發給經銷商、要進契約附件）時，
-以天麗自身 CI 出稿、不掛龍蝦 logo；要當教學案例再另出一版。
+以天麗自身 CI 出稿、不掛 Sixhands logo；要當教學案例再另出一版。
 
 ---
 

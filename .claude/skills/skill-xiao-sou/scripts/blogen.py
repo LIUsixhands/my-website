@@ -39,7 +39,7 @@ BRAND_SHORT = "Sixhands Studio"   # title 後綴用短版，省下寬度給關�
 # 🚨 2026-09-09：追蹤碼一定要寫在模板裡。
 #    之前是產完頁面再手動插，結果 blog 重新產生一次就被整段洗掉、而且沒有任何警告。
 #    改成常數後，每次產生的頁面都自帶追蹤碼。
-PIXEL_ID = "1449145406049235"
+PIXEL_ID = "［待填：Pixel ID］"
 GTM_ID = "GTM-5D6Z25BQ"
 
 _GTM_HEAD_TPL = """  <!-- Google Tag Manager -->
@@ -272,7 +272,7 @@ NAV = """<nav class="navbar">
     <li><a href="../about.html">關於我</a></li>
     <li><a href="../courses.html">課程</a></li>
     <li><a href="index.html" class="active">部落格</a></li>
-    <li><a href="../market.html">龍蝦超市</a></li>
+    <li><a href="../works-grid.html">作品集</a></li>
     <li><a href="../workshop.html" class="navbar-cta">講座報名</a></li>
   </ul>
 </nav>"""
@@ -290,21 +290,20 @@ FOOTER = """<footer>
         <li><a href="../workshop.html">實體講座</a></li>
         <li><a href="../courses.html">課程介紹</a></li>
         <li><a href="index.html">部落格</a></li>
-        <li><a href="../market.html">AI 龍蝦超市</a></li>
+        <li><a href="../works-grid.html">作品集</a></li>
         <li><a href="../ai-check.html">免費 AI 健診</a></li>
       </ul>
     </div>
     <div class="footer-links">
       <h4>聯絡</h4>
       <ul>
-        <li><a href="https://www.facebook.com/profile.php?id=61573990441019" target="_blank" rel="noopener">FB Sixhands Studio粉專</a></li>\n        <li><a href="https://www.facebook.com/profile.php?id=61571365185788" target="_blank" rel="noopener">FB 崴歆國際</a></li>\n        <li><a href="https://line.me/R/ti/p/@j8888" target="_blank" rel="noopener">LINE @j8888</a></li>\n        <li><a href="https://www.tiktok.com/@jason96949" target="_blank" rel="noopener">TikTok @jason96949</a></li>
-        <li><a href="mailto:jinwei09170327@gmail.com">Email 助哥</a></li>
+        <li><a href="https://line.me/R/ti/p/@080akczk" target="_blank" rel="noopener">LINE @080akczk</a></li>\n        <li><a href="https://sixhands-studio.netlify.app/" target="_blank" rel="noopener">Sixhands Studio 官網</a></li>
         <li><a href="../contact.html">聯絡我們</a></li>
       </ul>
     </div>
   </div>
   <div class="footer-bottom">
-    <span>© 2026 崴歆國際有限公司（Sixhands Studio AI數字員工）　統一編號 96750917</span>
+    <span>© 2026 Sixhands Studio</span>
     <span><a href="/refund.html">退費政策</a>　由 AI 數字員工協助維護 🦞</span>
   </div>
 </footer>
@@ -432,12 +431,12 @@ LLMS_SITE = {
              "每場限額 45 位，報名費 500 元。頁面含各場次日期、地址與常見問題。"),
             ("courses.html", "AI 數字員工課程",
              "12 週實戰班與半日 Workshop，涵蓋 Prompt 工程、AI 生圖生片、工作流自動化。"),
-            ("market.html", "AI 龍蝦超市",
-             "15 隻 AI 數字員工的型錄，涵蓋行銷、廣告、文案、客服、法務與財務。"),
+            ("works-grid.html", "作品集",
+             "Sixhands Studio 全部作品：房地產 AI 工具、提示詞包、互動遊戲與影片模板。"),
         ]),
         ("關於", [
             ("about.html", "關於助哥",
-             "Sixhands Studio創辦人，10 年企業管理經驗，專長是把 AI 導入中小企業的行銷與營運流程。"),
+             "Sixhands Studio 創辦人，台中七期房地產仲介，IP 定位「不賣房子，賣判斷」，用 AI 數字員工團隊經營房地產本業與個人品牌。"),
             ("contact.html", "聯絡方式", "課程報名、講座場次與企業 AI 導入諮詢。"),
         ]),
         ("免費資源", [
@@ -514,7 +513,7 @@ def build_post(md_path: Path, site: Path, base: str, all_posts=None):
     keyword = meta.get("keyword", "")
     cta = CTA_PRESETS.get(meta.get("cta", "workshop"), CTA_PRESETS["workshop"])
     canonical = f"{base.rstrip('/')}/{BLOG_DIRNAME}/{slug}.html"
-    og_img = meta.get("image", f"{base.rstrip('/')}/photos/jason-new.jpg")
+    og_img = meta.get("image", f"{base.rstrip('/')}/photos/qiqi-view.jpg")
 
     body_html, toc = md_to_html(md)
 
@@ -661,7 +660,7 @@ def write_index(site: Path, base: str, posts):
     (out / "index.html").write_text(
         page_shell(f"老闆的 AI 實戰筆記｜{BRAND_SHORT}",
                    "AI 導入中小企業的實戰筆記：省下哪些人力、怎麼開始、哪些錢不必花。助哥每天一篇。",
-                   canonical, f"{base.rstrip('/')}/photos/jason-new.jpg", ld, body),
+                   canonical, f"{base.rstrip('/')}/photos/qiqi-view.jpg", ld, body),
         encoding="utf-8")
     return len(posts)
 

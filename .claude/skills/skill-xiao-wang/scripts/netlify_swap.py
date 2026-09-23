@@ -1,6 +1,6 @@
 """只替換 Netlify 站上指定檔案（digest 法）。用法：python3 netlify_swap.py [--go] 本機路徑:站上路徑 ..."""
 import json, sys, hashlib, time, urllib.request, os
-SITE = '80025f46-1ffa-4669-b866-9187fdc3fb9a'
+SITE = '［待填：Netlify site ID］'
 SRC = os.path.expanduser('~/Desktop/講座報名網站_上線用')
 
 def find_token(o):

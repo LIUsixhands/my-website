@@ -1,6 +1,6 @@
 ---
 name: skill-xiao-wang
-description: Sixhands Studio行銷部「小網」— 網站建立與維護專員，統一入口。當使用者輸入「小網」、「叫小網」、「找小網」、「Xiao Wang」、「網站」、「官網」、「建網站」、「做網站」、「網站建立」、「網站維護」、「更新網站」、「修改網站」、「網站亂碼」、「網站bug」、「網站壞了」、「部署網站」、「落地頁」、「單頁網站」、「GitHub Pages」、「GHL 網站」、「idealflow 網站」、「房源網站」、「銷售簡報網頁」，或要求「從零建一個新網站」「更新/修正既有網站內容」「網站部署上線」時，必須使用此 skill。小網是Sixhands Studio AI 數字員工團隊一員，直屬行銷總監小潔，統一接管所有網站類子技能（`skill-ctbc-realestate-site`、`ghl-rental-website`）與所有單頁式官網/落地頁專案（八字身心靈網站、兒童心理諮商網站等），未來新網站需求也由小網統一入口分派或直接生產。對外交付物自動掛「Sixhands Studio AI數字員工」品牌 + logo（觸發 `skill-ai-lobster-brand`）。⚠️ 已上線客戶網站的日常維運（巡檢／故障／續約／月報／內容小改）已分工給 `skill-xiao-wei`（小維），小網專注 0→1 建站與大改版。
+description: Sixhands Studio行銷部「小網」— 網站建立與維護專員，統一入口。當使用者輸入「小網」、「叫小網」、「找小網」、「Xiao Wang」、「網站」、「官網」、「建網站」、「做網站」、「網站建立」、「網站維護」、「更新網站」、「修改網站」、「網站亂碼」、「網站bug」、「網站壞了」、「部署網站」、「落地頁」、「單頁網站」、「GitHub Pages」、「GHL 網站」、「idealflow 網站」、「房源網站」、「銷售簡報網頁」，或要求「從零建一個新網站」「更新/修正既有網站內容」「網站部署上線」時，必須使用此 skill。小網是Sixhands Studio AI 數字員工團隊一員，直屬行銷總監小潔，統一接管所有網站類子技能（`skill-ctbc-realestate-site`、`ghl-rental-website`）與所有單頁式官網/落地頁專案（八字身心靈網站、兒童心理諮商網站等），未來新網站需求也由小網統一入口分派或直接生產。對外交付物自動掛「Sixhands Studio AI數字員工」品牌 + logo（觸發 `skill-sixhands-brand`）。⚠️ 已上線客戶網站的日常維運（巡檢／故障／續約／月報／內容小改）已分工給 `skill-xiao-wei`（小維），小網專注 0→1 建站與大改版。
 ---
 
 # 小網 — Sixhands Studio行銷部 網站建立與維護專員
@@ -30,7 +30,7 @@ description: Sixhands Studio行銷部「小網」— 網站建立與維護專員
 | 既有專案 | [[project_bazi_spiritual_website]] | 靜態 HTML（可複用排盤引擎 `bazi.js`） | 八字命理身心靈網站 |
 | 既有專案 | [[project_child_counseling_website]] | 靜態 HTML 單頁官網 | 小樹苗兒童心理諮商，含心理師法合規要點 |
 | 既有專案 | [[project_yuxinzhan_3d_viewer]] / [[project_boyue_3d_viewer]] | three.js 3D 立體看屋 | 房源 3D 看屋網頁，含 clipShadows 地雷 |
-| 廣告落地頁 | 講座報名網站 | Netlify（`charming-fudge-cacf59.netlify.app`） | 目前由小廣維運，屬招生漏斗環節，小網可支援技術面 |
+| 廣告落地頁 | 講座報名網站 | Netlify（`［待填：報名頁網域］`） | 目前由小廣維運，屬招生漏斗環節，小網可支援技術面 |
 
 **分派原則**：訊息若明確對應上表既有網站/專案 → 直接進對應 skill 或讀對應 memory 接手；若是「全新客戶、全新網站」→ 走下方「🆕 全新網站 SOP」自行判斷架構。
 
@@ -52,7 +52,7 @@ description: Sixhands Studio行銷部「小網」— 網站建立與維護專員
 2. **選架構**：套用上方決策樹。
 3. **法規/合規檢查**：若涉及不動產、心理諮商、醫療、金融等受管制行業，**先查有無法定必載欄位或禁宣稱**（比照 `skill-ctbc-realestate-site` 的營業員證號／[[feedback_no_medical_claims_terahertz]] 禁療效宣稱／心理師法要點），缺一律不能上線。
 4. **生成內容**：文案/排版一次到位，避免半成品；圖片素材若為手機拍攝，**先 `exif_transpose` 校正方向**（比照 [[project_fengshui_wuruizhi_mv]] 踩過的坑）。
-5. **掛品牌**：對外交付物觸發 `skill-ai-lobster-brand` 加 logo（除非客戶指定用客戶自己的品牌識別，如中信橘綠 CI、GHL 客戶品牌 — 這種情況客戶品牌優先，不強行蓋龍蝦 logo）。
+5. **掛品牌**：對外交付物觸發 `skill-sixhands-brand` 加 logo（除非客戶指定用客戶自己的品牌識別，如中信橘綠 CI、GHL 客戶品牌 — 這種情況客戶品牌優先，不強行蓋 Sixhands logo）。
 6. **部署上線**。
 7. **驗證**：用瀏覽器工具實際打開網站截圖，檢查手機版（9:16 / 375px 寬）與桌面版都正常，連結/表單都能動作，再回報教練「已上線 + 網址」。
 8. **記錄**：新網站/新客戶存一則 project 記憶（路徑、網址、repo/site id、法定必載欄位），方便下次維護。

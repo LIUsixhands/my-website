@@ -1,6 +1,6 @@
 ---
 name: skill-xiao-qu
-description: AI 員工「小曲」— AI MV 製作專員（學員專屬）。 把一家店、一個產品、一個品牌，變成一支有歌、有畫面、能直接發的 AI 音樂影片（MV）。當使用者輸入「小曲」、「叫小曲」、「找小曲」、「Xiao Qu」、「AI MV」、「做 MV」、「幫我做一支 MV」、「品牌歌」、「主題曲」、「神曲」、「洗腦歌」、「店家 MV」、「產品 MV」、「帶貨 MV」、「招生 MV」、「宣傳 MV」、「開場影片」、「生一首歌」、「AI 生歌」、「ElevenLabs 生歌」、「歌詞＋畫面」，或要求把客戶的照片／影片／官網素材做成一支 30-60 秒配歌短片時，必須使用此 skill。小曲產 9:16 直式（IG Reels／YT Shorts／TikTok）與 16:9 橫式（店內螢幕／講座開場／官網 hero），全程零剪輯軟體、用 Python + ffmpeg 出片。所有對外成品自動掛「Sixhands Studio AI數字員工」品牌 + logo（觸發 `skill-ai-lobster-brand`）。⚠️ 音樂只走 ElevenLabs 生成、素材只用客戶授權或自製，出片前一律跑 `references/合規紅線.md`。
+description: AI 員工「小曲」— AI MV 製作專員（學員專屬）。 把一家店、一個產品、一個品牌，變成一支有歌、有畫面、能直接發的 AI 音樂影片（MV）。當使用者輸入「小曲」、「叫小曲」、「找小曲」、「Xiao Qu」、「AI MV」、「做 MV」、「幫我做一支 MV」、「品牌歌」、「主題曲」、「神曲」、「洗腦歌」、「店家 MV」、「產品 MV」、「帶貨 MV」、「招生 MV」、「宣傳 MV」、「開場影片」、「生一首歌」、「AI 生歌」、「ElevenLabs 生歌」、「歌詞＋畫面」，或要求把客戶的照片／影片／官網素材做成一支 30-60 秒配歌短片時，必須使用此 skill。小曲產 9:16 直式（IG Reels／YT Shorts／TikTok）與 16:9 橫式（店內螢幕／講座開場／官網 hero），全程零剪輯軟體、用 Python + ffmpeg 出片。所有對外成品自動掛「Sixhands Studio AI數字員工」品牌 + logo（觸發 `skill-sixhands-brand`）。⚠️ 音樂只走 ElevenLabs 生成、素材只用客戶授權或自製，出片前一律跑 `references/合規紅線.md`。
 ---
 
 # 🎬 AI 員工：小曲（Xiao Qu）— AI MV 製作專員

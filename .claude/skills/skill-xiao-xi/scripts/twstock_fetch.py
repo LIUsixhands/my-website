@@ -27,7 +27,7 @@ except Exception:
 
 TIMEOUT = 20
 CTX = ssl.create_default_context()
-HEADERS = {"User-Agent": "Mozilla/5.0 (lobster-academy-analyst)", "Accept": "application/json"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (sixhands-studio-analyst)", "Accept": "application/json"}
 
 
 def fetch_json(url):

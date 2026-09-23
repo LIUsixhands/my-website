@@ -248,8 +248,8 @@
   ],
   "vo_offset": 0.2,
   "brand": {
-    "logo": "~/.claude/skills/skill-ai-lobster-brand/logo_white.png",
-    "logo_end": "~/.claude/skills/skill-ai-lobster-brand/logo_full_white.png",
+    "logo": "~/.claude/skills/skill-sixhands-brand/logo_white.png",
+    "logo_end": "~/.claude/skills/skill-sixhands-brand/logo_full_white.png",
     "line": "Sixhands Studio AI數字員工｜AI 短劇試播"
   },
   "sfx": [

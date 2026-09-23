@@ -3,8 +3,8 @@
 from PIL import Image, ImageDraw, ImageFont
 import os
 
-PHOTO = "/Users/chenyunung/Desktop/講座報名網站_上線用/photos"
-OUT = "/Users/chenyunung/Desktop/講座報名網站_上線用/廣告素材"
+PHOTO = os.path.expanduser("~/Desktop/講座報名網站_上線用/photos")
+OUT = os.path.expanduser("~/Desktop/講座報名網站_上線用/廣告素材")
 FB = "/System/Library/Fonts/STHeiti Medium.ttc"
 
 def font(sz): return ImageFont.truetype(FB, sz)
@@ -70,7 +70,7 @@ def ad1():
 # ---------- 圖2: 1:1 講師信任版 ----------
 def ad2():
     W=H=1080
-    base = fit_cover(Image.open(PHOTO+"/jason-new.jpg").convert("RGB"), W, H)
+    base = fit_cover(Image.open(PHOTO+"/speaker.jpg").convert("RGB"), W, H)
     base = grad_bottom(base, 0.58, 70)
     d = ImageDraw.Draw(base)
     badge(d, W/2, 60, "7 月台北三場 · AI 行銷實戰講座", font(34))

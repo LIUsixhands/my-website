@@ -11,6 +11,7 @@
     prs.save(OUT)
 然後另跑 add_notes 把逐字稿灌進 speaker notes（重建會洗掉 notes，務必後跑）。
 """
+import os
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
@@ -18,7 +19,7 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.oxml import parse_xml
 
-# ---- 品牌色（黑底 + 金 + 龍蝦橘）----
+# ---- 品牌色（黑底 + 金 + 品牌橘）----
 INK    = RGBColor(0x12, 0x12, 0x16)
 PANEL  = RGBColor(0x1E, 0x1E, 0x26)
 GOLD   = RGBColor(0xE8, 0xB7, 0x4A)
@@ -30,7 +31,7 @@ LIGHT  = RGBColor(0xF7, 0xF6, 0xF2)
 CN = "Microsoft JhengHei"
 EW = Inches(13.333)
 EH = Inches(7.5)
-LOGO = "/Users/chenyunung/.claude/skills/skill-ai-lobster-brand/logo.png"
+LOGO = os.path.expanduser("~/.claude/skills/skill-sixhands-brand/logo.png")
 
 # 影片自動播放 timing：{spid} 填影片 shape id；放映載入該頁即自動播。
 AUTOPLAY_TIMING = (

@@ -1,4 +1,4 @@
-"""開一個新短劇專案：python3 new_episode.py <專案資料夾> [--style anime|real] [--brand lobster|none]
+"""開一個新短劇專案：python3 new_episode.py <專案資料夾> [--style anime|real] [--brand sixhands|none]
 會複製劇本範本 episode.json（範例是代銷 EP01《穿藍白拖的客人》），再依你的劇本改。"""
 import sys, json, shutil
 from pathlib import Path

@@ -18,7 +18,7 @@ OUT = Path(tempfile.gettempdir()) / "xiaosou_deploy"
 
 SKIP_HINTS = ("備份", "未採用", "backup", "_bak")
 
-OWN_ORIGINS = ("https://jasonmanage.com", "https://www.jasonmanage.com")
+OWN_ORIGINS = ("https://sixhands-studio.netlify.app", "https://sixhands-studio.netlify.app")
 
 # 一定要上線的檔案（不靠引用分析）
 ALWAYS = [

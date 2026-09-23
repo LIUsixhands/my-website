@@ -163,7 +163,7 @@ def _deploy_manifest(files: dict, by_sha: dict, site_id: str, token: str, log=pr
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", required=True, help="要部署的資料夾（部署包，不是網站原始碼）")
-    ap.add_argument("--site-id", default="80025f46-1ffa-4669-b866-9187fdc3fb9a")
+    ap.add_argument("--site-id", default="［待填：Netlify site ID］")
     a = ap.parse_args()
     res = deploy_digest(Path(a.src).expanduser(), a.site_id, find_token())
     print(f"部署狀態：{res['state']}　{res.get('published_at','')}")

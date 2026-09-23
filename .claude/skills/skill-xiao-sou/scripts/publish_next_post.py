@@ -47,8 +47,8 @@ from netlify_deploy import deploy_overlay, find_token  # noqa: E402
 #    EDEADLK / EPERM / Errno60，症狀是「有 PID 但沒有紀錄」的靜默斷更
 POSTS = Path.home() / "Sixhands Studio_SEO" / "posts"
 SITE = Path.home() / "Desktop" / "講座報名網站_上線用"
-BASE = "https://jasonmanage.com"
-NETLIFY_SITE_ID = "80025f46-1ffa-4669-b866-9187fdc3fb9a"
+BASE = "https://sixhands-studio.netlify.app"
+NETLIFY_SITE_ID = "［待填：Netlify site ID］"
 
 INTERVAL_DAYS = 2          # 幾天發一篇
 LOW_STOCK = 2              # 存量低於幾篇就警告

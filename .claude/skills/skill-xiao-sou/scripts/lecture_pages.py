@@ -37,7 +37,7 @@ BRAND_SHORT = "Sixhands Studio"
 # 🚨 2026-09-09：追蹤碼一定要寫在模板裡。
 #    之前是產完頁面再手動插，結果 blog 重新產生一次就被整段洗掉、而且沒有任何警告。
 #    改成常數後，每次產生的頁面都自帶追蹤碼。
-PIXEL_ID = "1449145406049235"
+PIXEL_ID = "［待填：Pixel ID］"
 GTM_ID = "GTM-5D6Z25BQ"
 
 _GTM_HEAD_TPL = """  <!-- Google Tag Manager -->
@@ -203,20 +203,19 @@ FOOTER = """<footer>
         <li><a href="../courses.html">課程介紹</a></li>
         <li><a href="../blog/index.html">部落格</a></li>
         <li><a href="index.html">書籍精讀</a></li>
-        <li><a href="../market.html">AI 龍蝦超市</a></li>
+        <li><a href="../works-grid.html">作品集</a></li>
       </ul>
     </div>
     <div class="footer-links">
       <h4>聯絡</h4>
       <ul>
-        <li><a href="https://www.youtube.com/@lobster-economics" target="_blank" rel="noopener">YouTube 龍蝦經濟學</a></li>
-        <li><a href="mailto:jinwei09170327@gmail.com">Email 助哥</a></li>
+        <li><a href="https://sixhands-studio.netlify.app/bio-links.html" target="_blank" rel="noopener">所有連結</a></li>
         <li><a href="../contact.html">聯絡我們</a></li>
       </ul>
     </div>
   </div>
   <div class="footer-bottom">
-    <span>© 2026 崴歆國際有限公司（Sixhands Studio AI數字員工）　統一編號 96750917</span>
+    <span>© 2026 Sixhands Studio</span>
     <span><a href="/refund.html">退費政策</a>　由 AI 數字員工協助維護 🦞</span>
   </div>
 </footer>
@@ -391,8 +390,8 @@ def build_index(site: Path, base: str, pages):
         f'<p>約 {p["words"]:,} 字</p></a>' for p in pages)
     ld = [{
         "@context": "https://schema.org", "@type": "CollectionPage",
-        "name": "書籍精讀｜龍蝦經濟學", "url": canonical, "inLanguage": "zh-TW",
-        "description": f"龍蝦經濟學 YouTube 頻道 {len(pages)} 集書籍精讀的完整文字版，"
+        "name": "書籍精讀｜貓咪經濟學", "url": canonical, "inLanguage": "zh-TW",
+        "description": f"貓咪經濟學 YouTube 頻道 {len(pages)} 集書籍精讀的完整文字版，"
                        f"每篇含影片、重點與逐字稿。",
         "isPartOf": {"@type": "WebSite", "name": BRAND, "url": b + "/"},
     }, {
@@ -407,7 +406,7 @@ def build_index(site: Path, base: str, pages):
   <div class="crumb"><a href="../index.html">首頁</a> ／ 書籍精讀</div>
   <h1 class="lec-title" style="font-size:clamp(26px,4.6vw,38px);margin:0 0 12px;">書籍精讀</h1>
   <p style="font-size:17px;color:var(--text-sub);max-width:62ch;line-height:1.9;margin:0 0 16px;">
-    龍蝦經濟學頻道每一集的完整文字版：影片講什麼，這裡就寫什麼。
+    貓咪經濟學頻道每一集的完整文字版：影片講什麼，這裡就寫什麼。
     講給要做決定的人聽——每本書只留能拿去用的部分。目前 {len(pages)} 本。
   </p>
   <p style="font-size:16px;color:var(--text-sub);max-width:62ch;line-height:1.9;margin:0 0 10px;">
@@ -426,9 +425,9 @@ def build_index(site: Path, base: str, pages):
     out.mkdir(parents=True, exist_ok=True)
     (out / "index.html").write_text(
         shell(f"書籍精讀｜{len(pages)} 本商業書的重點與逐字稿｜{BRAND_SHORT}",
-              f"龍蝦經濟學頻道 {len(pages)} 集書籍精讀的完整文字版，"
+              f"貓咪經濟學頻道 {len(pages)} 集書籍精讀的完整文字版，"
               f"每篇含影片、這集在講什麼與逐字稿全文。講給要做決定的老闆聽。",
-              canonical, f"{b}/photos/jason-new.jpg", ld, body, "books"),
+              canonical, f"{b}/photos/qiqi-view.jpg", ld, body, "books"),
         encoding="utf-8")
     return len(pages)
 

@@ -139,7 +139,7 @@ python3 tax_calendar.py --days 30
 其他規格：
 - 所有金額寫**整數元**、加千分位；不寫小數
 - 猜不到、不確定的一律進「待確認清單」丟回人類，**絕不自己認定**
-- 對外文件掛品牌與 logo → 見 [skill-ai-lobster-brand](../skill-ai-lobster-brand/SKILL.md)，logo 在 `assets/logo.png`
+- 對外文件掛品牌與 logo → 見 [skill-sixhands-brand](../skill-sixhands-brand/SKILL.md)，logo 在 `assets/logo.png`
 - 報表頁尾免責由引擎自動產生，**不可刪**
 
 ---

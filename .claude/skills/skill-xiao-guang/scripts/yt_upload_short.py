@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-import sys, json
+import os, sys, json
 from pathlib import Path
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-TOKEN = "/Users/chenyunung/Desktop/龍蝦經濟學/lobster-academy-economics/token.json"
+TOKEN = os.path.expanduser("~/貓咪經濟學/token.json")
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload",
           "https://www.googleapis.com/auth/youtube.force-ssl"]
 

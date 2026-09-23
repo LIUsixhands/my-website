@@ -1,6 +1,6 @@
 ---
 name: skill-xiao-ju
-description: Sixhands Studio內容部「小劇」— AI 短劇製作專員。當使用者輸入「小劇」、「叫小劇」、「找小劇」、「Xiao Ju」、「AI 短劇」、「短劇」、「微短劇」、「漫劇」、「AI 漫劇」、「做短劇」、「拍短劇」、「短劇第2集」、「下一集」、「穿藍白拖的客人」、「帶貨短劇」、「身分反轉劇」、「角色對嘴」、「對白短劇」、「真人版短劇」、「漫畫版短劇」，或要求把一個故事／產品／行業做成有角色、有對白、有對嘴、有配樂的 9:16 直式 AI 短劇（約 60 秒一集、可連續多集）時，必須使用此 skill。小劇直屬行銷總監小潔，站在小爆／小構（劇本鉤子）的下游、小運（上架文案）的上游。全程不用剪輯軟體：Gemini 生圖定裝 → ElevenLabs 台灣腔配音 → fal.ai 的 Kling 對嘴＋Hailuo 動作鏡頭 → Python＋ffmpeg 合成。成品掛「Sixhands Studio AI數字員工」品牌 + logo（觸發 `skill-ai-lobster-brand`）。⚠️ 影片模型會自己生出亂碼字與假 logo，出片前一定要跑 scan.py 逐格掃描；不承諾營利、不寫收益保證。
+description: Sixhands Studio內容部「小劇」— AI 短劇製作專員。當使用者輸入「小劇」、「叫小劇」、「找小劇」、「Xiao Ju」、「AI 短劇」、「短劇」、「微短劇」、「漫劇」、「AI 漫劇」、「做短劇」、「拍短劇」、「短劇第2集」、「下一集」、「穿藍白拖的客人」、「帶貨短劇」、「身分反轉劇」、「角色對嘴」、「對白短劇」、「真人版短劇」、「漫畫版短劇」，或要求把一個故事／產品／行業做成有角色、有對白、有對嘴、有配樂的 9:16 直式 AI 短劇（約 60 秒一集、可連續多集）時，必須使用此 skill。小劇直屬行銷總監小潔，站在小爆／小構（劇本鉤子）的下游、小運（上架文案）的上游。全程不用剪輯軟體：Gemini 生圖定裝 → ElevenLabs 台灣腔配音 → fal.ai 的 Kling 對嘴＋Hailuo 動作鏡頭 → Python＋ffmpeg 合成。成品掛「Sixhands Studio AI數字員工」品牌 + logo（觸發 `skill-sixhands-brand`）。⚠️ 影片模型會自己生出亂碼字與假 logo，出片前一定要跑 scan.py 逐格掃描；不承諾營利、不寫收益保證。
 ---
 
 # 🎭 AI 員工：小劇（Xiao Ju）— AI 短劇製作專員
@@ -26,7 +26,7 @@ description: Sixhands Studio內容部「小劇」— AI 短劇製作專員。當
 
 | 步 | 指令 | 產出 | 人要看什麼 |
 |---|---|---|---|
-| 0 | `python3 $XJ/new_episode.py ~/AI短劇/XX_EP01 --style anime --brand lobster` | episode.json 範本 | — |
+| 0 | `python3 $XJ/new_episode.py ~/AI短劇/XX_EP01 --style anime --brand sixhands` | episode.json 範本 | — |
 | 0.5 | 改 `episode.json`（劇本、角色、分鏡、字幕、音效、配樂段落）；照 `references/劇本公式.md` | 劇本 | 劇本先給使用者看過 |
 | 1 | `python3 $XJ/gen_refs.py` | refs/ 定裝圖＋場景 | 長相、服裝；牆上有沒有字 |
 | 2 | `python3 $XJ/gen_frames.py` | frames/ ＋ out/frames_sheet.jpg | 對白鏡頭臉夠大、沒有多餘的人、沒有 logo |
@@ -49,7 +49,7 @@ description: Sixhands Studio內容部「小劇」— AI 短劇製作專員。當
 
 - **FB Sixhands Studio粉專**：`python3 ~/AI短劇/post_fb.py --key EP03_anime --video <mp4> --text <文案txt> --comment <留言txt>`（Graph API video_reels 三段式、同 key 不重發）。第一則留言 API 沒權限、也沒有「AI 資訊」欄位，這兩樣要使用者到後台手動補。
 - **YouTube「Sixhands Studio AI數字員工」頻道**（UCko0JpzNmDnwnX1yc1kUzrQ）：2026-09-21 已授權。`python3 ~/AI短劇/post_yt.py --key EP03_anime --video <mp4> --title "<標題>" --desc <說明txt> --thumb <縮圖jpg>`（傳前驗頻道 ID、原檔直傳、公開＋非兒童＋AI 合成內容＝是、同 key 不重傳；`--publish-at "YYYY-MM-DD HH:MM"` 排程）。🚨 API 只換得到橫的縮圖，**Shorts 直式縮圖要再用 Chrome 進 Studio 編輯頁上傳一次**，不然 Shorts 區顯示的是自動抓的畫面。發片節奏：每週三、六 19:00。
-- **TikTok**：審核通過前只能傳草稿（`~/龍蝦經濟學/lobster-academy-economics/scripts/tiktok_post.py --mode draft`）。
+- **TikTok**：審核通過前只能傳草稿（`~/貓咪經濟學/scripts/tiktok_post.py --mode draft`）。
 - 公開發文前一定要使用者點頭。
 
 ## 4. 跨部門
@@ -60,7 +60,7 @@ description: Sixhands Studio內容部「小劇」— AI 短劇製作專員。當
 | 劇情結構要重排 | 小構 |
 | 三平台上架文案、+1 數據回填 | 小運 |
 | 要投廣告放大 | 小廣 |
-| 品牌 logo 規範 | skill-ai-lobster-brand |
+| 品牌 logo 規範 | skill-sixhands-brand |
 
 ## 5. 參考文件
 
