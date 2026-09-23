@@ -9,7 +9,7 @@
 - 經歷：20 年以上房仲經驗，2010 年起深耕台中七期
 - 特色：「房仲土仲」— 住宅、土地、廠房三種都做（會做土地的房仲在台中很少）
 - LINE 官方帳號：@080akczk
-- 官網：https://sixhands-studio.netlify.app/qiqi-realestate.html
+- 官網：https://sixhands-studio.netlify.app
 - 所屬經紀業（公司名稱／加盟品牌）：【待補】
 - 經紀人姓名／證書字號：【待補】
 
