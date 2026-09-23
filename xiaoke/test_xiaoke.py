@@ -332,6 +332,36 @@ class Line(unittest.TestCase):
         self.assertNotIn("AQ.secret", seen["url"])
         self.assertEqual(seen["headers"].get("X-goog-api-key"), "AQ.secret")
 
+    def test_gemini_retries_on_503(self):
+        """模型忙碌（503）要重試，不能第一次失敗就轉真人。"""
+        import os
+        calls = []
+
+        def flaky(method, url, token="", body=None, timeout=20, headers=None):
+            calls.append(1)
+            if len(calls) < 3:
+                raise clients.ApiError("HTTP 503 busy", 503)
+            inner = json.dumps({"answerable": True, "reply": "ok"})
+            return {"candidates": [{"content": {"parts": [{"text": inner}]}}]}
+
+        old_req, old_wait = clients._request, clients.RETRY_WAIT
+        clients._request, clients.RETRY_WAIT = flaky, 0
+        os.environ.setdefault("GEMINI_API_KEY", "x")
+        try:
+            self.assertEqual(clients.gemini_draft("q", "kb", "店")["reply"], "ok")
+            self.assertEqual(len(calls), 3)
+            calls.clear()
+
+            def bad_key(*a, **k):
+                calls.append(1)
+                raise clients.ApiError("HTTP 400 key", 400)
+            clients._request = bad_key
+            with self.assertRaises(clients.ApiError):
+                clients.gemini_draft("q", "kb", "店")
+            self.assertEqual(len(calls), 1, "金鑰錯誤不必重試")
+        finally:
+            clients._request, clients.RETRY_WAIT = old_req, old_wait
+
     def test_seen_dedup(self):
         s = server.Seen(size=2)
         self.assertTrue(s.first_time("a"))

@@ -9,6 +9,7 @@ import hmac
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 
@@ -16,10 +17,13 @@ from engine import build_prompt
 
 LINE_API = "https://api.line.me/v2/bot"
 TIMEOUT = 20
+RETRY_WAIT = 2   # 秒；測試會把它調成 0
 
 
 class ApiError(RuntimeError):
-    pass
+    def __init__(self, msg: str, status: int = 0):
+        super().__init__(msg)
+        self.status = status
 
 
 def _request(method: str, url: str, token: str = "", body=None, timeout: int = TIMEOUT,
@@ -36,7 +40,7 @@ def _request(method: str, url: str, token: str = "", body=None, timeout: int = T
             raw = r.read().decode("utf-8")
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:300]
-        raise ApiError(f"HTTP {e.code} {url.split('?')[0]}: {detail}") from None
+        raise ApiError(f"HTTP {e.code} {url.split('?')[0]}: {detail}", e.code) from None
     except urllib.error.URLError as e:
         raise ApiError(f"連不上 {url.split('?')[0]}: {e.reason}") from None
     return json.loads(raw) if raw.strip() else {}
@@ -88,7 +92,15 @@ def gemini_draft(text: str, knowledge: str, brand: str) -> dict:
         "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
     }
     # 金鑰放標頭不放網址：網址會被印進錯誤訊息與 log
-    out = _request("POST", url, body=body, timeout=30, headers={"x-goog-api-key": key})
+    # 503「模型忙碌」、429 限流通常幾秒就好（實機遇過 503），重試兩次再放棄轉真人
+    for attempt in range(3):
+        try:
+            out = _request("POST", url, body=body, timeout=30, headers={"x-goog-api-key": key})
+            break
+        except ApiError as e:
+            if e.status not in (429, 500, 503) or attempt == 2:
+                raise
+            time.sleep(RETRY_WAIT * (attempt + 1))
     try:
         raw = out["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError, TypeError):
