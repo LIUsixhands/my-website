@@ -1015,6 +1015,46 @@ class TestOutcomeCsv(unittest.TestCase):
         self.assertFalse(self.path.exists())
 
 
+class TestPushTopSeparateFromMonitoring(unittest.TestCase):
+    """推播只列前幾檔是為了讀得完；但不能讓人以為程式只監看那幾檔。"""
+
+    PAYLOAD = {"date": "2026-09-24", "round_trip_cost_pct": 0.207}
+    ROWS = [{"code": f"{1000 + i}", "name": f"股{i}", "prev_close": 50.0,
+             "amplitude_pct": 5.0, "volume_ratio": 10.0 - i} for i in range(20)]
+
+    def test_push_top_defaults_to_five(self):
+        self.assertEqual(screener.parse_args([]).push_top, 5)
+
+    def test_push_top_rejects_zero(self):
+        with self.assertRaises(SystemExit):
+            with contextlib.redirect_stderr(io.StringIO()):
+                screener.parse_args(["--push-top", "0"])
+
+    def test_message_states_true_monitored_count(self):
+        text = screener.format_watchlist(self.PAYLOAD, self.ROWS[:5], total=20)
+        self.assertIn("監看 20 檔", text)
+        self.assertIn("量比最高的 5 檔", text)
+
+    def test_message_stays_simple_when_nothing_truncated(self):
+        text = screener.format_watchlist(self.PAYLOAD, self.ROWS[:5], total=5)
+        self.assertIn("（5 檔）", text)
+        self.assertNotIn("監看", text)
+
+    def test_push_truncates_display_but_reports_full_total(self):
+        sent = []
+        with unittest.mock.patch.object(signals, "notify", sent.append):
+            screener.push_watchlist(self.PAYLOAD, self.ROWS, show=5)
+        self.assertIn("監看 20 檔", sent[0])
+        self.assertIn("1000", sent[0])          # 第 1 檔在
+        self.assertNotIn("1005", sent[0])       # 第 6 檔不在
+
+    def test_push_show_larger_than_pool_is_safe(self):
+        sent = []
+        with unittest.mock.patch.object(signals, "notify", sent.append):
+            screener.push_watchlist(self.PAYLOAD, self.ROWS[:3], show=5)
+        self.assertIn("（3 檔）", sent[0])
+
+
 class TestScreenerTopN(unittest.TestCase):
     """--top N 是驗證期的關鍵：每天用同一條規則取前 N 檔，結果才可重現。"""
 

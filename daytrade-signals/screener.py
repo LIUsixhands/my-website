@@ -2,8 +2,17 @@
 screener.py — 盤前選股。每天 08:30 跑一次。
 
     python3 screener.py              （Windows 是 python screener.py）
-    python3 screener.py --top 5      只留量比最高的 5 檔
-    python3 screener.py --top 5 --push   同時把名單推到 Telegram
+    python3 screener.py --push       監看全部候選，推播只列量比最高的幾檔
+    python3 screener.py --top 5      連監看範圍也砍到 5 檔
+
+--top 與 --push-top 是兩件事，驗證期不要混為一談：
+
+  --top      砍掉的是**監看範圍**（寫進 watchlist.json，signals.py 真的會去盯的）
+  --push-top 砍掉的只是**推播上顯示幾檔**（給人看的，不影響程式監看誰）
+
+驗證期建議不要用 --top：風控閘門本來就擋在「一天最多 5 個訊號」，監看 20 檔
+不會讓你多做任何一筆，但「有機會觸發」的標的多 4 倍，20 天累積得到的樣本數
+才夠算出可信的勝率。只監看 5 檔的話，多數日子 0 訊號，最後可能只有十幾個樣本。
 
 輸出 watchlist.json：10~20 檔候選 + 每檔的關鍵水位（昨高、昨低、昨均價、量能基準）。
 這一層只做「收斂」，不做預測。把 1800 檔縮到你眼睛顧得住的數量，就是它全部的工作。
@@ -150,10 +159,19 @@ def label(row: dict) -> str:
     return f"{row['code']} {name}" if name else str(row["code"])
 
 
-def format_watchlist(payload: dict, rows: list) -> str:
-    """推到手機上的版本。窄螢幕看得懂就好，不要照搬終端機的表格。"""
-    lines = [f"\U0001f4cb {payload['date']} 今日觀察名單（{len(rows)} 檔）",
-             "────────────────"]
+def format_watchlist(payload: dict, rows: list, total: int | None = None) -> str:
+    """推到手機上的版本。窄螢幕看得懂就好，不要照搬終端機的表格。
+
+    total 是**實際監看**的檔數。推播只列前幾檔是為了讀得完，但訊息必須說出
+    真正在監看幾檔 —— 否則你會以為程式只盯這 5 檔，然後收到名單外的訊號時
+    以為系統出錯。
+    """
+    total = len(rows) if total is None else total
+    head = (f"\U0001f4cb {payload['date']} 今日觀察名單（{total} 檔）"
+            if total == len(rows) else
+            f"\U0001f4cb {payload['date']} 今日觀察名單\n"
+            f"監看 {total} 檔，以下為量比最高的 {len(rows)} 檔")
+    lines = [head, "────────────────"]
     for i, r in enumerate(rows, 1):
         lines.append(f"{i}. {label(r)}　昨收 {r['prev_close']:.2f}　"
                      f"振幅 {r['amplitude_pct']:.1f}%　量比 {r['volume_ratio']:.2f}x")
@@ -165,10 +183,10 @@ def format_watchlist(payload: dict, rows: list) -> str:
     return "\n".join(lines)
 
 
-def push_watchlist(payload: dict, rows: list) -> None:
+def push_watchlist(payload: dict, rows: list, show: int = 5) -> None:
     """借用 signals 的推播管道，金鑰與節流邏輯都不必重寫一份。"""
     from signals import notify
-    notify(format_watchlist(payload, rows))
+    notify(format_watchlist(payload, rows[:show], total=len(rows)))
 
 
 def parse_args(argv=None):
@@ -177,9 +195,13 @@ def parse_args(argv=None):
                     help="只保留量比最高的 N 檔（不給就全部保留）")
     ap.add_argument("--push", action="store_true",
                     help="把名單推到 Telegram（配合排程用，人不用開電腦看）")
+    ap.add_argument("--push-top", type=int, default=5, metavar="N",
+                    help="推播上顯示幾檔（預設 5）。不影響監看範圍")
     args = ap.parse_args(argv)
     if args.top is not None and args.top < 1:
         ap.error("--top 至少要 1")
+    if args.push_top < 1:
+        ap.error("--push-top 至少要 1")
     return args
 
 
@@ -213,15 +235,15 @@ def main(argv=None):
         print(f"{r['code']:<7}{r.get('name', ''):<10}{r['prev_close']:>9.2f}"
               f"{r['amplitude_pct']:>9.2f}{r['prev_volume']:>11,}{r['volume_ratio']:>8.2f}")
     if args.push:
-        push_watchlist(payload, watchlist)
+        push_watchlist(payload, watchlist, show=args.push_top)
 
     if dropped:
         print(f"\n--top {args.top}：已捨去量比較低的 {len(dropped)} 檔"
               f"（{'、'.join(r['code'] for r in dropped)}）")
         print(f"下一步：{config.PY_CMD} signals.py")
     else:
-        print(f"\n下一步：開盤前自己看一眼題材與昨日型態，刪到剩 5 檔再跑 signals.py。")
-        print(f"（或直接跑 {config.PY_CMD} screener.py --top 5 讓程式照量比取前 5 檔）")
+        print(f"\n下一步：{config.PY_CMD} signals.py（監看以上全部 {len(watchlist)} 檔）")
+        print("驗證期建議就這樣跑 —— 閘門擋在一天 5 個訊號，監看多檔只是增加樣本。")
 
 
 if __name__ == "__main__":
