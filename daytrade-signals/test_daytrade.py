@@ -890,6 +890,33 @@ class TestOutcome(unittest.TestCase):
         self.assertEqual([o.code for o in out], ["2330"])
 
 
+class TestOutcomeSectionWording(unittest.TestCase):
+    """沒訊號的日子佔多數，訊息講錯會讓人以為系統壞了。"""
+
+    SIG = [{"code": "2330", "time": "09:23", "entry": 1.0, "stop": 0.9,
+            "target": 1.2, "lots": 1, "volume_surge": 1.0}]
+
+    def test_no_signals_says_so_and_calls_it_normal(self):
+        text = "\n".join(review.outcome_section([], None))
+        self.assertIn("今日無訊號", text)
+        self.assertIn("正常", text)
+        self.assertNotIn("未連線券商", text)      # 別讓人以為是故障
+
+    def test_no_signals_wording_holds_even_with_empty_outcomes(self):
+        text = "\n".join(review.outcome_section([], []))
+        self.assertIn("今日無訊號", text)
+        self.assertNotIn("未連線券商", text)
+
+    def test_signals_but_not_resolved_mentions_connection(self):
+        text = "\n".join(review.outcome_section(self.SIG, None))
+        self.assertIn("未連線券商", text)
+
+    def test_signals_but_no_bars_says_bars_insufficient(self):
+        text = "\n".join(review.outcome_section(self.SIG, []))
+        self.assertIn("分鐘 K 不足", text)
+        self.assertNotIn("今日無訊號", text)
+
+
 class TestOutcomeSummary(unittest.TestCase):
     def _o(self, net, result):
         return oc.Outcome(date="2026-09-24", code="1", time="09:23", entry=100.0,

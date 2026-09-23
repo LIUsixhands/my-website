@@ -183,12 +183,16 @@ def render(signals: list[dict], trades: list, state: dict,
 def outcome_section(signals: list[dict], outcomes: list | None) -> list[str]:
     """訊號後來怎麼了。沒有這一段，20 天跑完也算不出勝率。"""
     lines = ["", "## 二、訊號結果（分鐘 K 回推，保守判定）", ""]
+    # 先看有沒有訊號。沒有訊號卻說「未連線券商」，會讓人以為是故障 ——
+    # 而「今天沒有任何一檔突破」才是最常見、也完全正常的情況。
+    if not signals:
+        lines.append("_今日無訊號（沒有任何一檔滿足進場條件）。這是正常的。_")
+        return lines
     if outcomes is None:
-        lines.append("_未回推（未連線券商或未取得分鐘 K）。_")
+        lines.append("_有訊號但未回推（未連線券商或未取得分鐘 K）。_")
         return lines
     if not outcomes:
-        lines.append("_今日無訊號，或分鐘 K 不足以判定。_"
-                     if signals else "_今日無訊號。_")
+        lines.append("_有訊號，但分鐘 K 不足以判定結果。_")
         return lines
 
     import outcome as oc
