@@ -84,8 +84,9 @@ def gemini_draft(text: str, knowledge: str, brand: str) -> dict:
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
         raise ApiError("沒有設定 GEMINI_API_KEY（寫在 .env）")
-    # gemini-2.5-flash 已不開放給新帳號（實機回 HTTP 404），預設改用 Google 錯誤訊息建議的型號
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash").strip()
+    # 實機紀錄（2026-09）：2.5-flash 不開放新帳號（404）；Google 推薦的 3.6-flash 免費方案
+    # 連續 503 塞車；3.5-flash 可用、客服問答也夠。要換就改 .env 的 GEMINI_MODEL。
+    model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").strip()
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {
         "contents": [{"role": "user", "parts": [{"text": build_prompt(text, knowledge, brand)}]}],
