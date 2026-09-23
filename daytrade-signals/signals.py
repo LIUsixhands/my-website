@@ -29,6 +29,10 @@ except ImportError:                  # pragma: no cover - 取決於環境
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("signals")
 
+# 帳務查詢回「未知」時再確認幾次，才肯關閘停手（只有真錢模式會用到）
+UNKNOWN_RETRIES = 2
+UNKNOWN_RETRY_WAIT = 1.5      # 秒；在鎖內等待，所以不能太久
+
 RECENT_WINDOW_SEC = 300      # 「近期」量能取樣長度
 MIN_RECENT_SPAN_SEC = 60     # 近期樣本至少要橫跨這麼久才算得出速率
 MIN_OLDER_SPAN_SEC = 240     # 基準樣本至少要橫跨這麼久，否則基準不可信
@@ -88,6 +92,31 @@ class RiskGate:
                 break
         return n
 
+    def _requery(self, fn, label):
+        """帳務查詢回 None 時再確認幾次，才決定要不要關閘。
+
+        實機遇過：連線 keep-alive 斷掉重連之後，第一次 list_trades 直接 timeout。
+        那一瞬間的 None，跟「金鑰沒有帳務權限」在程式眼裡長得一模一樣，
+        但意義完全相反 —— 把前者當後者，一個網路抖動就報銷一整天
+        （閘門關了當天不會再開，重啟程式也會被擋下來）。
+        權限問題每次都失敗，暫時性失敗重試就過，試幾次就分得出來。
+
+        只在真錢模式重試：模擬模式的 None 本來就放行，多等那幾秒沒有意義，
+        而且這是在鎖內執行的，會卡住其他檔的行情處理。
+        """
+        result = fn()
+        if result is not None or config.SIMULATION:
+            return result
+        for i in range(UNKNOWN_RETRIES):
+            time.sleep(UNKNOWN_RETRY_WAIT)
+            log.warning("%s查不到，重試 %d/%d（暫時性失敗會過，權限問題不會）",
+                        label, i + 1, UNKNOWN_RETRIES)
+            result = fn()
+            if result is not None:
+                log.warning("%s重試後查到了，判定為連線暫時失常，不關閘。", label)
+                return result
+        return result
+
     def check(self) -> bool:
         """回傳 True 表示可以發訊號。"""
         if self.state["closed"]:
@@ -98,7 +127,7 @@ class RiskGate:
             self._close(f"已達當日訊號上限 {r['max_signals_per_day']} 個")
             return False
 
-        trades = self.broker.trades_today()
+        trades = self._requery(self.broker.trades_today, "成交紀錄")
         if trades is None:
             # 查不到成交 = 交易筆數上限這條線失效。與損益同一套處理：
             # 真錢模式停手，模擬模式放行並警告。
@@ -112,7 +141,7 @@ class RiskGate:
             self._close(f"已達當日交易筆數上限 {r['max_trades_per_day']} 筆")
             return False
 
-        rows = self.broker.realized_pnl_rows_today()
+        rows = self._requery(self.broker.realized_pnl_rows_today, "已實現損益")
         if rows is None:
             # 查不到損益 = 沒有煞車。真錢模式下寧可停手；
             # 模擬模式本來就沒有損益可查，硬要停手會讓第一個月完全跑不出訊號品質數據。
@@ -449,7 +478,10 @@ def main():
             # 但每 30 秒查一次帳務會撞到 Shioaji 流量上限，所以自己節流。
             if not gate.state["closed"] and time.monotonic() - last_poll >= poll_every:
                 last_poll = time.monotonic()
-                gate.check()
+                # 跟發訊號走同一把鎖：check() 可能會 _close() 改寫 state，
+                # 與 try_emit 的「過閘 → 記錄」撞在一起會寫壞同一份 state。
+                with signal_lock:
+                    gate.check()
     except KeyboardInterrupt:
         pass
     finally:
