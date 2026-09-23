@@ -301,6 +301,37 @@ class Line(unittest.TestCase):
         self.assertFalse(clients.parse_draft('{"answerable": "yes", "reply": "x"}')["answerable"],
                          "只有真正的 true 才算有把握")
 
+    def test_gemini_key_in_header_not_url(self):
+        """金鑰不能出現在網址：錯誤訊息與 log 會印出網址。"""
+        import os
+        import urllib.request
+        seen = {}
+
+        class Resp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self):
+                inner = json.dumps({"answerable": True, "reply": "hi"})
+                return json.dumps({"candidates": [{"content": {"parts": [{"text": inner}]}}]}).encode()
+
+        def fake_urlopen(req, timeout):
+            seen["url"], seen["headers"] = req.full_url, dict(req.header_items())
+            return Resp()
+
+        old, urllib.request.urlopen = urllib.request.urlopen, fake_urlopen
+        old_key = os.environ.get("GEMINI_API_KEY")
+        os.environ["GEMINI_API_KEY"] = "AQ.secret"
+        try:
+            self.assertTrue(clients.gemini_draft("q", "kb", "店")["answerable"])
+        finally:
+            urllib.request.urlopen = old
+            if old_key is None:
+                os.environ.pop("GEMINI_API_KEY", None)
+            else:
+                os.environ["GEMINI_API_KEY"] = old_key
+        self.assertNotIn("AQ.secret", seen["url"])
+        self.assertEqual(seen["headers"].get("X-goog-api-key"), "AQ.secret")
+
     def test_seen_dedup(self):
         s = server.Seen(size=2)
         self.assertTrue(s.first_time("a"))

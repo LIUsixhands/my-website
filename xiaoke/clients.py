@@ -22,12 +22,15 @@ class ApiError(RuntimeError):
     pass
 
 
-def _request(method: str, url: str, token: str = "", body=None, timeout: int = TIMEOUT) -> dict:
+def _request(method: str, url: str, token: str = "", body=None, timeout: int = TIMEOUT,
+             headers: dict | None = None) -> dict:
     data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json; charset=utf-8")
     if token:
         req.add_header("Authorization", f"Bearer {token}")
+    for k, v in (headers or {}).items():
+        req.add_header(k, v)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             raw = r.read().decode("utf-8")
@@ -77,14 +80,15 @@ def gemini_draft(text: str, knowledge: str, brand: str) -> dict:
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
         raise ApiError("沒有設定 GEMINI_API_KEY（寫在 .env）")
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
-    url = (f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-           f"?key={key}")
+    # gemini-2.5-flash 已不開放給新帳號（實機回 HTTP 404），預設改用 Google 錯誤訊息建議的型號
+    model = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash").strip()
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {
         "contents": [{"role": "user", "parts": [{"text": build_prompt(text, knowledge, brand)}]}],
         "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
     }
-    out = _request("POST", url, body=body, timeout=30)
+    # 金鑰放標頭不放網址：網址會被印進錯誤訊息與 log
+    out = _request("POST", url, body=body, timeout=30, headers={"x-goog-api-key": key})
     try:
         raw = out["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError, TypeError):
