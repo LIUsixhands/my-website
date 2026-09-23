@@ -102,12 +102,15 @@ def screen(broker: Broker) -> list[dict]:
     log.info("可當沖 + 四碼普通股：%d 檔", len(stage1))
 
     # 第二道：昨日量價（snapshots 帶回昨日收盤資訊）
+    # 代號→中文名稱。合約物件上就有，snapshot 上沒有，所以先在這裡收起來。
+    names = {getattr(c, "code", ""): getattr(c, "name", "") for c in stage1}
     snaps = broker.snapshots(stage1)
     rows = []
     for s in snaps:
         try:
             row = passes_basic(s, cfg)
             if row:
+                row["name"] = names.get(row["code"], "")
                 rows.append(row)
         except Exception as e:
             log.debug("skip %s: %s", getattr(s, "code", "?"), e)
@@ -141,12 +144,18 @@ def screen(broker: Broker) -> list[dict]:
     return rows[: cfg["max_universe"]]
 
 
+def label(row: dict) -> str:
+    """「代號 名稱」。拿不到名稱時只印代號，不要印出空格結尾的怪字串。"""
+    name = (row.get("name") or "").strip()
+    return f"{row['code']} {name}" if name else str(row["code"])
+
+
 def format_watchlist(payload: dict, rows: list) -> str:
     """推到手機上的版本。窄螢幕看得懂就好，不要照搬終端機的表格。"""
     lines = [f"\U0001f4cb {payload['date']} 今日觀察名單（{len(rows)} 檔）",
              "────────────────"]
     for i, r in enumerate(rows, 1):
-        lines.append(f"{i}. {r['code']}　昨收 {r['prev_close']:.2f}　"
+        lines.append(f"{i}. {label(r)}　昨收 {r['prev_close']:.2f}　"
                      f"振幅 {r['amplitude_pct']:.1f}%　量比 {r['volume_ratio']:.2f}x")
     lines += [
         "────────────────",
@@ -199,10 +208,10 @@ def main(argv=None):
 
     print(f"\n=== {payload['date']} 當沖候選池（{len(watchlist)} 檔）===")
     print(f"來回成本基準：{payload['round_trip_cost_pct']}%（你的停利要遠大於這個數字）\n")
-    print(f"{'代號':<8}{'昨收':>9}{'振幅%':>9}{'量(張)':>11}{'量比':>8}")
+    print(f"{'代號':<7}{'名稱':<10}{'昨收':>9}{'振幅%':>9}{'量(張)':>11}{'量比':>8}")
     for r in watchlist:
-        print(f"{r['code']:<8}{r['prev_close']:>9.2f}{r['amplitude_pct']:>9.2f}"
-              f"{r['prev_volume']:>11,}{r['volume_ratio']:>8.2f}")
+        print(f"{r['code']:<7}{r.get('name', ''):<10}{r['prev_close']:>9.2f}"
+              f"{r['amplitude_pct']:>9.2f}{r['prev_volume']:>11,}{r['volume_ratio']:>8.2f}")
     if args.push:
         push_watchlist(payload, watchlist)
 

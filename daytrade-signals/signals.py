@@ -179,6 +179,7 @@ class RiskGate:
 class SymbolState:
     code: str
     prev_close: float
+    name: str = ""
     or_high: float = 0.0
     or_low: float = 0.0
     or_locked: bool = False
@@ -291,6 +292,7 @@ def evaluate(st: SymbolState, now: dtime | None = None) -> dict | None:
     return {
         "time": datetime.now().strftime("%H:%M:%S"),
         "code": st.code,
+        "name": st.name,
         "direction": "做多",
         "entry": entry,
         "stop": stop,
@@ -308,7 +310,8 @@ def format_signal(sig: dict, ordinal: int) -> str:
     """ordinal = 這是今日第幾個訊號（1 起算）。"""
     r = config.RISK
     lines = [
-        f"📌 {sig['code']} 決策錨點｜{sig['time']}",
+        f"📌 {sig['code']}{(' ' + sig['name']) if sig.get('name') else ''}"
+        f" 決策錨點｜{sig['time']}",
         "────────────────",
         f"方向：{sig['direction']}（開盤區間突破）",
         f"進場：{sig['entry']:.2f}（區間高 {sig['or_high']:.2f}，均價 {sig['vwap']:.2f}）",
@@ -431,7 +434,8 @@ def main():
     if gate.state["closed"]:
         raise SystemExit(f"今日風控閘門已關閉（{gate.state['closed_reason']}），不再啟動。")
 
-    states = {i["code"]: SymbolState(i["code"], i["prev_close"]) for i in wl["items"]}
+    states = {i["code"]: SymbolState(i["code"], i["prev_close"], i.get("name", ""))
+              for i in wl["items"]}
     restore_signaled(states, gate)
 
     signal_lock = threading.Lock()
