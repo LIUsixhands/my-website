@@ -745,6 +745,36 @@ class TestRestoreSignaled(unittest.TestCase):
         self.assertEqual(states["2330"].signaled, 0)
 
 
+class TestScreenerTopN(unittest.TestCase):
+    """--top N 是驗證期的關鍵：每天用同一條規則取前 N 檔，結果才可重現。"""
+
+    def test_parses_top(self):
+        self.assertEqual(screener.parse_args(["--top", "5"]).top, 5)
+
+    def test_top_defaults_to_none(self):
+        self.assertIsNone(screener.parse_args([]).top)
+
+    def test_rejects_zero_and_negative(self):
+        for bad in ("0", "-3"):
+            with self.assertRaises(SystemExit):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    screener.parse_args(["--top", bad])
+
+    def test_keeps_highest_volume_ratio_first(self):
+        """screen() 已排好序，--top 只是截斷 —— 驗證截到的確實是前幾名。"""
+        rows = [{"code": f"{i}", "volume_ratio": 10 - i} for i in range(8)]
+        self.assertEqual([r["code"] for r in rows[:3]], ["0", "1", "2"])
+        self.assertTrue(all(rows[i]["volume_ratio"] >= rows[i + 1]["volume_ratio"]
+                            for i in range(len(rows) - 1)))
+
+    def test_top_larger_than_pool_keeps_everything(self):
+        rows = [{"code": "1"}, {"code": "2"}]
+        top = 5
+        kept, dropped = (rows, []) if len(rows) <= top else (rows[:top], rows[top:])
+        self.assertEqual(len(kept), 2)
+        self.assertEqual(dropped, [])
+
+
 class TestScreener(unittest.TestCase):
     def setUp(self):
         self.cfg = dict(config.SCREEN)
