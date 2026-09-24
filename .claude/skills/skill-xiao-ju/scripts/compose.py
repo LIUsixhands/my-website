@@ -2,7 +2,7 @@
 - 對白鏡頭用自己的音檔（不用對嘴模型輸出的音軌），配樂自動閃避台詞（sidechain），整體 -14 LUFS
 - 字幕／片名／角色字卡／AI 標示／品牌 logo／片尾下集預告，全部 PIL 畫好疊上去（不需要 libass）
 - 讀 episode.json 的 fixes：pick（換版本）、crop_top（裁掉底部亂碼）、slow（只取前段再放慢）
-- hold 鏡頭＝上一鏡最後一格定格（片尾字卡常用）；show_title: false 不疊片名；endcard 有設就用節慶字卡取代下集預告
+- keep_audio: true＝保留該鏡影片自帶的音效；hold 鏡頭＝上一鏡最後一格定格（片尾字卡常用）；show_title: false 不疊片名；endcard 有設就用節慶字卡取代下集預告
 用法：python3 compose.py [--out 檔名.mp4]"""
 import re, sys, subprocess
 from pathlib import Path
@@ -171,14 +171,19 @@ def overlays(tl):
     grad = Image.new("L", (1, H), 0)
     for y in range(H):
         grad.putpixel((0, y), int(215 * max(0, (y - 700) / (H - 700)) ** 0.8))
+    ec = EP.get("endcard") or {}
+    top = ec.get("pos") == "top"   # 畫面中間有主角（例如迷你分身）時，大字放上方、logo 放最下面
+    if top:
+        for y in range(700):
+            grad.putpixel((0, y), max(grad.getpixel((0, y)), int(170 * (1 - y / 700) ** 1.2)))
     endc.putalpha(grad.resize((W, H)))
-    if EP.get("endcard"):   # 節慶／單支片：大字＋副標，取代下集預告
-        ec = EP["endcard"]
+    if ec:   # 節慶／單支片：大字＋副標，取代下集預告
+        y0 = 150 if top else 1080
         big = text_img(ec["text"], fit_font(ec["text"], SERIF, 150, W - 120), GOLD, stroke=8, stroke_fill=(60, 30, 0))
-        endc.alpha_composite(big, ((W - big.width) // 2, 1080))
+        endc.alpha_composite(big, ((W - big.width) // 2, y0))
         if ec.get("sub"):
             sb = text_img(ec["sub"], fit_font(ec["sub"], SANS_M, 48, W - 140), (255, 255, 255), stroke=4)
-            endc.alpha_composite(sb, ((W - sb.width) // 2, 1080 + big.height - 10))
+            endc.alpha_composite(sb, ((W - sb.width) // 2, y0 + big.height - 10))
     elif EP.get("next"):
         nx = text_img("下集", font(SANS_B, 46), (30, 20, 0), stroke=0, shadow=False)
         pill = Image.new("RGBA", (nx.width + 30, nx.height + 2), (0, 0, 0, 0))
@@ -191,10 +196,10 @@ def overlays(tl):
     if BRAND.get("logo_end") and Path(BRAND["logo_end"]).expanduser().exists():
         fl = Image.open(Path(BRAND["logo_end"]).expanduser()).convert("RGBA")
         fl = fl.resize((230, int(230 * fl.height / fl.width)), Image.LANCZOS)
-        endc.alpha_composite(fl, ((W - fl.width) // 2, 1390))
+        endc.alpha_composite(fl, ((W - fl.width) // 2, 1560 if top else 1390))
     if BRAND.get("line"):
         b = text_img(BRAND["line"], font(SANS_M, 34), (230, 230, 230), stroke=3, shadow=False)
-        endc.alpha_composite(b, ((W - b.width) // 2, 1650))
+        endc.alpha_composite(b, ((W - b.width) // 2, 1780 if top else 1650))
     p = O / "endcard.png"; endc.save(p)
     ov.append((p, 0, 0, last["start"] + 0.15, last["end"] + 1))
     return ov
@@ -218,6 +223,13 @@ def audio_graph(tl, n_in):
         ms = int(max(0, t[s["at"]]["start"] + s.get("offset", 0)) * 1000)
         ins += ["-i", str(f)]
         fl.append(f"[{idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={s.get('vol', 0.8)},adelay={ms}|{ms}[f{idx}]"); fx.append(f"[f{idx}]"); idx += 1
+    for sh in EP["shots"]:   # keep_audio：沿用影片模型自己生的音效（沒有 ElevenLabs 時的替代）
+        if not sh.get("keep_audio"):
+            continue
+        x = t[sh["id"]]; ms = int(x["start"] * 1000)
+        ins += ["-i", str(C / f"{PICK.get(sh['id'], sh['id'])}.mp4")]
+        fl.append(f"[{idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,atrim=0:{x['dur']:.3f},afade=t=out:st={max(0, x['dur'] - 0.3):.3f}:d=0.3,"
+                  f"volume={sh.get('audio_vol', 1.0)},adelay={ms}|{ms}[f{idx}]"); fx.append(f"[f{idx}]"); idx += 1
     has_bgm = (S / "bgm.mp3").exists()
     # 台詞軌先補滿片長：sidechaincompress 會在 key 結束時一起截斷配樂（EP01 踩過）
     if dl:

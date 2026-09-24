@@ -39,7 +39,7 @@ description: Sixhands Studio內容部「小劇」— AI 短劇製作專員。當
 | 8.5 | `python3 $XJ/make_thumb.py --out 縮圖_EPxx.jpg` | out/ 縮圖 1080×1920 | 臉夠不夠大、對話框有沒有擋住臉 |
 | 9 | `python3 $XJ/review.py` | Gemini 審片報告 | 參考用，不能取代第 7 步 |
 
-**單鏡／節慶短片（首尾幀）**：鏡頭 `type` 設 `kf`＝Kling v2.1 pro 首尾幀（`img` 首幀、`end_img` 尾幀、`motion` 過程，`dur` ≤5 生 5 秒否則 10 秒）；後面接 `type: "hold"` 定格上一鏡最後一格當片尾。沒有對白也能合成（只配音效）。`show_title: false` 不疊片名；`endcard: {"text": "中秋快樂", "sub": "…"}` 取代下集預告。範例：`examples/中秋月餅分身_單鏡/`。
+**單鏡／節慶短片（首尾幀）**：鏡頭 `type` 設 `kf`＝Kling v2.1 pro 首尾幀（`img` 首幀、`end_img` 尾幀、`motion` 過程，`dur` ≤5 生 5 秒否則 10 秒）；後面接 `type: "hold"` 定格上一鏡最後一格當片尾。沒有對白也能合成（只配音效）。`show_title: false` 不疊片名；`endcard: {"text": "中秋快樂", "sub": "…", "pos": "top"}` 取代下集預告（pos top＝主角在畫面中間時字放上方）；`keep_audio: true` 保留影片自帶音效；外部 App 生的片放成 `clips/s01.mp4` 一樣跑 scan／compose，右下浮水印用 `fixes.crop_top: 0.93` 裁掉。範例：`examples/中秋月餅分身_單鏡/`。
 
 **壞鏡頭三種修法**（寫進 episode.json 的 `fixes`，重跑 compose.py 就好，不花錢）：
 - `pick`：`{"s06": "s06_omni"}` 換成 OmniHuman 版（先 `gen_video.py --omni s06`）
