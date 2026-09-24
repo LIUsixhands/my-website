@@ -9,6 +9,7 @@ review.py — 盤後覆盤。收盤後 14:00 跑一次。
 讓排程的 Claude 讀整個 journal/ 目錄做跨日稽核 —— 單日看不出壞習慣，
 一個月的日誌看得出來。
 """
+import argparse
 import json
 import logging
 from datetime import datetime
@@ -226,7 +227,81 @@ def write_journal(lines: list[str], date: str | None = None) -> "Path":
     return path
 
 
-def main():
+def format_push(signals: list[dict], outcomes, history: list) -> str:
+    """推到手機上的當日結果。
+
+    覆盤寫進 journal 而沒有人看，等於沒寫。這則訊息的工作是讓你在手機上
+    兩秒鐘看完今天的結論，細節留在 journal 裡。
+    """
+    import outcome as oc
+    from signals import RESOLUTION_MARK
+
+    date = datetime.now().strftime("%Y-%m-%d")
+    head = f"\U0001f4ca {date} 收盤覆盤"
+    names = {str(s.get("code")): (s.get("name") or "") for s in signals}
+    lines = [head, "────────────────"]
+
+    if not signals:
+        lines.append("今天沒有任何訊號 —— 這是正常的一天，不是系統壞了。")
+    elif outcomes is None:
+        lines.append(f"今天有 {len(signals)} 個訊號，但沒有回推到結局"
+                     "（未連線券商或拿不到分鐘 K）。")
+    elif not outcomes:
+        lines.append(f"今天有 {len(signals)} 個訊號，但一筆都回推不出來。")
+    else:
+        day = oc.summarise(outcomes)
+        lines.append(f"今日 {len(signals)} 個訊號｜"
+                     f"{day['wins']} 勝 {day['n'] - day['wins']} 敗")
+        lines.append(f"合計 {sum(o.r_multiple for o in outcomes):+.2f}R")
+        lines.append("")
+        for o in outcomes:
+            label = f"{o.code} {names.get(o.code, '')}".strip()
+            lines.append(f"{RESOLUTION_MARK.get(o.result, '')} {label}　"
+                         f"{o.result}　{o.r_multiple:+.2f}R　{o.net_pct:+.2f}%")
+
+    if history:
+        days = len({o.date for o in history})
+        total = oc.summarise(history)
+        lines += [
+            "────────────────",
+            f"累計 {days} 個有訊號的交易日／{total['n']} 筆",
+            f"勝率 {total['win_rate']}%　平均 {total['avg_r']:+.2f}R",
+            f"平均賺 {total['avg_win_pct']:+.2f}%　"
+            f"平均賠 {total['avg_loss_pct']:+.2f}%",
+        ]
+
+    lines += [
+        "────────────────",
+        f"勝＝扣掉 {config.round_trip_cost_pct():.3f}% 來回成本後為正",
+        "驗證期未下單，這不是你的實際損益。",
+    ]
+    return "\n".join(lines)
+
+
+def push_summary(signals: list[dict], outcomes) -> None:
+    """推播失敗不該讓覆盤跟著失敗 —— journal 已經寫好了。"""
+    from signals import notify
+    import outcome as oc
+    try:
+        history = oc.load_csv()
+    except Exception as e:
+        log.warning("讀不到 outcomes.csv，累計數字先略過：%s", e)
+        history = []
+    try:
+        notify(format_push(signals, outcomes, history))
+    except Exception as e:
+        log.error("當日結果推播失敗：%s", e)
+
+
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(description="盤後覆盤")
+    ap.add_argument("--no-push", action="store_true",
+                    help="不要把結果推到 Telegram（同一天重跑時用，免得重複推播）")
+    return ap.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
     import outcome as oc
     signals, state = load_signals()
     trades, pnl, note, broker = _connect()
@@ -238,6 +313,8 @@ def main():
     path = write_journal(lines)
     print("\n".join(lines))
     print(f"\n→ 已寫入 {path}")
+    if not args.no_push:
+        push_summary(signals, outcomes)
 
 
 if __name__ == "__main__":

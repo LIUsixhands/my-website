@@ -1158,6 +1158,110 @@ class TestBarContainingTheSignalIsExcluded(unittest.TestCase):
         self.assertEqual(o.bars, 1)
 
 
+class TestDailyPush(unittest.TestCase):
+    """覆盤寫進 journal 而沒有人看，等於沒寫。當日結果要推到手機上。"""
+
+    SIGNALS = [{"code": "6182", "name": "合晶"}, {"code": "3624", "name": "光頡"}]
+
+    def _oc(self, code, result, r, net):
+        return oc.Outcome(date="2026-09-24", code=code, time="09:19:22",
+                          entry=119.0, stop=117.5, target=121.5, lots=1,
+                          result=result, exit_price=121.5, r_multiple=r,
+                          gross_pct=net + 0.207, net_pct=net, bars=10)
+
+    def _today(self):
+        return [self._oc("6182", oc.TARGET, 1.67, 1.894),
+                self._oc("3624", oc.STOP, -1.0, -1.667)]
+
+    def test_counts_wins_and_losses(self):
+        text = review.format_push(self.SIGNALS, self._today(), [])
+        self.assertIn("1 勝 1 敗", text)
+        self.assertIn("合晶", text)
+        self.assertIn("+1.67R", text)
+
+    def test_no_signal_day_is_not_an_error(self):
+        """零訊號是最常見、也完全正常的一天，不能講得像系統壞了。"""
+        text = review.format_push([], None, [])
+        self.assertIn("沒有任何訊號", text)
+        self.assertIn("正常", text)
+
+    def test_signals_but_no_resolution_says_so(self):
+        text = review.format_push(self.SIGNALS, None, [])
+        self.assertIn("沒有回推", text)
+
+    def test_cumulative_section_uses_the_whole_history(self):
+        history = self._today() + [self._oc("8150", oc.TARGET, 1.67, 2.087)]
+        text = review.format_push(self.SIGNALS, self._today(), history)
+        self.assertIn("3 筆", text)
+        self.assertIn("66.7%", text)
+
+    def test_cumulative_is_omitted_when_there_is_no_history(self):
+        self.assertNotIn("累計", review.format_push([], None, []))
+
+    def test_says_it_is_not_real_pnl(self):
+        text = review.format_push(self.SIGNALS, self._today(), [])
+        self.assertIn("不是你的實際損益", text)
+        self.assertIn("0.207", text)
+
+    def test_cost_is_rounded(self):
+        """浮點數直接印會變成 0.20700000000000002%，那看起來像程式壞了。"""
+        text = review.format_push(self.SIGNALS, self._today(), [])
+        self.assertIn("扣掉 0.207% 來回成本", text)
+
+    def test_push_is_on_by_default_and_can_be_turned_off(self):
+        """同一天重跑覆盤不該再推一次，但預設要推。"""
+        self.assertFalse(review.parse_args([]).no_push)
+        self.assertTrue(review.parse_args(["--no-push"]).no_push)
+
+    def test_a_broken_push_does_not_lose_the_journal(self):
+        """journal 已經寫好了，推播壞掉不該讓整支程式倒。"""
+        def bad_notify(_text):
+            raise OSError("網路不通")
+        with unittest.mock.patch.object(signals, "notify", bad_notify):
+            review.push_summary(self.SIGNALS, self._today())   # 不該拋例外
+
+
+class TestOutcomeCsvRoundTrip(unittest.TestCase):
+    """寫出去再讀回來要是同一份數字 —— 跨日統計全靠這個。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self._tmp.name) / "outcomes.csv"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _o(self, **kw):
+        base = dict(date="2026-09-24", code="6182", time="09:19:22", entry=119.0,
+                    stop=117.5, target=121.5, lots=1, result=oc.TARGET,
+                    exit_price=121.5, r_multiple=1.67, gross_pct=2.101,
+                    net_pct=1.894, bars=10, or_high=118.5, vwap=117.15,
+                    volume_surge=1.81, extension_pct=0.422, vwap_gap_pct=1.579)
+        return oc.Outcome(**(base | kw))
+
+    def test_values_survive_the_round_trip(self):
+        oc.append_csv([self._o()], self.path)
+        back = oc.load_csv(self.path)
+        self.assertEqual(len(back), 1)
+        self.assertEqual(back[0], self._o())
+
+    def test_missing_optional_columns_come_back_as_none(self):
+        """舊的列沒有現場條件欄位，不能讀成 0.0 —— 那是假數字。"""
+        oc.append_csv([self._o(or_high=None, extension_pct=None)], self.path)
+        back = oc.load_csv(self.path)
+        self.assertIsNone(back[0].or_high)
+        self.assertIsNone(back[0].extension_pct)
+
+    def test_a_broken_row_is_skipped_not_fatal(self):
+        oc.append_csv([self._o()], self.path)
+        with open(self.path, "a", encoding="utf-8") as f:
+            f.write("2026-09-25,3707,09:00,not-a-number,,,,,,,,,\n")
+        self.assertEqual(len(oc.load_csv(self.path)), 1)
+
+    def test_missing_file_is_empty_not_an_error(self):
+        self.assertEqual(oc.load_csv(self.path), [])
+
+
 class TestOutcomeSummary(unittest.TestCase):
     def _o(self, net, result):
         return oc.Outcome(date="2026-09-24", code="1", time="09:23", entry=100.0,
