@@ -265,8 +265,7 @@ def format_push(signals: list[dict], outcomes, history: list) -> str:
         for o in outcomes:
             label = f"{o.code} {names.get(o.code, '')}".strip()
             lines.append(f"{RESOLUTION_MARK.get(o.result, '')} {label}　{o.result}")
-            lines.append(f"　{o.r_multiple:+.2f}R　{o.net_pct:+.2f}%　"
-                         f"{round(o.net_amount):+,.0f} 元")
+            lines.append(f"　{o.r_multiple:+.2f}R　{round(o.net_amount):+,.0f} 元")
 
     if history:
         days = len({o.date for o in history})

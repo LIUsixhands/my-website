@@ -1203,6 +1203,15 @@ class TestDailyPush(unittest.TestCase):
         self.assertIn("不是你的實際損益", text)
         self.assertIn("0.207", text)
 
+    def test_each_row_is_short_enough_for_a_phone(self):
+        """單筆那行太長的話，手機會把「元」自己擠到下一行，看起來很碎。"""
+        text = review.format_push(self.SIGNALS, self._today(), [])
+        rows = [l for l in text.splitlines() if l.startswith("　")]
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertNotIn("%", row)          # 百分比留在累計區塊
+            self.assertLessEqual(len(row), 20)
+
     def test_shows_the_amount_in_dollars(self):
         """使用者要的是「這一筆是多少錢」，R 倍數他換算不來。"""
         text = review.format_push(self.SIGNALS, self._today(), [])
