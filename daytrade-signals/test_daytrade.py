@@ -1163,9 +1163,9 @@ class TestDailyPush(unittest.TestCase):
 
     SIGNALS = [{"code": "6182", "name": "合晶"}, {"code": "3624", "name": "光頡"}]
 
-    def _oc(self, code, result, r, net):
+    def _oc(self, code, result, r, net, entry=119.0, lots=1):
         return oc.Outcome(date="2026-09-24", code=code, time="09:19:22",
-                          entry=119.0, stop=117.5, target=121.5, lots=1,
+                          entry=entry, stop=117.5, target=121.5, lots=lots,
                           result=result, exit_price=121.5, r_multiple=r,
                           gross_pct=net + 0.207, net_pct=net, bars=10)
 
@@ -1202,6 +1202,40 @@ class TestDailyPush(unittest.TestCase):
         text = review.format_push(self.SIGNALS, self._today(), [])
         self.assertIn("不是你的實際損益", text)
         self.assertIn("0.207", text)
+
+    def test_shows_the_amount_in_dollars(self):
+        """使用者要的是「這一筆是多少錢」，R 倍數他換算不來。"""
+        text = review.format_push(self.SIGNALS, self._today(), [])
+        self.assertIn("+2,254 元", text)          # 119.00 × 1000 × 1.894%
+        self.assertIn("-1,984 元", text)          # 119.00 × 1000 × -1.667%
+
+    def test_amount_follows_the_lot_size(self):
+        """建議 2 張的那筆，金額要是兩倍。"""
+        two = [self._oc("3707", oc.TARGET, 1.5, 1.856, entry=72.7, lots=2)]
+        self.assertIn("+2,699 元", review.format_push(self.SIGNALS, two, []))
+
+    def test_daily_total_is_capped_at_the_trade_limit(self):
+        """一天只准做 4 筆。把 5 個訊號的總和講成今天會賺到的錢是高估。"""
+        five = [self._oc(str(i), oc.TARGET, 1.67, 1.894) for i in range(5)]
+        text = review.format_push(self.SIGNALS, five, [])
+        self.assertIn("照 4 筆上限只做前 4 筆", text)
+        # 合計必須等於各筆相加。差一塊錢會讓人懷疑哪個數字才是對的。
+        self.assertIn("+11,270 元", text)         # 五筆合計
+        self.assertIn("+9,016 元", text)          # 前四筆
+
+    def test_no_cap_line_when_within_the_limit(self):
+        text = review.format_push(self.SIGNALS, self._today(), [])
+        self.assertNotIn("上限只做前", text)
+
+    def test_cumulative_amount_is_shown(self):
+        history = self._today() * 2
+        text = review.format_push(self.SIGNALS, self._today(), history)
+        self.assertIn("累計損益", text)
+
+    def test_says_the_amount_is_an_estimate(self):
+        text = review.format_push(self.SIGNALS, self._today(), [])
+        self.assertIn("建議張數", text)
+        self.assertIn("估算", text)
 
     def test_cost_is_rounded(self):
         """浮點數直接印會變成 0.20700000000000002%，那看起來像程式壞了。"""

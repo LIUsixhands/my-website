@@ -252,12 +252,21 @@ def format_push(signals: list[dict], outcomes, history: list) -> str:
         day = oc.summarise(outcomes)
         lines.append(f"今日 {len(signals)} 個訊號｜"
                      f"{day['wins']} 勝 {day['n'] - day['wins']} 敗")
-        lines.append(f"合計 {sum(o.r_multiple for o in outcomes):+.2f}R")
+        amount = lambda rows: sum(round(o.net_amount) for o in rows)
+        lines.append(f"合計 {sum(o.r_multiple for o in outcomes):+.2f}R　"
+                     f"{amount(outcomes):+,.0f} 元")
+        # 訊號數可以到 5，但一天只准做 4 筆。把全部訊號的總和當成「今天會賺到的錢」
+        # 會高估 —— 那第 5 筆照規則根本不會下單。
+        cap = config.RISK["max_trades_per_day"]
+        if len(outcomes) > cap:
+            traded = amount(outcomes[:cap])
+            lines.append(f"照 {cap} 筆上限只做前 {cap} 筆：{traded:+,.0f} 元")
         lines.append("")
         for o in outcomes:
             label = f"{o.code} {names.get(o.code, '')}".strip()
-            lines.append(f"{RESOLUTION_MARK.get(o.result, '')} {label}　"
-                         f"{o.result}　{o.r_multiple:+.2f}R　{o.net_pct:+.2f}%")
+            lines.append(f"{RESOLUTION_MARK.get(o.result, '')} {label}　{o.result}")
+            lines.append(f"　{o.r_multiple:+.2f}R　{o.net_pct:+.2f}%　"
+                         f"{round(o.net_amount):+,.0f} 元")
 
     if history:
         days = len({o.date for o in history})
@@ -268,11 +277,13 @@ def format_push(signals: list[dict], outcomes, history: list) -> str:
             f"勝率 {total['win_rate']}%　平均 {total['avg_r']:+.2f}R",
             f"平均賺 {total['avg_win_pct']:+.2f}%　"
             f"平均賠 {total['avg_loss_pct']:+.2f}%",
+            f"累計損益 {sum(round(o.net_amount) for o in history):+,.0f} 元",
         ]
 
     lines += [
         "────────────────",
         f"勝＝扣掉 {config.round_trip_cost_pct():.3f}% 來回成本後為正",
+        "金額依訊號的建議張數與目前成本設定估算。",
         "驗證期未下單，這不是你的實際損益。",
     ]
     return "\n".join(lines)
