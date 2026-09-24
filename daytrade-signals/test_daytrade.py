@@ -784,6 +784,101 @@ class TestSymbolNames(unittest.TestCase):
         self.assertIn("2330 決策錨點", format_signal(sig, 1))
 
 
+class TestLiveTracker(unittest.TestCase):
+    """訊號發出之後要盯到結局，當場講出來 —— 不能只有收盤後才知道。"""
+
+    SIG = {"code": "6182", "name": "合晶", "time": "09:19:22",
+           "entry": 119.0, "stop": 117.5, "target": 121.5}
+
+    def _tracker(self):
+        t = signals.LiveTracker()
+        t.track(self.SIG)
+        return t
+
+    def test_nothing_while_price_is_between_stop_and_target(self):
+        t = self._tracker()
+        self.assertEqual(t.on_price("6182", 120.0), [])
+        self.assertEqual(len(t.open), 1)
+
+    def test_target_reached(self):
+        msgs = self._tracker().on_price("6182", 121.5)
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("目標", msgs[0])
+        self.assertIn("合晶", msgs[0])
+
+    def test_stop_reached(self):
+        msgs = self._tracker().on_price("6182", 117.5)
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("停損", msgs[0])
+
+    def test_each_signal_resolves_once(self):
+        """tick 一秒好幾筆。同一筆推兩次，使用者會以為自己做了兩趟。"""
+        t = self._tracker()
+        self.assertEqual(len(t.on_price("6182", 121.6)), 1)
+        self.assertEqual(t.on_price("6182", 121.8), [])
+        self.assertEqual(t.on_price("6182", 117.0), [])
+        self.assertEqual(t.open, [])
+
+    def test_another_symbol_price_does_not_resolve_it(self):
+        t = self._tracker()
+        self.assertEqual(t.on_price("2330", 50.0), [])
+        self.assertEqual(len(t.open), 1)
+
+    def test_zero_price_is_ignored(self):
+        """開盤前或無成交時 last_price 是 0，拿它比停損會立刻誤判。"""
+        t = self._tracker()
+        self.assertEqual(t.on_price("6182", 0), [])
+        self.assertEqual(len(t.open), 1)
+
+    def test_flatten_uses_the_last_seen_price(self):
+        t = self._tracker()
+        t.on_price("6182", 120.3)
+        msgs = t.flatten()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("收盤平倉", msgs[0])
+        self.assertIn("120.30", msgs[0])
+        self.assertEqual(t.open, [])
+
+    def test_flatten_skips_a_symbol_that_never_quoted(self):
+        """沒有報價就沒有平倉價。硬掰一個數字比留給 outcome.py 回推更糟。"""
+        self.assertEqual(self._tracker().flatten(), [])
+
+    def test_resolved_signals_are_not_flattened_again(self):
+        t = self._tracker()
+        t.on_price("6182", 121.5)
+        self.assertEqual(t.flatten(), [])
+
+
+class TestResolutionMessage(unittest.TestCase):
+    """推播上的數字必須和 outcome.py 收盤後算出來的一致，否則互驗沒有意義。"""
+
+    O = signals.OpenSignal(code="6182", name="合晶", time="09:19:22",
+                           entry=119.0, stop=117.5, target=121.5)
+
+    def test_target_uses_the_target_price_not_the_tick(self):
+        """跳空穿過去的部分不算進報酬率 —— 限價單只會成交在目標價。"""
+        text = signals.format_resolution(self.O, 122.4, oc.TARGET)
+        self.assertIn("119.00 → 出場 121.50", text)
+        self.assertIn("觸發時報價 122.40", text)
+
+    def test_matches_outcome_module_arithmetic(self):
+        text = signals.format_resolution(self.O, 121.5, oc.TARGET)
+        gross = (121.5 - 119.0) / 119.0 * 100
+        net = gross - config.round_trip_cost_pct()
+        self.assertIn(f"{gross:+.2f}%", text)
+        self.assertIn(f"{net:+.2f}%", text)
+        self.assertIn("+1.67R", text)
+
+    def test_stop_is_minus_one_r(self):
+        text = signals.format_resolution(self.O, 117.5, oc.STOP)
+        self.assertIn("-1.00R", text)
+
+    def test_says_it_is_not_your_real_pnl(self):
+        """驗證期沒有下單。把這個數字當成自己的損益是最貴的誤會。"""
+        text = signals.format_resolution(self.O, 121.5, oc.TARGET)
+        self.assertIn("不是你的實際損益", text)
+
+
 class TestWatchlistPush(unittest.TestCase):
     """名單要推到手機上，格式得在窄螢幕讀得懂，而且不能講成進場訊號。"""
 

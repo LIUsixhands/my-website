@@ -73,7 +73,7 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 216 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 229 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -146,6 +146,17 @@ morning.bat                                      手動補跑一次（畫面會�
 >
 > 推播仍然只列前 5 檔（`--push-top`，純顯示），但訊息會寫明實際監看幾檔。
 > 等你確認規則本身站得住，再加回自己的判斷。
+
+### 訊號發出之後 —— 盤中即時追蹤
+
+訊號發出後，`signals.py` 會繼續盯著那一檔的報價，**碰到停損或目標的當下就推播**，
+13:25 還沒走完的一律以最後報價平倉並告知。
+
+出場價一律取停損／目標那個價位，不取觸發當下的報價 —— 跳空穿過去的部分另外寫在
+訊息裡，不混進報酬率。這樣即時推播的數字才會和 `outcome.py` 收盤後算出來的一致，
+**兩條獨立的路對不起來就表示其中一邊錯了**，驗證期兩份都留著互為對照。
+
+訊息會明講「這不是你的實際損益」。驗證期沒有下單，把它當成自己的損益是最貴的誤會。
 
 ### 訊號後來怎麼了 —— `outcome.py`
 
@@ -286,7 +297,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 216 項離線測試 |
+| `test_daytrade.py` | 229 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。
