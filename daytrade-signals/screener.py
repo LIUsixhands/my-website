@@ -189,6 +189,39 @@ def push_watchlist(payload: dict, rows: list, show: int = 5) -> None:
     notify(format_watchlist(payload, rows[:show], total=len(rows)))
 
 
+# 例外訊息可能很長（堆疊裡的 SQL、HTML 錯誤頁都有可能），推播只留前面這麼多字
+FAILURE_DETAIL_CHARS = 400
+
+
+def format_failure(exc: BaseException) -> str:
+    """失敗也要出聲。
+
+    08:40 什麼都沒收到時，你分不出「今天沒有名單」與「程式當掉了」—— 而這兩件事
+    該做的處置完全相反。所以 --push 模式下失敗必須推一則出來。
+    """
+    detail = f"{type(exc).__name__}: {exc}".strip()
+    if len(detail) > FAILURE_DETAIL_CHARS:
+        detail = detail[:FAILURE_DETAIL_CHARS] + "…（完整訊息在電腦上）"
+    return "\n".join([
+        f"\u26a0\ufe0f {datetime.now().strftime('%Y-%m-%d %H:%M')} 盤前選股失敗",
+        "────────────────",
+        detail,
+        "────────────────",
+        "今天沒有觀察名單，signals.py 不要開。",
+        "常見原因：金鑰的 IP 限制（家用 IP 會變）、筆電剛醒來還沒連上網路。",
+        "到電腦上手動跑一次就會看到完整錯誤。",
+    ])
+
+
+def push_failure(exc: BaseException) -> None:
+    """推失敗通知。推播自己壞掉也不能蓋掉原始錯誤，所以整段包起來。"""
+    from signals import notify
+    try:
+        notify(format_failure(exc))
+    except Exception as e:
+        log.error("連失敗通知都送不出去：%s", e)
+
+
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="盤前選股")
     ap.add_argument("--top", type=int, metavar="N",
@@ -205,8 +238,7 @@ def parse_args(argv=None):
     return args
 
 
-def main(argv=None):
-    args = parse_args(argv)
+def run(args) -> None:
     errs = config.validate()
     if errs:
         raise SystemExit("config.py 參數有問題：\n" + "\n".join(f"  - {e}" for e in errs))
@@ -244,6 +276,17 @@ def main(argv=None):
     else:
         print(f"\n下一步：{config.PY_CMD} signals.py（監看以上全部 {len(watchlist)} 檔）")
         print("驗證期建議就這樣跑 —— 閘門擋在一天 5 個訊號，監看多檔只是增加樣本。")
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    try:
+        run(args)
+    except Exception as exc:
+        # 排程跑的時候沒有人在看畫面，失敗只能靠推播讓人知道
+        if args.push:
+            push_failure(exc)
+        raise
 
 
 if __name__ == "__main__":
