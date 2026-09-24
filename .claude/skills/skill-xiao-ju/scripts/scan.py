@@ -15,6 +15,8 @@ except Exception:
     f = ImageFont.load_default()
 rows = []
 for x in build():
+    if x["type"] == "hold":   # 定格鏡頭＝上一鏡最後一格，上一鏡已掃過
+        continue
     name = PICK.get(x["id"], x["id"])
     used = x["dur"] * SLOW.get(x["id"], 1.0)   # 放慢的鏡頭只用到來源的前段
     n = max(1, int(used / STEP))

@@ -2,6 +2,7 @@
 - 對白鏡頭用自己的音檔（不用對嘴模型輸出的音軌），配樂自動閃避台詞（sidechain），整體 -14 LUFS
 - 字幕／片名／角色字卡／AI 標示／品牌 logo／片尾下集預告，全部 PIL 畫好疊上去（不需要 libass）
 - 讀 episode.json 的 fixes：pick（換版本）、crop_top（裁掉底部亂碼）、slow（只取前段再放慢）
+- hold 鏡頭＝上一鏡最後一格定格（片尾字卡常用）；show_title: false 不疊片名；endcard 有設就用節慶字卡取代下集預告
 用法：python3 compose.py [--out 檔名.mp4]"""
 import re, sys, subprocess
 from pathlib import Path
@@ -28,9 +29,10 @@ def find_font(cands):
 
 import glob
 _pf = glob.glob("/System/Library/AssetsV2/com_apple_MobileAsset_Font*/*/AssetData/PingFang.ttc")
-SANS_B = find_font([(p, 10) for p in _pf] + [("/System/Library/Fonts/STHeiti Medium.ttc", 0), ("C:/Windows/Fonts/msjhbd.ttc", 0)])
-SANS_M = find_font([(p, 6) for p in _pf] + [("/System/Library/Fonts/STHeiti Medium.ttc", 0), ("C:/Windows/Fonts/msjh.ttc", 0)])
-SERIF = find_font([("/System/Library/Fonts/Supplemental/Songti.ttc", 2), ("C:/Windows/Fonts/mingliub.ttc", 0)] + [SANS_B])
+NOTO = "/usr/share/fonts/opentype/noto/"   # Linux（雲端）：apt install fonts-noto-cjk，index 3＝繁中
+SANS_B = find_font([(p, 10) for p in _pf] + [("/System/Library/Fonts/STHeiti Medium.ttc", 0), ("C:/Windows/Fonts/msjhbd.ttc", 0), (NOTO + "NotoSansCJK-Bold.ttc", 3)])
+SANS_M = find_font([(p, 6) for p in _pf] + [("/System/Library/Fonts/STHeiti Medium.ttc", 0), ("C:/Windows/Fonts/msjh.ttc", 0), (NOTO + "NotoSansCJK-Regular.ttc", 3)])
+SERIF = find_font([("/System/Library/Fonts/Supplemental/Songti.ttc", 2), ("C:/Windows/Fonts/mingliub.ttc", 0), (NOTO + "NotoSerifCJK-Bold.ttc", 3)] + [SANS_B])
 
 
 def font(spec, size):
@@ -56,6 +58,11 @@ def segments(tl):
     for x in tl:
         src = C / f"{PICK.get(x['id'], x['id'])}.mp4"
         out = SEG / f"{x['id']}.mp4"
+        if x["type"] == "hold":   # 上一鏡（已縮放裁切好的片段）最後一格定格
+            sh_run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", "-0.1", "-i", str(files[-1]), "-an", "-vf",
+                    f"fps={FPS},tpad=stop_mode=clone:stop_duration={x['dur'] + 1:.3f},trim=duration={x['dur']:.3f},setpts=PTS-STARTPTS,format=yuv420p",
+                    "-c:v", "libx264", "-crf", "16", "-preset", "fast", str(out)])
+            files.append(out); continue
         pre = ""
         if x["id"] in CROP_TOP:
             z = CROP_TOP[x["id"]]; pre += f"crop=iw*{z}:ih*{z}:(iw-iw*{z})/2:0,"
@@ -129,13 +136,14 @@ def overlays(tl):
             p = O / f"sub_{sh['id']}_{k}.png"; im.save(p)
             ov.append((p, (W - im.width) // 2, 1330 - im.height // 2, off + a, off + b + 0.08))
     # 片名（第一鏡）
-    title = text_img(EP["title"], font(SERIF, 118), GOLD, stroke=8, stroke_fill=(40, 20, 0))
-    ep_tag = text_img(f"第 {EP['ep']} 集", font(SANS_B, 44), (255, 255, 255), stroke=5)
-    card = Image.new("RGBA", (max(title.width, ep_tag.width), title.height + ep_tag.height - 20), (0, 0, 0, 0))
-    card.alpha_composite(title, ((card.width - title.width) // 2, 0))
-    card.alpha_composite(ep_tag, ((card.width - ep_tag.width) // 2, title.height - 20))
-    p = O / "title.png"; card.save(p)
-    ov.append((p, (W - card.width) // 2, 250, 0.3, first["end"] - 0.1))
+    if EP.get("show_title", True):
+        title = text_img(EP["title"], font(SERIF, 118), GOLD, stroke=8, stroke_fill=(40, 20, 0))
+        ep_tag = text_img(f"第 {EP['ep']} 集", font(SANS_B, 44), (255, 255, 255), stroke=5)
+        card = Image.new("RGBA", (max(title.width, ep_tag.width), title.height + ep_tag.height - 20), (0, 0, 0, 0))
+        card.alpha_composite(title, ((card.width - title.width) // 2, 0))
+        card.alpha_composite(ep_tag, ((card.width - ep_tag.width) // 2, title.height - 20))
+        p = O / "title.png"; card.save(p)
+        ov.append((p, (W - card.width) // 2, 250, 0.3, first["end"] - 0.1))
     # 角色字卡
     for sh in EP["shots"]:
         if "label" not in sh:
@@ -164,7 +172,14 @@ def overlays(tl):
     for y in range(H):
         grad.putpixel((0, y), int(215 * max(0, (y - 700) / (H - 700)) ** 0.8))
     endc.putalpha(grad.resize((W, H)))
-    if EP.get("next"):
+    if EP.get("endcard"):   # 節慶／單支片：大字＋副標，取代下集預告
+        ec = EP["endcard"]
+        big = text_img(ec["text"], fit_font(ec["text"], SERIF, 150, W - 120), GOLD, stroke=8, stroke_fill=(60, 30, 0))
+        endc.alpha_composite(big, ((W - big.width) // 2, 1080))
+        if ec.get("sub"):
+            sb = text_img(ec["sub"], fit_font(ec["sub"], SANS_M, 48, W - 140), (255, 255, 255), stroke=4)
+            endc.alpha_composite(sb, ((W - sb.width) // 2, 1080 + big.height - 10))
+    elif EP.get("next"):
         nx = text_img("下集", font(SANS_B, 46), (30, 20, 0), stroke=0, shadow=False)
         pill = Image.new("RGBA", (nx.width + 30, nx.height + 2), (0, 0, 0, 0))
         ImageDraw.Draw(pill).rounded_rectangle([0, 0, pill.width - 1, pill.height - 1], radius=pill.height // 2, fill=GOLD + (255,))
@@ -205,7 +220,10 @@ def audio_graph(tl, n_in):
         fl.append(f"[{idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={s.get('vol', 0.8)},adelay={ms}|{ms}[f{idx}]"); fx.append(f"[f{idx}]"); idx += 1
     has_bgm = (S / "bgm.mp3").exists()
     # 台詞軌先補滿片長：sidechaincompress 會在 key 結束時一起截斷配樂（EP01 踩過）
-    fl.append(f"{''.join(dl)}amix=inputs={len(dl)}:normalize=0:dropout_transition=0,apad=whole_dur={total:.3f},asplit[dlg][key]")
+    if dl:
+        fl.append(f"{''.join(dl)}amix=inputs={len(dl)}:normalize=0:dropout_transition=0,apad=whole_dur={total:.3f},asplit[dlg][key]")
+    else:   # 沒有對白（純音效短片）：用靜音軌頂著
+        fl.append(f"anullsrc=r=48000:cl=stereo,atrim=duration={total:.3f},asplit[dlg][key]")
     mix = ["[dlg]"]
     if has_bgm:
         ins += ["-i", str(S / "bgm.mp3")]

@@ -19,6 +19,8 @@ def key(name):
     """金鑰：先看環境變數，再看 ~/.zshrc、~/.bash_profile（Mac 的 Bash 環境常讀不到 zshrc）"""
     if os.environ.get(name):
         return os.environ[name]
+    if name == "GEMINI_API_KEY" and os.environ.get("GOOGLE_API_KEY"):   # google-genai 兩個名字都認
+        return os.environ["GOOGLE_API_KEY"]
     for rc in (".zshrc", ".bash_profile", ".bashrc"):
         f = Path.home() / rc
         if f.exists():

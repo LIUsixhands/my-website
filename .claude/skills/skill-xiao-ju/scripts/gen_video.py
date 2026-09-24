@@ -1,6 +1,8 @@
 """步驟 4：影片生成（fal.ai）
 - 對白鏡頭（talk）→ Kling AI Avatar v2 對嘴（實測不輸 OmniHuman、價格 1/3，預設用它）
 - 其他鏡頭（anim / card）→ Hailuo-02 圖生影片 6 秒（後半常亂演，合成時只取前段）
+- 首尾幀鏡頭（kf）→ Kling v2.1 pro 圖生影片，frames/sXX.png 當首幀、sXX_end.png 當尾幀；dur ≤5 生 5 秒，否則 10 秒
+- 定格鏡頭（hold）→ 不生成，合成時沿用上一鏡最後一格
 用法：python3 gen_video.py [s01 ...] [--omni s06,s09]
   --omni：另外用 OmniHuman 生指定鏡頭的對照版（檔名 sXX_omni.mp4），Kling 版出包時可換
 成品已存在就跳過；request_id 記在 clips/_jobs.json，程式中斷可從 fal 後台撈回。"""
@@ -24,6 +26,8 @@ only = set(a for a in argv if not a.startswith("--"))
 KLING = "fal-ai/kling-video/ai-avatar/v2/standard"
 OMNI = "fal-ai/bytedance/omnihuman/v1.5"
 HAILUO = "fal-ai/minimax/hailuo-02/standard/image-to-video"
+KLING_KF = "fal-ai/kling-video/v2.1/pro/image-to-video"
+NO_JUNK = " No text, no subtitles, no logos, no extra people."
 
 
 def run(name, ep, make_args):
@@ -47,7 +51,15 @@ def tasks():
         sid = sh["id"]
         img = lambda sid=sid: fal_client.upload_file(str(F / f"{sid}.png"))
         aud = lambda sid=sid: fal_client.upload_file(str(A / f"{sid}.mp3"))
-        if sh["type"] == "talk":
+        if sh["type"] == "hold":
+            continue
+        if sh["type"] == "kf":
+            end = lambda sid=sid: fal_client.upload_file(str(F / f"{sid}_end.png"))
+            yield sid, KLING_KF, lambda sh=sh, img=img, end=end: {
+                "prompt": sh["motion"] + " Keep every character's face and outfit unchanged." + NO_JUNK,
+                "image_url": img(), "tail_image_url": end(), "duration": "5" if sh["dur"] <= 5 else "10",
+                "negative_prompt": "blur, distort, low quality, text, watermark, logo, extra fingers, deformed hands, extra people"}
+        elif sh["type"] == "talk":
             yield sid, KLING, lambda sh=sh, img=img, aud=aud: {"image_url": img(), "audio_url": aud(), "prompt": sh.get("prompt", ".")}
             if sid in OMNI_IDS:
                 yield f"{sid}_omni", OMNI, lambda sh=sh, img=img, aud=aud: {"image_url": img(), "audio_url": aud(), "prompt": sh.get("prompt", ""), "resolution": "1080p"}

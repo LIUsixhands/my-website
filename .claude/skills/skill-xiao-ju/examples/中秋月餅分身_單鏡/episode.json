@@ -1,0 +1,111 @@
+{
+  "title": "中秋月餅分身",
+  "ep": 1,
+  "show_title": false,
+  "style": "Photorealistic cinematic live-action film still, like a premium Taiwanese TV drama. Shot on a cinema camera with a 50mm lens, natural realistic skin texture and pores, realistic hair, soft cinematic lighting with warm gold practical lights, shallow depth of field, subtle film grain, vertical 9:16 frame. Ordinary non-celebrity people with original faces. Anatomically correct hands. No text, no letters, no subtitles, no watermark, no logo.",
+  "location": "A warm cozy Taiwanese living room at night during the Mid-Autumn Festival: a solid warm-toned wooden table in the foreground, soft amber table lamp light, a few glowing round paper lanterns hanging softly blurred in the background, a big bright full moon visible through a window, a sofa with cushions blurred behind. Plain walls with NO signage, NO calligraphy, NO posters, NO lettering anywhere.",
+  "characters": {
+    "her": {
+      "name": "主角（本人）",
+      "photo": "~/AI短劇/中秋月餅分身/1801345.jpg",
+      "desc": "a young Taiwanese woman around 30 years old with long dark wavy hair past her shoulders, bright friendly smile, wearing a black blazer with thin vertical pinstripes over a crisp white collared shirt, a tiny plain gold lapel pin with no text"
+    }
+  },
+  "shots": [
+    {
+      "id": "s01",
+      "type": "kf",
+      "chars": [
+        "her"
+      ],
+      "dur": 5.0,
+      "img": "Medium shot from the waist up: the woman sits behind the wooden table, face large and clearly visible, smiling playfully at the giant mooncake. On the table in front of her: an open golden octagonal gift box (plain gold, no text, no pattern of letters) holding ONE oversized Cantonese-style mooncake about the size of a dinner plate, glossy golden-brown baked crust with a plain decorative flower pattern and NO characters stamped on it. Her right index finger is just touching the top of the mooncake. She is the ONLY person in the scene.",
+      "end_img": "The same mooncake now has a small soft bump risen on top, and lying on its belly on top of the mooncake is a tiny chibi mini version of the SAME woman, only as tall as a hand, baby proportions with a big round head and short chubby limbs, same face features, same long dark wavy hair, wearing a tiny matching black pinstripe blazer and white collared shirt, cheeks blushing pink, laughing happily with eyes squeezed shut. The woman's right index finger gently presses the mini's chubby cheek, and she is laughing warmly. Mooncake crumbs sprinkled around. Only these two figures exist; nobody else in the scene.",
+      "motion": "The woman smiles and pokes the giant mooncake gently with her index finger two or three times. The top of the mooncake swells up and with a cute pop a tiny chibi baby-proportioned mini version of her in a matching mini pinstripe suit pops out and flops onto its belly on top of the mooncake. She gently pokes the mini's cheek with her fingertip; the mini blushes shyly, covers a smile, then bursts out laughing. Static camera, slight slow push-in, warm lamp light. Her face stays fully visible, five fingers per hand."
+    },
+    {
+      "id": "s02",
+      "type": "hold",
+      "chars": [
+        "her"
+      ],
+      "dur": 3.0
+    }
+  ],
+  "vo_offset": 0.2,
+  "brand": {
+    "logo": "~/.claude/skills/skill-sixhands-brand/logo_white.png",
+    "logo_end": "~/.claude/skills/skill-sixhands-brand/logo_full_white.png",
+    "line": "Sixhands Studio AI數字員工"
+  },
+  "endcard": {
+    "text": "中秋快樂",
+    "sub": "月圓人團圓・祝你甜甜蜜蜜"
+  },
+  "sfx": [
+    {
+      "name": "poke",
+      "prompt": "Three soft cute squishy boop sounds, a fingertip poking a soft pastry, playful and gentle",
+      "dur": 1.4,
+      "at": "s01",
+      "offset": 0.3,
+      "vol": 0.7
+    },
+    {
+      "name": "pop",
+      "prompt": "A cute magical cartoon pop with a soft sparkle chime shimmer, a tiny character popping out",
+      "dur": 1.2,
+      "at": "s01",
+      "offset": 1.9,
+      "vol": 0.8
+    },
+    {
+      "name": "giggle",
+      "prompt": "A tiny high-pitched cute baby-like shy giggle turning into happy laughter, cartoon character, no words",
+      "dur": 1.8,
+      "at": "s01",
+      "offset": 3.1,
+      "vol": 0.6
+    },
+    {
+      "name": "chime",
+      "prompt": "Warm gentle festive wind chime and soft guzheng pluck, peaceful Mid-Autumn night, soft reverb ending",
+      "dur": 3.0,
+      "at": "s02",
+      "offset": 0,
+      "vol": 0.7
+    }
+  ],
+  "music": {
+    "global": [
+      "warm heartwarming instrumental",
+      "Mid-Autumn Festival",
+      "gentle guzheng and soft piano",
+      "cozy"
+    ],
+    "negative": [
+      "vocals",
+      "singing",
+      "lyrics",
+      "drums"
+    ],
+    "volume": 0.3,
+    "sections": [
+      {
+        "name": "Warm",
+        "from": "s01",
+        "styles": [
+          "gentle playful pizzicato",
+          "soft guzheng",
+          "warm and sweet",
+          "ends softly"
+        ]
+      }
+    ]
+  },
+  "fixes": {
+    "pick": {},
+    "crop_top": {},
+    "slow": {}
+  }
+}

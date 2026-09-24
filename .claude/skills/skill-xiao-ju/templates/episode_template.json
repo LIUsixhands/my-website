@@ -351,14 +351,15 @@
     "slow": {}
   },
   "_說明": {
-    "shots.type": "talk＝角色開口說話（Kling 對嘴，長度跟著音檔）；anim＝動作鏡頭（Hailuo，要填 dur 秒數）；card＝片尾鏡頭（放最後，會疊下集預告）",
+    "shots.type": "talk＝角色開口說話（Kling 對嘴，長度跟著音檔）；anim＝動作鏡頭（Hailuo，要填 dur 秒數）；card＝片尾鏡頭（放最後，會疊下集預告）；kf＝首尾幀鏡頭（Kling v2.1 pro，填 img＋end_img＋motion＋dur）；hold＝定格上一鏡最後一格（填 dur，不花錢）",
     "line/vo": "line＝畫面上的人講話；vo＝畫外音（只放在 anim 鏡頭）。text 開頭方括號是情緒標籤，會被演出來但不會念出來",
     "subs": "字幕切段，一段一行、12 字內最好讀",
     "label": "角色第一次出場的字卡 [名字, 身分]",
     "fixes": "scan.py 看到壞鏡頭才填：pick 換版本、crop_top 裁掉底部（0.85＝留上面 85%）、slow 只取前段放慢（0.65＝用前 65% 放慢）",
     "brand": "logo 路徑留空就不放；學員替客戶做的片要換成客戶的 logo 或留空",
     "thumb": "縮圖設定（make_thumb.py 用）：hook＝中間紅帶大字；top／bottom 各抓一鏡的畫面，shot＝鏡頭 id、t＝第幾秒、zoom＝臉太小就調大(1.3左右)、crop＝取垂直哪一段(0最上 1最下)、x＝放大後取水平哪一段；bubble 第 2 行會是紅字，不要對話框就拿掉",
-    "characters.photo": "選填。放本人照片路徑（例如 ~/短劇/角色照片/我.jpg），gen_refs.py 會照這張臉做定裝圖。只能用你自己、或已取得本人書面同意的人的照片"
+    "characters.photo": "選填。放本人照片路徑（例如 ~/短劇/角色照片/我.jpg），gen_refs.py 會照這張臉做定裝圖。只能用你自己、或已取得本人書面同意的人的照片",
+    "endcard": "選填。{text, sub} 節慶／單支片片尾大字，會取代下集預告；show_title: false 可不疊片名"
   },
   "thumb": {
     "hook": "他到底是誰？",

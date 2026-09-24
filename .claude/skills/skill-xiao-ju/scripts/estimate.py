@@ -4,12 +4,13 @@ import requests
 from common import EP, key
 from timeline import build
 
-KLING, HAILUO, OMNI, USD_NTD = 0.0562, 0.045, 0.16, 32
+KLING, HAILUO, OMNI, KLING_KF, USD_NTD = 0.0562, 0.045, 0.16, 0.098, 32   # KLING_KF：Kling v2.1 pro 首尾幀（5 秒約 US$0.49，以 fal 後台為準）
 tl = build()
 talk = sum(x["dur"] for x in tl if x["type"] == "talk")
-anim = sum(1 for x in tl if x["type"] != "talk")
-k, h = talk * KLING * 1.1, anim * 6 * HAILUO   # Kling 實際輸出常比音檔長一點，抓 1.1 倍
-print(f"對白 {talk:.1f} 秒 → Kling 約 US${k:.2f}")
+anim = sum(1 for x in tl if x["type"] in ("anim", "card"))
+kf = sum(5 if x["dur"] <= 5 else 10 for x in tl if x["type"] == "kf")
+k, h = talk * KLING * 1.1 + kf * KLING_KF, anim * 6 * HAILUO   # Kling 實際輸出常比音檔長一點，抓 1.1 倍
+print(f"對白 {talk:.1f} 秒＋首尾幀 {kf} 秒 → Kling 約 US${k:.2f}")
 print(f"動作／片尾 {anim} 鏡 × 6 秒 → Hailuo 約 US${h:.2f}")
 print(f"合計約 US${k + h:.2f}（約 NT${(k + h) * USD_NTD:.0f}），重生壞鏡另計；若全部改用 OmniHuman 對嘴約 US${talk * OMNI:.2f}")
 try:
