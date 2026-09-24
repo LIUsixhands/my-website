@@ -19,7 +19,7 @@ outcome.py — 用分鐘 K 回推每個訊號的結局。
 import csv
 import logging
 from dataclasses import dataclass, asdict
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timedelta
 
 import config
 
@@ -33,6 +33,9 @@ FLAT = "收盤平倉"
 FLATTEN_AT = dtime(13, 25)
 
 OUTCOME_FILE = config.BASE_DIR / "outcomes.csv"
+
+# 一根分鐘 K 涵蓋的時間長度。用來排掉「包著訊號那一刻」的那一根。
+BAR_SPAN = timedelta(minutes=1)
 FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct")
@@ -94,11 +97,22 @@ def _parse_signal_time(sig: dict, date: str) -> datetime | None:
 
 
 def bars_after(broker, code: str, date: str, after: datetime) -> list[tuple]:
-    """回傳 (時間, 高, 低, 收) 的清單，只留進場之後、13:25 之前的。
+    """回傳 (時間, 高, 低, 收) 的清單，只留**完全在訊號之後**、13:25 之前的 K 棒。
 
-    K 棒的時間戳是該分鐘的**結束**時間（實機驗證過：09:00~09:01 那根標 09:01），
-    所以「label > 訊號時間」的第一根，會包含訊號發出前的幾秒鐘。
-    這使判定略偏保守 —— 那幾秒的低點可能讓它提早判停損。寧可如此。
+    K 棒的時間戳是該分鐘的**結束**時間（實機驗證過：09:00~09:01 那根標 09:01）。
+    所以「label > 訊號時間」的第一根，涵蓋的是訊號發出**前**的那幾十秒。
+    以前的版本留著那一根，還以為只是「略偏保守」——
+
+    那是錯的，而且錯得剛好會毀掉這個策略的統計。突破訊號依定義發在股價剛越過
+    開盤區間高點的那一刻，而停損就設在區間高點下方一點。那一根 K 棒裡，訊號
+    發出前的每一筆成交都還在區間高點之下 —— 低點幾乎必然掃到停損。
+    2026-09-24 五個訊號有四個被判成「第一根就停損」，實際上合晶當天從 119 一路
+    走到目標 121.50 還收在 120.50。不是市場的事，是尺量錯了。
+
+    所以只收「起點不早於訊號時間」的 K 棒，也就是 label >= 訊號時間 + 1 分鐘。
+    代價是訊號後最多 60 秒內的價格看不到 —— 那段空白對停損和目標一視同仁，
+    不偏向任何一邊；而且盤中的即時追蹤（signals.py 的 LiveTracker）看的是 tick，
+    正好補上這一段。
     """
     from broker import _bar_time
     try:
@@ -114,10 +128,13 @@ def bars_after(broker, code: str, date: str, after: datetime) -> list[tuple]:
         log.warning("%s 分鐘 K 欄位長度不一致，跳過", code)
         return []
 
+    # K 棒 label 是該分鐘的結束時間，所以 label 為 T 的那根涵蓋 (T-1分, T]。
+    # 要「整根都在訊號之後」，就是 T - 1分 >= 訊號時間。
+    first_ok = after + BAR_SPAN
     out = []
     for raw, h, l, c in zip(ts, highs, lows, closes):
         t = _bar_time(raw)
-        if t is None or t <= after or t.time() > FLATTEN_AT:
+        if t is None or t < first_ok or t.time() > FLATTEN_AT:
             continue
         out.append((t, float(h), float(l), float(c)))
     out.sort(key=lambda r: r[0])
