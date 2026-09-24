@@ -73,7 +73,7 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 235 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 248 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -146,6 +146,23 @@ morning.bat                                      手動補跑一次（畫面會�
 >
 > 推播仍然只列前 5 檔（`--push-top`，純顯示），但訊息會寫明實際監看幾檔。
 > 等你確認規則本身站得住，再加回自己的判斷。
+
+### 收盤後的日報 —— 自動推到手機
+
+`review.py` 跑完會把當日結果推一則到 Telegram：今天幾勝幾敗、每一筆的結局與 R
+倍數，加上讀 `outcomes.csv` 算出來的**累計**勝率與賺賠比。細節仍在 journal 裡，
+這則訊息只負責讓你兩秒看完結論。
+
+零訊號的日子會明講「這是正常的一天」，沒回推成功的日子也會說清楚是哪一種 ——
+三種情況三句話，不會混在一起。
+
+預設會推。同一天重跑覆盤時加 `--no-push` 就不會重複推播：
+
+```
+python review.py --no-push
+```
+
+推播失敗不會讓覆盤失敗 —— journal 在推播之前就寫好了。
 
 ### 訊號發出之後 —— 盤中即時追蹤
 
@@ -306,7 +323,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 235 項離線測試 |
+| `test_daytrade.py` | 248 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。

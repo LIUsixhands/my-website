@@ -222,6 +222,35 @@ def append_csv(outcomes: list[Outcome], path=None) -> None:
             w.writerow(asdict(o))
 
 
+_STR_FIELDS = ("date", "code", "time", "result")
+_INT_FIELDS = ("lots", "bars")
+_OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct")
+
+
+def load_csv(path=None) -> list[Outcome]:
+    """把累積下來的 outcomes.csv 讀回來，用來算跨日的統計。
+
+    壞掉的列跳過就好，不要讓一列爛資料害整份日報發不出去。
+    """
+    path = path or OUTCOME_FILE
+    if not path.exists():
+        return []
+    rows = []
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        for raw in csv.DictReader(f):
+            try:
+                kw = {k: str(raw.get(k, "")) for k in _STR_FIELDS}
+                kw |= {k: int(float(raw[k])) for k in _INT_FIELDS}
+                kw |= {k: float(raw[k]) for k in
+                       ("entry", "stop", "target", "exit_price",
+                        "r_multiple", "gross_pct", "net_pct")}
+                kw |= {k: _num(raw.get(k)) for k in _OPTIONAL_FIELDS}
+                rows.append(Outcome(**kw))
+            except (KeyError, TypeError, ValueError) as e:
+                log.warning("outcomes.csv 有一列讀不進來，跳過：%s", e)
+    return rows
+
+
 def summarise(outcomes: list[Outcome]) -> dict:
     """勝率與賺賠比。淨值一律以扣掉來回成本後計算。"""
     n = len(outcomes)
