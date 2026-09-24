@@ -1111,6 +1111,53 @@ class TestOutcomeSectionWording(unittest.TestCase):
         self.assertNotIn("今日無訊號", text)
 
 
+class TestBarContainingTheSignalIsExcluded(unittest.TestCase):
+    """包著訊號那一刻的那根 K 棒不能算 —— 它裝的是訊號發出「前」的價格。
+
+    2026-09-24 實例：合晶 09:19:22 發訊號，進場 119.00、停損 117.50。標 09:20 的
+    那根涵蓋 09:19:00~09:20:00，裡面有 22 秒是突破前、還在區間高點 118.50 之下的
+    成交。舊版把那根算進去，於是判「第一根就停損」——
+    而合晶當天實際走到目標 121.50，收在 120.50。
+
+    這對突破策略是系統性的：停損就設在區間高點下方，而訊號依定義發在剛越過區間
+    高點的那一刻，所以那一根的低點幾乎必然掃到停損。五個訊號誤判了四個。
+    """
+
+    DATE = "2026-09-24"
+    SIG = {"code": "6182", "time": "09:19:22", "entry": 119.0,
+           "stop": 117.5, "target": 121.5, "lots": 1}
+
+    def _resolve(self, rows):
+        return oc.resolve(FakeKbarBroker(_kb(rows)), self.SIG, self.DATE)
+
+    def test_the_containing_bar_cannot_trigger_the_stop(self):
+        """09:20 那根的低點 116.8 是突破前的價格，不算數。"""
+        o = self._resolve([("09:20", 119.5, 116.8, 119.4),
+                           ("09:21", 121.6, 119.2, 121.4)])
+        self.assertEqual(o.result, oc.TARGET)
+        self.assertEqual(o.exit_price, 121.5)
+
+    def test_the_containing_bar_cannot_trigger_the_target_either(self):
+        """排掉那一根對停損和目標一視同仁，不是偷偷偏向贏的那一邊。"""
+        o = self._resolve([("09:20", 122.0, 118.9, 119.1),
+                           ("09:21", 119.0, 117.4, 117.6)])
+        self.assertEqual(o.result, oc.STOP)
+
+    def test_a_signal_on_the_minute_loses_nothing(self):
+        """訊號剛好落在整分鐘時，下一根完全在它之後，該用就用。"""
+        sig = dict(self.SIG, time="09:19:00")
+        o = oc.resolve(FakeKbarBroker(_kb([("09:20", 121.6, 119.0, 121.4)])),
+                       sig, self.DATE)
+        self.assertEqual(o.result, oc.TARGET)
+
+    def test_only_the_one_bar_is_skipped(self):
+        """空白期是訊號後最多 60 秒，不是一分鐘以上。"""
+        o = self._resolve([("09:20", 119.5, 116.0, 119.4),
+                           ("09:21", 119.3, 117.0, 117.2)])
+        self.assertEqual(o.result, oc.STOP)
+        self.assertEqual(o.bars, 1)
+
+
 class TestOutcomeSummary(unittest.TestCase):
     def _o(self, net, result):
         return oc.Outcome(date="2026-09-24", code="1", time="09:23", entry=100.0,
@@ -1208,7 +1255,7 @@ class TestOutcomeRecordsSignalContext(unittest.TestCase):
            "volume_surge": 1.8}
 
     def _resolve(self, sig=None):
-        rows = [("09:36", 161.5, 157.0, 161.2)]
+        rows = [("09:37", 161.5, 157.0, 161.2)]   # 09:36 那根包著訊號，會被排掉
         return oc.resolve(FakeKbarBroker(_kb(rows)), sig or self.SIG, self.DATE)
 
     def test_keeps_the_conditions_as_they_were(self):
@@ -1226,7 +1273,7 @@ class TestOutcomeRecordsSignalContext(unittest.TestCase):
         """對照組：同一天的合晶，進場只高出區間高點 0.42%。"""
         sig = dict(self.SIG, code="6182", entry=119.0, stop=117.5, target=121.5,
                    or_high=118.5, vwap=117.15)
-        o = oc.resolve(FakeKbarBroker(_kb([("09:36", 122.0, 118.8, 121.8)])),
+        o = oc.resolve(FakeKbarBroker(_kb([("09:37", 122.0, 118.8, 121.8)])),
                        sig, self.DATE)
         self.assertAlmostEqual(o.extension_pct, 0.422, places=2)
 
