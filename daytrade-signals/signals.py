@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, time as dtime
 
 import config
+import outcome
 from broker import Broker
 
 # requests 只有推播用得到。缺席時仍要能跑（訊號照樣印在 stdout），
@@ -353,6 +354,118 @@ def try_emit(st: SymbolState, gate: RiskGate, lock, sig: dict) -> str | None:
     return format_signal(sig, ordinal)
 
 
+# ══════════════════════════════════════════════════════
+# 訊號發出之後 —— 盯到結局為止
+# ══════════════════════════════════════════════════════
+RESOLUTION_MARK = {
+    outcome.TARGET: "\u2705",        # ✅
+    outcome.STOP: "\U0001f6d1",      # 🛑
+    outcome.FLAT: "\u23f9",          # ⏹
+}
+
+
+@dataclass
+class OpenSignal:
+    code: str
+    name: str
+    time: str
+    entry: float
+    stop: float
+    target: float
+
+    def verdict(self, price: float) -> str:
+        """這個價位讓這筆結束了嗎。停損先判：往壞處算。"""
+        if price <= self.stop:
+            return outcome.STOP
+        if price >= self.target:
+            return outcome.TARGET
+        return ""
+
+
+def format_resolution(o: OpenSignal, price: float, verdict: str) -> str:
+    """出場價一律取停損／目標那個價位，不取觸發當下的報價。
+
+    理由是要和 outcome.py 的收盤回推對得起來 —— 兩邊算出不同的數字，就沒辦法
+    拿其中一邊去驗另一邊。跳空穿過去的部分另外寫在訊息裡，不混進報酬率。
+    """
+    exit_price = {outcome.TARGET: o.target, outcome.STOP: o.stop}.get(verdict, price)
+    gross = (exit_price - o.entry) / o.entry * 100
+    net = gross - config.round_trip_cost_pct()
+    risk = o.entry - o.stop
+    r = (exit_price - o.entry) / risk if risk > 0 else 0.0
+    label = f"{o.code} {o.name}".strip()
+    lines = [
+        f"{RESOLUTION_MARK.get(verdict, '')} {label} {verdict}"
+        f"｜{datetime.now().strftime('%H:%M:%S')}",
+        "────────────────",
+        f"進場 {o.entry:.2f} → 出場 {exit_price:.2f}",
+        f"{gross:+.2f}%（扣掉來回成本 {net:+.2f}%）　{r:+.2f}R",
+    ]
+    if abs(price - exit_price) >= 0.01:
+        lines.append(f"觸發時報價 {price:.2f}（穿過去的部分不計入上面的報酬率）")
+    lines += [
+        f"訊號發出於 {o.time}",
+        "────────────────",
+        "驗證期不下單。這是照規則做會有的結果，不是你的實際損益。",
+    ]
+    return "\n".join(lines)
+
+
+class LiveTracker:
+    """訊號發出後追到停損或目標為止，當場推播。
+
+    outcome.py 收盤後用分鐘 K 回推同一件事。兩條路完全獨立 —— 一邊看即時 tick、
+    一邊看收盤後的分鐘 K —— 所以兩邊對不起來就表示其中一邊錯了。驗證期兩份都留著，
+    互為對照。
+
+    tick 回呼跑在背景執行緒，同一檔會連續進來很多筆，所以「判定結束並移出清單」
+    必須在鎖內一次做完，否則同一筆會推播好幾次。推播本身留在鎖外，不卡行情。
+    """
+
+    def __init__(self):
+        self.open: list[OpenSignal] = []
+        self.last_price: dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def track(self, sig: dict) -> None:
+        with self._lock:
+            self.open.append(OpenSignal(
+                code=str(sig["code"]), name=str(sig.get("name", "")),
+                time=str(sig.get("time", "")), entry=float(sig["entry"]),
+                stop=float(sig["stop"]), target=float(sig["target"])))
+
+    def on_price(self, code: str, price: float) -> list[str]:
+        """回傳這個報價造成的推播訊息。絕大多數時候是空的。"""
+        if not price:
+            return []
+        done = []
+        with self._lock:
+            self.last_price[code] = price
+            still_open = []
+            for o in self.open:
+                verdict = o.verdict(price) if o.code == code else ""
+                if verdict:
+                    done.append((o, verdict))
+                else:
+                    still_open.append(o)
+            self.open = still_open
+        return [format_resolution(o, price, v) for o, v in done]
+
+    def flatten(self) -> list[str]:
+        """13:25 還沒結束的，一律以最後看到的報價平倉。"""
+        with self._lock:
+            rest, self.open = self.open, []
+        msgs = []
+        for o in rest:
+            price = self.last_price.get(o.code)
+            if price is None:
+                log.warning("%s 整天沒收到報價，無法即時平倉（收盤後仍會由 "
+                            "outcome.py 用分鐘 K 回推）", o.code)
+                continue
+            msgs.append(format_resolution(o, price, outcome.FLAT))
+        return msgs
+
+
 def notify(text: str):
     global _push_warned
     # 印出來的是終端機印得出的版本，送出去的是原文
@@ -439,6 +552,14 @@ def main():
     restore_signaled(states, gate)
 
     signal_lock = threading.Lock()
+    tracker = LiveTracker()
+    # 盤中重開時，今天已經發過的訊號也要繼續盯 —— 否則它們的結局只剩收盤後才知道。
+    # 代價是已經結束的那幾筆會被重新追蹤，價格再次碰到時會重複推播一次。
+    for past in gate.state.get("signals", []):
+        tracker.track(past)
+    if gate.state.get("signals"):
+        log.warning("已還原 %d 個今日訊號繼續追蹤結局（重開前已結束的可能會再推一次）",
+                    len(gate.state["signals"]))
 
     @broker.api.on_tick_stk_v1()
     def on_tick(exchange, tick):
@@ -446,11 +567,15 @@ def main():
         if not st or getattr(tick, "simtrade", 0):
             return
         st.update(tick)
+        # 先看已發出的訊號有沒有走完，再看要不要發新的
+        for done in tracker.on_price(st.code, st.last_price):
+            notify(done)
         sig = evaluate(st)
         if not sig:
             return
         msg = try_emit(st, gate, signal_lock, sig)
         if msg:
+            tracker.track(sig)
             notify(msg)
 
     import shioaji as sj  # 只有真的要訂閱行情時才需要
@@ -473,10 +598,17 @@ def main():
     close_at = _t(config.SIGNAL["market_close"])
     poll_every = config.RISK["poll_interval_sec"]
     last_poll = time.monotonic()
+    flattened = False
     try:
         while datetime.now().time() < close_at:
             time.sleep(30)
             broker.ensure_session()
+            # 13:25 還沒走完停損或目標的，一律平倉並告知結果。
+            # 與 outcome.py 的收盤回推用同一個時間，兩邊才比得起來。
+            if not flattened and datetime.now().time() >= outcome.FLATTEN_AT:
+                flattened = True
+                for msg in tracker.flatten():
+                    notify(msg)
             # 主動輪詢風控。只在訊號觸發時才檢查的話，虧損上限的「停手」通知
             # 會等到下一個訊號才發 —— 而那可能是收盤前，早就來不及了。
             # 但每 30 秒查一次帳務會撞到 Shioaji 流量上限，所以自己節流。
