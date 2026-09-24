@@ -36,6 +36,9 @@ OUTCOME_FILE = config.BASE_DIR / "outcomes.csv"
 
 # 一根分鐘 K 涵蓋的時間長度。用來排掉「包著訊號那一刻」的那一根。
 BAR_SPAN = timedelta(minutes=1)
+
+# 台股一張 = 1000 股。signals.py 算單筆風險時用的是同一個數字。
+SHARES_PER_LOT = 1000
 FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct")
@@ -67,6 +70,16 @@ class Outcome:
     @property
     def is_win(self) -> bool:
         return self.net_pct > 0
+
+    @property
+    def net_amount(self) -> float:
+        """扣掉成本後的損益金額（元）。
+
+        用 net_pct 乘上部位金額，而不是另外去算一次手續費與證交稅 —— 這樣訊息上
+        的百分比和金額一定對得起來。兩邊各算各的，遲早會差幾十塊而讓人懷疑哪個
+        才是對的。代價是成本以進場金額為基準估算，誤差在十位數，不影響判斷。
+        """
+        return self.net_pct / 100 * self.entry * SHARES_PER_LOT * self.lots
 
 
 def _num(value) -> float | None:
