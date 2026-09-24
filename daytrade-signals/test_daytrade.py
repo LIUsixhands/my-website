@@ -1076,6 +1076,65 @@ class TestOutcomeCsv(unittest.TestCase):
         oc.append_csv([], self.path)
         self.assertFalse(self.path.exists())
 
+    def test_older_rows_without_the_new_columns_survive(self):
+        """先前跑過的日子沒有現場條件欄位，補欄位不能把那些天弄丟。"""
+        with open(self.path, "w", newline="", encoding="utf-8") as f:
+            f.write("date,code,net_pct\n2026-09-24,1101,0.9\n")
+        oc.append_csv([self._o("2026-09-25", "2330")], self.path)
+        rows = self._rows()
+        self.assertEqual([r["date"] for r in rows], ["2026-09-24", "2026-09-25"])
+        self.assertEqual(rows[0]["or_high"], "")
+
+
+class TestOutcomeRecordsSignalContext(unittest.TestCase):
+    """訊號當下的現場條件要留下來，否則「什麼樣的訊號比較會成功」問不了。
+
+    2026-09-24 當天就遇到了：五個訊號裡有一個的進場價比開盤區間高點高出 2.3%
+    （其餘四個都在 0.8% 以內）。那是追高，風險結構完全不同 —— 但只記進場、停損、
+    目標的話，20 天之後根本分不出這一筆和其他筆的差別。
+    """
+
+    DATE = "2026-09-24"
+    SIG = {"code": "3016", "time": "09:35:25", "entry": 158.0, "stop": 156.0,
+           "target": 161.0, "lots": 1, "or_high": 154.5, "vwap": 151.06,
+           "volume_surge": 1.8}
+
+    def _resolve(self, sig=None):
+        rows = [("09:36", 161.5, 157.0, 161.2)]
+        return oc.resolve(FakeKbarBroker(_kb(rows)), sig or self.SIG, self.DATE)
+
+    def test_keeps_the_conditions_as_they_were(self):
+        o = self._resolve()
+        self.assertEqual(o.or_high, 154.5)
+        self.assertEqual(o.vwap, 151.06)
+        self.assertEqual(o.volume_surge, 1.8)
+
+    def test_extension_measures_how_far_past_the_breakout_it_entered(self):
+        o = self._resolve()
+        self.assertAlmostEqual(o.extension_pct, 2.265, places=2)
+        self.assertAlmostEqual(o.vwap_gap_pct, 4.594, places=2)
+
+    def test_a_normal_breakout_reads_much_lower(self):
+        """對照組：同一天的合晶，進場只高出區間高點 0.42%。"""
+        sig = dict(self.SIG, code="6182", entry=119.0, stop=117.5, target=121.5,
+                   or_high=118.5, vwap=117.15)
+        o = oc.resolve(FakeKbarBroker(_kb([("09:36", 122.0, 118.8, 121.8)])),
+                       sig, self.DATE)
+        self.assertAlmostEqual(o.extension_pct, 0.422, places=2)
+
+    def test_missing_fields_stay_empty_not_zero(self):
+        """舊訊號沒有這些欄位。塞 0 會讓它看起來像「剛好在區間高點進場」。"""
+        o = self._resolve({"code": "2330", "time": "09:23:00", "entry": 121.0,
+                           "stop": 119.5, "target": 123.5, "lots": 1})
+        self.assertIsNone(o.or_high)
+        self.assertIsNone(o.extension_pct)
+        self.assertIsNone(o.volume_surge)
+
+    def test_zero_vwap_does_not_become_a_huge_gap(self):
+        """vwap 拿不到時是 0，拿 0 當分母會算出無意義的數字。"""
+        o = self._resolve(dict(self.SIG, vwap=0))
+        self.assertIsNone(o.vwap_gap_pct)
+
 
 class TestPushTopSeparateFromMonitoring(unittest.TestCase):
     """推播只列前幾檔是為了讀得完；但不能讓人以為程式只監看那幾檔。"""
