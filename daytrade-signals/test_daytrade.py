@@ -1152,8 +1152,21 @@ class TestOutcomeCsv(unittest.TestCase):
                           r_multiple=1.5, gross_pct=1.5, net_pct=1.3, bars=3)
 
     def _rows(self):
-        with open(self.path, newline="", encoding="utf-8") as f:
+        with open(self.path, newline="", encoding="utf-8-sig") as f:
             return list(csv.DictReader(f))
+
+    def test_excel_in_taiwan_can_open_it(self):
+        """沒有 BOM 的話，cp950 的 Excel 會把「停損」開成亂碼。"""
+        oc.append_csv([self._o("2026-09-24", "6182")], self.path)
+        self.assertTrue(self.path.read_bytes().startswith(b"\xef\xbb\xbf"))
+        self.assertIn("目標", self.path.read_text(encoding="utf-8-sig"))
+
+    def test_first_column_name_is_not_polluted_by_the_bom(self):
+        """BOM 沒處理好的話，欄名會變成 '\ufeffdate'，讀回來全部對不上。"""
+        oc.append_csv([self._o("2026-09-24", "6182")], self.path)
+        oc.append_csv([self._o("2026-09-25", "3707")], self.path)
+        self.assertEqual([r["date"] for r in self._rows()],
+                         ["2026-09-24", "2026-09-25"])
 
     def test_appends_across_days(self):
         oc.append_csv([self._o("2026-09-24", "1")], self.path)

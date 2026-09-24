@@ -191,9 +191,12 @@ def append_csv(outcomes: list[Outcome], path=None) -> None:
     dates = {o.date for o in outcomes}
     kept = []
     if path.exists():
-        with open(path, newline="", encoding="utf-8") as f:
+        # utf-8-sig 讀得了有 BOM 與沒有 BOM 的檔，所以舊檔照樣接得下去
+        with open(path, newline="", encoding="utf-8-sig") as f:
             kept = [r for r in csv.DictReader(f) if r.get("date") not in dates]
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    # 寫成帶 BOM 的 UTF-8：台灣的 Excel 預設用 cp950 開 csv，沒有 BOM 的話
+    # 「停損」「目標」會變成一串亂碼。這份檔是要給人看的，不是只給程式讀的。
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         for r in kept:
