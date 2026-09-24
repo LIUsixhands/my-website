@@ -73,7 +73,7 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 205 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 210 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -108,7 +108,7 @@ Windows 的命令是 `python`，沒有 `python3`（打了會說「不是內部�
 
 ### 讓 Windows 自己在 08:40 跑
 
-`morning.bat` 就是為這件事準備的（內容只有一行：`python screener.py --top 5 --push`）。
+`morning.bat` 就是為這件事準備的（跑的是 `python screener.py --push`）。
 註冊成排程，平日 08:40 自動執行，名單直接到手機：
 
 ```
@@ -119,6 +119,19 @@ schtasks /create /tn "盤前選股" /tr "\"%CD%\morning.bat\"" /sc weekly /d MON
 
 **前提：電腦那個時間要是開機且未睡眠的狀態。** 筆電闔上蓋子排程不會跑 ——
 真要每天穩定執行，得讓它保持喚醒，或改放在一直開著的機器上。
+
+**08:40 什麼都沒收到，代表出事了，不是「今天沒名單」。** 選股永遠會產出名單
+（`--push` 模式連 0 檔都會推一則），而失敗也會推一則寫著錯誤訊息的通知出來。
+所以完全的沉默只有三種可能：電腦睡著了、排程沒註冊成功、或是程式還沒跑完。
+
+排在 08:40 的那一次沒有人在看畫面，所以 `morning.bat` 會把每次執行的完整輸出
+附加到 `logs/morning.log`（含結束碼）。事後要查當天到底發生什麼事就看這個檔案：
+
+```
+schtasks /query /tn "盤前選股" /v /fo list      查排程本身：上次執行時間與結果
+type logs\morning.log                           查程式跑出了什麼
+morning.bat                                      手動補跑一次（畫面會印出最後 25 行）
+```
 
 > **驗證期（前 20 個交易日）：不要用 `--top`，監看完整候選池。**
 >
@@ -256,7 +269,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 205 項離線測試 |
+| `test_daytrade.py` | 210 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。

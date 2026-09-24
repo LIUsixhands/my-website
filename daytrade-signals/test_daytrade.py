@@ -822,6 +822,68 @@ class TestWatchlistPush(unittest.TestCase):
         self.assertTrue(screener.parse_args(["--push"]).push)
 
 
+class TestScreenerFailureIsAudible(unittest.TestCase):
+    """08:40 的沉默有兩種意思，而處置完全相反 —— 所以失敗必須出聲。
+
+    「今天沒有名單」是正常的一天；「程式當掉了」要人去修。收不到訊息時這兩件事
+    長得一模一樣，於是使用者會坐在那裡等一個永遠不會來的名單。
+    """
+
+    def test_failure_text_names_the_error_and_says_no_watchlist(self):
+        text = screener.format_failure(RuntimeError("ip: 1.2.3.4 not allow"))
+        self.assertIn("盤前選股失敗", text)
+        self.assertIn("RuntimeError", text)
+        self.assertIn("not allow", text)
+        self.assertIn("沒有觀察名單", text)
+
+    def test_failure_text_is_truncated(self):
+        """例外訊息可能是一整頁 HTML 錯誤頁，Telegram 有長度上限。"""
+        text = screener.format_failure(RuntimeError("x" * 5000))
+        self.assertLess(len(text), 900)
+        self.assertIn("完整訊息在電腦上", text)
+
+    def test_push_mode_pushes_on_failure_and_still_raises(self):
+        sent = []
+        boom = RuntimeError("登入失敗")
+
+        def explode(args):
+            raise boom
+
+        with unittest.mock.patch.object(screener, "run", explode), \
+             unittest.mock.patch.object(signals, "notify", sent.append):
+            with self.assertRaises(RuntimeError):
+                screener.main(["--push"])
+        self.assertEqual(len(sent), 1)
+        self.assertIn("登入失敗", sent[0])
+
+    def test_without_push_it_stays_quiet(self):
+        """人就坐在畫面前面的時候，不需要再推一則到手機。"""
+        sent = []
+
+        def explode(args):
+            raise RuntimeError("登入失敗")
+
+        with unittest.mock.patch.object(screener, "run", explode), \
+             unittest.mock.patch.object(signals, "notify", sent.append):
+            with self.assertRaises(RuntimeError):
+                screener.main([])
+        self.assertEqual(sent, [])
+
+    def test_broken_push_does_not_swallow_the_real_error(self):
+        """推播管道自己壞掉時，原始錯誤還是要傳上去 —— 否則排程看到 exit 0。"""
+        def explode(args):
+            raise RuntimeError("真正的錯誤")
+
+        def bad_notify(_text):
+            raise OSError("網路不通")
+
+        with unittest.mock.patch.object(screener, "run", explode), \
+             unittest.mock.patch.object(signals, "notify", bad_notify):
+            with self.assertRaises(RuntimeError) as ctx:
+                screener.main(["--push"])
+        self.assertIn("真正的錯誤", str(ctx.exception))
+
+
 def _kb(rows):
     """把 (HH:MM, high, low, close) 做成 shioaji 形狀的假 kbars。
 

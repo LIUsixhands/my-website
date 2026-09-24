@@ -12,3 +12,6 @@ journal/*.md
 
 __pycache__/
 *.pyc
+
+# morning.bat 的執行紀錄（排程跑失敗時唯一的線索，但不進版控）
+logs/
