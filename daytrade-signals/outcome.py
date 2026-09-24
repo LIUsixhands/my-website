@@ -34,7 +34,8 @@ FLATTEN_AT = dtime(13, 25)
 
 OUTCOME_FILE = config.BASE_DIR / "outcomes.csv"
 FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
-          "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars")
+          "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars",
+          "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct")
 
 
 @dataclass
@@ -52,10 +53,32 @@ class Outcome:
     gross_pct: float      # 未扣成本的報酬率
     net_pct: float        # 扣掉來回成本後
     bars: int             # 從進場到出場經過幾根分鐘 K
+    # 以下是發訊號當下的現場條件。它們不影響任何判定，純粹是為了讓 20 天之後
+    # 回答得了「什麼樣的訊號比較會成功」—— 沒留下來的話，那些問題就永遠問不了。
+    or_high: float | None = None        # 開盤區間高點
+    vwap: float | None = None           # 當時的均價線
+    volume_surge: float | None = None   # 當時的量能倍數
+    extension_pct: float | None = None  # 進場價比區間高點高出幾 %（追高的程度）
+    vwap_gap_pct: float | None = None   # 進場價比均價線高出幾 %
 
     @property
     def is_win(self) -> bool:
         return self.net_pct > 0
+
+
+def _num(value) -> float | None:
+    """舊的訊號紀錄沒有這些欄位，缺了就留空，不要塞 0 冒充真實數字。"""
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pct_above(price: float, base: float | None) -> float | None:
+    """price 比 base 高出幾 %。base 缺或為 0 就沒有意義，回 None。"""
+    if not base:
+        return None
+    return round((price - base) / base * 100, 3)
 
 
 def _parse_signal_time(sig: dict, date: str) -> datetime | None:
@@ -128,6 +151,7 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
             break
 
     gross = (exit_price - entry) / entry * 100
+    or_high, vwap = _num(sig.get("or_high")), _num(sig.get("vwap"))
     return Outcome(
         date=date, code=str(sig["code"]), time=str(sig.get("time", "")),
         entry=entry, stop=stop, target=target, lots=int(sig.get("lots", 0) or 0),
@@ -136,6 +160,10 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         gross_pct=round(gross, 3),
         net_pct=round(gross - config.round_trip_cost_pct(), 3),
         bars=used,
+        or_high=or_high, vwap=vwap,
+        volume_surge=_num(sig.get("volume_surge")),
+        extension_pct=_pct_above(entry, or_high),
+        vwap_gap_pct=_pct_above(entry, vwap),
     )
 
 
