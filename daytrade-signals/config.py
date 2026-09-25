@@ -205,6 +205,25 @@ def round_to_tick(price: float, mode: str = "nearest") -> float:
     return round(n * tick, 2)
 
 
+# 台股單日漲跌幅上限。停損與目標都不可以落在這兩條線之外 ——
+# 那不是「比較難成交」，那是一張永遠不會成交的委託。
+PRICE_LIMIT_PCT = 10.0
+
+
+def limit_up(prev_close: float) -> float | None:
+    """當日漲停價。往**下**取合法檔位：漲停價不可以超過漲幅上限。"""
+    if not prev_close or prev_close <= 0:
+        return None
+    return round_to_tick(prev_close * (1 + PRICE_LIMIT_PCT / 100), "down")
+
+
+def limit_down(prev_close: float) -> float | None:
+    """當日跌停價。往**上**取合法檔位。"""
+    if not prev_close or prev_close <= 0:
+        return None
+    return round_to_tick(prev_close * (1 - PRICE_LIMIT_PCT / 100), "up")
+
+
 def round_trip_cost_pct() -> float:
     """來回一趟的成本（%）。策略期望值必須先跨過這條線。"""
     fee = COST["fee_rate"] * COST["fee_discount"] * 2
