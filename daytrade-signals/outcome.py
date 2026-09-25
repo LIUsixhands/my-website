@@ -41,7 +41,8 @@ BAR_SPAN = timedelta(minutes=1)
 SHARES_PER_LOT = 1000
 FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars",
-          "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct")
+          "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
+          "mae_pct", "mfe_pct", "target_after_stop")
 
 
 @dataclass
@@ -66,6 +67,11 @@ class Outcome:
     volume_surge: float | None = None   # 當時的量能倍數
     extension_pct: float | None = None  # 進場價比區間高點高出幾 %（追高的程度）
     vwap_gap_pct: float | None = None   # 進場價比均價線高出幾 %
+    # 進場之後整天（到 13:25）的極端值，不管中途有沒有出場。
+    # 用來回答「停損該多緊、目標該多遠」—— 只看出場價的話，這兩個問題永遠問不了。
+    mae_pct: float | None = None        # 最大不利偏移：進場後最低點離進場價幾 %
+    mfe_pct: float | None = None        # 最大有利偏移：進場後最高點離進場價幾 %
+    target_after_stop: bool | None = None   # 停損出場後，當天還是碰到目標了嗎
 
     @property
     def is_win(self) -> bool:
@@ -182,6 +188,9 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
 
     gross = (exit_price - entry) / entry * 100
     or_high, vwap = _num(sig.get("or_high")), _num(sig.get("vwap"))
+    # 整天的極端值：算的是**全部** K 棒，不是只算到出場那一根。
+    # 問題是「如果我沒出場會怎樣」，只看到出場為止就答不出來。
+    day_high, day_low = max(b[1] for b in bars), min(b[2] for b in bars)
     return Outcome(
         date=date, code=str(sig["code"]), time=str(sig.get("time", "")),
         entry=entry, stop=stop, target=target, lots=int(sig.get("lots", 0) or 0),
@@ -194,6 +203,9 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         volume_surge=_num(sig.get("volume_surge")),
         extension_pct=_pct_above(entry, or_high),
         vwap_gap_pct=_pct_above(entry, vwap),
+        mae_pct=round((day_low - entry) / entry * 100, 3),
+        mfe_pct=round((day_high - entry) / entry * 100, 3),
+        target_after_stop=(day_high >= target) if result == STOP else None,
     )
 
 
@@ -236,8 +248,16 @@ def append_csv(outcomes: list[Outcome], path=None) -> None:
 
 
 _STR_FIELDS = ("date", "code", "time", "result")
+_BOOL_FIELDS = ("target_after_stop",)
 _INT_FIELDS = ("lots", "bars")
-_OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct")
+_OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
+                    "vwap_gap_pct", "mae_pct", "mfe_pct")
+
+
+def _bool(value) -> bool | None:
+    """CSV 讀回來是字串。空字串代表「不適用」，不是 False。"""
+    text = str(value or "").strip()
+    return None if not text else text.lower() == "true"
 
 
 def load_csv(path=None) -> list[Outcome]:
@@ -258,6 +278,7 @@ def load_csv(path=None) -> list[Outcome]:
                        ("entry", "stop", "target", "exit_price",
                         "r_multiple", "gross_pct", "net_pct")}
                 kw |= {k: _num(raw.get(k)) for k in _OPTIONAL_FIELDS}
+                kw |= {k: _bool(raw.get(k)) for k in _BOOL_FIELDS}
                 rows.append(Outcome(**kw))
             except (KeyError, TypeError, ValueError) as e:
                 log.warning("outcomes.csv 有一列讀不進來，跳過：%s", e)
