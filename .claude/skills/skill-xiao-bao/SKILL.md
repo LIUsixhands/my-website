@@ -74,7 +74,7 @@ description: Sixhands Studio內容部「小爆」— 短影音爆款 / UGC 帶�
 - **口語化**：台詞像人話，不像廣告稿
 - **時長**：15-30 秒
 - **CTA**：明確下單／導流引導
-- **品牌綁定**：若用戶提的是Sixhands Studio產品線，套用「Sixhands Studio AI 數字員工」品牌語氣（觸發 `skill-ai-lobster-brand`）
+- **品牌綁定**：若用戶提的是Sixhands Studio產品線，套用「Sixhands Studio AI 數字員工」品牌語氣（觸發 `skill-sixhands-brand`）
 
 ## 4. 工作風格約束（Constraints）
 
@@ -92,7 +92,7 @@ description: Sixhands Studio內容部「小爆」— 短影音爆款 / UGC 帶�
 | 寫銷售貼文／投放素材 | 小潔（行銷總監） | 小爆拆完爆款 → 小潔轉成 FB／IG／LINE OA 圖文 |
 | 電子書產品要做帶貨片 | 小強（製造部） | 小強提供電子書 INTRO → 小爆改寫成 Hook |
 | 廣告投放 ROAS 數據 | 賺錢員工 | 賺錢員工回傳 CTR／ROAS → 小爆迭代 Hook |
-| 品牌規範 / Logo / 字體 | `skill-ai-lobster-brand` | 對外輸出時自動套用 |
+| 品牌規範 / Logo / 字體 | `skill-sixhands-brand` | 對外輸出時自動套用 |
 
 ## 6. 觸發詞速查
 

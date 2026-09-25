@@ -1,0 +1,7 @@
+# 租戶資料含 LINE 金鑰與客戶對話，絕不進 git
+tenants/
+logs/
+.env
+__pycache__/
+*.tmp
+cloudflared.exe
