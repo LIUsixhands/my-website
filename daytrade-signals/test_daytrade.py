@@ -1306,6 +1306,41 @@ class TestOutcomeCsvRoundTrip(unittest.TestCase):
         self.assertEqual(oc.load_csv(self.path), [])
 
 
+class TestFillWindow(unittest.TestCase):
+    """限價掛訊號價，到底買不買得到 —— 這決定了手動下單行不行得通。"""
+
+    DATE = "2026-09-24"
+    SIG = {"code": "6182", "time": "09:19:22", "entry": 119.0,
+           "stop": 117.5, "target": 121.5, "lots": 1}
+
+    def _resolve(self, rows):
+        return oc.resolve(FakeKbarBroker(_kb(rows)), self.SIG, self.DATE)
+
+    def test_negative_means_the_limit_order_would_fill(self):
+        """價格回頭到進場價以下 → 掛在訊號價買得到。"""
+        o = self._resolve([("09:21", 119.5, 118.6, 119.2),
+                           ("09:30", 121.6, 119.8, 121.4)])
+        self.assertLess(o.low_5m_pct, 0)
+
+    def test_positive_means_you_would_have_had_to_chase(self):
+        """價格一路不回頭 → 限價買不到，要追多少就是這個數字。"""
+        o = self._resolve([("09:21", 120.5, 119.6, 120.2),
+                           ("09:30", 121.6, 120.8, 121.4)])
+        self.assertAlmostEqual(o.low_5m_pct, 0.504, places=2)   # 119.6 vs 119.0
+
+    def test_only_the_first_five_bars_count(self):
+        """第 20 分鐘才回頭的價格，對「現在追不追得上」沒有意義。"""
+        rows = [(f"09:{m:02d}", 120.5, 119.6, 120.2) for m in range(21, 27)]
+        rows.append(("09:45", 120.0, 115.0, 116.0))   # 很晚才跌回來
+        o = oc.resolve(FakeKbarBroker(_kb(rows)), self.SIG, self.DATE)
+        self.assertGreater(o.low_5m_pct, 0)
+
+    def test_a_late_signal_with_few_bars_still_works(self):
+        """13:20 才發的訊號只剩幾根 K，不該因此算不出來。"""
+        o = self._resolve([("13:22", 119.5, 118.8, 119.2)])
+        self.assertIsNotNone(o.low_5m_pct)
+
+
 class TestPriceLimits(unittest.TestCase):
     """停損與目標都不可以落在漲跌停之外 —— 那是永遠不會成交的委託。
 

@@ -37,12 +37,16 @@ OUTCOME_FILE = config.BASE_DIR / "outcomes.csv"
 # 一根分鐘 K 涵蓋的時間長度。用來排掉「包著訊號那一刻」的那一根。
 BAR_SPAN = timedelta(minutes=1)
 
+# 看「訊號後多久之內買得到」用的窗口。人從收到推播、開 App、輸入到送出，
+# 現實上就是這幾分鐘 —— 窗口開太大等於假設你反應得比實際快。
+FILL_WINDOW_BARS = 5
+
 # 台股一張 = 1000 股。signals.py 算單筆風險時用的是同一個數字。
 SHARES_PER_LOT = 1000
 FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
-          "mae_pct", "mfe_pct", "target_after_stop")
+          "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct")
 
 
 @dataclass
@@ -72,6 +76,9 @@ class Outcome:
     mae_pct: float | None = None        # 最大不利偏移：進場後最低點離進場價幾 %
     mfe_pct: float | None = None        # 最大有利偏移：進場後最高點離進場價幾 %
     target_after_stop: bool | None = None   # 停損出場後，當天還是碰到目標了嗎
+    # 訊號後第 1~5 分鐘的最低價離進場價幾 %。<= 0 表示「限價掛訊號價買得到」。
+    # 人從收到訊號到送出委託正好就落在這個窗口裡，所以它直接回答「我追得上嗎」。
+    low_5m_pct: float | None = None
 
     @property
     def is_win(self) -> bool:
@@ -191,6 +198,7 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
     # 整天的極端值：算的是**全部** K 棒，不是只算到出場那一根。
     # 問題是「如果我沒出場會怎樣」，只看到出場為止就答不出來。
     day_high, day_low = max(b[1] for b in bars), min(b[2] for b in bars)
+    low_5m = min(b[2] for b in bars[:FILL_WINDOW_BARS])
     return Outcome(
         date=date, code=str(sig["code"]), time=str(sig.get("time", "")),
         entry=entry, stop=stop, target=target, lots=int(sig.get("lots", 0) or 0),
@@ -206,6 +214,7 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         mae_pct=round((day_low - entry) / entry * 100, 3),
         mfe_pct=round((day_high - entry) / entry * 100, 3),
         target_after_stop=(day_high >= target) if result == STOP else None,
+        low_5m_pct=round((low_5m - entry) / entry * 100, 3),
     )
 
 
@@ -251,7 +260,7 @@ _STR_FIELDS = ("date", "code", "time", "result")
 _BOOL_FIELDS = ("target_after_stop",)
 _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
-                    "vwap_gap_pct", "mae_pct", "mfe_pct")
+                    "vwap_gap_pct", "mae_pct", "mfe_pct", "low_5m_pct")
 
 
 def _bool(value) -> bool | None:
