@@ -1305,6 +1305,67 @@ class TestOutcomeCsvRoundTrip(unittest.TestCase):
         self.assertEqual(oc.load_csv(self.path), [])
 
 
+class TestExcursions(unittest.TestCase):
+    """停損該多緊、目標該多遠 —— 只記出場價的話，這兩個問題永遠問不了。
+
+    2026-09-24 光頡：進場 137.00、停損 135.00 被掃，但當天最高走到 144.50、
+    收在 140.00（剛好是目標價）。只看「停損」兩個字，看不出這一筆其實是被洗掉的。
+    """
+
+    DATE = "2026-09-24"
+    SIG = {"code": "3624", "time": "09:27:41", "entry": 137.0,
+           "stop": 135.0, "target": 140.0, "lots": 1}
+
+    def _resolve(self, rows):
+        return oc.resolve(FakeKbarBroker(_kb(rows)), self.SIG, self.DATE)
+
+    def test_extremes_cover_the_whole_day_not_just_up_to_the_exit(self):
+        o = self._resolve([("09:29", 137.5, 134.0, 134.5),   # 這根掃到停損
+                           ("10:40", 144.5, 138.0, 143.0),   # 出場之後才走的
+                           ("13:20", 141.0, 139.5, 140.0)])
+        self.assertEqual(o.result, oc.STOP)
+        self.assertAlmostEqual(o.mae_pct, -2.190, places=2)   # 134.0 vs 137.0
+        self.assertAlmostEqual(o.mfe_pct, 5.474, places=2)    # 144.5 vs 137.0
+
+    def test_flags_a_stop_that_later_reached_the_target(self):
+        """被洗掉之後又漲到目標 —— 這是這 20 天最關鍵的那個問題。"""
+        o = self._resolve([("09:29", 137.5, 134.0, 134.5),
+                           ("10:40", 144.5, 138.0, 143.0)])
+        self.assertTrue(o.target_after_stop)
+
+    def test_a_stop_that_never_recovered_is_marked_false(self):
+        o = self._resolve([("09:29", 137.5, 134.0, 134.5),
+                           ("10:40", 136.0, 133.0, 133.5)])
+        self.assertFalse(o.target_after_stop)
+
+    def test_not_applicable_when_it_was_not_a_stop(self):
+        """贏的那幾筆沒有「被洗掉」這回事，記 False 會污染統計。"""
+        o = self._resolve([("09:29", 140.5, 136.5, 140.2)])
+        self.assertEqual(o.result, oc.TARGET)
+        self.assertIsNone(o.target_after_stop)
+
+    def test_a_winner_still_records_how_far_it_went_against_you(self):
+        """贏的單的 MAE 才回答得了「停損可以多緊而不被洗掉」。"""
+        o = self._resolve([("09:29", 138.0, 135.5, 137.8),
+                           ("09:35", 140.5, 137.0, 140.2)])
+        self.assertEqual(o.result, oc.TARGET)
+        self.assertAlmostEqual(o.mae_pct, -1.095, places=2)   # 135.5 vs 137.0
+
+    def test_booleans_survive_the_csv_round_trip(self):
+        """空字串是「不適用」，不是 False。讀成 False 會讓贏的單被算進統計。"""
+        import tempfile
+        from pathlib import Path as _P
+        with tempfile.TemporaryDirectory() as d:
+            path = _P(d) / "outcomes.csv"
+            stopped = self._resolve([("09:29", 137.5, 134.0, 134.5),
+                                     ("10:40", 144.5, 138.0, 143.0)])
+            won = self._resolve([("09:29", 140.5, 136.5, 140.2)])
+            oc.append_csv([stopped, won], path)
+            back = oc.load_csv(path)
+            self.assertTrue(back[0].target_after_stop)
+            self.assertIsNone(back[1].target_after_stop)
+
+
 class TestOutcomeSummary(unittest.TestCase):
     def _o(self, net, result):
         return oc.Outcome(date="2026-09-24", code="1", time="09:23", entry=100.0,
