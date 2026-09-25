@@ -274,6 +274,11 @@ def evaluate(st: SymbolState, now: dtime | None = None) -> dict | None:
         return None
 
     entry = st.last_price
+    # 已經漲停鎖死就不要發了 —— 那個價位你買不到，就算買到也沒有上檔空間。
+    cap = config.limit_up(st.prev_close)
+    if cap and entry >= cap:
+        log.warning("%s 現價 %.2f 已達漲停 %.2f，不發訊號", st.code, entry, cap)
+        return None
     # 停損往上進位（較緊的那一邊）：實際風險不會超過 stop_loss_pct 設定的上限。
     stop = config.round_to_tick(entry * (1 - cfg["stop_loss_pct"] / 100), "up")
     if stop >= entry:
@@ -282,6 +287,12 @@ def evaluate(st: SymbolState, now: dtime | None = None) -> dict | None:
         return None
     # 目標同樣往上進位：真的到價時，R 倍數不會低於設定值。
     target = config.round_to_tick(entry + (entry - stop) * cfg["reward_risk"], "up")
+    # 但目標不可以超過漲停價。2026-09-24 的嘉晶就是這樣：昨收 145.5、漲停 160.0，
+    # 而我們發了一個 161.00 的目標 —— 那一筆被判成「收盤平倉」，不是因為它沒走到，
+    # 是因為那個價位當天不存在。貼齊漲停，並在訊號上講明賺賠比因此縮水。
+    target_capped = bool(cap and target > cap)
+    if target_capped:
+        target = cap
 
     risk_per_lot = (entry - stop) * 1000          # 一張 1000 股
     lots = int(config.RISK["per_trade_risk"] // risk_per_lot) if risk_per_lot > 0 else 0
@@ -301,6 +312,7 @@ def evaluate(st: SymbolState, now: dtime | None = None) -> dict | None:
         "lots": lots,
         "risk_per_lot": round(risk_per_lot),
         "oversized": oversized,
+        "target_capped": target_capped,
         "or_high": st.or_high,
         "vwap": round(st.vwap, 2),
         "volume_surge": round(surge, 2),
@@ -317,7 +329,10 @@ def format_signal(sig: dict, ordinal: int) -> str:
         f"方向：{sig['direction']}（開盤區間突破）",
         f"進場：{sig['entry']:.2f}（區間高 {sig['or_high']:.2f}，均價 {sig['vwap']:.2f}）",
         f"停損：{sig['stop']:.2f}  ← 跌破就走，不准往下修",
-        f"目標：{sig['target']:.2f}（{config.SIGNAL['reward_risk']}R）",
+        (f"目標：{sig['target']:.2f}（貼齊漲停，"
+         f"實際 {(sig['target'] - sig['entry']) / (sig['entry'] - sig['stop']):.2f}R）"
+         if sig.get("target_capped") else
+         f"目標：{sig['target']:.2f}（{config.SIGNAL['reward_risk']}R）"),
         f"建議張數：{sig['lots']} 張（單筆風險 {r['per_trade_risk']:,} 元）",
         f"量能倍數：{sig['volume_surge']:.2f}x",
     ]

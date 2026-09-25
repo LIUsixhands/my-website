@@ -68,7 +68,8 @@ def snap(code="2330", close=100.0, high=104.0, low=100.0, volume=9000, avg=101.0
 
 def ready_state(code="2330", or_high=100.0, last=101.0, vwap=100.5, surge_ratio=3.0):
     """造一個「萬事俱備」的個股狀態：區間已鎖、價格突破、站上均價、量能達標。"""
-    st = SymbolState(code, prev_close=99.0)
+    # 昨收跟著標的價位走，否則高價股的測試會誤觸漲停夾擠
+    st = SymbolState(code, prev_close=round(or_high * 0.99, 2))
     st.lock_opening_range(or_high, or_high - 2)
     st.last_price = last
     st.vwap = vwap
@@ -1303,6 +1304,71 @@ class TestOutcomeCsvRoundTrip(unittest.TestCase):
 
     def test_missing_file_is_empty_not_an_error(self):
         self.assertEqual(oc.load_csv(self.path), [])
+
+
+class TestPriceLimits(unittest.TestCase):
+    """停損與目標都不可以落在漲跌停之外 —— 那是永遠不會成交的委託。
+
+    2026-09-24 嘉晶：昨收 145.5、當日漲停 160.0，而系統發了 161.00 的目標。
+    那一筆被判成「收盤平倉」，不是因為它沒走到目標，是因為那個價位當天不存在。
+    """
+
+    def test_limit_up_rounds_down_to_a_legal_tick(self):
+        """漲停價不可以超過 10% —— 進位方向錯了會算出一個超過上限的價。"""
+        self.assertEqual(config.limit_up(145.5), 160.0)     # 160.05 → 160.0
+        self.assertEqual(config.limit_up(107.0), 117.5)
+        self.assertEqual(config.limit_up(70.2), 77.2)
+
+    def test_limit_down_rounds_up(self):
+        self.assertEqual(config.limit_down(145.5), 131.0)   # 130.95 → 131.0
+
+    def test_missing_prev_close_gives_no_limit(self):
+        """拿不到昨收就不要猜一個漲停價出來 —— 猜錯比不夾更糟。"""
+        self.assertIsNone(config.limit_up(0))
+        self.assertIsNone(config.limit_down(None))
+
+    def _state(self, prev_close, last_price, or_high):
+        st = signals.SymbolState(code="3016", prev_close=prev_close, name="嘉晶")
+        st.lock_opening_range(or_high, or_high - 3, source="測試")
+        st.last_price = last_price
+        st.vwap = or_high - 3
+        st.vol_marks = [(0.0, 0), (600.0, 6_000_000)]
+        return st
+
+    def test_target_is_capped_at_the_limit_up_price(self):
+        st = self._state(prev_close=145.5, last_price=158.0, or_high=154.5)
+        with unittest.mock.patch.object(signals.SymbolState, "volume_surge",
+                                        lambda self: 5.0):
+            sig = signals.evaluate(st, dtime(9, 35))
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig["target"], 160.0)      # 不是 161.0
+        self.assertTrue(sig["target_capped"])
+
+    def test_capped_target_is_spelled_out_in_the_message(self):
+        """賺賠比因此縮水，訊息上要講出來，不能假裝還是 1.5R。"""
+        sig = {"code": "3016", "name": "嘉晶", "time": "09:35:25", "direction": "做多",
+               "entry": 158.0, "stop": 156.0, "target": 160.0, "lots": 1,
+               "risk_per_lot": 2000, "oversized": False, "target_capped": True,
+               "or_high": 154.5, "vwap": 151.06, "volume_surge": 1.8}
+        text = signals.format_signal(sig, 5)
+        self.assertIn("貼齊漲停", text)
+        self.assertIn("1.00R", text)
+
+    def test_no_signal_once_it_is_locked_at_the_limit(self):
+        """漲停鎖死的價位你買不到，買到也沒有上檔空間。"""
+        st = self._state(prev_close=145.5, last_price=160.0, or_high=154.5)
+        with unittest.mock.patch.object(signals.SymbolState, "volume_surge",
+                                        lambda self: 5.0):
+            self.assertIsNone(signals.evaluate(st, dtime(9, 35)))
+
+    def test_a_normal_stock_is_untouched(self):
+        """沒碰到漲停的日子，目標還是照 1.5R 算。"""
+        st = self._state(prev_close=107.0, last_price=109.0, or_high=108.5)
+        with unittest.mock.patch.object(signals.SymbolState, "volume_surge",
+                                        lambda self: 5.0):
+            sig = signals.evaluate(st, dtime(9, 30))
+        self.assertEqual(sig["target"], 111.5)
+        self.assertFalse(sig["target_capped"])
 
 
 class TestExcursions(unittest.TestCase):
