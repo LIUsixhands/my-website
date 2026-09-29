@@ -73,7 +73,7 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 293 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 304 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -274,6 +274,27 @@ MAE 說明停損可以多緊而不被洗掉；輸的那幾筆的 MFE 說明停�
 
 ---
 
+## 即時判定與收盤回推衝突時，以 tick 為準
+
+`bars_after()` 刻意丟掉訊號後的頭 60 秒 —— 那一根 K 棒涵蓋訊號發出**前**的時間，
+留著會製造假停損（2026-09-24 五個訊號誤判四個）。代價是走得快的那幾筆就結束在
+那個空窗裡。
+
+2026-09-29 允強：09:32:13 發訊號、**09:32:25（12 秒後）到目標**。即時推播說
++1.57R，收盤覆盤說 −1.00R —— 分鐘 K 看不到那 12 秒，只看到後來跌回去碰停損。
+同一筆交易兩個答案，差 2.57R。
+
+原本 `outcome.py` 的註解寫著「LiveTracker 看 tick，正好補上這一段」。**那句話在
+程式裡不成立**：即時結果只活在那則 Telegram 訊息裡，沒人寫下來，`outcome.py`
+從來沒看過它。
+
+現在 `LiveTracker` 判定完會把結果寫回 `state.json` 的那一筆訊號
+（`live_result` / `live_exit` / `live_at`），`review.py` 讀回去交給 `resolve()`，
+**有 tick 判定就以它為準**，沒有才用分鐘 K。tick 是實際成交，分鐘 K 是事後摘要。
+
+整天的極值（`mae_pct` / `mfe_pct` / `low_5m_pct`）仍然一律由 K 棒算；K 棒抓不到
+時留空，不猜。`bars` 欄為 0 表示這一筆是 tick 判定的。
+
 ## 測試不會推到你手機
 
 2026-09-29：使用者跑一次 `python test_daytrade.py`，手機收到 5 則「今日停手」，
@@ -389,7 +410,7 @@ per_trade_risk           3000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 293 項離線測試 |
+| `test_daytrade.py` | 304 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。

@@ -2924,5 +2924,134 @@ class TestTestsCanNeverPush(unittest.TestCase):
             self.assertFalse(config.push_enabled())
 
 
+class TestLiveResultWinsOverKbars(unittest.TestCase):
+    """2026-09-29 允強：即時推播說 +1.57R，收盤覆盤說 -1.00R。同一筆交易兩個答案。
+
+    訊號 09:32:13，09:32:25（12 秒後）就到目標。bars_after() 刻意丟掉訊號後的頭
+    60 秒 —— 那一根 K 棒涵蓋訊號發出**前**的時間，留著會製造假停損。但這一筆整個
+    就結束在那個空窗裡，收盤回推只看到後來跌回去碰停損。
+
+    outcome.py 的註解本來寫著「LiveTracker 看 tick，正好補上這一段」——
+    那句話在程式裡不成立：即時結果只活在那則 Telegram 訊息裡，沒人寫下來。
+    """
+
+    DATE = "2026-09-24"
+    # 允強的真實數字
+    SIG = {"code": "2034", "time": "09:32:13", "entry": 24.20,
+           "stop": 23.85, "target": 24.75, "lots": 5}
+    # 訊號之後的 K 棒：價格跌回去碰到停損（到目標那 12 秒不在這些 K 棒裡）
+    BARS = [("09:34", 24.30, 23.80, 23.90), ("09:35", 23.95, 23.70, 23.75)]
+
+    def _resolve(self, **extra):
+        sig = dict(self.SIG, **extra)
+        return oc.resolve(FakeKbarBroker(_kb(self.BARS)), sig, self.DATE)
+
+    def test_without_live_result_the_kbars_say_stop(self):
+        """先證明這個 bug 真的存在：沒有即時判定時，K 棒會判成停損。"""
+        o = self._resolve()
+        self.assertEqual(o.result, oc.STOP)
+        self.assertEqual(o.r_multiple, -1.0)
+
+    def test_live_target_beats_the_kbars(self):
+        """有即時判定時，以 tick 為準 —— 這才是當下真正發生的事。"""
+        o = self._resolve(live_result=oc.TARGET, live_exit=24.75)
+        self.assertEqual(o.result, oc.TARGET)
+        self.assertEqual(o.exit_price, 24.75)
+        # (24.75 - 24.20) / (24.20 - 23.85) = 1.571
+        self.assertEqual(o.r_multiple, 1.57)
+        self.assertGreater(o.net_pct, 0)
+
+    def test_excursions_still_come_from_the_kbars(self):
+        """即時判定只決定結局，整天的極值仍然要用 K 棒算。"""
+        o = self._resolve(live_result=oc.TARGET, live_exit=24.75)
+        self.assertIsNotNone(o.mae_pct)
+        self.assertIsNotNone(o.mfe_pct)
+        self.assertLess(o.mae_pct, 0)          # 當天確實跌下去過
+
+    def test_live_result_survives_with_no_kbars_at_all(self):
+        """K 棒抓不到時，有即時判定就不該整筆丟掉 —— 那是真的成交過的結果。"""
+        o = oc.resolve(FakeKbarBroker(_kb([])),
+                       dict(self.SIG, live_result=oc.TARGET, live_exit=24.75),
+                       self.DATE)
+        self.assertIsNotNone(o)
+        self.assertEqual(o.result, oc.TARGET)
+        self.assertIsNone(o.mae_pct)           # 沒有 K 棒就留空，不要猜
+        self.assertIsNone(o.low_5m_pct)
+
+    def test_no_live_and_no_kbars_is_still_none(self):
+        """兩邊都沒有就不要猜一個結局出來。"""
+        self.assertIsNone(oc.resolve(FakeKbarBroker(_kb([])), self.SIG, self.DATE))
+
+
+class TestLiveResultIsWrittenDown(unittest.TestCase):
+    """即時判定沒寫回 state.json 的話，收盤覆盤永遠看不到它。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._orig, config.STATE_FILE = config.STATE_FILE, Path(self._tmp.name) / "state.json"
+        self.addCleanup(lambda: setattr(config, "STATE_FILE", self._orig))
+        self.gate = RiskGate(FakeBroker(pnl_rows=[]))
+        self.gate.record({"code": "2034", "time": "09:32:13", "entry": 24.20,
+                          "stop": 23.85, "target": 24.75, "lots": 5})
+
+    def test_written_into_the_matching_signal(self):
+        self.assertTrue(
+            self.gate.record_live_result("2034", "09:32:13", oc.TARGET, 24.75))
+        saved = json.loads(config.STATE_FILE.read_text(encoding="utf-8"))
+        sig = saved["signals"][0]
+        self.assertEqual(sig["live_result"], oc.TARGET)
+        self.assertEqual(sig["live_exit"], 24.75)
+        self.assertTrue(sig["live_at"])
+
+    def test_review_reads_it_straight_back(self):
+        """load_signals() 讀回來的就是 resolve() 吃的那份 —— 中間不可以掉。"""
+        self.gate.record_live_result("2034", "09:32:13", oc.TARGET, 24.75)
+        sigs, _ = review.load_signals()     # state.json 的日期就是今天
+        self.assertEqual(sigs[0]["live_result"], oc.TARGET)
+        self.assertEqual(sigs[0]["live_exit"], 24.75)
+
+    def test_unmatched_signal_is_reported_not_silently_dropped(self):
+        with self.assertLogs("signals", level="WARNING"):
+            self.assertFalse(
+                self.gate.record_live_result("9999", "09:00:00", oc.TARGET, 1.0))
+
+
+class TestTrackerHandsOffItsVerdict(unittest.TestCase):
+    def _tracker(self, seen):
+        return signals.LiveTracker(
+            on_resolved=lambda o, price, v: seen.append((o.code, v, price)))
+
+    def _sig(self, code="2034"):
+        return {"code": code, "time": "09:32:13", "entry": 24.20,
+                "stop": 23.85, "target": 24.75, "lots": 5}
+
+    def test_target_is_handed_off(self):
+        seen = []
+        t = self._tracker(seen)
+        t.track(self._sig())
+        msgs = t.on_price("2034", 24.80)
+        self.assertEqual(len(msgs), 1)
+        self.assertEqual(seen, [("2034", oc.TARGET, 24.80)])
+
+    def test_flatten_is_handed_off_too(self):
+        seen = []
+        t = self._tracker(seen)
+        t.track(self._sig())
+        t.on_price("2034", 24.30)          # 還沒結束，只是留下最後價格
+        t.flatten()
+        self.assertEqual(seen, [("2034", oc.FLAT, 24.30)])
+
+    def test_a_broken_recorder_does_not_swallow_the_push(self):
+        """寫回失敗是可以忍的，推播不見不行 —— 那是使用者唯一看得到的東西。"""
+        def boom(*_a):
+            raise RuntimeError("磁碟滿了")
+        t = signals.LiveTracker(on_resolved=boom)
+        t.track(self._sig())
+        with self.assertLogs("signals", level="WARNING"):
+            msgs = t.on_price("2034", 24.80)
+        self.assertEqual(len(msgs), 1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

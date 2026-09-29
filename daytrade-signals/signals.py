@@ -174,6 +174,27 @@ class RiskGate:
         self.save()
         return self.state["signals_sent"]
 
+    def record_live_result(self, code: str, time_str: str, result: str,
+                           exit_price: float) -> bool:
+        """把盤中 tick 看到的結局寫回 state.json 的那一筆訊號。
+
+        沒有這一步，即時判定只存在於那則 Telegram 訊息裡，收盤後就沒人知道了 ——
+        而 outcome.py 的分鐘 K 看不到訊號後的頭 60 秒。2026-09-29 允強 09:32:13
+        發訊號、09:32:25 就到目標（12 秒），收盤回推完全看不到那一段，只看到後來
+        跌回去碰停損，於是同一筆交易被判成 -1.00R，而當下推給使用者的是 +1.57R。
+
+        tick 是實際成交，分鐘 K 是事後的摘要 —— 兩邊衝突時以 tick 為準。
+        """
+        for sig in self.state.get("signals", []):
+            if str(sig.get("code")) == str(code) and str(sig.get("time")) == str(time_str):
+                sig["live_result"] = result
+                sig["live_exit"] = round(float(exit_price), 2)
+                sig["live_at"] = datetime.now().strftime("%H:%M:%S")
+                self.save()
+                return True
+        log.warning("即時判定找不到對應訊號（%s %s），沒寫回 state.json", code, time_str)
+        return False
+
 
 # ══════════════════════════════════════════════════════
 # 個股盤中狀態
@@ -507,10 +528,20 @@ class LiveTracker:
     必須在鎖內一次做完，否則同一筆會推播好幾次。推播本身留在鎖外，不卡行情。
     """
 
-    def __init__(self):
+    def __init__(self, on_resolved=None):
         self.open: list[OpenSignal] = []
         self.last_price: dict[str, float] = {}
         self._lock = threading.Lock()
+        # 判定完要交給誰記下來。沒有它的話，即時結果只活在那則推播裡。
+        self.on_resolved = on_resolved
+
+    def _handed_off(self, o: "OpenSignal", price: float, verdict: str) -> None:
+        if not self.on_resolved:
+            return
+        try:
+            self.on_resolved(o, price, verdict)
+        except Exception as e:      # 記錄失敗不可以讓推播跟著沒了
+            log.warning("即時判定寫回失敗（%s）：%s", o.code, e)
 
     def track(self, sig: dict) -> None:
         with self._lock:
@@ -534,6 +565,8 @@ class LiveTracker:
                 else:
                     still_open.append(o)
             self.open = still_open
+        for o, v in done:
+            self._handed_off(o, price, v)
         return [format_resolution(o, price, v) for o, v in done]
 
     def flatten(self) -> list[str]:
@@ -547,6 +580,7 @@ class LiveTracker:
                 log.warning("%s 整天沒收到報價，無法即時平倉（收盤後仍會由 "
                             "outcome.py 用分鐘 K 回推）", o.code)
                 continue
+            self._handed_off(o, price, outcome.FLAT)
             msgs.append(format_resolution(o, price, outcome.FLAT))
         return msgs
 
@@ -642,10 +676,18 @@ def main():
     restore_signaled(states, gate)
 
     signal_lock = threading.Lock()
-    tracker = LiveTracker()
+    def _remember(o, price, verdict):
+        # 在同一把鎖裡寫 state.json：行情回呼是多執行緒的，
+        # 跟 gate.record() 共用一把鎖才不會互相蓋掉。
+        with signal_lock:
+            gate.record_live_result(o.code, o.time, verdict, price)
+
+    tracker = LiveTracker(on_resolved=_remember)
     # 盤中重開時，今天已經發過的訊號也要繼續盯 —— 否則它們的結局只剩收盤後才知道。
     # 代價是已經結束的那幾筆會被重新追蹤，價格再次碰到時會重複推播一次。
     for past in gate.state.get("signals", []):
+        if past.get("live_result"):
+            continue        # 盤中已經判定完的，重開後不要再追一次把結果蓋掉
         tracker.track(past)
     if gate.state.get("signals"):
         log.warning("已還原 %d 個今日訊號繼續追蹤結局（重開前已結束的可能會再推一次）",

@@ -182,25 +182,38 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         return None
 
     bars = bars_after(broker, str(sig["code"]), date, fired)
-    if not bars:
-        return None
-
-    result, exit_price, used = FLAT, bars[-1][3], len(bars)
-    for i, (_, high, low, _close) in enumerate(bars, 1):
-        hit_stop, hit_target = low <= stop, high >= target
-        if hit_stop:                      # 同時觸及也判停損：分鐘 K 看不出先後
-            result, exit_price, used = STOP, stop, i
-            break
-        if hit_target:
-            result, exit_price, used = TARGET, target, i
-            break
+    # 盤中 LiveTracker 用 tick 判定過的，以它為準。
+    #
+    # bars_after() 刻意丟掉訊號後的頭 60 秒（那一根 K 棒涵蓋訊號發出**前**的時間，
+    # 留著會製造假停損）。但走得快的那幾筆就在那 60 秒裡結束 ——
+    # 2026-09-29 允強 09:32:13 發訊號、09:32:25 到目標，整件事發生在那個空窗裡：
+    # 即時推播說 +1.57R，收盤回推說 -1.00R（它只看到後來跌回去碰停損）。
+    # tick 是實際成交，分鐘 K 是事後摘要；衝突時以 tick 為準。
+    live_result = str(sig.get("live_result") or "")
+    live_exit = _num(sig.get("live_exit"))
+    if live_result and live_exit is not None:
+        result, exit_price, used = live_result, live_exit, 0   # 0 = 由 tick 判定
+    elif bars:
+        result, exit_price, used = FLAT, bars[-1][3], len(bars)
+        for i, (_, high, low, _close) in enumerate(bars, 1):
+            hit_stop, hit_target = low <= stop, high >= target
+            if hit_stop:                  # 同時觸及也判停損：分鐘 K 看不出先後
+                result, exit_price, used = STOP, stop, i
+                break
+            if hit_target:
+                result, exit_price, used = TARGET, target, i
+                break
+    else:
+        return None                        # 沒有 tick 判定也沒有 K 棒 —— 不要猜
 
     gross = (exit_price - entry) / entry * 100
     or_high, vwap = _num(sig.get("or_high")), _num(sig.get("vwap"))
     # 整天的極端值：算的是**全部** K 棒，不是只算到出場那一根。
     # 問題是「如果我沒出場會怎樣」，只看到出場為止就答不出來。
-    day_high, day_low = max(b[1] for b in bars), min(b[2] for b in bars)
-    low_5m = min(b[2] for b in bars[:FILL_WINDOW_BARS])
+    # 極值仍然要用 K 棒算；沒有 K 棒（只有 tick 判定）時留空，不要猜一個數字出來。
+    day_high = max((b[1] for b in bars), default=None)
+    day_low = min((b[2] for b in bars), default=None)
+    low_5m = min((b[2] for b in bars[:FILL_WINDOW_BARS]), default=None)
     return Outcome(
         date=date, code=str(sig["code"]), time=str(sig.get("time", "")),
         entry=entry, stop=stop, target=target, lots=int(sig.get("lots", 0) or 0),
@@ -213,10 +226,11 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         volume_surge=_num(sig.get("volume_surge")),
         extension_pct=_pct_above(entry, or_high),
         vwap_gap_pct=_pct_above(entry, vwap),
-        mae_pct=round((day_low - entry) / entry * 100, 3),
-        mfe_pct=round((day_high - entry) / entry * 100, 3),
-        target_after_stop=(day_high >= target) if result == STOP else None,
-        low_5m_pct=round((low_5m - entry) / entry * 100, 3),
+        mae_pct=_pct_above(day_low, entry) if day_low is not None else None,
+        mfe_pct=_pct_above(day_high, entry) if day_high is not None else None,
+        target_after_stop=((day_high >= target) if day_high is not None else None)
+        if result == STOP else None,
+        low_5m_pct=_pct_above(low_5m, entry) if low_5m is not None else None,
         rank=int(sig.get("rank") or 0),
     )
 
