@@ -47,7 +47,7 @@ SHARES_PER_LOT = 1000
 FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
-          "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct")
+          "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct", "rank")
 
 
 @dataclass
@@ -80,6 +80,7 @@ class Outcome:
     # 訊號後第 1~5 分鐘的最低價離進場價幾 %。<= 0 表示「限價掛訊號價買得到」。
     # 人從收到訊號到送出委託正好就落在這個窗口裡，所以它直接回答「我追得上嗎」。
     low_5m_pct: float | None = None
+    rank: int = 0                 # 盤前選股名次（1 = 量比最高），0 = 未知
 
     @property
     def is_win(self) -> bool:
@@ -216,6 +217,7 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         mfe_pct=round((day_high - entry) / entry * 100, 3),
         target_after_stop=(day_high >= target) if result == STOP else None,
         low_5m_pct=round((low_5m - entry) / entry * 100, 3),
+        rank=int(sig.get("rank") or 0),
     )
 
 
@@ -344,6 +346,9 @@ def load_csv(path=None) -> list[Outcome]:
                         "r_multiple", "gross_pct", "net_pct")}
                 kw |= {k: _num(raw.get(k)) for k in _OPTIONAL_FIELDS}
                 kw |= {k: _bool(raw.get(k)) for k in _BOOL_FIELDS}
+                # rank 是後來才加的欄位。9/24~9/29 寫下的列沒有它，
+                # 當成必填會讓那幾天**整列被跳過** —— 累計勝率會無聲歸零。
+                kw["rank"] = int(float(raw.get("rank") or 0))
                 rows.append(Outcome(**kw))
             except (KeyError, TypeError, ValueError) as e:
                 log.warning("outcomes.csv 有一列讀不進來，跳過：%s", e)

@@ -342,23 +342,23 @@ class TestEvaluate(unittest.TestCase):
         self.assertAlmostEqual(sig["entry"], 101.0)
         # 101 × (1-1.5%) = 99.485 → 進位到 0.1 檔位 = 99.5
         self.assertAlmostEqual(sig["stop"], 99.5)
-        # 101 + 1.5 × 1.5 = 103.25 → 進位到 0.5 檔位 = 103.5
-        self.assertAlmostEqual(sig["target"], 103.5)
+        # 101 + 1.5 × 2.5 = 104.75 → 進位到 0.5 檔位 = 105.0
+        self.assertAlmostEqual(sig["target"], 105.0)
         self.assertFalse(sig["oversized"])
 
     def test_lot_sizing_from_per_trade_risk(self):
         sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.NOON)
-        # 一張風險 = (101 - 99.5) × 1000 = 1500 元；2000 / 1500 → 1 張
+        # 一張風險 = (101 - 99.5) × 1000 = 1500 元；3000 / 1500 → 2 張
         self.assertEqual(sig["risk_per_lot"], 1500)
-        self.assertEqual(sig["lots"], 1)
+        self.assertEqual(sig["lots"], 2)
 
         cheap = ready_state(or_high=20.0, last=20.2, vwap=20.1)
         sig2 = evaluate(cheap, now=self.NOON)
         # 20.2 × (1-1.5%) = 19.897 → 進位到 0.05 檔位 = 19.90
         self.assertAlmostEqual(sig2["stop"], 19.9)
-        # 一張風險 = 300 元；2000 / 300 → 6 張
+        # 一張風險 = 300 元；3000 / 300 → 10 張
         self.assertEqual(sig2["risk_per_lot"], 300)
-        self.assertEqual(sig2["lots"], 6)
+        self.assertEqual(sig2["lots"], 10)
         self.assertFalse(sig2["oversized"])
 
     def test_prices_land_on_legal_ticks(self):
@@ -504,12 +504,12 @@ class TestRiskGate(unittest.TestCase):
         self.assertIn("交易筆數上限", gate.state["closed_reason"])
 
     def test_closes_on_daily_loss(self):
-        gate = RiskGate(FakeBroker(pnl_rows=[-5000.0, -3000.0]))
+        gate = RiskGate(FakeBroker(pnl_rows=[-8000.0, -4000.0]))
         self.assertFalse(gate.check())
         self.assertIn("觸及上限", gate.state["closed_reason"])
 
     def test_daily_loss_just_under_limit_stays_open(self):
-        gate = RiskGate(FakeBroker(pnl_rows=[-7999.0]))
+        gate = RiskGate(FakeBroker(pnl_rows=[-11999.0]))
         self.assertTrue(gate.check())
 
     def test_closes_on_consecutive_losses(self):
@@ -1397,12 +1397,14 @@ class TestPriceLimits(unittest.TestCase):
             self.assertIsNone(signals.evaluate(st, dtime(9, 35)))
 
     def test_a_normal_stock_is_untouched(self):
-        """沒碰到漲停的日子，目標還是照 1.5R 算。"""
+        """沒碰到漲停的日子，目標還是照 reward_risk 算。"""
+        # 進場 109、停損 107.5（R=1.5）→ 目標 109 + 1.5×2.5 = 112.75 → 113.0
+        # 漲停 = 107 × 1.1 = 117.7 → 往下取 0.5 檔位 = 117.5，目標沒碰到
         st = self._state(prev_close=107.0, last_price=109.0, or_high=108.5)
         with unittest.mock.patch.object(signals.SymbolState, "volume_surge",
                                         lambda self: 5.0):
             sig = signals.evaluate(st, dtime(9, 30))
-        self.assertEqual(sig["target"], 111.5)
+        self.assertEqual(sig["target"], 113.0)
         self.assertFalse(sig["target_capped"])
 
 
@@ -2787,6 +2789,67 @@ class TestCandidateOutcomes(unittest.TestCase):
         oc.append_candidates_csv(pairs, path=self.dst)
         with open(self.dst, newline="", encoding="utf-8-sig") as f:
             self.assertEqual(len(list(csv.DictReader(f))), 1)
+
+
+class TestLotSizingFloatNoise(unittest.TestCase):
+    """(20.2-19.9)*1000 = 300.0000000000007，整除時會少算一整張。"""
+
+    def test_exact_division_is_not_eaten_by_float_noise(self):
+        st = ready_state(or_high=20.0, last=20.2, vwap=20.1)
+        sig = evaluate(st, now=dtime(10, 0))
+        self.assertEqual(sig["stop"], 19.9)
+        self.assertEqual(sig["risk_per_lot"], 300)
+        # 3000 / 300 剛好 10 張。沒 round 的話這裡會是 9。
+        self.assertEqual(sig["lots"],
+                         config.RISK["per_trade_risk"] // sig["risk_per_lot"])
+
+    def test_risk_per_lot_is_exact_cents(self):
+        for or_high, last in ((20.0, 20.2), (100.0, 101.0), (500.0, 505.0)):
+            sig = evaluate(ready_state(or_high=or_high, last=last, vwap=or_high),
+                           now=dtime(10, 0))
+            self.assertEqual(sig["risk_per_lot"],
+                             round(sig["risk_per_lot"], 2),
+                             f"{or_high}/{last} 的單張風險帶了浮點雜訊")
+
+
+class TestWatchlistRank(unittest.TestCase):
+    """只做前 N 名會不會比較好 —— 不記名次，這一題 20 天後只能重測。"""
+
+    def test_rank_flows_into_the_signal(self):
+        st = ready_state("2330")
+        st.rank = 7
+        sig = evaluate(st, now=dtime(10, 0))
+        self.assertEqual(sig["rank"], 7)
+
+    def test_rank_defaults_to_zero_when_unknown(self):
+        sig = evaluate(ready_state("2330"), now=dtime(10, 0))
+        self.assertEqual(sig["rank"], 0)
+
+    def test_rank_reaches_outcomes_csv(self):
+        sig = {"code": "2330", "time": "09:23:00", "entry": 121.0,
+               "stop": 119.5, "target": 123.5, "lots": 1, "rank": 3}
+        o = oc.resolve(FakeKbarBroker(_kb([("09:24", 121.5, 120.8, 121.2),
+                                           ("09:25", 123.6, 121.0, 123.4)])),
+                       sig, "2026-09-24")
+        self.assertEqual(o.rank, 3)
+        self.assertIn("rank", oc.FIELDS)
+
+    def test_old_csv_without_rank_still_loads(self):
+        """9/24~9/29 寫的 outcomes.csv 沒有 rank 欄，不可以因此讀不回來。"""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            old = [f for f in oc.FIELDS if f != "rank"]
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.DictWriter(f, fieldnames=old)
+                w.writeheader()
+                w.writerow({"date": "2026-09-24", "code": "6182", "time": "09:19:22",
+                            "entry": 119.0, "stop": 117.5, "target": 121.5,
+                            "lots": 1, "result": oc.TARGET, "exit_price": 121.5,
+                            "r_multiple": 1.67, "gross_pct": 2.1, "net_pct": 1.89,
+                            "bars": 4})
+            rows = oc.load_csv(path=path)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].rank, 0)
 
 
 if __name__ == "__main__":

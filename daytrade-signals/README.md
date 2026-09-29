@@ -73,7 +73,7 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 283 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 289 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -198,6 +198,7 @@ python review.py --no-push
 | `mfe_pct` | 進場後整天的**最高**點離進場價幾 %（最大有利偏移） |
 | `target_after_stop` | 停損出場後，當天還是碰到目標了嗎 |
 | `low_5m_pct` | 訊號後第 1~5 分鐘的最低價離進場價幾 %（≤0 表示限價掛訊號價買得到） |
+| `rank` | 這檔在當天盤前選股的名次（1 = 量比最高）—— 回答「只做前 N 名會不會比較好」 |
 
 ### 被擋掉的候選 —— `candidates.csv`
 
@@ -278,9 +279,9 @@ MAE 說明停損可以多緊而不被洗掉；輸的那幾筆的 MFE 說明停�
 ```
 max_signals_per_day      5      一天最多 5 個訊號
 max_trades_per_day       4      一天最多 4 筆
-max_daily_loss           8000   虧到這裡，系統當日不再發訊號
+max_daily_loss           12000  虧到這裡，系統當日不再發訊號
 max_consecutive_losses   3      連三敗停手
-per_trade_risk           2000   單筆風險 → 反推張數
+per_trade_risk           3000   單筆風險 → 反推張數
 ```
 
 **這些數字只能在開盤前改。** 盤中想調鬆 = 系統失效的瞬間。
@@ -299,7 +300,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 **目標價也不可以超過當日漲停。** 2026-09-24 的嘉晶：昨收 145.5、漲停 160.0，而系統
 發了 161.00 的目標。那一筆被判成「收盤平倉」，不是因為它沒走到目標，是因為**那個
 價位當天不存在** —— 它漲停鎖死在 160.0。現在目標會貼齊漲停，訊號上寫明賺賠比因此
-縮水到多少（不假裝還是 1.5R）；現價已經漲停鎖死則不發訊號，那個價位你買不到，
+縮水到多少（不假裝還是 2.5R）；現價已經漲停鎖死則不發訊號，那個價位你買不到，
 買到也沒有上檔空間。
 
 這跟檔位進位是同一類問題：不是參數調得好不好，是這個數字在現實中下不出去。
@@ -372,7 +373,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 283 項離線測試 |
+| `test_daytrade.py` | 289 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。

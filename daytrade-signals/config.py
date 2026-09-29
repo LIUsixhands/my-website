@@ -151,7 +151,7 @@ SIGNAL = {
     "require_above_vwap": True,     # 多單需站上均價線；空單需跌破
     "max_signals_per_symbol": 1,    # 同一檔一天只發一次，杜絕凹單
     "stop_loss_pct": 1.5,           # 建議停損（%）
-    "reward_risk": 1.5,             # 目標 = 1.5R
+    "reward_risk": 2.5,             # 目標 = 2.5R
     "allow_short": False,           # 先賣後買 v1 未實作（券源、軋空風險）
     "backfill_opening_range": True, # 09:15 後才啟動時，用分鐘 K 補算開盤區間
     "market_close": "13:30:00",     # 收工時間
@@ -161,9 +161,9 @@ SIGNAL = {
 RISK = {
     "max_signals_per_day": 5,       # 一天最多推播幾個訊號
     "max_trades_per_day": 4,        # 一天最多做幾筆
-    "max_daily_loss": 8000,         # 當日實現虧損達此數字 → 系統停止發訊號（元）
+    "max_daily_loss": 12000,        # 當日實現虧損達此數字 → 系統停止發訊號（元）
     "max_consecutive_losses": 3,    # 連續虧損筆數 → 當日停手
-    "per_trade_risk": 2000,         # 單筆可承受虧損（元）→ 用來反推張數
+    "per_trade_risk": 3000,         # 單筆可承受虧損（元）→ 用來反推張數
     "halt_when_pnl_unknown": True,  # 損益查不到 → 直接關閘（模擬模式不適用，見 README）
     "poll_interval_sec": 300,       # 沒有訊號時，每隔多久主動查一次損益（API 有流量上限）
 }

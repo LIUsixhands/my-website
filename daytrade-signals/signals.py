@@ -192,6 +192,7 @@ class SymbolState:
     vol_marks: list = field(default_factory=list)   # (ts, total_volume) 用來算量能速率
     signaled: int = 0
     vwap_warned: bool = False
+    rank: int = 0                             # 盤前選股名次（1 = 量比最高），0 = 未知
     candidates: int = 0                       # 今日已記錄幾個「被擋掉的候選」
     last_candidate_at: datetime | None = None # 候選之間的冷卻，避免每個 tick 記一筆
 
@@ -314,7 +315,10 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
     if target_capped:
         target = cap
 
-    risk_per_lot = (entry - stop) * 1000          # 一張 1000 股
+    # 四捨五入到分：進場價與停損價都已經進位到合法檔位，一張的風險本來就是整數分。
+    # 不 round 的話 (20.2-19.9)*1000 會是 300.0000000000007，3000 // 它 = 9 而不是 10
+    # —— 浮點雜訊直接吃掉你一整張。
+    risk_per_lot = round((entry - stop) * 1000, 2)   # 一張 1000 股
     lots = int(config.RISK["per_trade_risk"] // risk_per_lot) if risk_per_lot > 0 else 0
     # 連一張都超過單筆風險上限時，張數不能報 0（那不是可執行的指示），
     # 但必須標記出來，否則你會照著它做一筆風險超標的交易而不知道。
@@ -336,6 +340,7 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         "or_high": st.or_high,
         "vwap": round(st.vwap, 2),
         "volume_surge": round(surge, 2),
+        "rank": st.rank,
     }
 
 
@@ -376,7 +381,7 @@ _push_warned = False
 # 這裡只寫檔，不推播、不計入風控、不進 outcomes.csv，策略行為完全沒變。
 CANDIDATE_FILE = config.BASE_DIR / "candidates.csv"
 CANDIDATE_FIELDS = ("date", "code", "name", "time", "entry", "stop", "target",
-                    "lots", "reason", "or_high", "vwap", "volume_surge")
+                    "lots", "reason", "or_high", "vwap", "volume_surge", "rank")
 # 同一檔的候選之間至少隔這麼久。不設的話突破後每個 tick 都會記一筆，
 # 記到的是同一次突破的雜訊，不是「另一次進場機會」。
 CANDIDATE_COOLDOWN = timedelta(minutes=5)
@@ -627,8 +632,13 @@ def main():
     if gate.state["closed"]:
         raise SystemExit(f"今日風控閘門已關閉（{gate.state['closed_reason']}），不再啟動。")
 
-    states = {i["code"]: SymbolState(i["code"], i["prev_close"], i.get("name", ""))
-              for i in wl["items"]}
+    # watchlist 已依（量比, 振幅）排好序，名次就是它在清單裡的位置。
+    # 記下來，20 天後才答得出「只做前 N 名會不會比較好」—— 不然那一題要重測。
+    states = {}
+    for n, i in enumerate(wl["items"], 1):
+        st = SymbolState(i["code"], i["prev_close"], i.get("name", ""))
+        st.rank = n
+        states[i["code"]] = st
     restore_signaled(states, gate)
 
     signal_lock = threading.Lock()
