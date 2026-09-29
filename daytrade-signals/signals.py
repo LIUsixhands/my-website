@@ -647,7 +647,40 @@ def backfill_opening_ranges(broker: Broker, states: dict):
     notify(msg)
 
 
-def main():
+FAILURE_DETAIL_CHARS = 400
+
+
+def format_failure(exc: BaseException) -> str:
+    """盤中監看掛掉，一定要出聲。
+
+    這是三支程式裡最不能靜默的一支。screener 掛了你只是沒名單；review 掛了資料
+    晚一天補。但 signals.py 在 10:30 死掉的話：**已經發出的訊號沒有人在追蹤**
+    （到目標或到停損都不會再通知你），而且後面的訊號不會出現 —— 而畫面上看起來
+    就只是「今天比較少訊號」。自動排程之後更嚴重，因為視窗可能是縮著的。
+    """
+    detail = f"{type(exc).__name__}: {exc}".strip()
+    if len(detail) > FAILURE_DETAIL_CHARS:
+        detail = detail[:FAILURE_DETAIL_CHARS] + "…（完整訊息在電腦上）"
+    return "\n".join([
+        f"\U0001f6a8 {datetime.now().strftime('%H:%M')} 盤中監看中斷",
+        "────────────────",
+        detail,
+        "────────────────",
+        "**已發出的訊號現在沒有人在追蹤了** —— 到目標或到停損都不會再通知你。",
+        "手上有部位的話，改用看盤軟體自己盯著停損。",
+        "到電腦上重新執行 signals.py 可以接回今天已發出的訊號。",
+    ])
+
+
+def push_failure(exc: BaseException) -> None:
+    """推失敗通知。推播自己壞掉也不能蓋掉原始錯誤，所以整段包起來。"""
+    try:
+        notify(format_failure(exc))
+    except Exception as e:
+        log.error("連失敗通知都送不出去：%s", e)
+
+
+def run():
     errs = config.validate()
     if errs:
         raise SystemExit("config.py 參數有問題，盤中不要硬上：\n" +
@@ -760,6 +793,17 @@ def main():
     finally:
         gate.save()
         log.info("收盤。請執行 review.py 產出今日覆盤。")
+
+
+def main():
+    try:
+        run()
+    except SystemExit:
+        # 「今天沒名單」「閘門已關」這類是正常的停止，不是故障，不推播。
+        raise
+    except Exception as exc:
+        push_failure(exc)
+        raise
 
 
 if __name__ == "__main__":

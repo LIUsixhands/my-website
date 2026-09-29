@@ -3127,5 +3127,73 @@ class TestAfternoonBat(unittest.TestCase):
         self.assertNotIn("--no-push", self.text)
 
 
+class TestMonitorFailureIsAudible(unittest.TestCase):
+    """三支程式裡最不能靜默的一支。
+
+    screener 掛了只是沒名單；review 掛了資料晚一天補。但 signals.py 在 10:30 死掉：
+    **已發出的訊號沒有人在追蹤**（到目標或到停損都不通知），後面的訊號也不會出現，
+    而畫面上看起來只是「今天比較少訊號」。排程化之後更嚴重，視窗可能是縮著的。
+    """
+
+    def test_message_says_open_signals_are_unwatched(self):
+        msg = signals.format_failure(RuntimeError("連線中斷"))
+        self.assertIn("盤中監看中斷", msg)
+        self.assertIn("連線中斷", msg)
+        self.assertIn("沒有人在追蹤", msg)
+
+    def test_long_errors_are_trimmed(self):
+        msg = signals.format_failure(RuntimeError("x" * 5000))
+        self.assertLess(len(msg), signals.FAILURE_DETAIL_CHARS + 400)
+
+    def test_crash_pushes_then_still_raises(self):
+        pushed = []
+        with unittest.mock.patch.object(signals, "run",
+                                        side_effect=RuntimeError("爆了")), \
+                unittest.mock.patch.object(signals, "push_failure", pushed.append):
+            with self.assertRaises(RuntimeError):
+                signals.main()
+        self.assertEqual(len(pushed), 1)
+
+    def test_systemexit_is_not_a_failure(self):
+        """「今天沒名單」「閘門已關」是正常停止，休市日不該每天推一則錯誤。"""
+        pushed = []
+        with unittest.mock.patch.object(
+                signals, "run",
+                side_effect=SystemExit("watchlist 是 2026-09-29 的，不是今天的")), \
+                unittest.mock.patch.object(signals, "push_failure", pushed.append):
+            with self.assertRaises(SystemExit):
+                signals.main()
+        self.assertEqual(pushed, [])
+
+    def test_a_broken_notifier_does_not_hide_the_real_error(self):
+        with unittest.mock.patch.object(signals, "notify",
+                                        side_effect=RuntimeError("網路不通")), \
+                self.assertLogs("signals", level="ERROR"):
+            signals.push_failure(RuntimeError("原始錯誤"))   # 不可以往外拋
+
+
+class TestMonitorBat(unittest.TestCase):
+    BAT = Path(__file__).with_name("monitor.bat")
+
+    def setUp(self):
+        if not self.BAT.exists():
+            self.skipTest("monitor.bat 不在（非 Windows 佈署）")
+        self.text = self.BAT.read_bytes().decode("ascii")
+
+    def test_runs_signals_and_keeps_a_log(self):
+        self.assertIn("python signals.py", self.text)
+        self.assertIn("logs\\monitor.log", self.text)
+
+    def test_reports_a_non_zero_exit(self):
+        self.assertIn("ERRORLEVEL", self.text)
+        self.assertIn("FAILED", self.text)
+
+    def test_runs_from_its_own_folder(self):
+        self.assertIn('cd /d "%~dp0"', self.text)
+
+    def test_crlf_and_ascii_only(self):
+        self.assertIn(b"\r\n", self.BAT.read_bytes())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
