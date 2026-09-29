@@ -3053,5 +3053,79 @@ class TestTrackerHandsOffItsVerdict(unittest.TestCase):
         self.assertEqual(len(msgs), 1)
 
 
+class TestReviewFailureIsAudible(unittest.TestCase):
+    """14:00 的排程安靜掛掉的話，你只會發現「今天沒收到日報」。
+
+    而「今天沒訊號」與「程式當了」該做的事完全相反：後者代表**今天的結果沒進
+    outcomes.csv，20 天的統計少一天，而且補不回來**。
+    """
+
+    def test_message_says_the_data_is_missing(self):
+        msg = review.format_failure(RuntimeError("未安裝 shioaji"))
+        self.assertIn("盤後覆盤失敗", msg)
+        self.assertIn("未安裝 shioaji", msg)
+        self.assertIn("outcomes.csv", msg)
+
+    def test_long_errors_are_trimmed(self):
+        msg = review.format_failure(RuntimeError("x" * 5000))
+        self.assertLess(len(msg), review.FAILURE_DETAIL_CHARS + 400)
+
+    def test_failure_pushes_then_still_raises(self):
+        """通知要送出去，但錯誤不可以被吞掉 —— 排程要看得到非 0 的離開碼。"""
+        pushed = []
+        with unittest.mock.patch.object(review, "run",
+                                        side_effect=RuntimeError("爆了")), \
+                unittest.mock.patch.object(review, "push_failure", pushed.append):
+            with self.assertRaises(RuntimeError):
+                review.main([])
+        self.assertEqual(len(pushed), 1)
+
+    def test_no_push_flag_suppresses_the_notice(self):
+        pushed = []
+        with unittest.mock.patch.object(review, "run",
+                                        side_effect=RuntimeError("爆了")), \
+                unittest.mock.patch.object(review, "push_failure", pushed.append):
+            with self.assertRaises(RuntimeError):
+                review.main(["--no-push"])
+        self.assertEqual(pushed, [])
+
+    def test_a_broken_notifier_does_not_hide_the_real_error(self):
+        with unittest.mock.patch("signals.notify",
+                                 side_effect=RuntimeError("網路不通")), \
+                self.assertLogs("review", level="ERROR"):
+            review.push_failure(RuntimeError("原始錯誤"))   # 不可以往外拋
+
+
+class TestAfternoonBat(unittest.TestCase):
+    """跟 morning.bat 同一套：留紀錄、回報離開碼、可以手動雙擊。"""
+
+    BAT = Path(__file__).with_name("afternoon.bat")
+
+    def setUp(self):
+        if not self.BAT.exists():
+            self.skipTest("afternoon.bat 不在（非 Windows 佈署）")
+        self.text = self.BAT.read_bytes().decode("ascii")
+
+    def test_runs_review_and_keeps_a_log(self):
+        self.assertIn("python review.py", self.text)
+        self.assertIn("logs\\afternoon.log", self.text)
+
+    def test_reports_a_non_zero_exit(self):
+        self.assertIn("ERRORLEVEL", self.text)
+        self.assertIn("FAILED", self.text)
+
+    def test_runs_from_its_own_folder(self):
+        """排程器的工作目錄不一定是這裡，不 cd 的話會找不到 config.py。"""
+        self.assertIn('cd /d "%~dp0"', self.text)
+
+    def test_crlf_and_ascii_only(self):
+        """cp950 主控台讀不了 UTF-8 註解；LF 換行在舊 cmd 上也會出事。"""
+        self.assertIn(b"\r\n", self.BAT.read_bytes())
+
+    def test_does_not_pass_no_push(self):
+        """排程的重點就是那則日報，加了 --no-push 等於白做。"""
+        self.assertNotIn("--no-push", self.text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

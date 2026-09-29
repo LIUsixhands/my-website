@@ -310,8 +310,39 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
-def main(argv=None):
-    args = parse_args(argv)
+FAILURE_DETAIL_CHARS = 400
+
+
+def format_failure(exc: BaseException) -> str:
+    """覆盤失敗也要出聲。
+
+    14:00 的排程如果安靜地掛掉，你只會發現「今天沒收到日報」，而分不出是
+    「今天沒訊號」還是「程式當了」。這兩件事該做的處置完全相反 ——
+    後者代表**今天的結果沒進 outcomes.csv，20 天的統計就少一天**，而且補不回來。
+    """
+    detail = f"{type(exc).__name__}: {exc}".strip()
+    if len(detail) > FAILURE_DETAIL_CHARS:
+        detail = detail[:FAILURE_DETAIL_CHARS] + "…（完整訊息在電腦上）"
+    return "\n".join([
+        f"\u26a0\ufe0f {datetime.now().strftime('%Y-%m-%d %H:%M')} 盤後覆盤失敗",
+        "────────────────",
+        detail,
+        "────────────────",
+        "今天的結果沒有記進 outcomes.csv —— 這一天的資料會缺，而且補不回來。",
+        "到電腦上手動跑一次 python review.py 就會看到完整錯誤。",
+    ])
+
+
+def push_failure(exc: BaseException) -> None:
+    """推失敗通知。推播自己壞掉也不能蓋掉原始錯誤，所以整段包起來。"""
+    from signals import notify
+    try:
+        notify(format_failure(exc))
+    except Exception as e:
+        log.error("連失敗通知都送不出去：%s", e)
+
+
+def run(args) -> None:
     import outcome as oc
     signals, state = load_signals()
     trades, pnl, note, broker = _connect()
@@ -334,6 +365,16 @@ def main(argv=None):
     print(f"\n→ 已寫入 {path}")
     if not args.no_push:
         push_summary(signals, outcomes)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    try:
+        run(args)
+    except Exception as exc:
+        if not args.no_push:
+            push_failure(exc)
+        raise
 
 
 if __name__ == "__main__":
