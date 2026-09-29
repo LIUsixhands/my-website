@@ -555,7 +555,7 @@ def notify(text: str):
     global _push_warned
     # 印出來的是終端機印得出的版本，送出去的是原文
     print("\n" + config.console_text(text) + "\n")
-    if not (config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID):
+    if not config.push_enabled():
         return
     if requests is None:
         if not _push_warned:

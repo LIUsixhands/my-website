@@ -6,6 +6,11 @@ test_daytrade.py — 離線測試。不需要 shioaji、不需要網路、不需
 測的是「錯了不會報錯」的那些地方：訊號條件、風控閘門、量能基準、紀律稽核。
 這些邏輯算錯不會讓程式崩掉，它會安靜地給你一個看起來很專業的錯誤決策。
 """
+import os
+# 這一行必須在 import config 之前。2026-09-29 跑一次測試就推了 5 則訊息到使用者手機，
+# 其中一則寫著「原因：測試」—— 測試絕對不可以動到真的推播。
+os.environ["DAYTRADE_NO_PUSH"] = "1"
+
 import contextlib
 import csv
 import io
@@ -59,6 +64,22 @@ def tick(close, high=None, low=None, avg_price=0, total_volume=0, at="09:05:00")
         total_volume=total_volume,
         datetime=datetime.strptime(f"2026-01-02 {at}", "%Y-%m-%d %H:%M:%S"),
     )
+
+
+@contextlib.contextmanager
+def push_allowed():
+    """只有「故意在測推播機制」的測試才用。
+
+    全域保險絲把推播關死了（見 TestTestsCanNeverPush）。這幾條測試要驗的是
+    保險絲**之後**的那段程式，所以暫時把它換掉 —— 送出去的永遠是假的 requests。
+    """
+    orig = config.push_enabled
+    config.push_enabled = lambda: bool(config.TELEGRAM_BOT_TOKEN
+                                       and config.TELEGRAM_CHAT_ID)
+    try:
+        yield
+    finally:
+        config.push_enabled = orig
 
 
 def snap(code="2330", close=100.0, high=104.0, low=100.0, volume=9000, avg=101.0):
@@ -243,7 +264,8 @@ class TestConsoleEncoding(unittest.TestCase):
         sys.stdout = self._fake_stdout("cp950")
         safe = config.console_text(msg)
         sys.stdout = buf
-        with unittest.mock.patch.object(signals, "requests", FakeRequests), \
+        with push_allowed(), \
+             unittest.mock.patch.object(signals, "requests", FakeRequests), \
              unittest.mock.patch.object(config, "TELEGRAM_BOT_TOKEN", "t"), \
              unittest.mock.patch.object(config, "TELEGRAM_CHAT_ID", "c"), \
              unittest.mock.patch.object(config, "console_text", lambda _t: safe):
@@ -579,7 +601,11 @@ class TestNotify(unittest.TestCase):
         self._orig = (signals.requests, config.TELEGRAM_BOT_TOKEN,
                       config.TELEGRAM_CHAT_ID, signals._push_warned)
 
+        self._push_ctx = push_allowed()
+        self._push_ctx.__enter__()
+
     def tearDown(self):
+        self._push_ctx.__exit__(None, None, None)
         (signals.requests, config.TELEGRAM_BOT_TOKEN,
          config.TELEGRAM_CHAT_ID, signals._push_warned) = self._orig
 
@@ -2547,7 +2573,7 @@ class TestPreflight(unittest.TestCase):
         config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID = "tok", "chat"
         signals.requests = FakeRequests
         try:
-            with contextlib.redirect_stdout(io.StringIO()):
+            with push_allowed(), contextlib.redirect_stdout(io.StringIO()):
                 r = preflight.check_telegram()
             self.assertEqual(r.status, preflight.OK)
             self.assertTrue(sent and "preflight" in sent[0])
@@ -2850,6 +2876,52 @@ class TestWatchlistRank(unittest.TestCase):
             rows = oc.load_csv(path=path)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].rank, 0)
+
+
+class TestTestsCanNeverPush(unittest.TestCase):
+    """2026-09-29：跑一次測試，使用者手機收到 5 則「今日停手」，其中一則寫「原因：測試」。
+
+    RiskGate._close() 直接呼叫 notify()，而使用者機器上 .env 有金鑰、requests 也裝了。
+    CI 兩樣都沒有，所以這個洞在 CI 裡永遠不會露出來 —— 只有真的在他電腦上跑才會。
+    """
+
+    def test_push_is_disabled_while_these_tests_run(self):
+        """這一條要是失敗了，代表保險絲斷了，測試又會推到手機。"""
+        self.assertFalse(config.push_enabled())
+
+    def test_notify_does_not_hit_the_network(self):
+        sent = []
+        fake = SimpleNamespace(post=lambda *a, **k: sent.append(a))
+        with unittest.mock.patch.object(signals, "requests", fake), \
+                unittest.mock.patch.object(config, "TELEGRAM_BOT_TOKEN", "x"), \
+                unittest.mock.patch.object(config, "TELEGRAM_CHAT_ID", "y"), \
+                contextlib.redirect_stdout(io.StringIO()):
+            signals.notify("測試訊息")
+        self.assertEqual(sent, [])
+
+    def test_gate_closing_does_not_push(self):
+        """閘門關閉是最容易漏掉的一條：它在 _close() 裡直接 notify()。"""
+        sent = []
+        fake = SimpleNamespace(post=lambda *a, **k: sent.append(a))
+        with tempfile.TemporaryDirectory() as d:
+            orig, config.STATE_FILE = config.STATE_FILE, Path(d) / "state.json"
+            try:
+                with unittest.mock.patch.object(signals, "requests", fake), \
+                        unittest.mock.patch.object(config, "TELEGRAM_BOT_TOKEN", "x"), \
+                        unittest.mock.patch.object(config, "TELEGRAM_CHAT_ID", "y"), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    RiskGate(FakeBroker(pnl_rows=[]))._close("測試")
+            finally:
+                config.STATE_FILE = orig
+        self.assertEqual(sent, [])
+
+    def test_env_var_alone_is_enough(self):
+        """dryrun.py 靠的是環境變數，不是 unittest 在不在 sys.modules。"""
+        with unittest.mock.patch.dict(os.environ, {"DAYTRADE_NO_PUSH": "1"}), \
+                unittest.mock.patch.dict(sys.modules):
+            sys.modules.pop("unittest", None)
+            sys.modules.pop("pytest", None)
+            self.assertFalse(config.push_enabled())
 
 
 if __name__ == "__main__":

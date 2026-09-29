@@ -73,7 +73,7 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 289 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 293 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -274,6 +274,22 @@ MAE 說明停損可以多緊而不被洗掉；輸的那幾筆的 MFE 說明停�
 
 ---
 
+## 測試不會推到你手機
+
+2026-09-29：使用者跑一次 `python test_daytrade.py`，手機收到 5 則「今日停手」，
+其中一則寫著「原因：測試」。`RiskGate._close()` 直接呼叫 `notify()`，而使用者的
+機器上 `.env` 有金鑰、`requests` 也裝了 —— 測試就真的把訊息推出去。
+CI 兩樣都沒有，所以這個洞在 CI 裡永遠不會露出來。
+
+`config.push_enabled()` 現在是唯一的出口判斷，兩層保險：
+
+- 環境變數 `DAYTRADE_NO_PUSH=1`（`dryrun.py` 與 `test_daytrade.py` 都會設）
+- `unittest` / `pytest` 只要在 `sys.modules` 裡就一律不推 —— 就算未來新增的測試檔
+  忘了設環境變數也漏不出去
+
+測試裡有一條 `test_push_is_disabled_while_these_tests_run`：保險絲斷掉的話，
+整份測試會失敗，而不是等你手機響了才發現。
+
 ## 參數紅線（`config.py`）
 
 ```
@@ -373,7 +389,7 @@ per_trade_risk           3000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 289 項離線測試 |
+| `test_daytrade.py` | 293 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。

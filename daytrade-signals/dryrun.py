@@ -10,6 +10,8 @@ dryrun.py — 不連券商、不用金鑰，把一整天的 tick 灌進引擎跑
 
 產出寫到 journal/DRYRUN-YYYYMMDD.md，不會覆蓋真實交易日誌。
 """
+import os
+os.environ.setdefault("DAYTRADE_NO_PUSH", "1")  # 假 tick 不可以推到手機
 import argparse
 import random
 from datetime import datetime, time as dtime

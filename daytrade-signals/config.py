@@ -230,6 +230,25 @@ def round_trip_cost_pct() -> float:
     return (fee + COST["tax_rate"]) * 100
 
 
+def push_enabled() -> bool:
+    """推播該不該真的送出去。
+
+    2026-09-29：使用者跑一次 `python test_daytrade.py`，手機收到 5 則「今日停手」，
+    其中一則寫著「原因：測試」。RiskGate._close() 直接呼叫 notify()，而使用者的機器
+    上 .env 有金鑰、requests 也裝了 —— 測試就真的把訊息推到他手機。CI 兩樣都沒有，
+    所以這個洞從來沒在 CI 裡露出來。
+
+    測試與 dryrun 一律不推：它們的「訊號」是假的，混進真的推播裡會讓你分不出來
+    哪一則該當真。DAYTRADE_NO_PUSH 讓 dryrun.py 與任何腳本能明確關掉。
+    """
+    if os.environ.get("DAYTRADE_NO_PUSH"):
+        return False
+    # 保險絲：就算未來有人新增測試檔忘了設環境變數，也推不出去。
+    if "unittest" in sys.modules or "pytest" in sys.modules:
+        return False
+    return bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
+
+
 def validate() -> list[str]:
     """開盤前自我檢查。回傳錯誤訊息，空清單才可以上線。
 
