@@ -8,12 +8,14 @@ signals.py — 盤中訊號引擎。09:00 啟動，13:30 自動收工。
 
 它不會幫你下單。下單是你的手，責任也是你的。
 """
+import csv
 import json
 import logging
+import pathlib
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timedelta
 
 import config
 import outcome
@@ -190,6 +192,16 @@ class SymbolState:
     vol_marks: list = field(default_factory=list)   # (ts, total_volume) 用來算量能速率
     signaled: int = 0
     vwap_warned: bool = False
+    candidates: int = 0                       # 今日已記錄幾個「被擋掉的候選」
+    last_candidate_at: datetime | None = None # 候選之間的冷卻，避免每個 tick 記一筆
+
+    def should_record_candidate(self, now: datetime) -> bool:
+        """候選要記，但不能每個 tick 都記 —— 冷卻與上限都在這裡。"""
+        if self.candidates >= MAX_CANDIDATES_PER_SYMBOL:
+            return False
+        if self.last_candidate_at and now - self.last_candidate_at < CANDIDATE_COOLDOWN:
+            return False
+        return True
 
     def lock_opening_range(self, high: float, low: float, source: str = "tick"):
         self.or_high, self.or_low = high, low
@@ -246,11 +258,19 @@ class SymbolState:
 # ══════════════════════════════════════════════════════
 # 訊號判斷
 # ══════════════════════════════════════════════════════
-def evaluate(st: SymbolState, now: dtime | None = None) -> dict | None:
+def evaluate(st: SymbolState, now: dtime | None = None, *,
+             ignore_symbol_cap: bool = False) -> dict | None:
+    """ignore_symbol_cap=True 時照樣算出訊號內容，不管「一檔一天只發一次」。
+
+    這是給候選紀錄用的：被上限擋掉的那些訊號本身是合格的，只是不推播。
+    不把它們算出來，20 天後就回答不了「上限該不該放寬」。
+    """
     cfg = config.SIGNAL
     now = now or datetime.now().time()
 
-    if not st.or_locked or st.signaled >= cfg["max_signals_per_symbol"]:
+    if not st.or_locked:
+        return None
+    if not ignore_symbol_cap and st.signaled >= cfg["max_signals_per_symbol"]:
         return None
     if now >= _t(cfg["entry_window_end"]):
         return None
@@ -350,23 +370,68 @@ def format_signal(sig: dict, ordinal: int) -> str:
 
 _push_warned = False
 
+# ── 被擋掉的候選 ───────────────────────────────────────
+# 訊號上限與「一檔一天一次」擋掉的訊號，以前是 return None 直接丟掉。
+# 那兩條規則到底訂得對不對，20 天後只能靠這份紀錄回答 —— 沒有紀錄就只能再測一次。
+# 這裡只寫檔，不推播、不計入風控、不進 outcomes.csv，策略行為完全沒變。
+CANDIDATE_FILE = config.BASE_DIR / "candidates.csv"
+CANDIDATE_FIELDS = ("date", "code", "name", "time", "entry", "stop", "target",
+                    "lots", "reason", "or_high", "vwap", "volume_surge")
+# 同一檔的候選之間至少隔這麼久。不設的話突破後每個 tick 都會記一筆，
+# 記到的是同一次突破的雜訊，不是「另一次進場機會」。
+CANDIDATE_COOLDOWN = timedelta(minutes=5)
+MAX_CANDIDATES_PER_SYMBOL = 3
 
-def try_emit(st: SymbolState, gate: RiskGate, lock, sig: dict) -> str | None:
-    """在鎖內完成「再確認 → 過閘 → 記錄」，回傳要推播的訊息（或 None）。
+BLOCK_DAILY_CAP = "daily_cap"        # 今日訊號額度用完
+BLOCK_SYMBOL_CAP = "symbol_cap"      # 這檔今天已經發過了
+
+
+def record_candidate(sig: dict, reason: str, path=None) -> None:
+    """把被擋掉的候選附加到 candidates.csv。寫檔失敗不可以影響盤中監看。"""
+    path = pathlib.Path(path) if path else CANDIDATE_FILE
+    row = {k: sig.get(k, "") for k in CANDIDATE_FIELDS}
+    row["date"] = datetime.now().strftime("%Y-%m-%d")
+    row["reason"] = reason
+    try:
+        new_file = not path.exists()
+        with open(path, "a", newline="", encoding="utf-8-sig") as f:
+            w = csv.DictWriter(f, fieldnames=CANDIDATE_FIELDS)
+            if new_file:
+                w.writeheader()
+            w.writerow(row)
+    except Exception as e:
+        log.warning("候選寫檔失敗（不影響監看）：%s", e)
+
+
+def try_emit(st: SymbolState, gate: RiskGate, lock, sig: dict,
+             now: datetime | None = None) -> tuple[str | None, str | None]:
+    """在鎖內完成「再確認 → 過閘 → 記錄」。
+
+    回傳 (要推播的訊息, 被擋掉的原因)，兩者恰有一個是 None。被擋的原因要回傳，
+    因為候選紀錄的判斷必須跟閘門在同一把鎖裡做完，否則兩條執行緒會各自記一筆。
 
     行情回呼跑在背景執行緒上，多檔可能同時觸發。這幾步不是原子的話，
     兩檔會雙雙通過 check() 再各自寫進 state.json —— 當日訊號上限就被繞過去了。
-    推播留在鎖外：網路請求不該卡住其他檔的行情處理。
+    推播與寫檔留在鎖外：網路與磁碟不該卡住其他檔的行情處理。
     """
+    now = now or datetime.now()
     with lock:
         # 鎖內再確認一次：可能有另一條執行緒剛剛替這檔發過。
         if st.signaled >= config.SIGNAL["max_signals_per_symbol"]:
-            return None
-        if not gate.check():
-            return None
+            blocked = BLOCK_SYMBOL_CAP
+        elif not gate.check():
+            blocked = BLOCK_DAILY_CAP
+        else:
+            blocked = None
+        if blocked:
+            if not st.should_record_candidate(now):
+                return None, None       # 冷卻中或已達上限 —— 擋掉，但也不記
+            st.candidates += 1
+            st.last_candidate_at = now
+            return None, blocked
         st.signaled += 1
         ordinal = gate.record(sig)
-    return format_signal(sig, ordinal)
+    return format_signal(sig, ordinal), None
 
 
 # ══════════════════════════════════════════════════════
@@ -585,10 +650,15 @@ def main():
         # 先看已發出的訊號有沒有走完，再看要不要發新的
         for done in tracker.on_price(st.code, st.last_price):
             notify(done)
-        sig = evaluate(st)
+        # ignore_symbol_cap：連「這檔今天發過了」的那種也要算出來並記錄，
+        # 否則「被洗掉後能不能重新進場」這一題永遠沒有資料可以回答。
+        sig = evaluate(st, ignore_symbol_cap=True)
         if not sig:
             return
-        msg = try_emit(st, gate, signal_lock, sig)
+        msg, blocked = try_emit(st, gate, signal_lock, sig)
+        if blocked:
+            record_candidate(sig, blocked)
+            return
         if msg:
             tracker.track(sig)
             notify(msg)

@@ -73,7 +73,7 @@ SHIOAJI_PERSON_ID=
 ### 裝完先跑這三個
 
 ```bash
-python3 test_daytrade.py   # 272 項離線測試，不需金鑰與網路
+python3 test_daytrade.py   # 283 項離線測試，不需金鑰與網路
 python3 dryrun.py          # 灌模擬 tick 跑一整天，驗證管線沒斷
 python3 preflight.py       # 連線體檢：核對 Shioaji 回傳格式（需金鑰，只讀不下單）
 ```
@@ -198,6 +198,27 @@ python review.py --no-push
 | `mfe_pct` | 進場後整天的**最高**點離進場價幾 %（最大有利偏移） |
 | `target_after_stop` | 停損出場後，當天還是碰到目標了嗎 |
 | `low_5m_pct` | 訊號後第 1~5 分鐘的最低價離進場價幾 %（≤0 表示限價掛訊號價買得到） |
+
+### 被擋掉的候選 —— `candidates.csv`
+
+「一天最多 5 個訊號」與「一檔一天只發一次」這兩條規則，以前是把被擋掉的訊號
+**直接丟掉**：`return None`，不寫檔、不記錄。第 1、2 天都在 09:49 之前就打滿
+5 個，也就是說那之後的訊號全部消失了 —— 而 20 天後要回答「上限訂多少」「被洗
+掉後能不能重新進場」，靠的正是那些消失的資料。沒有紀錄，那兩題只能再測一次。
+
+現在被擋掉的訊號照樣算完整條件，寫進 `candidates.csv`，`review.py` 收盤後用
+**完全相同**的回推邏輯產出 `candidates_outcomes.csv`（多一欄 `reason`）。
+
+| `reason` | 被什麼擋掉 |
+|---|---|
+| `daily_cap` | 今日訊號額度（5 個）已用完 |
+| `symbol_cap` | 這檔今天已經發過訊號了 |
+
+候選**不推播、不計入風控、不進 `outcomes.csv`、不進日報** —— 策略行為一行沒改，
+只是把原本丟掉的東西記下來。每檔每天最多記 3 個，且彼此至少間隔 5 分鐘，否則
+突破後每個 tick 都會記一筆，記到的是同一次突破的雜訊。
+
+日報刻意不顯示它們：每天看到「你少賺了多少」，只會讓人想把上限拆掉。
 | `vwap_gap_pct` | 進場價比均價線高出幾 % |
 
 進場價取的是「條件全部成立那一刻的現價」，不是「區間高點 + 突破緩衝」。多數時候
@@ -351,7 +372,7 @@ per_trade_risk           2000   單筆風險 → 反推張數
 | `review.py` | 盤後覆盤 → `journal/YYYYMMDD.md` |
 | `dryrun.py` | 離線灌 tick 驗證管線（不連券商、不用金鑰） |
 | `preflight.py` | 連線體檢：核對 Shioaji 回傳格式與帳務權限（只讀） |
-| `test_daytrade.py` | 272 項離線測試 |
+| `test_daytrade.py` | 283 項離線測試 |
 
 `state.json`、`watchlist.json` 與 `journal/*.md` **不進版控**：
 那是你的帳務與持股紀錄。要給 Claude 做跨日稽核時，直接把本機的 `journal/` 丟給它。

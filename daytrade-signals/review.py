@@ -319,6 +319,15 @@ def main(argv=None):
     if broker is not None and signals:
         outcomes = oc.resolve_all(broker, signals)
         oc.append_csv(outcomes)
+    if broker is not None:
+        # 被上限擋掉的候選也回推一份，寫到另一份檔。
+        # 刻意不進日報 —— 每天看到「你少賺了多少」只會讓人想把上限拆掉。
+        try:
+            pending = oc.load_candidates()
+            if pending:
+                oc.append_candidates_csv(oc.resolve_candidates(broker, pending))
+        except Exception as e:                   # 候選壞掉不可以讓日報產不出來
+            log.warning("候選回推失敗（不影響日報）：%s", e)
     lines = render(signals, trades, state, pnl, note, outcomes)
     path = write_journal(lines)
     print("\n".join(lines))

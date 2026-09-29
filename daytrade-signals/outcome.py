@@ -18,6 +18,7 @@ outcome.py — 用分鐘 K 回推每個訊號的結局。
 """
 import csv
 import logging
+import pathlib
 from dataclasses import dataclass, asdict
 from datetime import datetime, time as dtime, timedelta
 
@@ -254,6 +255,61 @@ def append_csv(outcomes: list[Outcome], path=None) -> None:
             w.writerow({k: r.get(k, "") for k in FIELDS})
         for o in outcomes:
             w.writerow(asdict(o))
+
+
+# ── 被擋掉的候選 ───────────────────────────────────────
+# signals.py 把訊號上限／一檔一次擋掉的訊號寫進 candidates.csv。
+# 這裡用完全相同的邏輯回推它們的結局，只是寫到另一份檔，
+# 不進 outcomes.csv、不進日報 —— 它們不是你會做的交易，是「沒做到的那些」。
+CANDIDATE_FILE = config.BASE_DIR / "candidates.csv"
+CANDIDATE_OUTCOME_FILE = config.BASE_DIR / "candidates_outcomes.csv"
+CANDIDATE_OUT_FIELDS = FIELDS + ("reason",)
+
+
+def load_candidates(date: str | None = None, path=None) -> list[dict]:
+    """讀出指定日期的候選（預設今天）。格式就是 resolve() 吃得下的 sig dict。"""
+    path = pathlib.Path(path) if path else CANDIDATE_FILE
+    if not path.exists():
+        return []
+    date = date or datetime.now().strftime("%Y-%m-%d")
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        return [r for r in csv.DictReader(f) if r.get("date") == date]
+
+
+def resolve_candidates(broker, rows: list[dict],
+                       date: str | None = None) -> list[tuple]:
+    """回推候選的結局，回傳 [(Outcome, reason)]。"""
+    out = []
+    for r in rows:
+        try:
+            o = resolve(broker, r, date or r.get("date"))
+        except Exception as e:
+            log.warning("候選 %s 回推失敗：%s", r.get("code"), e)
+            o = None
+        if o:
+            out.append((o, r.get("reason", "")))
+    return out
+
+
+def append_candidates_csv(pairs: list[tuple], path=None) -> None:
+    """與 append_csv 同樣的「同日重跑先刪舊列」語意，多帶一欄 reason。"""
+    if not pairs:
+        return
+    path = pathlib.Path(path) if path else CANDIDATE_OUTCOME_FILE
+    dates = {o.date for o, _ in pairs}
+    kept = []
+    if path.exists():
+        with open(path, newline="", encoding="utf-8-sig") as f:
+            kept = [r for r in csv.DictReader(f) if r.get("date") not in dates]
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=CANDIDATE_OUT_FIELDS)
+        w.writeheader()
+        for r in kept:
+            w.writerow({k: r.get(k, "") for k in CANDIDATE_OUT_FIELDS})
+        for o, reason in pairs:
+            row = asdict(o)
+            row["reason"] = reason
+            w.writerow(row)
 
 
 _STR_FIELDS = ("date", "code", "time", "result")

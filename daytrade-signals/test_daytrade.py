@@ -668,7 +668,7 @@ class TestConcurrentEmit(unittest.TestCase):
             sig = evaluate(st, now=dtime(10, 0))
             barrier.wait()                       # 盡量讓大家同時進來
             if sig:
-                msg = signals.try_emit(st, gate, lock, sig)
+                msg, _blocked = signals.try_emit(st, gate, lock, sig)
                 if msg:
                     with sent_lock:
                         sent.append(msg)
@@ -2618,6 +2618,175 @@ class TestBarTime(unittest.TestCase):
         from broker import _bar_time
         self.assertIsNone(_bar_time("abc"))
         self.assertIsNone(_bar_time(None))
+
+
+class TestBlockedCandidatesAreRecorded(unittest.TestCase):
+    """被上限擋掉的訊號以前直接消失。沒有這份紀錄，「上限訂多少」只能再測一次。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "candidates.csv"
+        self.addCleanup(self.tmp.cleanup)
+        self._orig_state = config.STATE_FILE          # 別讓測試之間互相污染風控狀態
+        config.STATE_FILE = Path(self.tmp.name) / "state.json"
+
+    def tearDown(self):
+        config.STATE_FILE = self._orig_state
+
+    def _rows(self):
+        with open(self.path, newline="", encoding="utf-8-sig") as f:
+            return list(csv.DictReader(f))
+
+    def test_daily_cap_blocks_but_records(self):
+        gate = RiskGate(FakeBroker(pnl_rows=[]))
+        gate.state["signals_sent"] = config.RISK["max_signals_per_day"]
+        st = ready_state("2330")
+        sig = evaluate(st, now=dtime(10, 0))
+        msg, blocked = signals.try_emit(st, gate, threading.Lock(), sig)
+        self.assertIsNone(msg)
+        self.assertEqual(blocked, signals.BLOCK_DAILY_CAP)
+        # 被擋掉不可以留下任何副作用
+        self.assertEqual(st.signaled, 0)
+        self.assertEqual(gate.state["signals_sent"], config.RISK["max_signals_per_day"])
+
+    def test_second_breakout_on_same_symbol_is_evaluated_and_blocked(self):
+        gate = RiskGate(FakeBroker(pnl_rows=[]))
+        st = ready_state("2330")
+        lock = threading.Lock()
+        first = evaluate(st, now=dtime(10, 0))
+        msg, blocked = signals.try_emit(st, gate, lock, first)
+        self.assertIsNotNone(msg)
+        self.assertIsNone(blocked)
+        # 第二次：舊行為是 evaluate 直接回 None，連算都不算
+        self.assertIsNone(evaluate(st, now=dtime(10, 30)))
+        again = evaluate(st, now=dtime(10, 30), ignore_symbol_cap=True)
+        self.assertIsNotNone(again)
+        _, blocked = signals.try_emit(st, gate, lock, again,
+                                      now=datetime(2026, 1, 2, 10, 30))
+        self.assertEqual(blocked, signals.BLOCK_SYMBOL_CAP)
+        self.assertEqual(st.signaled, 1)         # 候選不會讓它變成發了兩次
+
+    def test_cooldown_stops_every_tick_becoming_a_candidate(self):
+        gate = RiskGate(FakeBroker(pnl_rows=[]))
+        gate.state["signals_sent"] = config.RISK["max_signals_per_day"]
+        st = ready_state("2330")
+        sig = evaluate(st, now=dtime(10, 0))
+        lock = threading.Lock()
+        t0 = datetime(2026, 1, 2, 10, 0, 0)
+        recorded = []
+        for offset in (0, 30, 60, 301):          # 秒
+            _, blocked = signals.try_emit(
+                st, gate, lock, sig, now=t0 + timedelta(seconds=offset))
+            if blocked:
+                recorded.append(offset)
+        self.assertEqual(recorded, [0, 301])     # 冷卻 5 分鐘內的都不記
+
+    def test_candidates_per_symbol_are_capped(self):
+        gate = RiskGate(FakeBroker(pnl_rows=[]))
+        gate.state["signals_sent"] = config.RISK["max_signals_per_day"]
+        st = ready_state("2330")
+        sig = evaluate(st, now=dtime(10, 0))
+        lock = threading.Lock()
+        t0 = datetime(2026, 1, 2, 10, 0, 0)
+        hits = 0
+        for i in range(10):
+            _, blocked = signals.try_emit(
+                st, gate, lock, sig, now=t0 + timedelta(minutes=10 * i))
+            hits += bool(blocked)
+        self.assertEqual(hits, signals.MAX_CANDIDATES_PER_SYMBOL)
+
+    def test_record_candidate_writes_header_once_and_appends(self):
+        st = ready_state("2330", or_high=100.0, last=101.0)
+        sig = evaluate(st, now=dtime(10, 0))
+        signals.record_candidate(sig, signals.BLOCK_DAILY_CAP, path=self.path)
+        signals.record_candidate(sig, signals.BLOCK_SYMBOL_CAP, path=self.path)
+        rows = self._rows()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([r["reason"] for r in rows],
+                         [signals.BLOCK_DAILY_CAP, signals.BLOCK_SYMBOL_CAP])
+        self.assertEqual(rows[0]["code"], "2330")
+        self.assertEqual(float(rows[0]["entry"]), sig["entry"])
+        self.assertEqual(float(rows[0]["stop"]), sig["stop"])
+        self.assertEqual(float(rows[0]["target"]), sig["target"])
+        self.assertTrue(rows[0]["date"])
+        # 台灣的 Excel 要 BOM，否則中文欄位會是亂碼
+        self.assertTrue(self.path.read_bytes().startswith(b"\xef\xbb\xbf"))
+
+    def test_write_failure_never_breaks_monitoring(self):
+        st = ready_state("2330")
+        sig = evaluate(st, now=dtime(10, 0))
+        bad = Path(self.tmp.name) / "nope" / "candidates.csv"   # 目錄不存在
+        signals.record_candidate(sig, signals.BLOCK_DAILY_CAP, path=bad)  # 不可拋
+
+    def test_normal_path_is_unchanged(self):
+        """沒被擋的時候，行為要跟以前一模一樣。"""
+        gate = RiskGate(FakeBroker(pnl_rows=[]))
+        st = ready_state("2330")
+        sig = evaluate(st, now=dtime(10, 0))
+        msg, blocked = signals.try_emit(st, gate, threading.Lock(), sig)
+        self.assertIsNone(blocked)
+        self.assertIn("決策錨點", msg)
+        self.assertEqual(st.signaled, 1)
+        self.assertEqual(st.candidates, 0)
+
+
+class TestCandidateOutcomes(unittest.TestCase):
+    """候選也要回推結局，否則只知道「有幾個」，不知道「會不會賺」。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.src = Path(self.tmp.name) / "candidates.csv"
+        self.dst = Path(self.tmp.name) / "candidates_outcomes.csv"
+
+    def _write(self, rows):
+        with open(self.src, "w", newline="", encoding="utf-8-sig") as f:
+            w = csv.DictWriter(f, fieldnames=signals.CANDIDATE_FIELDS)
+            w.writeheader()
+            for r in rows:
+                w.writerow(r)
+
+    DATE = "2026-09-24"
+    BARS = [("09:24", 121.5, 120.8, 121.2), ("09:25", 123.6, 121.0, 123.4)]
+
+    def _row(self, date=None, code="2330", reason="daily_cap"):
+        return {"date": date or self.DATE, "code": code, "name": "",
+                "time": "09:23:00", "entry": 121.0, "stop": 119.5,
+                "target": 123.5, "lots": 1, "reason": reason,
+                "or_high": 120.0, "vwap": 120.5, "volume_surge": 2.0}
+
+    def test_load_only_returns_that_day(self):
+        self._write([self._row(), self._row(date="2026-09-25")])
+        rows = oc.load_candidates(date=self.DATE, path=self.src)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["date"], self.DATE)
+
+    def test_missing_file_is_not_an_error(self):
+        self.assertEqual(oc.load_candidates(date=self.DATE, path=self.src), [])
+
+    def test_resolve_and_write_keeps_reason(self):
+        rows = [self._row(reason="symbol_cap")]
+        broker = FakeKbarBroker(_kb(self.BARS))
+        pairs = oc.resolve_candidates(broker, rows, date=self.DATE)
+        self.assertEqual(len(pairs), 1)
+        outcome_, reason = pairs[0]
+        self.assertEqual(reason, "symbol_cap")
+        self.assertEqual(outcome_.result, oc.TARGET)
+        oc.append_candidates_csv(pairs, path=self.dst)
+        with open(self.dst, newline="", encoding="utf-8-sig") as f:
+            written = list(csv.DictReader(f))
+        self.assertEqual(len(written), 1)
+        self.assertEqual(written[0]["reason"], "symbol_cap")
+        self.assertEqual(written[0]["result"], oc.TARGET)
+
+    def test_rerunning_the_same_day_does_not_duplicate(self):
+        rows = [self._row()]
+        broker = FakeKbarBroker(_kb(self.BARS))
+        pairs = oc.resolve_candidates(broker, rows, date=self.DATE)
+        oc.append_candidates_csv(pairs, path=self.dst)
+        oc.append_candidates_csv(pairs, path=self.dst)
+        with open(self.dst, newline="", encoding="utf-8-sig") as f:
+            self.assertEqual(len(list(csv.DictReader(f))), 1)
 
 
 if __name__ == "__main__":
