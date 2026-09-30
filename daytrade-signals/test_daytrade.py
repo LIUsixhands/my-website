@@ -29,6 +29,7 @@ from types import SimpleNamespace
 import config
 import preflight
 import review
+import broker as broker_mod
 from broker import Broker
 import outcome as oc
 import screener
@@ -3193,6 +3194,89 @@ class TestMonitorBat(unittest.TestCase):
 
     def test_crlf_and_ascii_only(self):
         self.assertIn(b"\r\n", self.BAT.read_bytes())
+
+
+class TestLoginRetry(unittest.TestCase):
+    """2026-09-30 早上真的發生的事。
+
+    08:40 盤前選股登入成功；08:50 盤中監看收到
+    `SystemMaintenance: 503, Paper report subscription was not confirmed`
+    —— 永豐模擬環境在那 10 分鐘之間進入維護。以前這個例外直接往外炸，
+    一整個驗證日就這樣沒了，而且每次維護都會再發生一次。
+    """
+
+    class Boom:
+        """前 n 次登入丟例外，之後成功。"""
+
+        def __init__(self, exc, fail_times):
+            self.exc, self.left, self.calls = exc, fail_times, 0
+
+        def login(self, **_kw):
+            self.calls += 1
+            if self.left > 0:
+                self.left -= 1
+                raise self.exc
+
+    def _broker(self, api):
+        b = Broker(api=api)          # 注入 api 不會登入
+        b.api = api
+        return b
+
+    def _run(self, exc, fail_times):
+        api = self.Boom(exc, fail_times)
+        b = self._broker(api)
+        slept = []
+        b._login_with_retry(sleep=slept.append)
+        return api, slept
+
+    def test_transient_maintenance_is_survived(self):
+        exc = RuntimeError("SystemMaintenance: StatusCode: 503, Detail: "
+                           "Paper report subscription was not confirmed")
+        with self.assertLogs("broker", level="WARNING"):
+            api, slept = self._run(exc, fail_times=3)
+        self.assertEqual(api.calls, 4)                  # 三次失敗 + 一次成功
+        self.assertEqual(slept, [broker_mod.LOGIN_RETRY_WAIT] * 3)
+
+    def test_first_try_does_not_sleep(self):
+        api, slept = self._run(RuntimeError("x"), fail_times=0)
+        self.assertEqual(api.calls, 1)
+        self.assertEqual(slept, [])
+
+    def test_permission_errors_fail_immediately(self):
+        """金鑰錯、權限不足重試一百次也一樣 —— 重試只是把壞消息延後 6 分鐘。"""
+        exc = RuntimeError("Token doesn't have permission")
+        api = self.Boom(exc, fail_times=99)
+        b = self._broker(api)
+        with self.assertRaises(RuntimeError) as cm:
+            b._login_with_retry(sleep=lambda _s: None)
+        self.assertIn("permission", str(cm.exception))
+        self.assertEqual(api.calls, 1)                  # 一次就放棄
+
+    def test_gives_up_after_the_cap_and_says_why(self):
+        exc = RuntimeError("SystemMaintenance: 503")
+        api = self.Boom(exc, fail_times=99)
+        b = self._broker(api)
+        with self.assertLogs("broker", level="WARNING"), \
+                self.assertRaises(RuntimeError) as cm:
+            b._login_with_retry(sleep=lambda _s: None)
+        self.assertEqual(api.calls, broker_mod.LOGIN_ATTEMPTS)
+        self.assertIn("維護", str(cm.exception))
+        self.assertIn("503", str(cm.exception))         # 原始錯誤要留著
+
+    def test_transient_detection(self):
+        for text in ("SystemMaintenance: 503", "Read timed out",
+                     "Connection aborted", "Service temporarily unavailable",
+                     "502 Bad Gateway"):
+            self.assertTrue(broker_mod._looks_transient(RuntimeError(text)), text)
+        for text in ("Token doesn't have permission", "Invalid api key",
+                     "signature mismatch"):
+            self.assertFalse(broker_mod._looks_transient(RuntimeError(text)), text)
+
+    def test_retry_window_covers_the_gap_to_the_open(self):
+        """排程 08:50 開始、09:00 開盤 —— 重試總時長要塞得進那 10 分鐘。"""
+        total = broker_mod.LOGIN_ATTEMPTS * broker_mod.LOGIN_RETRY_WAIT
+        self.assertGreaterEqual(total, 5 * 60)
+        self.assertLessEqual(total, 10 * 60)
 
 
 if __name__ == "__main__":

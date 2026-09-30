@@ -22,6 +22,22 @@ except ImportError:              # pragma: no cover - 取決於環境
 log = logging.getLogger(__name__)
 
 
+# 登入重試。券商維護通常幾分鐘就過，但排程是 08:50 開始、09:00 開盤 ——
+# 熬過去比報銷一整天划算。12 次 × 30 秒 ≈ 6 分鐘，剛好在開盤前用完。
+LOGIN_ATTEMPTS = 12
+LOGIN_RETRY_WAIT = 30
+
+# 只重試「會自己好」的錯誤。金鑰錯、權限不足重試一百次也一樣。
+_TRANSIENT_HINTS = ("systemmaintenance", "maintenance", "503", "502", "504",
+                    "timeout", "timed out", "connection", "temporarily",
+                    "unavailable", "try again")
+
+
+def _looks_transient(exc: BaseException) -> bool:
+    text = f"{type(exc).__name__} {exc}".lower()
+    return any(h in text for h in _TRANSIENT_HINTS)
+
+
 class Broker:
     def __init__(self, api=None):
         """api 可注入，用來離線測試這些封裝對 Shioaji 回傳格式的假設。
@@ -49,10 +65,42 @@ class Broker:
                 "缺少 SHIOAJI_API_KEY / SHIOAJI_SECRET_KEY。"
                 f"請確認 {config.ENV_FILE.name} 存在且已填入金鑰"
                 "（cp .env.template .env），或已 export 這兩個環境變數。")
-        self.api.login(api_key=config.API_KEY, secret_key=config.SECRET_KEY)
+        self._login_with_retry()
         self._login_at = datetime.now()
         log.info("Shioaji 登入完成（simulation=%s）", config.SIMULATION)
         self.activate_ca()
+
+    def _login_with_retry(self, sleep=time.sleep) -> None:
+        """券商端的暫時性故障不該報銷一整天。
+
+        2026-09-30：08:40 的盤前選股登入成功，08:50 的盤中監看卻收到
+        `SystemMaintenance: 503, Paper report subscription was not confirmed`
+        —— 永豐的模擬環境在那 10 分鐘之間進入維護。以前這個例外直接往外炸，
+        排程就這樣安靜地少掉一整個驗證日，而且每次維護都會再發生一次。
+
+        跟帳務查詢的重試同一個原則：**暫時性失敗要熬過去，權限問題要立刻報錯。**
+        金鑰錯誤、密碼錯誤這類永遠不會自己好的，重試只是把壞消息延後 6 分鐘。
+        """
+        last = None
+        for attempt in range(1, LOGIN_ATTEMPTS + 1):
+            try:
+                self.api.login(api_key=config.API_KEY, secret_key=config.SECRET_KEY)
+                if attempt > 1:
+                    log.warning("第 %d 次嘗試才登入成功（券商端剛才不穩）", attempt)
+                return
+            except Exception as e:
+                last = e
+                if not _looks_transient(e):
+                    raise                     # 權限／金鑰問題，重試沒有意義
+                if attempt == LOGIN_ATTEMPTS:
+                    break
+                log.warning("登入失敗（第 %d/%d 次，判定為暫時性，%d 秒後重試）：%s",
+                            attempt, LOGIN_ATTEMPTS, LOGIN_RETRY_WAIT, e)
+                sleep(LOGIN_RETRY_WAIT)
+        raise RuntimeError(
+            f"連續 {LOGIN_ATTEMPTS} 次登入都失敗（約 "
+            f"{LOGIN_ATTEMPTS * LOGIN_RETRY_WAIT // 60} 分鐘），券商端可能在維護。"
+            f"最後一次的錯誤：{type(last).__name__}: {last}") from last
 
     def activate_ca(self) -> bool | None:
         """啟用電子憑證。回傳 True/False，模擬模式或未設定則回傳 None。
