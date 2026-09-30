@@ -1,0 +1,57 @@
+{
+  "_說明": "小曲 MV 設定檔範例。複製一份改成你的案子。路徑都相對於這個 json 所在資料夾。",
+
+  "ratio": "9:16",
+  "fps": 30,
+  "audio": "audio/take2.mp3",
+  "total": null,
+  "out": "final.mp4",
+  "brand": true,
+
+  "accent": [214, 40, 40],
+  "card_bg": [12, 12, 14],
+  "sub_y": 0.63,
+  "sub_chars": 13,
+  "zoom_amt": 0.10,
+
+  "song_ms": 55000,
+  "song_prompt": "A bright, warm Mandarin Chinese city-pop song with a sweet female vocal singing in a natural Taiwanese Mandarin accent. Warm electric piano and clean guitar in the verse, opening into a big joyful chorus with claps and a light disco bassline. Tempo around 112 BPM, key of F major. The feeling of walking past a shop you have passed a hundred times and finally going in. CRITICAL: articulate \"剛剛好\" (gang-gang-hao) and \"熱的\" (re-de) slowly and very distinctly. No rap, no heavy autotune, no English vocals. End cleanly before 55 seconds.",
+
+  "lyrics": "[Verse]\n每天經過那個轉角\n招牌的燈一直亮著\n說好改天要進去看看\n改天就這樣過了半年\n\n[Pre-Chorus]\n別再改天了\n就是今天\n\n[Chorus]\n熱的剛剛好\n甜的剛剛好\n一口就知道 有人在乎\n不用排很久\n不用想很久\n轉角那盞燈 一直等你\n\n[Verse]\n麵團是今天早上揉的\n奶茶是現場煮的\n老闆記得你上次點什麼\n這種事 機器學不來\n\n[Outro]\n今天下班 就轉那個彎",
+
+  "subs": null,
+
+  "shots": [
+    {"id": "s01", "t0": 0.00,  "t1": 2.20,  "type": "image", "src": "assets/01_店門.jpg",   "mode": "fill", "cx": 0.5, "cy": 0.45, "zoom": "in"},
+    {"id": "s02", "t0": 2.20,  "t1": 4.30,  "type": "image", "src": "assets/02_招牌.jpg",   "mode": "fill", "cx": 0.5, "cy": 0.35, "zoom": "out"},
+    {"id": "s03", "t0": 4.30,  "t1": 6.40,  "type": "image", "src": "assets/03_街景.jpg",   "mode": "band", "cy": 0.5,  "zoom": "in"},
+    {"id": "s04", "t0": 6.40,  "t1": 8.60,  "type": "card",  "big": "別再改天了",            "sub": ""},
+    {"id": "s05", "t0": 8.60,  "t1": 10.40, "type": "image", "src": "assets/04_產品特寫.jpg", "mode": "fill", "cx": 0.5, "cy": 0.5,  "zoom": "in"},
+    {"id": "s06", "t0": 10.40, "t1": 12.20, "type": "video", "src": "assets/vid_出餐.mp4",   "ss": 3.5},
+    {"id": "s07", "t0": 12.20, "t1": 14.00, "type": "image", "src": "assets/05_老闆.jpg",    "mode": "fill", "cx": 0.45,"cy": 0.4,  "zoom": "out",
+     "big": "熱的剛剛好", "big_alpha": 0.45}
+  ],
+
+  "endcard": {
+    "t0": 50.0,
+    "title": "○○早餐店",
+    "lines": ["台南市東區○○路 123 號", "每天 06:00 - 11:30 ／週一公休", "LINE：@xxxxxx"],
+    "cta": "私訊幫你留一份"
+  },
+
+  "_鏡型速查": {
+    "image + fill": "滿版裁切，主力。cx/cy 是裁切中心（0=左/上，1=右/下）",
+    "image + band": "橫幅照轉直式：模糊底＋清晰橫幅。橫的照片放直片一律用這個",
+    "image + fit":  "低清素材：不放大加黑邊。糊掉比黑邊難看",
+    "video":        "ss = 從影片第幾秒開始切",
+    "card":         "純文字圖卡。big ≤9 字，可用 \\n 換行",
+    "big":          "貼在照片上的大字（文字全不透明，底圖壓暗），big_alpha = 壓暗程度 0.35-0.55"
+  },
+
+  "_排鏡原則": [
+    "平均一鏡 2 秒，最長不超過 3.5 秒；副歌可壓到 1.2-1.5 秒",
+    "第一鏡從 0.00 開始，最後一鏡收在音樂結束點（音訊零留白）",
+    "三層證據換媒材：情境照 → 產品特寫 → 現場/人臉",
+    "真素材排前 10 秒，AI 生圖往後放"
+  ]
+}

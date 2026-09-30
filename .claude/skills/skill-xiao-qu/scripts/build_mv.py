@@ -1,0 +1,458 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""小曲 · AI MV 一鍵合成器
+
+讀 mv.json → 逐幀 PIL 算 Ken Burns → 燒字幕 → 品牌尾卡 → 混音 → out/final.mp4
+
+設計原則（都是踩過雷換來的）：
+  * Ken Burns 一律用 PIL 逐幀算，**不用 ffmpeg zoompan**（zoompan 配靜態圖會 n×n 爆量）。
+  * 幀不落地，直接 rawvideo pipe 給 ffmpeg（省掉幾 GB 暫存 PNG）。
+  * 字幕壓畫面高度 63%（剪輯鐵律）。
+  * 中文一律用系統 STHeiti / Songti，不用 SC 字型（SC 缺繁體字會渲染成空白）。
+
+用法：
+    python3 build_mv.py mv.json
+    python3 build_mv.py mv.json --preview 10     # 只算前 10 秒，快速看排版
+"""
+import json, subprocess, sys, pathlib, math, shutil, tempfile, platform
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps
+
+# ---------- 字型（跨平台）----------
+# 規則：繁體一律用 TC / 正黑體，絕不用 SC 字型（SC 缺繁體字會渲染成空白）。
+# 找不到就直接報錯停掉，不 fallback 到 PIL 預設字型 —— 那會靜默畫出一排豆腐格。
+_FONT_CANDIDATES = {
+    "bold": [
+        # macOS
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "/System/Library/Fonts/PingFang.ttc",
+        # Windows（微軟正黑體，繁體內建）
+        "C:/Windows/Fonts/msjhbd.ttc",
+        "C:/Windows/Fonts/msjh.ttc",
+        # Linux
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJKtc-Bold.otf",
+    ],
+    "light": [
+        "/System/Library/Fonts/STHeiti Light.ttc",
+        "/System/Library/Fonts/PingFang.ttc",
+        "C:/Windows/Fonts/msjhl.ttc",
+        "C:/Windows/Fonts/msjh.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Light.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJKtc-Light.otf",
+    ],
+    "serif": [
+        "/System/Library/Fonts/Supplemental/Songti.ttc",   # 繁體用 TC，勿用 SC
+        "C:/Windows/Fonts/mingliu.ttc",                    # 細明體
+        "C:/Windows/Fonts/kaiu.ttf",                       # 標楷體
+        "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
+    ],
+}
+
+
+def _pick_font(kind):
+    for c in _FONT_CANDIDATES[kind]:
+        if pathlib.Path(c).exists():
+            return c
+    sys.exit(
+        f"❌ 找不到可用的中文字型（{kind}）。\n"
+        f"   目前系統：{platform.system()}\n"
+        f"   已找過：\n     " + "\n     ".join(_FONT_CANDIDATES[kind]) + "\n"
+        "   Windows：微軟正黑體(msjh.ttc)是內建的，若被移除請重裝或改用「設定→字型」安裝。\n"
+        "   Linux：sudo apt install fonts-noto-cjk\n"
+        "   或在 mv.json 加 \"fonts\": {\"bold\": \"字型檔完整路徑\", ...} 自己指定。"
+    )
+
+
+F_BOLD = _pick_font("bold")
+F_LIGHT = _pick_font("light")
+F_SERIF = _pick_font("serif")
+IDX_TC = 0
+
+RATIOS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080)}
+
+
+def font(path, size, index=IDX_TC):
+    return ImageFont.truetype(path, size, index=index)
+
+
+def tw(draw, text, f):
+    b = draw.textbbox((0, 0), text, font=f)
+    return b[2] - b[0], b[3] - b[1]
+
+
+# ---------- 素材載入 ----------
+_cache = {}
+
+
+def load_img(path):
+    p = str(path)
+    if p not in _cache:
+        im = Image.open(p)
+        im = ImageOps.exif_transpose(im)          # 手機照必做，否則會躺著
+        _cache[p] = im.convert("RGB")
+    return _cache[p]
+
+
+def grab_video_frame(path, t, size):
+    """從影片抽一幀（給 type=video 用）。回傳 PIL Image。"""
+    key = f"{path}@{t:.2f}"
+    if key in _cache:
+        return _cache[key]
+    tmp = pathlib.Path(tempfile.gettempdir()) / f"_xq_{abs(hash(key))}.jpg"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.3f}",
+                    "-i", str(path), "-frames:v", "1", "-q:v", "2", str(tmp)],
+                   check=True)
+    im = Image.open(tmp).convert("RGB")
+    tmp.unlink(missing_ok=True)
+    _cache[key] = im
+    return im
+
+
+# ---------- 取景 ----------
+def render_fill(src, W, H, cx, cy, zoom):
+    """滿版裁切：主力鏡型。zoom 是這一幀的放大率（1.0 = 剛好蓋滿）。
+
+    先在原圖上裁出對應視窗、再縮到輸出尺寸（等價於先放大再裁，但不必每幀
+    放大整張大圖 → 2K 素材可快 3-4 倍）。
+    """
+    sw, sh = src.size
+    scale = max(W / sw, H / sh) * zoom
+    nw, nh = max(W, int(sw * scale)), max(H, int(sh * scale))
+    x = max(0, min(nw - W, int((nw - W) * cx)))
+    y = max(0, min(nh - H, int((nh - H) * cy)))
+    # 換算回原圖座標的裁切視窗
+    sx0 = x * sw / nw
+    sy0 = y * sh / nh
+    sx1 = (x + W) * sw / nw
+    sy1 = (y + H) * sh / nh
+    return src.resize((W, H), Image.LANCZOS, box=(sx0, sy0, sx1, sy1))
+
+
+def render_band(src, W, H, cy, zoom, band_cy=0.42):
+    """橫幅照轉直式：模糊放大當底，中間放清晰的完整橫幅。"""
+    bgkey = (id(src), W, H, "band_bg")
+    bg = _cache.get(bgkey)
+    if bg is None:
+        # 模糊底跟 zoom 無關，整鏡固定 → 只算一次
+        bg = render_fill(src, W, H, 0.5, 0.5, 1.15).filter(ImageFilter.GaussianBlur(38))
+        bg = Image.eval(bg, lambda v: int(v * 0.55))
+        _cache[bgkey] = bg
+    bg = bg.copy()
+    sw, sh = src.size
+    bw = int(W * zoom)
+    bh = max(1, int(bw * sh / sw))
+    band = src.resize((bw, bh), Image.LANCZOS)
+    if bw > W:                      # 放大超出畫寬就水平裁掉多的
+        left = int((bw - W) * 0.5)
+        band = band.crop((left, 0, left + W, bh))
+        bw = W
+    bg.paste(band, ((W - bw) // 2, int(H * band_cy) - bh // 2))
+    return bg
+
+
+def render_fit(src, W, H, zoom):
+    """低清素材：不放大，加黑邊。放大糊掉比黑邊難看。"""
+    canvas = Image.new("RGB", (W, H), (0, 0, 0))
+    sw, sh = src.size
+    scale = min(W / sw, H / sh) * zoom
+    nw, nh = int(sw * scale), int(sh * scale)
+    canvas.paste(src.resize((nw, nh), Image.LANCZOS), ((W - nw) // 2, (H - nh) // 2))
+    return canvas
+
+
+def render_card(shot, W, H, cfg, transparent=False):
+    """純文字圖卡：黑底 + 大字 +（可選）副標。
+
+    transparent=True 時只畫字（回 RGBA），給「疊在照片上的大字」用——
+    直接 blend 整張卡會把文字一起稀釋成半透明，字會糊掉。
+    """
+    if transparent:
+        im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    else:
+        im = Image.new("RGB", (W, H), tuple(shot.get("bg", cfg.get("card_bg", [12, 12, 14]))))
+    d = ImageDraw.Draw(im)
+    accent = tuple(cfg.get("accent", [214, 40, 40]))
+    S = min(W, H)                      # 字級一律照短邊算，否則 16:9 會整個爆版
+    big = shot.get("big", "")
+    sub = shot.get("sub", "")
+    size = shot.get("size") or int(S * 0.155)
+    f = font(F_BOLD, size)
+    f2 = font(F_LIGHT, int(S * 0.048))
+    lines = big.split("\n") if big else []
+
+    gap = int(size * 0.42)
+    block = sum(tw(d, l, f)[1] + gap for l in lines)
+    if big:
+        block += int(size * 0.15) + max(4, S // 300)
+    if sub:
+        block += int(S * 0.055) + tw(d, sub, f2)[1]
+    y = max(int(H * 0.06), (H - block) // 2)
+
+    for l in lines:
+        w, h = tw(d, l, f)
+        d.text(((W - w) // 2, y), l, font=f, fill=(255, 255, 255))
+        y += h + gap
+    if big:
+        y += int(size * 0.15)
+        d.rectangle([(W // 2 - int(S * 0.075), y),
+                     (W // 2 + int(S * 0.075), y + max(4, S // 300))], fill=accent)
+        y += max(4, S // 300)
+    if sub:
+        y += int(S * 0.055)
+        w, _ = tw(d, sub, f2)
+        d.text(((W - w) // 2, y), sub, font=f2, fill=(190, 190, 195))
+    return im
+
+
+# ---------- 尾卡 ----------
+def fit_font(d, text, path, size, max_w):
+    """尾卡字級照短邊算，遇到長字串會靜默爆版 → 這裡自動縮到塞得下。"""
+    f = font(path, size)
+    while size > 10 and tw(d, text, f)[0] > max_w:
+        size = int(size * 0.94)
+        f = font(path, size)
+    return f
+
+
+def render_endcard(ec, W, H, cfg, logo_path):
+    """尾卡：流式排版（先量總高再置中），16:9 / 9:16 都不會壓在一起。"""
+    im = Image.new("RGB", (W, H), tuple(ec.get("bg", cfg.get("card_bg", [12, 12, 14]))))
+    d = ImageDraw.Draw(im)
+    accent = tuple(cfg.get("accent", [214, 40, 40]))
+    S = min(W, H)                      # 字級照短邊，不照畫面寬
+
+    title = ec.get("title", "")
+    lines = ec.get("lines", [])
+    cta = ec.get("cta", "")
+    max_w = W - int(S * 0.16)          # 左右安全區
+    f_t = fit_font(d, title, F_BOLD, int(S * 0.105), max_w)
+    f_l = font(F_LIGHT, int(S * 0.050))
+    if lines:
+        f_l = min((fit_font(d, l, F_LIGHT, int(S * 0.050), max_w) for l in lines),
+                  key=lambda f: f.size)
+    f_c = fit_font(d, cta, F_BOLD, int(S * 0.058), max_w - int(S * 0.080) * 2)
+
+    rule_h = max(4, S // 320)
+    pad = int(S * 0.040)               # CTA 按鈕內距
+    gap_l = int(S * 0.026)             # 資訊行間距
+
+    # logo 區塊先算好，尾卡一定留得下位置
+    lg = None
+    if cfg.get("brand", True) and logo_path and pathlib.Path(logo_path).exists():
+        lg = Image.open(logo_path).convert("RGBA")
+        lw = int(S * 0.15)
+        lg = lg.resize((lw, int(lg.height * lw / lg.width)), Image.LANCZOS)
+    f_b = font(F_LIGHT, int(S * 0.030))
+    brand_txt = "Sixhands Studio AI數字員工"
+    logo_block = (lg.height + int(S * 0.012) + tw(d, brand_txt, f_b)[1]) if lg else 0
+
+    # 量總高
+    block = 0
+    if title:
+        block += tw(d, title, f_t)[1] + int(S * 0.022) + rule_h + int(S * 0.045)
+    for l in lines:
+        block += tw(d, l, f_l)[1] + gap_l
+    if cta:
+        block += int(S * 0.045) + tw(d, cta, f_c)[1] + pad
+
+    avail = H - logo_block - int(S * 0.10) if lg else H
+    y = max(int(H * 0.07), (avail - block) // 2)
+
+    if title:
+        w, h = tw(d, title, f_t)
+        d.text(((W - w) // 2, y), title, font=f_t, fill=(255, 255, 255))
+        y += h + int(S * 0.022)
+        d.rectangle([(W // 2 - int(S * 0.085), y), (W // 2 + int(S * 0.085), y + rule_h)],
+                    fill=accent)
+        y += rule_h + int(S * 0.045)
+
+    for l in lines:
+        w, h = tw(d, l, f_l)
+        d.text(((W - w) // 2, y), l, font=f_l, fill=(225, 225, 228))
+        y += h + gap_l
+
+    if cta:
+        y += int(S * 0.045)
+        w, h = tw(d, cta, f_c)
+        bx0 = (W - w) // 2 - pad
+        d.rounded_rectangle([(bx0, y), (bx0 + w + pad * 2, y + h + pad)],
+                            radius=int(S * 0.018), fill=accent)
+        d.text(((W - w) // 2, y + pad // 2), cta, font=f_c, fill=(255, 255, 255))
+        y += h + pad
+
+    # 品牌 logo（客戶自用商業片可在 mv.json 設 "brand": false 關掉）
+    if lg:
+        ly = max(y + int(S * 0.05), H - logo_block - int(S * 0.045))
+        im.paste(lg, ((W - lg.width) // 2, ly), lg)
+        w, _ = tw(d, brand_txt, f_b)
+        d.text(((W - w) // 2, ly + lg.height + int(S * 0.012)), brand_txt,
+               font=f_b, fill=(150, 150, 155))
+    return im
+
+
+# ---------- 字幕 ----------
+def draw_subs(im, text, W, H, cfg, scrim=0.0):
+    """白字幕壓在淺色素材（網站截圖、亮色插畫）上會看不見，
+    所以先在字後面墊一塊「糊掉的暗版」再寫字。scrim=0 就是舊行為（只描邊）。"""
+    if not text:
+        return im
+    d = ImageDraw.Draw(im)
+    per = cfg.get("sub_chars") or (13 if H > W else 20)
+    size = cfg.get("sub_size") or int(min(W, H) * 0.058)
+    f = font(F_BOLD, size)
+    lines = [text[i:i + per] for i in range(0, len(text), per)]
+    y = int(H * cfg.get("sub_y", 0.63))
+
+    if scrim:
+        gap = int(size * 0.34)
+        blk = sum(tw(d, l, f)[1] + gap for l in lines) - gap
+        wmax = max(tw(d, l, f)[0] for l in lines)
+        padx, pady = int(size * 1.45), int(size * 0.80)
+        x0 = max(0, (W - wmax) // 2 - padx)
+        y0 = max(0, y - pady)
+        x1 = min(W, (W + wmax) // 2 + padx)
+        y1 = min(H, y + blk + pady)
+        mask = Image.new("L", (W, H), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([(x0, y0), (x1, y1)],
+                                               radius=int(size * 0.9), fill=int(255 * scrim))
+        mask = mask.filter(ImageFilter.GaussianBlur(int(size * 0.72)))
+        im.paste(Image.new("RGB", (W, H), (0, 0, 0)), (0, 0), mask)
+        d = ImageDraw.Draw(im)
+    for l in lines:
+        w, h = tw(d, l, f)
+        x = (W - w) // 2
+        for dx, dy in ((-3, 0), (3, 0), (0, -3), (0, 3), (-2, -2), (2, 2), (-2, 2), (2, -2)):
+            d.text((x + dx, y + dy), l, font=f, fill=(0, 0, 0))
+        d.text((x, y), l, font=f, fill=(255, 255, 255))
+        y += h + int(size * 0.34)
+    return im
+
+
+# ---------- 主流程 ----------
+def main():
+    if len(sys.argv) < 2:
+        sys.exit("用法：python3 build_mv.py mv.json [--preview 秒數]")
+    cfg_path = pathlib.Path(sys.argv[1]).resolve()
+    root = cfg_path.parent
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+
+    # mv.json 可覆寫字型（換系統、換品牌字型用）
+    global F_BOLD, F_LIGHT, F_SERIF
+    for k, name in (("bold", "F_BOLD"), ("light", "F_LIGHT"), ("serif", "F_SERIF")):
+        v = (cfg.get("fonts") or {}).get(k)
+        if v:
+            if not pathlib.Path(v).exists():
+                sys.exit(f"❌ mv.json fonts.{k} 指定的字型不存在：{v}")
+            globals()[name] = v
+    print(f"字型 → 粗:{pathlib.Path(F_BOLD).name} 細:{pathlib.Path(F_LIGHT).name}"
+          f"（{platform.system()}）※換過字型就是換過字寬，出片後務必重跑 check_frames.py 目視", flush=True)
+
+    W, H = RATIOS[cfg.get("ratio", "9:16")]
+    FPS = cfg.get("fps", 30)
+    logo = cfg.get("logo") or str(pathlib.Path(__file__).parent.parent / "assets" / "logo.png")
+
+    audio = root / cfg["audio"]
+    if not audio.exists():
+        sys.exit(f"找不到音檔 {audio}")
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                "-of", "csv=p=0", str(audio)],
+                               capture_output=True, text=True).stdout.strip())
+    total = float(cfg.get("total") or dur)
+
+    preview = 0.0
+    if "--preview" in sys.argv:
+        preview = float(sys.argv[sys.argv.index("--preview") + 1])
+        total = min(total, preview)
+
+    shots = sorted(cfg["shots"], key=lambda s: s["t0"])
+    subs = cfg.get("subs")
+    if subs is None and (root / "subs.json").exists():
+        subs = json.loads((root / "subs.json").read_text(encoding="utf-8"))
+    subs = subs or []
+
+    ec = cfg.get("endcard")
+    ec_from = float(ec["t0"]) if ec and "t0" in ec else None
+    ec_img = render_endcard(ec, W, H, cfg, logo) if ec else None
+
+    out = root / "out"
+    out.mkdir(exist_ok=True)
+    final = out / cfg.get("out", "final.mp4")
+
+    ff = subprocess.Popen(
+        ["ffmpeg", "-y", "-loglevel", "error",
+         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
+         "-i", str(audio),
+         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+         # 取樣率統一 44100，避免混軌後音畫長度對不上
+         "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
+         "-shortest", "-movflags", "+faststart", str(final)],
+        stdin=subprocess.PIPE)
+
+    nframes = int(round(total * FPS))
+    si = 0
+    print(f"▶ {W}x{H} @{FPS}fps ／ {total:.2f}s ／ {nframes} 幀 ／ {len(shots)} 鏡")
+    for n in range(nframes):
+        t = n / FPS
+
+        if ec_from is not None and t >= ec_from:
+            frame = ec_img.copy()
+        else:
+            while si + 1 < len(shots) and t >= shots[si + 1]["t0"]:
+                si += 1
+            sh = shots[si]
+            t0 = sh["t0"]
+            t1 = sh.get("t1", shots[si + 1]["t0"] if si + 1 < len(shots) else total)
+            p = 0.0 if t1 <= t0 else max(0.0, min(1.0, (t - t0) / (t1 - t0)))
+
+            amt = sh.get("zoom_amt", cfg.get("zoom_amt", 0.10))
+            z = sh.get("zoom", "in")
+            zoom = 1.0 + amt * p if z == "in" else (1.0 + amt * (1 - p) if z == "out" else 1.0)
+            zoom = min(zoom, 2.0)                 # 放大率硬上限，超過必糊
+
+            typ = sh.get("type", "image")
+            if typ == "card":
+                frame = render_card(sh, W, H, cfg)
+            else:
+                if typ == "video":
+                    src = grab_video_frame(root / sh["src"], sh.get("ss", 0) + (t - t0), (W, H))
+                else:
+                    src = load_img(root / sh["src"])
+                mode = sh.get("mode", "fill")
+                if mode == "band":
+                    frame = render_band(src, W, H, sh.get("cy", .5), zoom, sh.get("band_cy", .42))
+                elif mode == "fit":
+                    frame = render_fit(src, W, H, zoom)
+                else:
+                    frame = render_fill(src, W, H, sh.get("cx", .5), sh.get("cy", .5), zoom)
+                if sh.get("big"):
+                    # 先壓暗底圖，再把文字用全不透明疊上去（文字不能跟著變半透明）
+                    dim = sh.get("big_alpha", 0.45)
+                    frame = Image.eval(frame, lambda v: int(v * (1 - dim)))
+                    txt = render_card({"big": sh["big"], "size": sh.get("size"),
+                                       "sub": sh.get("big_sub", "")}, W, H, cfg, transparent=True)
+                    frame = Image.alpha_composite(frame.convert("RGBA"), txt).convert("RGB")
+
+            cur = next((s for s in subs if s["t0"] <= t < s["t1"]), None)
+            if cur:
+                sc = 0.0 if typ == "card" else float(sh.get("scrim", cfg.get("scrim", 0)))
+                frame = draw_subs(frame, cur["text"], W, H, cfg, sc)
+
+        ff.stdin.write(frame.tobytes())
+        if n % (FPS * 5) == 0:
+            print(f"  {t:6.2f}s / {total:.2f}s", flush=True)
+
+    ff.stdin.close()
+    ff.wait()
+    if ff.returncode != 0:
+        sys.exit("❌ ffmpeg 失敗")
+
+    vd = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                         "-of", "csv=p=0", str(final)], capture_output=True, text=True).stdout.strip()
+    print(f"\n✅ {final}  影像 {vd}s ／ 音訊 {dur:.2f}s")
+    if not preview and abs(float(vd) - dur) > 0.3:
+        print("⚠️ 音畫長度差超過 0.3 秒 → 先查音訊取樣率與 total 設定（見 踩雷速查.md）")
+    print("👉 下一步：python3 check_frames.py out/final.mp4  然後用眼睛看抽幀拼圖")
+
+
+if __name__ == "__main__":
+    main()
