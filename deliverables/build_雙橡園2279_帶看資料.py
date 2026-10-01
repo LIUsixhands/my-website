@@ -3,13 +3,18 @@
 數字來源：.claude/skills/skill-xiao-deng/references/七期外·相鄰大樓行情.md 雙橡園2279 卡片
 （實價登錄撈取日 2026-10-01）。改數字請先改行情卡，再回來改這裡。"""
 import tempfile
+import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 OUT = Path(__file__).parent
 NAME = "雙橡園2279_帶看資料"
-CONTACT_NAME = "助哥"
-CONTACT_TEL = "0925-313-570"
+# 聯絡人與電話不寫進 repo（整個 repo 會被 Netlify 公開），執行時用環境變數帶入：
+#   CONTACT_NAME=助哥 CONTACT_TEL=09xx-xxx-xxx python3 build_雙橡園2279_帶看資料.py
+# 沒帶就不印聯絡區塊。產出的 PDF 已列入 .gitignore，只用 LINE 傳給買方。
+CONTACT_NAME = os.environ.get("CONTACT_NAME", "")
+CONTACT_TEL = os.environ.get("CONTACT_TEL", "")
+CONTACT = f"{CONTACT_NAME}　{CONTACT_TEL}".strip("　")
 FOOT = "永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號"
 
 # 歷年不含車位中位（萬/坪）
@@ -120,7 +125,7 @@ HTML = f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
   交屋後（113 年起）的成交落在 <b>78–81 萬／坪</b>（不含車位）。<br>
   不同期別的價格不能直接相比，本資料把兩者分開呈現。
  </div>
- <div class="contact"><div class="n">帶看與諮詢・永慶不動產 七期河南市政店</div><div class="t">{CONTACT_NAME}　{CONTACT_TEL}</div></div>
+ {f'<div class="contact"><div class="n">帶看與諮詢・永慶不動產 七期河南市政店</div><div class="t">{CONTACT}</div></div>' if CONTACT else ''}
  {foot(1)}
 </div>
 
@@ -212,7 +217,7 @@ HTML = f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
  樂居公開資料（撈取日 2026-10-01）。<br>
  <b>免責聲明</b>：本資料由經紀人員依公開資料整理，僅供參考，實際成交價格受樓層、格局、屋況、車位及交易條件影響。
  物件實際狀況以現場及產權資料為準。</p>
- <div class="card"><div class="n">有任何問題，歡迎直接聯絡</div><div class="t">{CONTACT_NAME}　{CONTACT_TEL}</div></div>
+ {f'<div class="card"><div class="n">有任何問題，歡迎直接聯絡</div><div class="t">{CONTACT}</div></div>' if CONTACT else ''}
  <div class="seal">百富國際<br>開發有限公司</div>
  {foot(4)}
 </div>
