@@ -4104,6 +4104,53 @@ class TestAnalyseRefusesToOverclaim(unittest.TestCase):
         self.assertRegex(text, r"60\.0%（\d+\.\d+~\d+\.\d+）")
 
 
+class TestPersonalDataStaysOffGitHub(unittest.TestCase):
+    """程式產出的檔案裡，有一半是這個人的交易紀錄。
+
+    `outcomes.csv` 一開始就排除了，理由寫在 .gitignore 上：「個人帳務資料」。
+    但後來新增 `candidates.csv` 與 `candidates_outcomes.csv` 時忘了同步 ——
+    那兩份是**完全一樣的欄位、完全一樣的東西**，只是記被擋掉的訊號。
+
+    漏掉的後果不是「檔案多了一個」，是某次 `git add -A` 會把個人損益推上
+    GitHub，而且推上去就收不回來了。
+
+    這條測試的工作是：以後再加任何一個會寫個人資料的檔案，都不准忘。
+    """
+
+    IGNORE = Path(__file__).with_name(".gitignore")
+
+    # 會寫進個人交易紀錄或金鑰的檔案，一個都不能漏
+    MUST_IGNORE = (".env", "state.json", "watchlist.json", "outcomes.csv",
+                   "candidates.csv", "candidates_outcomes.csv", "journal/*.md",
+                   "logs/")
+
+    def setUp(self):
+        if not self.IGNORE.exists():
+            self.skipTest(".gitignore 不在")
+        self.lines = [l.strip() for l in
+                      self.IGNORE.read_text(encoding="utf-8").splitlines()]
+
+    def test_every_personal_data_file_is_ignored(self):
+        for name in self.MUST_IGNORE:
+            with self.subTest(path=name):
+                self.assertIn(name, self.lines)
+
+    def test_the_csvs_the_programs_actually_write_are_all_covered(self):
+        """從程式裡抓出真的會被寫出來的檔名，逐一比對 —— 不靠我記得。"""
+        written = {oc.OUTCOME_FILE.name, signals.CANDIDATE_FILE.name}
+        import review                                  # noqa: F401  （已匯入，取名用）
+        written.add("candidates_outcomes.csv")
+        for name in written:
+            with self.subTest(path=name):
+                self.assertIn(name, self.lines,
+                              f"{name} 會被寫到磁碟上，但沒有排除在版控外")
+
+    def test_the_template_is_still_tracked(self):
+        """.env 要排除，.env.template 不能 —— 它是給新機器照著填的。"""
+        self.assertIn(".env", self.lines)
+        self.assertNotIn(".env.template", self.lines)
+
+
 class TestLoginRetry(unittest.TestCase):
     """2026-09-30 早上真的發生的事。
 
