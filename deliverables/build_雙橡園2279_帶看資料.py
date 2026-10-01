@@ -2,6 +2,7 @@
 """雙橡園2279 買方帶看資料（銷售報告書版型：暖金＋奶油白）。
 數字來源：.claude/skills/skill-xiao-deng/references/七期外·相鄰大樓行情.md 雙橡園2279 卡片
 （實價登錄撈取日 2026-10-01）。改數字請先改行情卡，再回來改這裡。"""
+import tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
@@ -206,7 +207,9 @@ HTML = f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
 </div>
 </body></html>"""
 
-html = OUT / f"{NAME}.html"
+# HTML 只當渲染中介，放暫存目錄：deliverables/ 下的 .html 會被 sitemap 收錄成公開網頁，
+# 這份只透過 LINE 傳 PDF 給買方，不上網站。
+html = Path(tempfile.mkdtemp()) / f"{NAME}.html"
 html.write_text(HTML, encoding="utf-8")
 with sync_playwright() as pw:
     b = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium-1194/chrome-linux/chrome")
