@@ -1,0 +1,24 @@
+# Netlify 建置設定
+#
+# 目的：只在「網站檔案真的有變」時才建置。
+#
+# 背景（2026-10-01）：這個 repo 同時放網站本體與 .claude/ 底下的
+# AI 員工知識庫（行情庫、實登原始檔、SOP、GSC 匯出…）。知識庫更新
+# 完全不影響網站輸出，但每次 PR 仍會觸發「預覽建置 ＋ 合併後正式
+# 建置」兩次。2026-10-01 當天 14 個 commit 裡有 9 個是純知識庫變更，
+# 約 18 次建置花在網站一個字都沒改的情況上，直接吃掉 Free 方案額度。
+#
+# ignore 指令的語意（Netlify 規格）：
+#   離開碼 0   → 取消建置
+#   離開碼非 0 → 照常建置
+# git diff --quiet 在「沒有差異」時回 0、「有差異」時回 1，
+# 所以下面這行的意思是：除了 .claude/ 以外都沒變 → 不建置。
+#
+# 若 $CACHED_COMMIT_REF 不存在（首次建置、清除快取後），git diff
+# 會報錯並回非 0，Netlify 會照常建置——這是安全的失敗方向。
+#
+# 只宣告 ignore，不宣告 command / publish，
+# 其餘設定沿用 Netlify 後台既有值，避免動到部署目錄。
+
+[build]
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':(exclude).claude'"
