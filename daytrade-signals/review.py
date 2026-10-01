@@ -181,6 +181,26 @@ def render(signals: list[dict], trades: list, state: dict,
     return lines
 
 
+def _fill_cell(o) -> str:
+    """表格裡那一格：買得到 / 差多少 / 不知道。空白會被當成「沒事」，所以不留空。"""
+    import outcome as oc
+    pct = oc.fill_pct(o)
+    if pct is None:
+        return "？"
+    return "\u2705" if pct <= 0 else f"\u2716 +{pct:.2f}%"
+
+
+def _fill_text(fills: dict) -> str:
+    if not fills.get("known"):
+        return "無資料（當天沒收到報價，不代表買不到）"
+    text = f"{fills['filled']}/{fills['known']} 筆（{fills['rate']}%）"
+    if fills.get("avg_miss_pct") is not None:
+        text += f"，買不到的平均要追 +{fills['avg_miss_pct']:.2f}%"
+    if fills.get("unknown"):
+        text += f"；另有 {fills['unknown']} 筆無資料"
+    return text
+
+
 def outcome_section(signals: list[dict], outcomes: list | None) -> list[str]:
     """訊號後來怎麼了。沒有這一段，20 天跑完也算不出勝率。"""
     lines = ["", "## 二、訊號結果（分鐘 K 回推，保守判定）", ""]
@@ -197,17 +217,21 @@ def outcome_section(signals: list[dict], outcomes: list | None) -> list[str]:
         return lines
 
     import outcome as oc
-    lines += ["| 代號 | 結果 | 出場價 | R | 毛報酬% | 扣成本後% | 持有K棒 |",
-              "|------|------|--------|---|---------|-----------|---------|"]
+    lines += ["| 代號 | 結果 | 出場價 | R | 毛報酬% | 扣成本後% | 持有K棒 | 掛得到? |",
+              "|------|------|--------|---|---------|-----------|---------|---------|"]
     for o in outcomes:
         lines.append(f"| {o.code} | {o.result} | {o.exit_price:.2f} | {o.r_multiple:+.2f} "
-                     f"| {o.gross_pct:+.3f} | {o.net_pct:+.3f} | {o.bars} |")
+                     f"| {o.gross_pct:+.3f} | {o.net_pct:+.3f} | {o.bars} "
+                     f"| {_fill_cell(o)} |")
 
     st = oc.summarise(outcomes)
+    fills = oc.fill_stats(outcomes)
     payoff = f"{st['payoff']}" if st.get("payoff") else "—（今日無虧損樣本）"
     lines += [
         "",
         f"- 勝率（扣成本後為正才算贏）：**{st['win_rate']}%**（{st['wins']}/{st['n']}）",
+        f"- 掛進場價買得到：**{_fill_text(fills)}**"
+        f"　—— 買不到的筆數不會進你的帳戶，這個數字和勝率要一起看。",
         f"- 平均賺 {st['avg_win_pct']:+.3f}%　平均賠 {st['avg_loss_pct']:+.3f}%　賺賠比 {payoff}",
         f"- 當日合計（扣成本後）：**{st['total_net_pct']:+.3f}%**　平均 {st['avg_r']:+.2f}R",
         f"- 結局分佈：{st['by_result']}",
@@ -255,6 +279,9 @@ def format_push(signals: list[dict], outcomes, history: list) -> str:
         amount = lambda rows: sum(round(o.net_amount) for o in rows)
         lines.append(f"合計 {sum(o.r_multiple for o in outcomes):+.2f}R　"
                      f"{amount(outcomes):+,.0f} 元")
+        today_fill = oc.fill_stats(outcomes)
+        if today_fill.get("known"):
+            lines.append(f"掛進場價買得到 {today_fill['filled']}/{today_fill['known']} 筆")
         # 訊號數可以到 5，但一天只准做 4 筆。把全部訊號的總和當成「今天會賺到的錢」
         # 會高估 —— 那第 5 筆照規則根本不會下單。
         cap = config.RISK["max_trades_per_day"]
@@ -274,6 +301,7 @@ def format_push(signals: list[dict], outcomes, history: list) -> str:
             "────────────────",
             f"累計 {days} 個有訊號的交易日／{total['n']} 筆",
             f"勝率 {total['win_rate']}%　平均 {total['avg_r']:+.2f}R",
+            f"掛進場價買得到 {_fill_text(oc.fill_stats(history))}",
             f"平均賺 {total['avg_win_pct']:+.2f}%　"
             f"平均賠 {total['avg_loss_pct']:+.2f}%",
             f"累計損益 {sum(round(o.net_amount) for o in history):+,.0f} 元",

@@ -3054,6 +3054,275 @@ class TestTrackerHandsOffItsVerdict(unittest.TestCase):
         self.assertEqual(len(msgs), 1)
 
 
+class TestFillProbeAnswersCanIEvenBuyIt(unittest.TestCase):
+    """2026-10-01 聯傑：訊號 09:39:28 進場 65.60，09:40 已經 66.60（+8.12%）。
+
+    使用者的原話：「這支根本買不到」。他問了整輪的那一題 ——
+    「如果買不到是空談」。
+
+    唯一能回答的欄位是 low_5m_pct，而它是用分鐘 K 算的，而 bars_after() 刻意
+    丟掉訊號後的頭 60 秒。急拉型的突破訊號正好都在那 60 秒內離開進場價 ——
+    於是最需要答案的那幾筆，欄位答不出來，還會答得偏悲觀。
+
+    FillProbe 用 tick 量同一個窗口，沒有那個空窗。
+    """
+
+    SIG = {"code": "3094", "name": "聯傑", "time": "09:39:28",
+           "entry": 65.60, "stop": 64.70, "target": 67.70, "lots": 3}
+
+    def _at(self, h, m, s=0):
+        return datetime(2026, 10, 1, h, m, s)
+
+    def _tracker(self, seen):
+        return signals.LiveTracker(on_fill=lambda p: seen.append((p.code, p.low)))
+
+    def test_lowest_tick_in_the_window_is_what_gets_recorded(self):
+        seen = []
+        t = self._tracker(seen)
+        t.track(self.SIG, now=self._at(9, 39, 28))
+        for price, at in ((66.10, (9, 39, 40)), (65.90, (9, 40, 10)),
+                          (66.60, (9, 41, 0))):
+            t.on_price("3094", price, now=self._at(*at))
+        self.assertEqual(seen, [])              # 窗口還沒滿，不要先寫
+        t.on_price("3094", 66.80, now=self._at(9, 44, 28))
+        self.assertEqual(seen, [("3094", 65.90)])
+
+    def test_never_traded_at_the_entry_price_is_the_honest_answer(self):
+        """聯傑那一筆：5 分鐘內最低 65.90 > 進場 65.60 —— 掛單買不到。"""
+        seen = []
+        t = self._tracker(seen)
+        t.track(self.SIG, now=self._at(9, 39, 28))
+        t.on_price("3094", 65.90, now=self._at(9, 40, 0))
+        t.on_price("3094", 66.80, now=self._at(9, 45, 0))
+        _, low = seen[0]
+        self.assertGreater(low, self.SIG["entry"])
+
+    def test_the_probe_outlives_the_trade(self):
+        """12 秒就到目標（允強）也要繼續量成交窗口。
+
+        買不買得到和這筆賺賠無關。探針跟著 OpenSignal 一起被移出清單的話，
+        跑最快的那幾筆就剛好沒有資料 —— 而那幾筆正是最可能買不到的。
+        """
+        seen = []
+        t = self._tracker(seen)
+        t.track(self.SIG, now=self._at(9, 39, 28))
+        msgs = t.on_price("3094", 67.70, now=self._at(9, 39, 40))   # 直接到目標
+        self.assertEqual(len(msgs), 1)
+        self.assertFalse(t.open)                # 這筆交易結束了
+        t.on_price("3094", 65.50, now=self._at(9, 40, 0))           # 之後回到進場價以下
+        t.on_price("3094", 66.00, now=self._at(9, 45, 0))           # 窗口滿
+        self.assertEqual(seen, [("3094", 65.50)])
+
+    def test_a_restored_signal_records_nothing_rather_than_a_fake_number(self):
+        """盤中重開時還原舊訊號：窗口早就過了。
+
+        這時候收到的報價和「當時買不買得到」無關。記下去會是個假數字，
+        而假數字比空白危險 —— 空白看得出來是不知道。
+        """
+        seen = []
+        t = self._tracker(seen)
+        t.track(self.SIG, now=self._at(10, 30))     # 訊號 09:39，已經過了快一小時
+        self.assertEqual(t.fills, [])
+        t.on_price("3094", 60.00, now=self._at(10, 31))
+        t.flatten()
+        self.assertEqual(seen, [])
+
+    def test_a_quiet_stock_still_gets_written_before_the_close(self):
+        """某檔窗口滿了之後完全沒成交，不可以等到 13:25 才寫得出去。
+
+        中間程式掛掉就全沒了。所以收窗要檢查全部探針，不只正在進報價的那一檔。
+        """
+        seen = []
+        t = self._tracker(seen)
+        t.track(self.SIG, now=self._at(9, 39, 28))
+        t.on_price("3094", 65.90, now=self._at(9, 40, 0))
+        t.track({"code": "2034", "time": "09:50:00", "entry": 24.20,
+                 "stop": 23.85, "target": 24.75, "lots": 5}, now=self._at(9, 50))
+        # 只有 2034 在進報價，但 3094 的窗口已經滿了
+        t.on_price("2034", 24.30, now=self._at(9, 50, 10))
+        self.assertEqual(seen, [("3094", 65.90)])
+
+    def test_flatten_flushes_whatever_is_left(self):
+        seen = []
+        t = self._tracker(seen)
+        t.track(self.SIG, now=self._at(9, 39, 28))
+        t.on_price("3094", 65.90, now=self._at(9, 40, 0))
+        t.flatten()
+        self.assertEqual(seen, [("3094", 65.90)])
+
+    def test_no_ticks_at_all_means_unknown_not_unbuyable(self):
+        """整個窗口一筆成交都沒收到 → None。空白是空白，不是「買不到」。"""
+        seen = []
+        t = self._tracker(seen)
+        t.track(self.SIG, now=self._at(9, 39, 28))
+        t.flatten()
+        self.assertEqual(seen, [("3094", None)])
+
+    def test_a_broken_recorder_does_not_swallow_the_push(self):
+        def boom(*_a):
+            raise RuntimeError("磁碟滿了")
+        t = signals.LiveTracker(on_fill=boom)
+        t.track(self.SIG, now=self._at(9, 39, 28))
+        with self.assertLogs("signals", level="WARNING"):
+            msgs = t.on_price("3094", 67.70, now=self._at(9, 50))
+        self.assertEqual(len(msgs), 1)          # 到目標的推播照樣要出去
+
+    def test_unparseable_time_does_not_crash_the_tick_thread(self):
+        """時間字串壞掉時不要丟例外 —— 這段跑在行情回呼裡。"""
+        self.assertIsNone(signals.parse_fired_at("", self._at(9, 40)))
+        self.assertIsNone(signals.parse_fired_at(None, self._at(9, 40)))
+        t = signals.LiveTracker(on_fill=lambda p: None)
+        t.track(dict(self.SIG, time="九點半"), now=self._at(9, 40))
+        self.assertEqual(t.fills, [])
+        self.assertEqual(len(t.open), 1)        # 交易本身照樣要追
+
+
+class TestFillIsWrittenDown(unittest.TestCase):
+    """量到了沒寫回 state.json，收盤覆盤就看不到 —— 和 live_result 同一個坑。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._orig, config.STATE_FILE = config.STATE_FILE, Path(self._tmp.name) / "state.json"
+        self.addCleanup(lambda: setattr(config, "STATE_FILE", self._orig))
+        self.gate = RiskGate(FakeBroker(pnl_rows=[]))
+        self.gate.record({"code": "3094", "time": "09:39:28", "entry": 65.60,
+                          "stop": 64.70, "target": 67.70, "lots": 3})
+
+    def test_written_into_the_matching_signal(self):
+        self.assertTrue(self.gate.record_fill("3094", "09:39:28", 65.90))
+        saved = json.loads(config.STATE_FILE.read_text(encoding="utf-8"))
+        self.assertEqual(saved["signals"][0]["fill_low"], 65.90)
+
+    def test_none_is_stored_as_none_not_zero(self):
+        """0 會被算成「買得到」，而且是最便宜的那種買得到。不可以。"""
+        self.gate.record_fill("3094", "09:39:28", None)
+        saved = json.loads(config.STATE_FILE.read_text(encoding="utf-8"))
+        self.assertIsNone(saved["signals"][0]["fill_low"])
+
+    def test_review_reads_it_straight_back(self):
+        self.gate.record_fill("3094", "09:39:28", 65.90)
+        sigs, _ = review.load_signals()
+        self.assertEqual(sigs[0]["fill_low"], 65.90)
+
+    def test_unmatched_signal_is_reported_not_silently_dropped(self):
+        with self.assertLogs("signals", level="WARNING"):
+            self.assertFalse(self.gate.record_fill("9999", "09:00:00", 1.0))
+
+
+class TestFillColumnBeatsTheKbarBlindSpot(unittest.TestCase):
+    """聯傑那一筆的兩個答案：tick 看得到的，分鐘 K 看不到。"""
+
+    DATE = "2026-09-24"      # _kb() 的時間戳固定在這一天
+    SIG = {"code": "3094", "time": "09:39:28", "entry": 65.60,
+           "stop": 64.70, "target": 67.70, "lots": 3}
+    # 分鐘 K 從 09:41 才算（09:40 那根涵蓋訊號發出前）。訊號後的急拉都在空窗裡。
+    BARS = [("09:41", 66.80, 66.00, 66.60), ("09:42", 67.00, 66.30, 66.90),
+            ("09:43", 67.70, 66.80, 67.50)]
+
+    def _resolve(self, **extra):
+        return oc.resolve(FakeKbarBroker(_kb(self.BARS)),
+                          dict(self.SIG, **extra), self.DATE)
+
+    def test_kbars_alone_say_it_never_came_back(self):
+        o = self._resolve()
+        self.assertGreater(o.low_5m_pct, 0)        # 66.00 > 65.60
+        self.assertIsNone(o.fill_low_pct)          # 沒有 tick 資料就留空
+
+    def test_tick_fill_is_recorded_as_its_own_column(self):
+        """兩欄並存，不互相覆蓋 —— 不然 20 天後沒辦法拿一邊驗另一邊。"""
+        o = self._resolve(fill_low=65.50)
+        self.assertGreater(o.low_5m_pct, 0)
+        self.assertLess(o.fill_low_pct, 0)
+        self.assertAlmostEqual(o.fill_low_pct, -0.152, places=2)
+
+    def test_fill_pct_prefers_the_tick_number(self):
+        self.assertLess(oc.fill_pct(self._resolve(fill_low=65.50)), 0)
+        self.assertGreater(oc.fill_pct(self._resolve()), 0)      # 退回分鐘 K
+
+    def test_the_real_lianjie_case_stays_unbuyable(self):
+        """tick 也證實買不到時，答案就是買不到 —— 不要因為有新欄位就變樂觀。"""
+        o = self._resolve(fill_low=65.90)
+        self.assertGreater(o.fill_low_pct, 0)
+        self.assertGreater(oc.fill_pct(o), 0)
+
+    def test_it_survives_the_csv_round_trip(self):
+        """寫進 outcomes.csv 再讀回來要是同一個數字。這是 20 天後唯一的資料來源。"""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            oc.append_csv([self._resolve(fill_low=65.50)], path)
+            back = oc.load_csv(path)
+        self.assertEqual(len(back), 1)
+        self.assertAlmostEqual(back[0].fill_low_pct, -0.152, places=2)
+
+    def test_old_rows_without_the_column_still_load(self):
+        """已經累積的 outcomes.csv 沒有這一欄。讀不回來就等於前幾天白跑。"""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            rows = [f for f in oc.FIELDS if f != "fill_low_pct"]
+            path.write_text(
+                ",".join(rows) + "\n" +
+                ",".join({"date": self.DATE, "code": "3094", "time": "09:39:28",
+                          "entry": "65.6", "stop": "64.7", "target": "67.7",
+                          "lots": "3", "result": oc.TARGET, "exit_price": "67.7",
+                          "r_multiple": "2.33", "gross_pct": "3.2",
+                          "net_pct": "2.8", "bars": "4"}.get(f, "") for f in rows)
+                + "\n", encoding="utf-8")
+            back = oc.load_csv(path)
+        self.assertEqual(len(back), 1)
+        self.assertIsNone(back[0].fill_low_pct)
+
+
+class TestFillStats(unittest.TestCase):
+    """買不到的筆數不會進帳戶，所以這個數字要和勝率擺在一起，不是附註。"""
+
+    def _o(self, fill=None, low5=None):
+        return oc.Outcome(
+            date="2026-10-01", code="3094", time="09:39:28", entry=65.60,
+            stop=64.70, target=67.70, lots=3, result=oc.TARGET, exit_price=67.70,
+            r_multiple=2.33, gross_pct=3.2, net_pct=2.8, bars=4,
+            fill_low_pct=fill, low_5m_pct=low5)
+
+    def test_counts_only_the_rows_it_actually_knows(self):
+        st = oc.fill_stats([self._o(fill=-0.2), self._o(fill=0.5), self._o()])
+        self.assertEqual((st["known"], st["filled"], st["unknown"]), (2, 1, 1))
+        self.assertEqual(st["rate"], 50.0)
+
+    def test_exactly_at_the_entry_price_counts_as_filled(self):
+        st = oc.fill_stats([self._o(fill=0.0)])
+        self.assertEqual(st["filled"], 1)
+
+    def test_how_far_you_would_have_had_to_chase(self):
+        st = oc.fill_stats([self._o(fill=-0.2), self._o(fill=0.4), self._o(fill=0.6)])
+        self.assertAlmostEqual(st["avg_miss_pct"], 0.5, places=3)
+
+    def test_all_filled_means_no_chase_number(self):
+        self.assertIsNone(oc.fill_stats([self._o(fill=-0.2)])["avg_miss_pct"])
+
+    def test_nothing_known_is_none_not_zero_percent(self):
+        """0% 會被讀成「一筆都買不到」。不知道就是不知道。"""
+        st = oc.fill_stats([self._o(), self._o()])
+        self.assertIsNone(st["rate"])
+        self.assertEqual(st["known"], 0)
+
+    def test_it_shows_up_where_a_human_will_see_it(self):
+        """寫進 CSV 而報告裡沒有，20 天後沒人會去翻 —— 和沒量一樣。"""
+        rows = [self._o(fill=-0.2), self._o(fill=0.5)]
+        journal = "\n".join(review.outcome_section(
+            [{"code": "3094", "time": "09:39:28", "entry": 65.6, "stop": 64.7,
+              "target": 67.7, "lots": 3, "volume_surge": 5.21}], rows))
+        self.assertIn("掛進場價買得到", journal)
+        self.assertIn("1/2", journal)
+        push = review.format_push([], rows, rows)
+        self.assertIn("掛進場價買得到", push)
+
+    def test_unknown_cell_is_marked_not_left_blank(self):
+        """表格留空會被當成「沒事」。不知道要寫出來。"""
+        self.assertEqual(review._fill_cell(self._o()), "？")
+        self.assertIn("\u2705", review._fill_cell(self._o(fill=-0.2)))
+        self.assertIn("+0.50%", review._fill_cell(self._o(fill=0.5)))
+
+
 class TestReviewFailureIsAudible(unittest.TestCase):
     """14:00 的排程安靜掛掉的話，你只會發現「今天沒收到日報」。
 

@@ -195,6 +195,25 @@ class RiskGate:
         log.warning("即時判定找不到對應訊號（%s %s），沒寫回 state.json", code, time_str)
         return False
 
+    def record_fill(self, code: str, time_str: str, low: float | None) -> bool:
+        """把訊號後 5 分鐘內的最低成交價寫回 state.json 的那一筆訊號。
+
+        回答的是使用者問了一整輪的那一題：「買不到就是空談」。
+        low 比進場價低（或相等）＝ 限價單掛在進場價會成交；
+        low 比進場價高＝ 那段時間根本沒有人在進場價以下賣，這筆買不到，
+        除非追價 —— 而追價就不是這套系統算出來的風報比了。
+
+        low 是 None 代表那 5 分鐘內一筆成交都沒收到，不是「買不到」。
+        空白要留空白。
+        """
+        for sig in self.state.get("signals", []):
+            if str(sig.get("code")) == str(code) and str(sig.get("time")) == str(time_str):
+                sig["fill_low"] = None if low is None else round(float(low), 2)
+                self.save()
+                return True
+        log.warning("成交窗口找不到對應訊號（%s %s），沒寫回 state.json", code, time_str)
+        return False
+
 
 # ══════════════════════════════════════════════════════
 # 個股盤中狀態
@@ -470,6 +489,49 @@ RESOLUTION_MARK = {
 }
 
 
+# 訊號發出後，限價單掛在進場價買不買得到 —— 看這段時間內最低成交到哪裡。
+# 和 outcome.FILL_WINDOW_BARS（5 根分鐘 K）是同一個窗口，刻意對齊，兩邊才能互驗。
+FILL_WINDOW = timedelta(minutes=5)
+
+
+@dataclass
+class FillProbe:
+    """訊號後 5 分鐘內的最低成交價 —— 也就是「這一筆到底買不買得到」。
+
+    這一題只有 tick 答得出來。outcome.py 的 low_5m_pct 是用分鐘 K 算的，
+    而分鐘 K 刻意丟掉訊號後的頭 60 秒（見 outcome.bars_after 的說明），
+    急拉型的突破訊號正好都在那 60 秒內就離開進場價 —— 於是最需要知道答案的
+    那幾筆，欄位反而答不出來，還會答得偏悲觀（說「從來沒回到進場價」）。
+
+    刻意和 OpenSignal 分開成兩個東西，理由有兩個：
+      1. 買不買得到和這筆賺賠無關。就算 12 秒就到目標（2026-09-29 允強），
+         5 分鐘內買不買得到仍然要記。
+      2. 所以這支探針在訊號判定結束之後還要繼續收報價，不能跟著 OpenSignal
+         一起被移出追蹤清單。
+    """
+    code: str
+    time: str
+    entry: float
+    fired: datetime
+    low: float | None = None
+
+    def saw(self, price: float) -> None:
+        if self.low is None or price < self.low:
+            self.low = price
+
+    def closed(self, now: datetime) -> bool:
+        return now - self.fired >= FILL_WINDOW
+
+
+def parse_fired_at(time_str: str, now: datetime) -> datetime | None:
+    """把訊號上的 "HH:MM:SS" 還原成今天的 datetime。解析不出來就回 None。"""
+    try:
+        t = datetime.strptime(str(time_str), "%H:%M:%S").time()
+    except (ValueError, TypeError):
+        return None
+    return datetime.combine(now.date(), t)
+
+
 @dataclass
 class OpenSignal:
     code: str
@@ -528,12 +590,15 @@ class LiveTracker:
     必須在鎖內一次做完，否則同一筆會推播好幾次。推播本身留在鎖外，不卡行情。
     """
 
-    def __init__(self, on_resolved=None):
+    def __init__(self, on_resolved=None, on_fill=None):
         self.open: list[OpenSignal] = []
+        self.fills: list[FillProbe] = []
         self.last_price: dict[str, float] = {}
         self._lock = threading.Lock()
         # 判定完要交給誰記下來。沒有它的話，即時結果只活在那則推播裡。
         self.on_resolved = on_resolved
+        # 成交窗口收完要交給誰記下來。同理：不寫回去就只活在記憶體裡。
+        self.on_fill = on_fill
 
     def _handed_off(self, o: "OpenSignal", price: float, verdict: str) -> None:
         if not self.on_resolved:
@@ -543,17 +608,36 @@ class LiveTracker:
         except Exception as e:      # 記錄失敗不可以讓推播跟著沒了
             log.warning("即時判定寫回失敗（%s）：%s", o.code, e)
 
-    def track(self, sig: dict) -> None:
+    def _fill_handed_off(self, p: "FillProbe") -> None:
+        if not self.on_fill:
+            return
+        try:
+            self.on_fill(p)
+        except Exception as e:      # 同理：記錄失敗不可以影響盤中
+            log.warning("成交窗口寫回失敗（%s）：%s", p.code, e)
+
+    def track(self, sig: dict, now: datetime | None = None) -> None:
+        now = now or datetime.now()
+        probe = None
+        fired = parse_fired_at(sig.get("time", ""), now)
+        # 盤中重開時還原舊訊號：窗口早就過了，這時候收到的報價和「當時買不買得到」
+        # 無關，記下去會是個假數字。寧可空白 —— 空白代表不知道，0 代表買得到。
+        if fired is not None and now - fired < FILL_WINDOW:
+            probe = FillProbe(code=str(sig["code"]), time=str(sig.get("time", "")),
+                              entry=float(sig["entry"]), fired=fired)
         with self._lock:
             self.open.append(OpenSignal(
                 code=str(sig["code"]), name=str(sig.get("name", "")),
                 time=str(sig.get("time", "")), entry=float(sig["entry"]),
                 stop=float(sig["stop"]), target=float(sig["target"])))
+            if probe is not None:
+                self.fills.append(probe)
 
-    def on_price(self, code: str, price: float) -> list[str]:
+    def on_price(self, code: str, price: float, now: datetime | None = None) -> list[str]:
         """回傳這個報價造成的推播訊息。絕大多數時候是空的。"""
         if not price:
             return []
+        now = now or datetime.now()
         done = []
         with self._lock:
             self.last_price[code] = price
@@ -565,14 +649,29 @@ class LiveTracker:
                 else:
                     still_open.append(o)
             self.open = still_open
+            # 成交窗口：這一檔的報價先記進去，再看有沒有哪一檔的窗口滿了。
+            # 收窗要檢查**全部**探針、不只這一檔 —— 否則某檔突然沒成交，
+            # 它的窗口就要等到 13:25 flatten 才寫得出去，中間程式掛掉就沒了。
+            closed, waiting = [], []
+            for p in self.fills:
+                if p.code == code:
+                    p.saw(price)
+                (closed if p.closed(now) else waiting).append(p)
+            self.fills = waiting
         for o, v in done:
             self._handed_off(o, price, v)
+        for p in closed:
+            self._fill_handed_off(p)
         return [format_resolution(o, price, v) for o, v in done]
 
     def flatten(self) -> list[str]:
         """13:25 還沒結束的，一律以最後看到的報價平倉。"""
         with self._lock:
             rest, self.open = self.open, []
+            probes, self.fills = self.fills, []
+        # 窗口沒收完就收盤的（那一檔後來完全沒成交），有多少記多少。
+        for p in probes:
+            self._fill_handed_off(p)
         msgs = []
         for o in rest:
             price = self.last_price.get(o.code)
@@ -715,7 +814,10 @@ def run():
         with signal_lock:
             gate.record_live_result(o.code, o.time, verdict, price)
 
-    tracker = LiveTracker(on_resolved=_remember)
+    def _remember_fill(p: FillProbe):
+        gate.record_fill(p.code, p.time, p.low)
+
+    tracker = LiveTracker(on_resolved=_remember, on_fill=_remember_fill)
     # 盤中重開時，今天已經發過的訊號也要繼續盯 —— 否則它們的結局只剩收盤後才知道。
     # 代價是已經結束的那幾筆會被重新追蹤，價格再次碰到時會重複推播一次。
     for past in gate.state.get("signals", []):

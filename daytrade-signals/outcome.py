@@ -47,7 +47,8 @@ SHARES_PER_LOT = 1000
 FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
-          "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct", "rank")
+          "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
+          "fill_low_pct", "rank")
 
 
 @dataclass
@@ -80,6 +81,10 @@ class Outcome:
     # 訊號後第 1~5 分鐘的最低價離進場價幾 %。<= 0 表示「限價掛訊號價買得到」。
     # 人從收到訊號到送出委託正好就落在這個窗口裡，所以它直接回答「我追得上嗎」。
     low_5m_pct: float | None = None
+    # 同一題，但是用盤中 tick 量的（signals.py 的 FillProbe 寫回 state.json）。
+    # low_5m_pct 用分鐘 K，看不到訊號後的頭 60 秒；急拉的訊號正好都在那 60 秒
+    # 內跑掉，所以分鐘 K 版本對這幾筆會偏悲觀。兩欄並存，20 天後互相對照。
+    fill_low_pct: float | None = None
     rank: int = 0                 # 盤前選股名次（1 = 量比最高），0 = 未知
 
     @property
@@ -214,6 +219,8 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
     day_high = max((b[1] for b in bars), default=None)
     day_low = min((b[2] for b in bars), default=None)
     low_5m = min((b[2] for b in bars[:FILL_WINDOW_BARS]), default=None)
+    # 盤中 tick 量到的同一個窗口。沒有這個欄位（舊紀錄、或當天沒收到報價）就留空。
+    fill_low = _num(sig.get("fill_low"))
     return Outcome(
         date=date, code=str(sig["code"]), time=str(sig.get("time", "")),
         entry=entry, stop=stop, target=target, lots=int(sig.get("lots", 0) or 0),
@@ -231,6 +238,7 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         target_after_stop=((day_high >= target) if day_high is not None else None)
         if result == STOP else None,
         low_5m_pct=_pct_above(low_5m, entry) if low_5m is not None else None,
+        fill_low_pct=_pct_above(fill_low, entry) if fill_low is not None else None,
         rank=int(sig.get("rank") or 0),
     )
 
@@ -332,7 +340,8 @@ _STR_FIELDS = ("date", "code", "time", "result")
 _BOOL_FIELDS = ("target_after_stop",)
 _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
-                    "vwap_gap_pct", "mae_pct", "mfe_pct", "low_5m_pct")
+                    "vwap_gap_pct", "mae_pct", "mfe_pct", "low_5m_pct",
+                    "fill_low_pct")
 
 
 def _bool(value) -> bool | None:
@@ -367,6 +376,36 @@ def load_csv(path=None) -> list[Outcome]:
             except (KeyError, TypeError, ValueError) as e:
                 log.warning("outcomes.csv 有一列讀不進來，跳過：%s", e)
     return rows
+
+
+def fill_pct(o: Outcome) -> float | None:
+    """這一筆「掛進場價買不買得到」的那個數字，單位 %。None = 不知道。
+
+    tick 量到的優先，分鐘 K 的當備援 —— 分鐘 K 看不到訊號後的頭 60 秒，
+    對急拉型的訊號會偏悲觀（說「沒回到進場價」其實只是沒看到）。
+    """
+    return o.fill_low_pct if o.fill_low_pct is not None else o.low_5m_pct
+
+
+def fill_stats(outcomes: list[Outcome]) -> dict:
+    """掛限價在進場價、買得到幾筆。
+
+    使用者自己講的那一題：「買不到就是空談」。勝率再高，買不到的那幾筆
+    不會進你的帳戶 —— 所以這個數字要和勝率擺在一起看，不是附註。
+    """
+    known = [p for p in (fill_pct(o) for o in outcomes) if p is not None]
+    if not known:
+        return {"known": 0, "filled": 0, "rate": None, "unknown": len(outcomes)}
+    filled = [p for p in known if p <= 0]
+    return {
+        "known": len(known),
+        "filled": len(filled),
+        "rate": round(len(filled) / len(known) * 100, 1),
+        "unknown": len(outcomes) - len(known),
+        # 買不到的那幾筆，當時最低價離進場價多遠（平均）—— 要追幾毛才追得上。
+        "avg_miss_pct": round(sum(p for p in known if p > 0) / max(len(known) - len(filled), 1), 3)
+        if len(known) > len(filled) else None,
+    }
 
 
 def summarise(outcomes: list[Outcome]) -> dict:
