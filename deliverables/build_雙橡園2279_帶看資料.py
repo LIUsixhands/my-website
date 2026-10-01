@@ -8,6 +8,8 @@ from playwright.sync_api import sync_playwright
 
 OUT = Path(__file__).parent
 NAME = "雙橡園2279_帶看資料"
+CONTACT_NAME = "助哥"
+CONTACT_TEL = "0925-313-570"
 FOOT = "永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號"
 
 # 歷年不含車位中位（萬/坪）
@@ -77,6 +79,13 @@ td.b{font-weight:700;color:#7A5520}
 .concl{margin:12mm 20mm 0;font-size:11.5pt;line-height:1.8;color:#FBF6EC}
 .concl b{color:#D9B878}
 .cover .foot{color:#b5a382;border-color:#6b5a3c}
+.cover .contact{position:absolute;left:20mm;right:20mm;bottom:22mm;border:1px solid #B08A4A;padding:4mm 6mm;
+ display:flex;justify-content:space-between;align-items:center}
+.cover .contact .n{font-size:10pt;color:#E8D9B8}
+.cover .contact .t{font-family:"Noto Serif CJK TC",serif;font-size:20pt;font-weight:700;color:#D9B878;letter-spacing:.04em}
+.card{position:absolute;left:17mm;bottom:30mm;width:105mm;background:#3A2E1C;color:#FBF6EC;padding:4mm 6mm}
+.card .n{font-size:9.5pt;color:#E8D9B8}
+.card .t{font-family:"Noto Serif CJK TC",serif;font-size:18pt;font-weight:700;color:#D9B878;letter-spacing:.04em}
 .spec td:first-child{width:24%;text-align:left;font-weight:700;color:#7A5520}
 .spec td{text-align:left}
 .spec td:last-child{width:19%;font-size:8pt;color:#8a7a5e}
@@ -87,7 +96,7 @@ td.b{font-weight:700;color:#7A5520}
  font-size:9.5pt;font-weight:700;line-height:1.35;transform:rotate(-12deg);opacity:.85}
 """
 
-def foot(n): return f'<div class="foot"><span>{FOOT}</span><span>{n} / 4</span></div>'
+def foot(n): return f'<div class="foot"><span>{FOOT}</span><span>{CONTACT_NAME} {CONTACT_TEL}　{n} / 4</span></div>'
 
 HTML = f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>雙橡園2279 帶看資料</title>
 <style>{CSS}</style></head><body>
@@ -111,6 +120,7 @@ HTML = f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
   交屋後（113 年起）的成交落在 <b>78–81 萬／坪</b>（不含車位）。<br>
   不同期別的價格不能直接相比，本資料把兩者分開呈現。
  </div>
+ <div class="contact"><div class="n">帶看與諮詢・永慶不動產 七期河南市政店</div><div class="t">{CONTACT_NAME}　{CONTACT_TEL}</div></div>
  {foot(1)}
 </div>
 
@@ -202,6 +212,7 @@ HTML = f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
  樂居公開資料（撈取日 2026-10-01）。<br>
  <b>免責聲明</b>：本資料由經紀人員依公開資料整理，僅供參考，實際成交價格受樓層、格局、屋況、車位及交易條件影響。
  物件實際狀況以現場及產權資料為準。</p>
+ <div class="card"><div class="n">有任何問題，歡迎直接聯絡</div><div class="t">{CONTACT_NAME}　{CONTACT_TEL}</div></div>
  <div class="seal">百富國際<br>開發有限公司</div>
  {foot(4)}
 </div>
