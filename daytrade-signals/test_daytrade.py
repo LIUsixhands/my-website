@@ -1255,14 +1255,15 @@ class TestDailyPush(unittest.TestCase):
         """一天只准做 4 筆。把 5 個訊號的總和講成今天會賺到的錢是高估。"""
         five = [self._oc(str(i), oc.TARGET, 1.67, 1.894) for i in range(5)]
         text = review.format_push(self.SIGNALS, five, [])
-        self.assertIn("照 4 筆上限只做前 4 筆", text)
+        self.assertIn("照完整規則只做 4 筆", text)
+        self.assertIn("已達當日交易筆數上限 4 筆", text)
         # 合計必須等於各筆相加。差一塊錢會讓人懷疑哪個數字才是對的。
         self.assertIn("+11,270 元", text)         # 五筆合計
-        self.assertIn("+9,016 元", text)          # 前四筆
+        self.assertIn("+9,016 元", text)          # 照規則做到的四筆
 
     def test_no_cap_line_when_within_the_limit(self):
         text = review.format_push(self.SIGNALS, self._today(), [])
-        self.assertNotIn("上限只做前", text)
+        self.assertNotIn("照完整規則", text)
 
     def test_cumulative_amount_is_shown(self):
         history = self._today() * 2
@@ -3442,6 +3443,222 @@ class TestMarketColumnsLandOnEveryRow(unittest.TestCase):
         self.assertEqual(len(back), 1)
         self.assertEqual(back[0].category, "")
         self.assertIsNone(back[0].mkt_open_pct)
+
+
+class TestReplayRules(unittest.TestCase):
+    """2026-10-01：五個訊號依序是四個停損 + 最後一個目標。
+
+    日報本來寫「照 4 筆上限只做前 4 筆：-12,622 元」。那個數字只算了筆數上限，
+    沒算日虧上限與連敗停手 —— 而連敗停手（3 筆）在第三個停損之後就關閘了，
+    所以第 4、5 個訊號照規則根本不會做。真正的數字是 **-9,515 元／3 筆**。
+
+    日報把那一天講得比實際慘 3,107 元。方向剛好是「看起來更糟」，所以不會有人
+    發現 —— 直到用它去決定日虧上限該訂多少的時候。
+
+    連敗停手今天同時做了兩件事：擋掉第四個停損（省 3,107 元），也擋掉唯一的
+    贏家（少賺 5,892 元）。兩邊都要算進去，才知道這條線該訂在哪。
+    """
+
+    # 當天的真實數字。net_amount = net_pct/100 × entry × 1000 × lots，
+    # 所以用 net_pct 反推成當天那幾個金額。
+    DAY = [("2340", "09:12:00", "09:20:00", oc.STOP, -1.00, -3442, 1),
+           ("3162", "09:21:00", "09:28:00", oc.STOP, -1.00, -2973, 1),
+           ("8050", "09:30:00", "09:35:00", oc.STOP, -1.00, -3100, 1),
+           ("5309", "09:36:00", "09:38:00", oc.STOP, -1.00, -3107, 1),
+           ("3094", "09:39:28", "09:52:00", oc.TARGET, 2.33, 5892, 3)]
+
+    def _rows(self, day=None):
+        out = []
+        for code, t, exit_at, result, r, amount, lots in (day or self.DAY):
+            entry = 100.0
+            net_pct = amount / (entry * 1000 * lots) * 100
+            out.append(oc.Outcome(
+                date="2026-10-01", code=code, time=t, entry=entry,
+                stop=99.0, target=102.5, lots=lots, result=result,
+                exit_price=entry, r_multiple=r, gross_pct=net_pct + 0.207,
+                net_pct=net_pct, bars=2, exit_at=exit_at))
+        return out
+
+    def test_the_streak_rule_closes_the_gate_after_three_losses(self):
+        res = oc.replay_rules(self._rows())
+        self.assertEqual([o.code for o in res["taken"]], ["2340", "3162", "8050"])
+        self.assertIn("連續 3 筆虧損", res["closed_reason"])
+
+    def test_the_real_number_for_that_day(self):
+        res = oc.replay_rules(self._rows())
+        self.assertEqual(round(sum(round(o.net_amount) for o in res["taken"])), -9515)
+
+    def test_it_is_not_just_the_first_n_trades(self):
+        """前 4 筆 = -12,622。照規則 = -9,515。差 3,107 元，就是第四個停損。"""
+        rows = self._rows()
+        first_four = sum(round(o.net_amount) for o in rows[:4])
+        res = oc.replay_rules(rows)
+        self.assertEqual(first_four, -12622)
+        self.assertNotEqual(sum(round(o.net_amount) for o in res["taken"]), first_four)
+
+    def test_the_winner_was_blocked_and_that_cost_is_reported(self):
+        """這條線也擋掉了唯一的贏家。不把這個數字講出來，等於只講它的好處。"""
+        res = oc.replay_rules(self._rows())
+        blocked = [o.code for o, _ in res["blocked"]]
+        self.assertEqual(blocked, ["5309", "3094"])
+        self.assertEqual(round(res["missed_amount"]), -3107 + 5892)
+
+    def test_a_trade_still_open_does_not_count_as_realised(self):
+        """閘門看的是**已實現**損益。還沒出場的不算 —— 這是閘門真正的行為。
+
+        把未出場的也算進去會讓閘門提早關，於是這個模擬會憑空少掉幾筆虧損，
+        把結果講得比實際好。寧可晚關。
+        """
+        # 三筆都在 09:40 之後才出場：第四個訊號發出時，一筆都還沒實現
+        day = [(c, t, "13:25:00", r, rr, a, l)
+               for c, t, _x, r, rr, a, l in self.DAY]
+        res = oc.replay_rules(day and self._rows(day))
+        self.assertEqual(len(res["taken"]), 4)          # 只剩筆數上限擋得住
+        self.assertIn("交易筆數上限", res["closed_reason"])
+
+    def test_a_missing_exit_time_is_treated_as_still_open(self):
+        """exit_at 缺的那幾筆保守處理，不要憑空關閘。"""
+        day = [(c, t, "", r, rr, a, l) for c, t, _x, r, rr, a, l in self.DAY]
+        res = oc.replay_rules(self._rows(day))
+        self.assertEqual(len(res["taken"]), 4)
+
+    def test_the_daily_loss_cap_can_also_close_it(self):
+        day = [("A", "09:10:00", "09:11:00", oc.STOP, -1.0, -7000, 1),
+               ("B", "09:12:00", "09:13:00", oc.TARGET, 2.0, 1000, 1),
+               ("C", "09:14:00", "09:15:00", oc.STOP, -1.0, -6500, 1),
+               ("D", "09:20:00", "09:21:00", oc.TARGET, 2.0, 9999, 1)]
+        res = oc.replay_rules(self._rows(day))
+        self.assertEqual([o.code for o in res["taken"]], ["A", "B", "C"])
+        self.assertIn("觸及上限 12,000 元", res["closed_reason"])
+
+    def test_a_win_resets_the_loss_streak(self):
+        """連敗是**連續**的。中間賺一筆就從零開始數，不是累計虧損筆數。
+
+        不歸零的話，紅盤日被零星幾筆停損湊滿三筆就會莫名收工 ——
+        那不是這條規則要擋的東西。
+        """
+        day = [("A", "09:10:00", "09:11:00", oc.STOP, -1.0, -1000, 1),
+               ("B", "09:12:00", "09:13:00", oc.STOP, -1.0, -1000, 1),
+               ("C", "09:14:00", "09:15:00", oc.TARGET, 2.0, 2000, 1),
+               ("D", "09:16:00", "09:17:00", oc.STOP, -1.0, -1000, 1)]
+        res = oc.replay_rules(self._rows(day))
+        self.assertEqual(len(res["taken"]), 4)      # 四筆都做得到
+        self.assertEqual(res["closed_reason"], "")
+
+    def test_the_streak_rule_only_ever_binds_on_the_first_three(self):
+        """現在的參數下，連敗停手實際上只有一種情況會生效：**開頭連三敗**。
+
+        筆數上限 4、連敗上限 3 —— 中間只要賺一筆，連敗就歸零，而要再連三敗
+        就得做到第 5 筆，但第 5 筆早就被筆數上限擋住了。所以除了今天這種
+        「一開始就連三個停損」，連敗停手這條線永遠輪不到它出手。
+
+        這不是 bug，是兩條線的參數互動。寫成測試是為了讓它有人看得見 ——
+        20 天後要調這兩個數字的時候，要知道它們不是獨立的。
+        """
+        day = [("A", "09:10:00", "09:11:00", oc.STOP, -1.0, -500, 1),
+               ("B", "09:12:00", "09:13:00", oc.TARGET, 2.0, 500, 1),
+               ("C", "09:14:00", "09:15:00", oc.STOP, -1.0, -500, 1),
+               ("D", "09:16:00", "09:17:00", oc.STOP, -1.0, -500, 1),
+               ("E", "09:18:00", "09:19:00", oc.STOP, -1.0, -500, 1)]
+        res = oc.replay_rules(self._rows(day))
+        self.assertEqual([o.code for o in res["taken"]], ["A", "B", "C", "D"])
+        self.assertIn("交易筆數上限", res["closed_reason"])
+        # 參數前提：改了任何一個，上面那句話就要重新算一次
+        self.assertEqual(config.RISK["max_trades_per_day"], 4)
+        self.assertEqual(config.RISK["max_consecutive_losses"], 3)
+
+    def test_a_clean_day_blocks_nothing(self):
+        day = [("A", "09:10:00", "09:11:00", oc.TARGET, 2.0, 2000, 1),
+               ("B", "09:12:00", "09:13:00", oc.STOP, -1.0, -1000, 1)]
+        res = oc.replay_rules(self._rows(day))
+        self.assertEqual(res["blocked"], [])
+        self.assertEqual(res["closed_reason"], "")
+
+    def test_signals_are_replayed_in_time_order_not_list_order(self):
+        """outcomes 的順序不保證是時間序，而閘門是照時間走的。"""
+        rows = self._rows()
+        res = oc.replay_rules(list(reversed(rows)))
+        self.assertEqual([o.code for o in res["taken"]], ["2340", "3162", "8050"])
+
+    def test_it_reaches_both_the_journal_and_the_phone(self):
+        """算出來而沒有人看，和沒算一樣。"""
+        rows = self._rows()
+        sigs = [{"code": o.code, "time": o.time, "entry": o.entry, "stop": o.stop,
+                 "target": o.target, "lots": o.lots, "volume_surge": 2.0}
+                for o in rows]
+        journal = "\n".join(review.outcome_section(sigs, rows))
+        self.assertIn("照完整規則", journal)
+        self.assertIn("連續 3 筆虧損", journal)
+        self.assertIn("-9,515", journal)
+        # 被擋掉那幾筆的代價也要講：-3,107（省到的）+ 5,892（錯過的）= +2,785。
+        # 只講這條線省了多少、不講它錯過多少，是在幫自己的規則說話。
+        self.assertIn("+2,785", journal)
+        push = review.format_push(sigs, rows, rows)
+        self.assertIn("照完整規則只做 3 筆", push)
+        self.assertIn("-9,515 元", push)
+
+    def test_a_clean_day_says_so_instead_of_staying_silent(self):
+        """沒有被擋掉的日子要明講「上面的數字就是照規則的數字」。
+
+        留白會讓人以為這一段壞了，或者以為上面的數字一定就是照規則的。
+        """
+        day = [("A", "09:10:00", "09:11:00", oc.TARGET, 2.0, 2000, 1)]
+        rows = self._rows(day)
+        sigs = [{"code": "A", "time": "09:10:00", "entry": 100.0, "stop": 99.0,
+                 "target": 102.5, "lots": 1, "volume_surge": 2.0}]
+        journal = "\n".join(review.outcome_section(sigs, rows))
+        self.assertIn("沒有任何訊號被風控擋掉", journal)
+
+
+class TestExitTime(unittest.TestCase):
+    """閘門看的是已實現損益，而一筆要出場了才算實現 —— 所以出場時間是必要的。"""
+
+    SIG = {"code": "2449", "time": "09:30:00", "entry": 119.0,
+           "stop": 118.0, "target": 121.5, "lots": 2}
+
+    def test_tick_verdict_uses_its_real_timestamp(self):
+        o = oc.resolve(FakeKbarBroker(_kb([("09:35", 119.5, 118.5, 119.2)])),
+                       dict(self.SIG, live_result=oc.TARGET, live_exit=121.5,
+                            live_at="09:30:12"), "2026-09-24")
+        self.assertEqual(o.exit_at, "09:30:12")
+
+    def test_kbar_verdict_uses_the_bar_label(self):
+        o = oc.resolve(FakeKbarBroker(_kb([("09:32", 119.5, 118.5, 119.2),
+                                           ("09:33", 121.6, 119.0, 121.5)])),
+                       dict(self.SIG), "2026-09-24")
+        self.assertEqual(o.result, oc.TARGET)
+        self.assertEqual(o.exit_at, "09:33:00")
+
+    def test_a_flat_close_is_recorded_as_1325(self):
+        o = oc.resolve(FakeKbarBroker(_kb([("09:32", 119.5, 118.5, 119.2)])),
+                       dict(self.SIG), "2026-09-24")
+        self.assertEqual(o.result, oc.FLAT)
+        self.assertEqual(o.exit_at, "13:25:00")
+
+    def test_it_survives_the_csv_round_trip(self):
+        o = oc.resolve(FakeKbarBroker(_kb([("09:32", 121.6, 119.0, 121.5)])),
+                       dict(self.SIG), "2026-09-24")
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            oc.append_csv([o], path)
+            back = oc.load_csv(path)
+        self.assertEqual(back[0].exit_at, "09:32:00")
+
+    def test_old_rows_without_it_still_load(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            keep = [f for f in oc.FIELDS if f != "exit_at"]
+            filled = {"date": "2026-09-24", "code": "2449", "time": "09:30:00",
+                      "entry": "119", "stop": "118", "target": "121.5",
+                      "lots": "2", "result": oc.TARGET, "exit_price": "121.5",
+                      "r_multiple": "2.5", "gross_pct": "2.1", "net_pct": "1.7",
+                      "bars": "2"}
+            path.write_text(",".join(keep) + "\n"
+                            + ",".join(filled.get(f, "") for f in keep) + "\n",
+                            encoding="utf-8")
+            back = oc.load_csv(path)
+        self.assertEqual(len(back), 1)
+        self.assertEqual(back[0].exit_at, "")
 
 
 class TestFillStats(unittest.TestCase):

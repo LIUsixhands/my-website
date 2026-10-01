@@ -226,6 +226,7 @@ def outcome_section(signals: list[dict], outcomes: list | None) -> list[str]:
 
     st = oc.summarise(outcomes)
     fills = oc.fill_stats(outcomes)
+    rules = oc.replay_rules(outcomes)
     payoff = f"{st['payoff']}" if st.get("payoff") else "—（今日無虧損樣本）"
     lines += [
         "",
@@ -239,6 +240,41 @@ def outcome_section(signals: list[dict], outcomes: list | None) -> list[str]:
         "> 判定偏保守：同一根 K 同時觸及停損與目標時判停損；成交價以訊號價計，"
         "未計滑價；13:25 前一律平倉。**實際成績只會比這裡差，不會更好。**",
     ]
+    lines += rules_section(rules)
+    return lines
+
+
+def _amount(rows) -> float:
+    """金額一律「各筆先四捨五入再相加」—— 和逐筆明細用同一個約定。
+    兩邊各算各的，遲早會差一塊錢，而差一塊錢會讓人懷疑哪個數字才是對的。"""
+    return sum(round(o.net_amount) for o in rows)
+
+
+def rules_section(rules: dict) -> list[str]:
+    """照完整規則今天會做到哪幾筆。
+
+    上面那一段算的是「每個訊號後來怎麼了」，而不是「你照規則做得到哪幾筆」。
+    兩者在打滿上限或觸及紅線的日子會差很多，而那正是最需要看清楚的日子。
+    """
+    if not rules.get("blocked"):
+        return ["", "_今日沒有任何訊號被風控擋掉，上面的數字就是照規則的數字。_"]
+    lines = ["", "### 照完整規則（筆數上限 + 日虧上限 + 連敗停手）", "",
+             f"- 實際會做：**{len(rules['taken'])} 筆**，"
+             f"{_amount(rules['taken']):+,.0f} 元（{rules['total_r']:+.2f}R）",
+             f"- 關閘原因：{rules['closed_reason']}",
+             f"- 被擋掉的那幾筆合計："
+             f"{_amount([o for o, _ in rules['blocked']]):+,.0f} 元", ""]
+    lines += ["| 代號 | 時間 | 結果 | 金額 | 做了嗎 |",
+              "|------|------|------|------|--------|"]
+    for o in rules["taken"]:
+        lines.append(f"| {o.code} | {o.time} | {o.result} | "
+                     f"{round(o.net_amount):+,.0f} | 做 |")
+    for o, why in rules["blocked"]:
+        lines.append(f"| {o.code} | {o.time} | {o.result} | "
+                     f"{round(o.net_amount):+,.0f} | 擋（{why}） |")
+    lines += ["",
+              "> 被擋掉的那幾筆是賺的時候，這條線的代價就是那個數字；是賠的時候，"
+              "這條線替你省下那個數字。**兩邊都要看，才知道線該訂在哪。**"]
     return lines
 
 
@@ -282,12 +318,16 @@ def format_push(signals: list[dict], outcomes, history: list) -> str:
         today_fill = oc.fill_stats(outcomes)
         if today_fill.get("known"):
             lines.append(f"掛進場價買得到 {today_fill['filled']}/{today_fill['known']} 筆")
-        # 訊號數可以到 5，但一天只准做 4 筆。把全部訊號的總和當成「今天會賺到的錢」
-        # 會高估 —— 那第 5 筆照規則根本不會下單。
-        cap = config.RISK["max_trades_per_day"]
-        if len(outcomes) > cap:
-            traded = amount(outcomes[:cap])
-            lines.append(f"照 {cap} 筆上限只做前 {cap} 筆：{traded:+,.0f} 元")
+        # 「照規則今天真的會做到哪幾筆」要把閘門整套跑一遍，不是取前 N 筆。
+        # 原本寫成 outcomes[:cap]，那只算了筆數上限，沒算日虧上限與連敗停手 ——
+        # 2026-10-01 五訊號（四停損 + 最後一個目標）下，前 4 筆算出 -12,622 元，
+        # 而連敗停手其實在第三筆之後就關閘了，真正的數字是 -9,515 元／3 筆。
+        # 日報把那一天講得比實際慘 3,107 元。
+        rules = oc.replay_rules(outcomes)
+        if rules["blocked"]:
+            lines.append(f"照完整規則只做 {len(rules['taken'])} 筆："
+                         f"{amount(rules['taken']):+,.0f} 元")
+            lines.append(f"　（{rules['closed_reason']}）")
         lines.append("")
         for o in outcomes:
             label = f"{o.code} {names.get(o.code, '')}".strip()

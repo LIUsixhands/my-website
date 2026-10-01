@@ -86,14 +86,11 @@ class RiskGate:
         """從最後一筆往前數，連續幾筆是虧的。
 
         依 list_profit_loss 的回傳順序判斷（同一天內視為時間序）。
+        實作放在 outcome.py，因為盤後覆盤的 replay_rules() 要算同一件事 ——
+        兩邊各寫一份的話，有一天會走偏，而覆盤算出的「照規則會做幾筆」
+        就不再是閘門真正會做的事。
         """
-        n = 0
-        for pnl in reversed(rows):
-            if pnl < 0:
-                n += 1
-            else:
-                break
-        return n
+        return outcome.trailing_losses(rows)
 
     def _requery(self, fn, label):
         """帳務查詢回 None 時再確認幾次，才決定要不要關閘。

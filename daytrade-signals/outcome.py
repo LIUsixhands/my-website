@@ -48,7 +48,8 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
           "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
-          "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct")
+          "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
+          "exit_at")
 
 
 @dataclass
@@ -92,6 +93,10 @@ class Outcome:
     # mkt_open_pct 在任何訊號發出**之前**就已知，所以它是唯一有資格變成規則的那個。
     mkt_open_pct: float | None = None     # 09:15 時的大盤漲跌 %
     mkt_day_pct: float | None = None      # 當日收盤的大盤漲跌 %
+    # 出場時間 "HH:MM:SS"。風控閘門看的是**已實現**損益，而一筆要出場了才算實現 ——
+    # 沒有這一欄就答不出「這一筆發訊號的時候，前面幾筆已經結束了幾筆」，
+    # 於是「照規則今天真的會做到哪幾筆」只能用「前 N 筆」粗估，而那會算錯。
+    exit_at: str = ""
 
     @property
     def is_win(self) -> bool:
@@ -180,6 +185,23 @@ def bars_after(broker, code: str, date: str, after: datetime) -> list[tuple]:
     return out
 
 
+def _exit_at(sig: dict, fired: datetime, result: str, used: int, bars: list) -> str:
+    """這一筆什麼時候出場。tick 判定有真實時間戳；分鐘 K 判定只能用 K 棒推。
+
+    tick 判定（live_at）是實際成交那一刻，最準。分鐘 K 判定取那根 K 棒的
+    label（該分鐘的結束時間）—— 誤差在一分鐘內，而閘門的判斷用不到比這更細。
+    收盤平倉一律記 13:25，和 FLATTEN_AT 同一個時間。
+    """
+    live_at = str(sig.get("live_at") or "").strip()
+    if live_at and sig.get("live_result"):
+        return live_at
+    if result == FLAT:
+        return FLATTEN_AT.strftime("%H:%M:%S")
+    if used and len(bars) >= used:
+        return bars[used - 1][0].strftime("%H:%M:%S")
+    return ""
+
+
 def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
     """回推單一訊號的結局。拿不到 K 棒就回 None（不要猜）。"""
     date = date or datetime.now().strftime("%Y-%m-%d")
@@ -247,6 +269,7 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         fill_low_pct=_pct_above(fill_low, entry) if fill_low is not None else None,
         rank=int(sig.get("rank") or 0),
         category=str(sig.get("category") or ""),
+        exit_at=_exit_at(sig, fired, result, used, bars),
     )
 
 
@@ -352,7 +375,7 @@ def append_candidates_csv(pairs: list[tuple], path=None) -> None:
             w.writerow(row)
 
 
-_STR_FIELDS = ("date", "code", "time", "result", "category")
+_STR_FIELDS = ("date", "code", "time", "result", "category", "exit_at")
 _BOOL_FIELDS = ("target_after_stop",)
 _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
@@ -421,6 +444,80 @@ def fill_stats(outcomes: list[Outcome]) -> dict:
         # 買不到的那幾筆，當時最低價離進場價多遠（平均）—— 要追幾毛才追得上。
         "avg_miss_pct": round(sum(p for p in known if p > 0) / max(len(known) - len(filled), 1), 3)
         if len(known) > len(filled) else None,
+    }
+
+
+def trailing_losses(amounts: list[float]) -> int:
+    """從最後一筆往前數，連續幾筆是虧的。
+
+    閘門（signals.RiskGate）和覆盤的規則重跑（replay_rules）都要算這個。
+    兩邊各寫一份的話，有一天會走偏 —— 而走偏的那天，覆盤算出來的
+    「照規則會做幾筆」就不再是閘門真正會做的事，那整個模擬就沒有意義了。
+    """
+    n = 0
+    for amount in reversed(amounts):
+        if amount < 0:
+            n += 1
+        else:
+            break
+    return n
+
+
+def replay_rules(outcomes: list[Outcome]) -> dict:
+    """照風控閘門的規則把一天重跑一次，回傳實際會做到的那幾筆。
+
+    為什麼不能只取前 N 筆（日報本來就是這樣算的，而那會算錯）：
+    閘門看的是**已實現**損益與連敗筆數，而那取決於某一筆發訊號的時候，前面
+    幾筆有沒有已經出場。所以要照訊號順序走，每一筆都用「此刻已出場的那些」
+    去判斷閘門開不開。
+
+    2026-10-01 就是這個差別第一次有代價的日子：五個訊號依序是四個停損 +
+    最後一個目標。
+      - 全部五筆：          -6,730 元
+      - 日報的「前 4 筆」：  -12,622 元
+      - 照完整規則：連三敗在第三筆之後就關閘，第 4、5 個訊號都不會做
+                             → -9,515 元，3 筆收工
+    日報少講了 3,107 元，而且少講的方向是「看起來更慘」。連敗停手那條規則
+    今天其實是賺到的 —— 它擋掉了第四個停損。而它也擋掉了唯一的贏家。
+    兩件事都要算進去，才知道這條線該訂在哪。
+
+    exit_at 缺的那幾筆保守處理：當成「還沒出場」，也就是不計入閘門看到的
+    已實現損益。寧可讓閘門晚關，不要讓它早關 —— 早關會讓這個模擬
+    憑空少掉幾筆虧損，把結果講得比實際好。
+    """
+    r = config.RISK
+    cap_trades = r["max_trades_per_day"]
+    cap_loss = abs(r["max_daily_loss"])
+    cap_streak = r["max_consecutive_losses"]
+
+    ordered = sorted(outcomes, key=lambda o: str(o.time))
+    taken: list[Outcome] = []
+    blocked: list[tuple[Outcome, str]] = []
+    reason = ""
+    for o in ordered:
+        if not reason:
+            # 這一刻已經出場的那些，才算「已實現」。
+            closed = [t for t in taken if t.exit_at and str(t.exit_at) <= str(o.time)]
+            realised = sum(t.net_amount for t in closed)
+            streak = trailing_losses([t.net_amount for t in closed])
+            if len(taken) >= cap_trades:
+                reason = f"已達當日交易筆數上限 {cap_trades} 筆"
+            elif realised <= -cap_loss:
+                reason = f"當日實現虧損 {realised:,.0f} 元，觸及上限 {cap_loss:,} 元"
+            elif streak >= cap_streak:
+                reason = f"連續 {streak} 筆虧損，觸及上限 {cap_streak} 筆"
+        if reason:
+            blocked.append((o, reason))
+        else:
+            taken.append(o)
+
+    return {
+        "taken": taken,
+        "blocked": blocked,
+        "closed_reason": reason,
+        "net_amount": sum(o.net_amount for o in taken),
+        "total_r": round(sum(o.r_multiple for o in taken), 2),
+        "missed_amount": sum(o.net_amount for o, _ in blocked),
     }
 
 
