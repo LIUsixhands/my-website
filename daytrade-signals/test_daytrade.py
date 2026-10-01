@@ -3853,6 +3853,136 @@ class TestMonitorBat(unittest.TestCase):
         self.assertIn(b"\r\n", self.BAT.read_bytes())
 
 
+class TestTheWindowSaysNotToCloseIt(unittest.TestCase):
+    """2026-10-01 真的發生的事，而且錯在程式不在人。
+
+    08:40 的排程每天都正確觸發、正確登入、正確跑。但它跳出來的黑視窗把所有
+    輸出都導到 log，所以畫面從頭到尾空白；而整支程式最花時間的那一段（量比，
+    60 次 API 加上刻意的間隔，約 40~80 秒）以前一聲不吭。
+
+    於是那個視窗有一分多鐘看起來跟當掉一模一樣，使用者把它關掉了 ——
+    工作排程器記下 `0xC000013A`（STATUS_CONTROL_C_EXIT），log 裡留下 `^C`。
+    那天的盤前名單整個沒了。
+
+    排程設定一格都沒錯。錯的是「跑很久又不出聲」這件事。
+    """
+
+    BATS = {
+        "morning.bat": "PRE-MARKET SCREENER",
+        "monitor.bat": "INTRADAY MONITOR",
+        "afternoon.bat": "POST-CLOSE REVIEW",
+    }
+
+    def _text(self, name):
+        path = Path(__file__).with_name(name)
+        if not path.exists():
+            self.skipTest(f"{name} 不在（非 Windows 佈署）")
+        return path.read_bytes().decode("ascii")      # 仍然只能有 ASCII
+
+    def test_every_window_says_what_it_is_and_not_to_close_it(self):
+        for name, what in self.BATS.items():
+            with self.subTest(bat=name):
+                text = self._text(name)
+                self.assertIn(what, text)
+                self.assertIn("DO NOT CLOSE", text)
+
+    def test_every_window_says_a_blank_screen_is_normal(self):
+        """這才是真正的那句話。只寫「不要關」而不解釋，下次還是會被關。"""
+        for name in self.BATS:
+            with self.subTest(bat=name):
+                text = self._text(name)
+                self.assertIn("BLANK", text)
+                self.assertIn("NOT frozen", text)
+
+    def test_the_banner_prints_before_the_program_starts(self):
+        """印在後面等於沒印 —— 要關的人在前 10 秒就關了。"""
+        for name in self.BATS:
+            with self.subTest(bat=name):
+                text = self._text(name)
+                self.assertLess(text.index("DO NOT CLOSE"), text.index("python "))
+
+    def test_the_banner_is_not_swallowed_by_the_log_redirect(self):
+        """橫幅要留在畫面上。被導進 log 的話，使用者還是看到一片黑。"""
+        for name in self.BATS:
+            with self.subTest(bat=name):
+                for line in self._text(name).splitlines():
+                    if "DO NOT CLOSE" in line or "NOT frozen" in line:
+                        self.assertNotIn(">>", line)
+
+    def test_the_monitor_spells_out_what_closing_it_costs(self):
+        """08:50 那個開到 13:30，關掉它會讓當天的訊號與追蹤整個停掉，而且無聲。
+
+        三個裡面它的代價最大，所以它要講得最白。
+        """
+        text = self._text("monitor.bat")
+        self.assertIn("13:30", text)
+        self.assertIn("STOPS TODAY'S SIGNALS", text)
+
+    def test_the_bats_stay_ascii_so_a_cp950_console_can_print_them(self):
+        """繁中主控台是 cp950。.bat 裡放 UTF-8 中文會變亂碼，
+        而一則讀不懂的警告跟沒有警告一樣。"""
+        for name in self.BATS:
+            with self.subTest(bat=name):
+                path = Path(__file__).with_name(name)
+                if not path.exists():
+                    self.skipTest(f"{name} 不在")
+                path.read_bytes().decode("ascii")      # 不能丟例外
+
+
+class TestScreenerSaysItIsStillAlive(unittest.TestCase):
+    """量比那一段是唯一會跑很久的地方，以前從頭到尾不出聲。
+
+    報進度有兩個作用，缺一不可：
+      1. 畫面上看得出它還活著 —— 沒有人會再想關掉它
+      2. 萬一還是被砍，log 會停在「第幾檔」，而不是停在迴圈開始前；
+         那會分辨「一開跑就被砍」和「跑太久被砍」，是兩種不同的毛病
+    """
+
+    class FakeBroker:
+        def __init__(self, n):
+            self.n = n
+
+        def all_stocks(self):
+            return [SimpleNamespace(code=f"{1000 + i}", name=f"N{i}",
+                                    day_trade="Yes", category="24")
+                    for i in range(self.n)]
+
+        def is_day_tradable(self, c, allow_short=None):
+            return True
+
+        def snapshots(self, contracts):
+            return [SimpleNamespace(
+                code=c.code, close=100.0, high=108.0, low=99.0,
+                total_volume=5000, yesterday_volume=5000,
+                change_rate=3.0, amount=5e8) for c in contracts]
+
+        def kbars(self, code, start, end):
+            return SimpleNamespace(ts=[], Volume=[])
+
+    def _run(self, n=25):
+        with unittest.mock.patch.dict(
+                config.SCREEN, {"max_kbar_queries": n, "kbar_sleep_sec": 0}):
+            with self.assertLogs("screener", level="INFO") as cm:
+                screener.screen(self.FakeBroker(n))
+        return "\n".join(cm.output)
+
+    def test_it_reports_progress_while_it_grinds(self):
+        out = self._run(25)
+        self.assertIn("量比計算中… 10/25", out)
+        self.assertIn("量比計算中… 20/25", out)
+
+    def test_it_always_reports_the_last_one(self):
+        """不是 10 的倍數的那一檔也要報，否則 log 看起來像沒跑完。"""
+        self.assertIn("量比計算中… 25/25", self._run(25))
+
+    def test_it_warns_up_front_how_long_the_quiet_part_takes(self):
+        """「等一下沒聲音是正常的」要在**開始之前**講，不是事後補。"""
+        out = self._run(25)
+        head = out.index("開始計算量比")
+        self.assertLess(head, out.index("量比計算中…"))
+        self.assertIn("是正常的", out[head:head + 200])
+
+
 class TestLoginRetry(unittest.TestCase):
     """2026-09-30 早上真的發生的事。
 

@@ -8,6 +8,18 @@ REM Everything the run prints is appended to logs\afternoon.log, so a silent
 REM 14:00 can still be diagnosed later.
 cd /d "%~dp0"
 if not exist "logs" mkdir "logs"
+REM Same blank-window problem as morning.bat; see the note there.
+echo.
+echo ==========================================================
+echo   POST-CLOSE REVIEW IS RUNNING  --  DO NOT CLOSE
+echo.
+echo   Takes about a minute. The screen stays BLANK until it
+echo   finishes. That is normal, it is NOT frozen.
+echo.
+echo   Closing it means today's results never reach
+echo   outcomes.csv, and that day cannot be recovered.
+echo ==========================================================
+echo.
 echo ================ %DATE% %TIME% ================>>"logs\afternoon.log"
 python review.py >>"logs\afternoon.log" 2>&1
 set RC=%ERRORLEVEL%

@@ -94,6 +94,10 @@ def volume_baseline(ts_list, volume_list, lookback_days: int) -> float:
     return sum(per_day[d] for d in days) / len(days)
 
 
+# 量比迴圈每幾檔報一次進度。太密會把 log 洗掉，太疏就失去「它還活著」的作用。
+PROGRESS_EVERY = 10
+
+
 def screen(broker: Broker) -> list[dict]:
     cfg = config.SCREEN
     contracts = broker.all_stocks()
@@ -141,7 +145,17 @@ def screen(broker: Broker) -> list[dict]:
 
     start = (datetime.now() - timedelta(days=cfg["lookback_days"] * 3)).strftime("%Y-%m-%d")
     end = datetime.now().strftime("%Y-%m-%d")
-    for r in probe:
+    # 這段是整支程式唯一會跑很久的地方：每檔一次 API，中間還要刻意等（避開流量上限）。
+    # 以前它從頭到尾不出聲，排程跳出來的黑視窗就會有一分多鐘完全沒反應 ——
+    # 跟當掉長得一模一樣。2026-10-01 使用者就是因此把它關掉的（exit 0xC000013A，
+    # 也就是 CTRL+C），那天的盤前名單整個沒了。
+    #
+    # 所以這裡每隔幾檔就報一次進度。兩個作用：
+    #   1. 畫面上（或 log 裡）看得出它還活著，沒有人會再想關掉它
+    #   2. 萬一真的被砍，log 會停在「第幾檔」，而不是停在迴圈開始前
+    log.info("開始計算量比：%d 檔，預估 %.0f 秒。這段期間沒有其他訊息是正常的。",
+             len(probe), len(probe) * (cfg["kbar_sleep_sec"] + 0.5))
+    for i, r in enumerate(probe, 1):
         try:
             kb = broker.kbars(r["code"], start, end)
             base = volume_baseline(getattr(kb, "ts", []), getattr(kb, "Volume", []),
@@ -150,6 +164,8 @@ def screen(broker: Broker) -> list[dict]:
         except Exception as e:
             log.debug("%s 量比計算失敗，以 1.0 計：%s", r["code"], e)
             r["volume_ratio"] = 1.0
+        if i % PROGRESS_EVERY == 0 or i == len(probe):
+            log.info("量比計算中… %d/%d", i, len(probe))
         throttle(cfg["kbar_sleep_sec"])
     for r in rest:
         r["volume_ratio"] = 1.0
