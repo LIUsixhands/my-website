@@ -33,6 +33,7 @@ import broker as broker_mod
 from broker import Broker
 import outcome as oc
 import screener
+import analyse
 import signals
 from signals import RiskGate, SymbolState, evaluate, format_signal
 
@@ -3981,6 +3982,126 @@ class TestScreenerSaysItIsStillAlive(unittest.TestCase):
         head = out.index("開始計算量比")
         self.assertLess(head, out.index("量比計算中…"))
         self.assertIn("是正常的", out[head:head + 200])
+
+
+class TestWinRateInterval(unittest.TestCase):
+    """analyse.py 的工作是**不要給出看起來像答案的雜訊**，而我第一版自己犯了。
+
+    第一版用常態近似（Wald）：8 筆全輸時 p=0，`sqrt(p(1-p)/n)` 也是 0，
+    區間變成 (0%, 0%) —— **寬度為零**。然後「兩組區間有沒有重疊」就會說
+    「沒有重疊，這兩組真的有差」，用 8 筆樣本講出一個比任何數字都更有
+    自信的假答案。
+
+    改用 Wilson score 區間。
+    """
+
+    def test_all_losses_is_not_certainty(self):
+        """8 筆全輸不代表勝率確定是 0%。區間要有寬度。"""
+        rate, lo, hi = analyse.win_rate_ci(0, 8)
+        self.assertEqual((rate, lo), (0.0, 0.0))
+        self.assertGreater(hi, 20)          # 上界要留得夠寬
+
+    def test_all_wins_is_not_certainty_either(self):
+        rate, lo, hi = analyse.win_rate_ci(8, 8)
+        self.assertEqual((rate, hi), (100.0, 100.0))
+        self.assertLess(lo, 80)
+
+    def test_a_tiny_sample_is_visibly_useless(self):
+        """n=4 的區間要寬到沒有人會想拿它做決定。"""
+        _, lo, hi = analyse.win_rate_ci(2, 4)
+        self.assertGreater(hi - lo, 50)
+
+    def test_more_samples_narrow_it(self):
+        small = analyse.win_rate_ci(6, 10)
+        big = analyse.win_rate_ci(60, 100)
+        self.assertEqual(small[0], big[0])                  # 同樣是 60%
+        self.assertLess(big[2] - big[1], small[2] - small[1])
+
+    def test_empty_is_zero_not_a_crash(self):
+        self.assertEqual(analyse.win_rate_ci(0, 0), (0.0, 0.0, 0.0))
+
+    def test_the_interval_stays_inside_zero_to_hundred(self):
+        for wins, n in ((0, 3), (3, 3), (1, 2), (99, 100)):
+            with self.subTest(wins=wins, n=n):
+                _, lo, hi = analyse.win_rate_ci(wins, n)
+                self.assertGreaterEqual(lo, 0.0)
+                self.assertLessEqual(hi, 100.0)
+
+
+class TestAnalyseRefusesToOverclaim(unittest.TestCase):
+    """樣本不夠的時候要說「分不出來」，不要印一個中間值讓人盯著看。"""
+
+    def _rows(self, spec):
+        """spec: [(date, time, 是否獲利, rank, mkt, volume_surge, fill_pct)]"""
+        out = []
+        for date, t, win, rank, mkt, vs, fill in spec:
+            out.append(oc.Outcome(
+                date=date, code="T", time=t, entry=100.0, stop=99.0, target=102.5,
+                lots=1, result=oc.TARGET if win else oc.STOP, exit_price=100.0,
+                r_multiple=2.5 if win else -1.0,
+                gross_pct=2.4 if win else -1.6, net_pct=2.2 if win else -1.8,
+                bars=2, rank=rank, mkt_open_pct=mkt, volume_surge=vs,
+                fill_low_pct=fill, exit_at="10:00:00"))
+        return out
+
+    def test_signal_order_is_derived_from_the_time_within_each_day(self):
+        """outcomes.csv 沒有「第幾個」這一欄，要自己從時間排出來。"""
+        rows = self._rows([("2026-10-01", "09:39", True, 0, None, None, None),
+                           ("2026-10-01", "09:12", False, 0, None, None, None),
+                           ("2026-09-30", "09:20", True, 0, None, None, None)])
+        order = analyse.signal_order(rows)
+        self.assertEqual([o.time for o in order[1]], ["09:12", "09:20"])
+        self.assertEqual([o.time for o in order[2]], ["09:39"])
+
+    def test_two_tiny_groups_are_called_indistinguishable(self):
+        """4 筆全贏 vs 4 筆全輸，看起來天差地遠 —— 但那是 4 筆。"""
+        rows = self._rows(
+            [("2026-10-01", f"09:1{i}", True, 1, None, None, None) for i in range(4)] +
+            [("2026-10-02", f"09:1{i}", False, 11, None, None, None) for i in range(4)])
+        self.assertTrue(analyse.overlapping(analyse.by_rank(rows)))
+        text = "\n".join(analyse.render_group("x", analyse.by_rank(rows), "q"))
+        self.assertIn("分不出來", text)
+
+    def test_a_group_below_the_floor_shows_no_rate_at_all(self):
+        rows = self._rows([("2026-10-01", "09:10", True, 1, None, None, None)])
+        text = "\n".join(analyse.render_group("x", analyse.by_rank(rows), "q"))
+        self.assertIn("太少", text)
+        self.assertNotIn("100.0%", text)
+
+    def test_a_single_group_can_never_be_a_difference(self):
+        """只有一組的時候沒有「比較」這件事，不可以說有差。"""
+        rows = self._rows([("2026-10-01", f"09:1{i}", i % 2 == 0, 1,
+                            None, None, None) for i in range(10)])
+        self.assertTrue(analyse.overlapping(analyse.by_rank(rows)))
+
+    def test_a_real_separation_is_reported_as_one(self):
+        """區間真的分開時要講 —— 否則這支程式永遠只會說「不知道」。"""
+        rows = self._rows(
+            [("2026-10-01", f"09:{10+i}", True, 1, None, None, None) for i in range(40)] +
+            [("2026-10-02", f"09:{10+i}", False, 11, None, None, None) for i in range(40)])
+        self.assertFalse(analyse.overlapping(analyse.by_rank(rows)))
+        text = "\n".join(analyse.render_group("x", analyse.by_rank(rows), "q"))
+        self.assertIn("沒有**重疊", text)
+
+    def test_unknown_values_are_dropped_not_bucketed_as_zero(self):
+        """大盤查不到的那幾天不能算成「開低」—— None 是不知道，不是負的。"""
+        rows = self._rows([("2026-10-01", "09:10", True, 0, None, None, None),
+                           ("2026-10-01", "09:11", True, 0, 0.5, None, None)])
+        groups = analyse.by_market(rows)
+        self.assertEqual(sum(len(v) for v in groups.values()), 1)
+
+    def test_an_empty_csv_says_so_instead_of_printing_zeros(self):
+        text = "\n".join(analyse.report([]))
+        self.assertIn("是空的或不存在", text)
+        self.assertNotIn("0.0%", text)
+
+    def test_the_report_always_shows_the_interval_next_to_the_rate(self):
+        """只印中間那個數字，就是這支程式要避免的那件事。"""
+        rows = self._rows([("2026-10-01", f"09:{10+i}", i < 6, 1, 0.5, 6.0, -0.2)
+                           for i in range(10)])
+        text = "\n".join(analyse.report(rows))
+        self.assertIn("95% 信賴區間", text)
+        self.assertRegex(text, r"60\.0%（\d+\.\d+~\d+\.\d+）")
 
 
 class TestLoginRetry(unittest.TestCase):
