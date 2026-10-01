@@ -233,6 +233,7 @@ class SymbolState:
     signaled: int = 0
     vwap_warned: bool = False
     rank: int = 0                             # 盤前選股名次（1 = 量比最高），0 = 未知
+    category: str = ""                        # 產業類別代碼（輪動題材的客觀代理）
     candidates: int = 0                       # 今日已記錄幾個「被擋掉的候選」
     last_candidate_at: datetime | None = None # 候選之間的冷卻，避免每個 tick 記一筆
 
@@ -381,6 +382,7 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         "vwap": round(st.vwap, 2),
         "volume_surge": round(surge, 2),
         "rank": st.rank,
+        "category": st.category,
     }
 
 
@@ -804,6 +806,7 @@ def run():
     for n, i in enumerate(wl["items"], 1):
         st = SymbolState(i["code"], i["prev_close"], i.get("name", ""))
         st.rank = n
+        st.category = str(i.get("category", "") or "")
         states[i["code"]] = st
     restore_signaled(states, gate)
 

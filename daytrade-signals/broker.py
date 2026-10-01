@@ -230,6 +230,60 @@ class Broker:
             return None
         return max(highs), min(lows)
 
+    # 大盤代理。用 0050 不用加權指數：0050 是普通股合約，kbars 與 snapshots
+    # 一定拿得到；指數商品在不同 shioaji 版本下路徑和支援度不一樣，驗證期不想
+    # 多一個會壞的東西。0050 與加權指數的日漲跌相關性極高，而我們只需要
+    # 「今天大盤是往上還是往下」這個量級的答案。
+    MARKET_PROXY = "0050"
+
+    def market_day(self, date: str | None = None, code: str | None = None):
+        """回傳 (09:15 時的大盤漲跌 %, 當日收盤漲跌 %)。拿不到就回 (None, None)。
+
+        為什麼要記這個：這套系統**只做多**。多方突破在大盤走弱的日子結構上就是
+        逆風，而同一套規則在紅盤日與綠盤日的勝率可能差很多 —— 不記下來，20 天後
+        看到的只是「平均」，而平均把兩種完全不同的日子混在一起。
+
+        09:15 那個數字特別重要：它在任何訊號發出**之前**就已經知道了。
+        所以它是唯一有資格變成規則的（例如「大盤開盤 15 分鐘走弱就不做多」）——
+        收盤漲跌只能事後解釋，不能當進場條件。20 天後用資料決定，現在只記。
+
+        拿不到一律回 None，不要猜 0 —— 0 是「平盤」，那是一個有意義的答案。
+        """
+        code = code or self.MARKET_PROXY
+        date = date or datetime.now().strftime("%Y-%m-%d")
+        start = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=10)).strftime("%Y-%m-%d")
+        try:
+            kb = self.kbars(code, start, date)
+        except Exception as e:
+            log.warning("大盤代理 %s 分鐘 K 取得失敗：%s", code, e)
+            return None, None
+
+        ts_list = list(getattr(kb, "ts", []) or [])
+        close_list = list(getattr(kb, "Close", []) or [])
+        if len(ts_list) != len(close_list) or not ts_list:
+            log.warning("大盤代理 %s 分鐘 K 欄位長度不一致或為空", code)
+            return None, None
+
+        today, before = [], []
+        for ts, c in zip(ts_list, close_list):
+            t = _bar_time(ts)
+            if t is None:
+                continue
+            (today if t.strftime("%Y-%m-%d") == date else before).append((t, float(c)))
+        if not today or not before:
+            log.warning("大盤代理 %s 缺當日或前一日資料，不猜數字", code)
+            return None, None
+
+        prev_close = max(before, key=lambda r: r[0])[1]
+        if not prev_close:
+            return None, None
+        today.sort(key=lambda r: r[0])
+        # 分鐘 K 的 label 是該分鐘的結束時間，所以 09:15 那根的收盤就是 09:15 的價格。
+        at_open = next((c for t, c in today if t.strftime("%H:%M") >= "09:15"), None)
+        day_close = today[-1][1]
+        pct = lambda v: round((v - prev_close) / prev_close * 100, 3)
+        return (pct(at_open) if at_open is not None else None), pct(day_close)
+
     def short_sources(self, codes):
         """借券／券源查詢，先賣後買才需要。回傳 {code: 可用張數}"""
         contracts = [self.stock(c) for c in codes]

@@ -2852,6 +2852,15 @@ class TestWatchlistRank(unittest.TestCase):
         sig = evaluate(ready_state("2330"), now=dtime(10, 0))
         self.assertEqual(sig["rank"], 0)
 
+    def test_category_flows_into_the_signal_too(self):
+        """產業別是「輪動題材」唯一免費又客觀的代理 —— 合約物件上就有。"""
+        st = ready_state("2330")
+        st.category = "24"
+        self.assertEqual(evaluate(st, now=dtime(10, 0))["category"], "24")
+
+    def test_category_defaults_to_blank_not_a_crash(self):
+        self.assertEqual(evaluate(ready_state("2330"), now=dtime(10, 0))["category"], "")
+
     def test_rank_reaches_outcomes_csv(self):
         sig = {"code": "2330", "time": "09:23:00", "entry": 121.0,
                "stop": 119.5, "target": 123.5, "lots": 1, "rank": 3}
@@ -3271,6 +3280,168 @@ class TestFillColumnBeatsTheKbarBlindSpot(unittest.TestCase):
             back = oc.load_csv(path)
         self.assertEqual(len(back), 1)
         self.assertIsNone(back[0].fill_low_pct)
+
+
+def _kb_days(rows):
+    """跨日的假 kbars：rows 是 (YYYY-MM-DD, HH:MM, close)。
+
+    時間戳照 shioaji 的方式建（台北牆上時間當成 UTC 納秒），不用
+    datetime.timestamp()，否則與解讀端的時區偏移互相抵銷，等於自己驗自己。
+    """
+    ts, closes = [], []
+    for day, hhmm, c in rows:
+        t = datetime(int(day[:4]), int(day[5:7]), int(day[8:10]),
+                     int(hhmm[:2]), int(hhmm[3:]), tzinfo=dt_timezone.utc)
+        ts.append(int(t.timestamp() * 1e9))
+        closes.append(c)
+    return SimpleNamespace(ts=ts, High=list(closes), Low=list(closes), Close=closes)
+
+
+class TestMarketDay(unittest.TestCase):
+    """這套系統只做多。多方突破在綠盤日結構上逆風 —— 不分開看，20 天後拿到的
+    「平均勝率」是把紅盤日和綠盤日混在一起的數字，對任何決定都沒有用。
+
+    09:15 那個數字特別重要：它在任何訊號發出**之前**就已經知道，所以它是唯一
+    有資格變成進場條件的。收盤漲跌只能事後解釋。
+    """
+
+    DATE = "2026-10-01"
+    ROWS = [("2026-09-30", "13:20", 100.0), ("2026-09-30", "13:30", 200.0),
+            ("2026-10-01", "09:10", 201.0), ("2026-10-01", "09:15", 202.0),
+            ("2026-10-01", "09:20", 210.0), ("2026-10-01", "13:30", 206.0)]
+
+    def _broker(self, kb):
+        b = Broker.__new__(Broker)          # 不跑 __init__，不連券商
+        b.kbars = lambda code, start, end: kb
+        return b
+
+    def test_open15_and_close_are_measured_against_yesterday(self):
+        o, d = self._broker(self._kb()).market_day(self.DATE)
+        self.assertAlmostEqual(o, 1.0, places=3)     # 202 vs 200
+        self.assertAlmostEqual(d, 3.0, places=3)     # 206 vs 200
+
+    def _kb(self, rows=None):
+        return _kb_days(rows if rows is not None else self.ROWS)
+
+    def test_yesterdays_close_is_its_last_bar_not_its_first(self):
+        """前一日的收盤是那天**最後**一根，取錯根整個基準就偏了。"""
+        o, _ = self._broker(self._kb()).market_day(self.DATE)
+        self.assertAlmostEqual(o, 1.0, places=3)     # 用 200 不是 100
+
+    def test_open15_uses_the_0915_bar_not_the_first_one_after(self):
+        """K 棒 label 是該分鐘的結束時間，所以 09:15 那根的收盤就是 09:15 的價。"""
+        o, _ = self._broker(self._kb()).market_day(self.DATE)
+        self.assertNotAlmostEqual(o, 5.0, places=3)  # 不是 09:20 的 210
+
+    def test_no_previous_day_is_none_not_zero(self):
+        """0 是「平盤」，那是一個有意義的答案。查不到就要留空。"""
+        rows = [r for r in self.ROWS if r[0] == self.DATE]
+        self.assertEqual(self._broker(self._kb(rows)).market_day(self.DATE),
+                         (None, None))
+
+    def test_no_bars_today_is_none_too(self):
+        rows = [r for r in self.ROWS if r[0] != self.DATE]
+        self.assertEqual(self._broker(self._kb(rows)).market_day(self.DATE),
+                         (None, None))
+
+    def test_a_kbar_failure_is_logged_not_raised(self):
+        """大盤查不到不可以讓整份覆盤產不出來。"""
+        b = Broker.__new__(Broker)
+        def boom(*_a, **_k):
+            raise RuntimeError("流量上限")
+        b.kbars = boom
+        with self.assertLogs("broker", level="WARNING"):
+            self.assertEqual(b.market_day(self.DATE), (None, None))
+
+    def test_a_zero_previous_close_does_not_divide_by_zero(self):
+        rows = [("2026-09-30", "13:30", 0.0)] + [r for r in self.ROWS if r[0] == self.DATE]
+        self.assertEqual(self._broker(self._kb(rows)).market_day(self.DATE),
+                         (None, None))
+
+
+class TestMarketColumnsLandOnEveryRow(unittest.TestCase):
+    DATE = "2026-09-24"      # _kb() 的時間戳固定在這一天
+    SIG = {"code": "2449", "time": "09:30:00", "entry": 119.0,
+           "stop": 118.0, "target": 121.5, "lots": 2, "category": "24"}
+    BARS = [("09:32", 121.6, 119.0, 121.5)]
+
+    class _Broker(FakeKbarBroker):
+        def __init__(self, kb, mkt=(0.8, -1.2), boom=False):
+            super().__init__(kb)
+            self._mkt, self._boom = mkt, boom
+
+        def market_day(self, date=None):
+            if self._boom:
+                raise RuntimeError("流量上限")
+            return self._mkt
+
+    def test_both_columns_are_written_to_all_rows(self):
+        rows = oc.resolve_all(self._Broker(_kb(self.BARS)),
+                              [dict(self.SIG), dict(self.SIG, code="2454")],
+                              self.DATE)
+        self.assertEqual(len(rows), 2)
+        for o in rows:
+            self.assertEqual((o.mkt_open_pct, o.mkt_day_pct), (0.8, -1.2))
+
+    def test_a_market_failure_leaves_blanks_and_still_produces_the_report(self):
+        with self.assertLogs("outcome", level="WARNING"):
+            rows = oc.resolve_all(self._Broker(_kb(self.BARS), boom=True),
+                                  [dict(self.SIG)], self.DATE)
+        self.assertEqual(len(rows), 1)              # 覆盤照樣要產得出來
+        self.assertIsNone(rows[0].mkt_open_pct)     # 不是 0
+        self.assertIsNone(rows[0].mkt_day_pct)
+
+    def test_the_market_is_queried_once_not_once_per_signal(self):
+        calls = []
+        b = self._Broker(_kb(self.BARS))
+        inner = b.market_day
+        b.market_day = lambda date=None: (calls.append(date), inner(date))[1]
+        oc.resolve_all(b, [dict(self.SIG), dict(self.SIG, code="2454"),
+                           dict(self.SIG, code="3034")], self.DATE)
+        self.assertEqual(len(calls), 1)
+
+    def test_no_resolvable_signals_means_no_market_query(self):
+        """一筆都回推不出來時不要白打一次 API。"""
+        b = self._Broker(_kb([]), boom=True)        # boom：被呼叫就會拋
+        self.assertEqual(oc.resolve_all(b, [dict(self.SIG)], self.DATE), [])
+
+    def test_category_rides_along_from_the_signal(self):
+        o = oc.resolve(FakeKbarBroker(_kb(self.BARS)), dict(self.SIG), self.DATE)
+        self.assertEqual(o.category, "24")
+
+    def test_a_signal_without_category_is_blank_not_a_crash(self):
+        sig = {k: v for k, v in self.SIG.items() if k != "category"}
+        o = oc.resolve(FakeKbarBroker(_kb(self.BARS)), sig, self.DATE)
+        self.assertEqual(o.category, "")
+
+    def test_the_new_columns_survive_the_csv_round_trip(self):
+        rows = oc.resolve_all(self._Broker(_kb(self.BARS)), [dict(self.SIG)], self.DATE)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            oc.append_csv(rows, path)
+            back = oc.load_csv(path)
+        self.assertEqual(len(back), 1)
+        self.assertEqual(back[0].category, "24")
+        self.assertEqual((back[0].mkt_open_pct, back[0].mkt_day_pct), (0.8, -1.2))
+
+    def test_old_rows_without_the_new_columns_still_load(self):
+        """已經累積的 outcomes.csv 沒有這三欄。整列被跳過的話前幾天就白跑了。"""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            keep = [f for f in oc.FIELDS
+                    if f not in ("category", "mkt_open_pct", "mkt_day_pct")]
+            filled = {"date": self.DATE, "code": "2449", "time": "09:30:00",
+                      "entry": "119", "stop": "118", "target": "121.5",
+                      "lots": "2", "result": oc.TARGET, "exit_price": "121.5",
+                      "r_multiple": "2.5", "gross_pct": "2.1", "net_pct": "1.7",
+                      "bars": "2"}
+            path.write_text(",".join(keep) + "\n"
+                            + ",".join(filled.get(f, "") for f in keep) + "\n",
+                            encoding="utf-8")
+            back = oc.load_csv(path)
+        self.assertEqual(len(back), 1)
+        self.assertEqual(back[0].category, "")
+        self.assertIsNone(back[0].mkt_open_pct)
 
 
 class TestFillStats(unittest.TestCase):

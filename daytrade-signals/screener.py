@@ -113,6 +113,10 @@ def screen(broker: Broker) -> list[dict]:
     # 第二道：昨日量價（snapshots 帶回昨日收盤資訊）
     # 代號→中文名稱。合約物件上就有，snapshot 上沒有，所以先在這裡收起來。
     names = {getattr(c, "code", ""): getattr(c, "name", "") for c in stage1}
+    # 產業類別代碼。合約物件上就有，不用多打一次 API。
+    # 這是「輪動題材」唯一客觀又免費的代理：題材在輪動時，整個族群會一起有量。
+    # 存原始代碼不自己翻成中文 —— 翻錯比不翻糟，20 天後看實際出現哪些值再對照。
+    cats = {getattr(c, "code", ""): str(getattr(c, "category", "") or "") for c in stage1}
     snaps = broker.snapshots(stage1)
     rows = []
     for s in snaps:
@@ -120,6 +124,7 @@ def screen(broker: Broker) -> list[dict]:
             row = passes_basic(s, cfg)
             if row:
                 row["name"] = names.get(row["code"], "")
+                row["category"] = cats.get(row["code"], "")
                 rows.append(row)
         except Exception as e:
             log.debug("skip %s: %s", getattr(s, "code", "?"), e)

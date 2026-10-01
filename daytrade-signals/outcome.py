@@ -48,7 +48,7 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "result", "exit_price", "r_multiple", "gross_pct", "net_pct", "bars",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
           "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
-          "fill_low_pct", "rank")
+          "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct")
 
 
 @dataclass
@@ -86,6 +86,12 @@ class Outcome:
     # 內跑掉，所以分鐘 K 版本對這幾筆會偏悲觀。兩欄並存，20 天後互相對照。
     fill_low_pct: float | None = None
     rank: int = 0                 # 盤前選股名次（1 = 量比最高），0 = 未知
+    category: str = ""            # 產業類別代碼 —— 「輪動題材」的客觀代理
+    # 當日大盤（0050 代理）。這套系統只做多，多方突破在綠盤日結構上逆風，
+    # 不分開看等於把兩種完全不同的日子平均在一起。
+    # mkt_open_pct 在任何訊號發出**之前**就已知，所以它是唯一有資格變成規則的那個。
+    mkt_open_pct: float | None = None     # 09:15 時的大盤漲跌 %
+    mkt_day_pct: float | None = None      # 當日收盤的大盤漲跌 %
 
     @property
     def is_win(self) -> bool:
@@ -240,6 +246,7 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         low_5m_pct=_pct_above(low_5m, entry) if low_5m is not None else None,
         fill_low_pct=_pct_above(fill_low, entry) if fill_low is not None else None,
         rank=int(sig.get("rank") or 0),
+        category=str(sig.get("category") or ""),
     )
 
 
@@ -253,6 +260,15 @@ def resolve_all(broker, sigs: list[dict], date: str | None = None) -> list[Outco
             o = None
         if o:
             out.append(o)
+    # 大盤只查一次，寫到當天每一列上。查不到就留空 —— 空白是空白，0 是平盤。
+    if out:
+        try:
+            mkt_open, mkt_day = broker.market_day(date)
+        except Exception as e:                       # 大盤查不到不該讓整份覆盤產不出來
+            log.warning("大盤取得失敗：%s", e)
+            mkt_open = mkt_day = None
+        for o in out:
+            o.mkt_open_pct, o.mkt_day_pct = mkt_open, mkt_day
     return out
 
 
@@ -336,12 +352,12 @@ def append_candidates_csv(pairs: list[tuple], path=None) -> None:
             w.writerow(row)
 
 
-_STR_FIELDS = ("date", "code", "time", "result")
+_STR_FIELDS = ("date", "code", "time", "result", "category")
 _BOOL_FIELDS = ("target_after_stop",)
 _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "vwap_gap_pct", "mae_pct", "mfe_pct", "low_5m_pct",
-                    "fill_low_pct")
+                    "fill_low_pct", "mkt_open_pct", "mkt_day_pct")
 
 
 def _bool(value) -> bool | None:
