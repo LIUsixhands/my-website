@@ -1,0 +1,22 @@
+# 金鑰
+.env
+
+# 當日產出：每天都會變，而且是個人帳務資料
+state.json
+watchlist.json
+outcomes.csv
+# candidates 這兩份和 outcomes.csv 是同一類東西（同樣的欄位、同樣的個人交易
+# 紀錄），卻漏在這張清單外面 —— 新增 candidates.csv 的那次忘了同步更新。
+# 漏掉的後果不是「檔案多了一個」，是個人損益紀錄會跟著 commit 上 GitHub。
+candidates.csv
+candidates_outcomes.csv
+
+# 交易日誌含個人損益與持股，不進版控。
+# 要給 Claude 做跨日稽核時，直接把本機的 journal/ 目錄丟給它。
+journal/*.md
+
+__pycache__/
+*.pyc
+
+# morning.bat 的執行紀錄（排程跑失敗時唯一的線索，但不進版控）
+logs/
