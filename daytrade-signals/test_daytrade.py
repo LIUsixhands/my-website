@@ -124,7 +124,7 @@ class TestConfig(unittest.TestCase):
             (config.RISK, "max_daily_loss", 0, "max_daily_loss"),
             (config.RISK, "max_consecutive_losses", 0, "max_consecutive_losses"),
             (config.RISK, "poll_interval_sec", 5, "poll_interval_sec"),
-            (config.SIGNAL, "market_close", "11:00:00", "時間順序"),
+            (config.SIGNAL, "market_close", "09:01:00", "時間順序"),
             (config.SCREEN, "min_price", 999.0, "min_price"),
             (config.COST, "fee_discount", 0, "fee_discount"),
         ]
@@ -138,11 +138,30 @@ class TestConfig(unittest.TestCase):
                 finally:
                     section[key] = original
 
-    def test_validate_catches_contradicting_red_lines(self):
+    def test_red_line_mismatch_warns_but_does_not_block_startup(self):
+        """單筆風險 × 筆數上限 < 日虧上限 —— 是提醒，不是錯誤。
+
+        原本這是 validate() 的錯誤，訊息寫「日虧上限形同虛設」。那個算式錯了：
+        它假設每一筆都剛好賠 per_trade_risk，但 signals.py 的 oversized 路徑
+        （連一張都超過上限時仍給 1 張）讓單筆風險可以超過上限 —— 股價高於
+        per_trade_risk ÷ 1000 ÷ stop_loss_pct 的訊號每一筆都會超標。
+        那正是日虧上限唯一會出手的時候，所以它不是虛設，不該擋住啟動。
+        """
         original = config.RISK["max_daily_loss"]
         config.RISK["max_daily_loss"] = 999_999
         try:
-            self.assertTrue(any("形同虛設" in e for e in config.validate()))
+            self.assertEqual(config.validate(), [], "這不該是錯誤")
+            self.assertTrue(any("日虧上限" in w for w in config.warnings()))
+        finally:
+            config.RISK["max_daily_loss"] = original
+
+    def test_the_warning_names_the_price_above_which_a_lot_busts_the_cap(self):
+        """警告要講得出門檻，否則看的人無從判斷這對自己適不適用。"""
+        original = config.RISK["max_daily_loss"]
+        config.RISK["max_daily_loss"] = 999_999
+        try:
+            # 3,000 ÷ 1000 ÷ 1.5% = 200 元
+            self.assertIn("200", " ".join(config.warnings()))
         finally:
             config.RISK["max_daily_loss"] = original
 
@@ -295,7 +314,7 @@ class TestOpeningRange(unittest.TestCase):
     def test_accumulates_then_locks(self):
         st = SymbolState("2330", 99.0)
         st.update(tick(100.0, high=100.5, low=99.5, at="09:01:00"))
-        st.update(tick(101.0, high=101.5, low=99.0, at="09:10:00"))
+        st.update(tick(101.0, high=101.5, low=99.0, at="09:01:30"))
         self.assertFalse(st.or_locked)
         self.assertAlmostEqual(st.or_high, 101.5)
         self.assertAlmostEqual(st.or_low, 99.0)
@@ -356,10 +375,10 @@ class TestVolumeSurge(unittest.TestCase):
 
 
 class TestEvaluate(unittest.TestCase):
-    NOON = dtime(10, 0)
+    IN_WINDOW = dtime(9, 3)      # 進場窗口 09:02–09:05 之內
 
     def test_fires_on_all_conditions_met(self):
-        sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.NOON)
+        sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.IN_WINDOW)
         self.assertIsNotNone(sig)
         self.assertEqual(sig["code"], "2330")
         self.assertEqual(sig["direction"], "做多")
@@ -367,17 +386,17 @@ class TestEvaluate(unittest.TestCase):
         # 101 × (1-1.5%) = 99.485 → 進位到 0.1 檔位 = 99.5
         self.assertAlmostEqual(sig["stop"], 99.5)
         # 101 + 1.5 × 2.5 = 104.75 → 進位到 0.5 檔位 = 105.0
-        self.assertAlmostEqual(sig["target"], 105.0)
+        self.assertAlmostEqual(sig["target"], 103.5)
         self.assertFalse(sig["oversized"])
 
     def test_lot_sizing_from_per_trade_risk(self):
-        sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.NOON)
+        sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.IN_WINDOW)
         # 一張風險 = (101 - 99.5) × 1000 = 1500 元；3000 / 1500 → 2 張
         self.assertEqual(sig["risk_per_lot"], 1500)
         self.assertEqual(sig["lots"], 2)
 
         cheap = ready_state(or_high=20.0, last=20.2, vwap=20.1)
-        sig2 = evaluate(cheap, now=self.NOON)
+        sig2 = evaluate(cheap, now=self.IN_WINDOW)
         # 20.2 × (1-1.5%) = 19.897 → 進位到 0.05 檔位 = 19.90
         self.assertAlmostEqual(sig2["stop"], 19.9)
         # 一張風險 = 300 元；3000 / 300 → 10 張
@@ -390,7 +409,7 @@ class TestEvaluate(unittest.TestCase):
         for or_high, last in ((20.0, 20.2), (60.0, 60.5), (100.0, 101.0), (280.0, 283.0)):
             with self.subTest(last=last):
                 sig = evaluate(ready_state(or_high=or_high, last=last, vwap=last - 0.5),
-                               now=self.NOON)
+                               now=self.IN_WINDOW)
                 self.assertIsNotNone(sig)
                 for field in ("stop", "target"):
                     price = sig[field]
@@ -403,7 +422,7 @@ class TestEvaluate(unittest.TestCase):
         for or_high, last in ((20.0, 20.2), (60.0, 60.5), (100.0, 101.0), (280.0, 283.0)):
             with self.subTest(last=last):
                 sig = evaluate(ready_state(or_high=or_high, last=last, vwap=last - 0.5),
-                               now=self.NOON)
+                               now=self.IN_WINDOW)
                 actual_pct = (sig["entry"] - sig["stop"]) / sig["entry"] * 100
                 self.assertLessEqual(actual_pct, config.SIGNAL["stop_loss_pct"] + 1e-9)
 
@@ -411,14 +430,14 @@ class TestEvaluate(unittest.TestCase):
         for or_high, last in ((20.0, 20.2), (60.0, 60.5), (100.0, 101.0), (280.0, 283.0)):
             with self.subTest(last=last):
                 sig = evaluate(ready_state(or_high=or_high, last=last, vwap=last - 0.5),
-                               now=self.NOON)
+                               now=self.IN_WINDOW)
                 r = (sig["target"] - sig["entry"]) / (sig["entry"] - sig["stop"])
                 self.assertGreaterEqual(r, config.SIGNAL["reward_risk"] - 1e-9)
 
     def test_flags_oversized_single_lot(self):
         """高價股一張的停損金額就超過單筆上限 → 必須標記，不能假裝 1 張沒事。"""
         pricey = ready_state(or_high=280.0, last=283.0, vwap=281.0)
-        sig = evaluate(pricey, now=self.NOON)
+        sig = evaluate(pricey, now=self.IN_WINDOW)
         self.assertEqual(sig["lots"], 1)
         self.assertTrue(sig["oversized"])
         self.assertGreater(sig["risk_per_lot"], config.RISK["per_trade_risk"])
@@ -427,16 +446,16 @@ class TestEvaluate(unittest.TestCase):
     def test_blocked_before_range_locked(self):
         st = ready_state()
         st.or_locked = False
-        self.assertIsNone(evaluate(st, now=self.NOON))
+        self.assertIsNone(evaluate(st, now=self.IN_WINDOW))
 
     def test_blocked_below_breakout_buffer(self):
         # 區間高 100 → 觸發價 100.10；100.05 不算突破
         st = ready_state(or_high=100.0, last=100.05, vwap=99.0)
-        self.assertIsNone(evaluate(st, now=self.NOON))
+        self.assertIsNone(evaluate(st, now=self.IN_WINDOW))
 
     def test_blocked_below_vwap(self):
         st = ready_state(or_high=100.0, last=101.0, vwap=101.5)
-        self.assertIsNone(evaluate(st, now=self.NOON))
+        self.assertIsNone(evaluate(st, now=self.IN_WINDOW))
 
     def test_missing_vwap_blocks_instead_of_skipping_the_rule(self):
         """均價線拿不到 → 不發訊號，而不是把這條規則靜靜跳過。
@@ -447,38 +466,38 @@ class TestEvaluate(unittest.TestCase):
         st = ready_state(or_high=100.0, last=101.0, vwap=0.0)
         self.assertTrue(config.SIGNAL["require_above_vwap"])
         with self.assertLogs(signals.log, level="WARNING") as cm:
-            self.assertIsNone(evaluate(st, now=self.NOON))
+            self.assertIsNone(evaluate(st, now=self.IN_WINDOW))
         self.assertIn("沒有均價線", "".join(cm.output))
         self.assertTrue(st.vwap_warned)
 
     def test_missing_vwap_warns_only_once(self):
         st = ready_state(or_high=100.0, last=101.0, vwap=0.0)
         with self.assertLogs(signals.log, level="WARNING"):
-            evaluate(st, now=self.NOON)
+            evaluate(st, now=self.IN_WINDOW)
         with self.assertNoLogs(signals.log, level="WARNING"):
-            self.assertIsNone(evaluate(st, now=self.NOON))
+            self.assertIsNone(evaluate(st, now=self.IN_WINDOW))
 
     def test_missing_vwap_is_allowed_when_rule_is_off(self):
         original = config.SIGNAL["require_above_vwap"]
         config.SIGNAL["require_above_vwap"] = False
         try:
             st = ready_state(or_high=100.0, last=101.0, vwap=0.0)
-            self.assertIsNotNone(evaluate(st, now=self.NOON))
+            self.assertIsNotNone(evaluate(st, now=self.IN_WINDOW))
         finally:
             config.SIGNAL["require_above_vwap"] = original
 
     def test_blocked_on_weak_volume(self):
         st = ready_state(or_high=100.0, last=101.0, vwap=100.5, surge_ratio=1.2)
-        self.assertIsNone(evaluate(st, now=self.NOON))
+        self.assertIsNone(evaluate(st, now=self.IN_WINDOW))
 
     def test_blocked_after_entry_window(self):
         st = ready_state()
-        self.assertIsNone(evaluate(st, now=dtime(12, 31)))
+        self.assertIsNone(evaluate(st, now=dtime(9, 5)))
 
     def test_one_signal_per_symbol(self):
         st = ready_state()
         st.signaled = config.SIGNAL["max_signals_per_symbol"]
-        self.assertIsNone(evaluate(st, now=self.NOON))
+        self.assertIsNone(evaluate(st, now=self.IN_WINDOW))
 
 
 class TestRiskGate(unittest.TestCase):
@@ -508,7 +527,7 @@ class TestRiskGate(unittest.TestCase):
         原本 record() 先加一、format 再 +1，第一個訊號會印成 2/5。
         """
         gate = RiskGate(FakeBroker(pnl_rows=[]))
-        sig = evaluate(ready_state(), now=dtime(10, 0))
+        sig = evaluate(ready_state(), now=dtime(9, 3))
         ordinal = gate.record(sig)
         self.assertEqual(ordinal, 1)
         self.assertIn(f"今日第 1/{config.RISK['max_signals_per_day']} 個訊號",
@@ -571,7 +590,7 @@ class TestRiskGate(unittest.TestCase):
 
     def test_state_persists_across_restart(self):
         gate = RiskGate(FakeBroker(pnl_rows=[]))
-        gate.record(evaluate(ready_state(), now=dtime(10, 0)))
+        gate.record(evaluate(ready_state(), now=dtime(9, 3)))
         gate._close("測試")
         reloaded = RiskGate(FakeBroker(pnl_rows=[]))
         self.assertTrue(reloaded.state["closed"])
@@ -693,7 +712,7 @@ class TestConcurrentEmit(unittest.TestCase):
         barrier = threading.Barrier(threads)
 
         def worker(st):
-            sig = evaluate(st, now=dtime(10, 0))
+            sig = evaluate(st, now=dtime(9, 3))
             barrier.wait()                       # 盡量讓大家同時進來
             if sig:
                 msg, _blocked = signals.try_emit(st, gate, lock, sig)
@@ -766,7 +785,7 @@ class TestRestoreSignaled(unittest.TestCase):
         st = ready_state("2330")
         states = {"2330": st}
         signals.restore_signaled(states, gate)
-        self.assertIsNone(evaluate(st, now=dtime(10, 0)))
+        self.assertIsNone(evaluate(st, now=dtime(9, 3)))
 
     def test_ignores_codes_not_in_watchlist(self):
         gate = RiskGate(FakeBroker(pnl_rows=[]))
@@ -1253,14 +1272,14 @@ class TestDailyPush(unittest.TestCase):
         self.assertIn("+2,699 元", review.format_push(self.SIGNALS, two, []))
 
     def test_daily_total_is_capped_at_the_trade_limit(self):
-        """一天只准做 4 筆。把 5 個訊號的總和講成今天會賺到的錢是高估。"""
+        """一天只准做幾筆是 config 說了算。把全部訊號的總和講成今天會賺到的錢是高估。"""
         five = [self._oc(str(i), oc.TARGET, 1.67, 1.894) for i in range(5)]
         text = review.format_push(self.SIGNALS, five, [])
-        self.assertIn("照完整規則只做 4 筆", text)
-        self.assertIn("已達當日交易筆數上限 4 筆", text)
+        self.assertIn("照完整規則只做 3 筆", text)
+        self.assertIn("已達當日交易筆數上限 3 筆", text)
         # 合計必須等於各筆相加。差一塊錢會讓人懷疑哪個數字才是對的。
         self.assertIn("+11,270 元", text)         # 五筆合計
-        self.assertIn("+9,016 元", text)          # 照規則做到的四筆
+        self.assertIn("+6,762 元", text)          # 照規則做到的三筆（3 × 2,254）
 
     def test_no_cap_line_when_within_the_limit(self):
         text = review.format_push(self.SIGNALS, self._today(), [])
@@ -1403,7 +1422,7 @@ class TestPriceLimits(unittest.TestCase):
         st = self._state(prev_close=145.5, last_price=158.0, or_high=154.5)
         with unittest.mock.patch.object(signals.SymbolState, "volume_surge",
                                         lambda self: 5.0):
-            sig = signals.evaluate(st, dtime(9, 35))
+            sig = signals.evaluate(st, dtime(9, 3))
         self.assertIsNotNone(sig)
         self.assertEqual(sig["target"], 160.0)      # 不是 161.0
         self.assertTrue(sig["target_capped"])
@@ -1423,17 +1442,17 @@ class TestPriceLimits(unittest.TestCase):
         st = self._state(prev_close=145.5, last_price=160.0, or_high=154.5)
         with unittest.mock.patch.object(signals.SymbolState, "volume_surge",
                                         lambda self: 5.0):
-            self.assertIsNone(signals.evaluate(st, dtime(9, 35)))
+            self.assertIsNone(signals.evaluate(st, dtime(9, 3)))
 
     def test_a_normal_stock_is_untouched(self):
         """沒碰到漲停的日子，目標還是照 reward_risk 算。"""
-        # 進場 109、停損 107.5（R=1.5）→ 目標 109 + 1.5×2.5 = 112.75 → 113.0
+        # 進場 109、停損 107.5（R=1.5）→ 目標 109 + 1.5×1.5 = 111.25 → 111.5
         # 漲停 = 107 × 1.1 = 117.7 → 往下取 0.5 檔位 = 117.5，目標沒碰到
         st = self._state(prev_close=107.0, last_price=109.0, or_high=108.5)
         with unittest.mock.patch.object(signals.SymbolState, "volume_surge",
                                         lambda self: 5.0):
-            sig = signals.evaluate(st, dtime(9, 30))
-        self.assertEqual(sig["target"], 113.0)
+            sig = signals.evaluate(st, dtime(9, 3))
+        self.assertEqual(sig["target"], 111.5)
         self.assertFalse(sig["target_capped"])
 
 
@@ -1638,8 +1657,8 @@ class TestPushTopSeparateFromMonitoring(unittest.TestCase):
     ROWS = [{"code": f"{1000 + i}", "name": f"股{i}", "prev_close": 50.0,
              "amplitude_pct": 5.0, "volume_ratio": 10.0 - i} for i in range(20)]
 
-    def test_push_top_defaults_to_five(self):
-        self.assertEqual(screener.parse_args([]).push_top, 5)
+    def test_push_top_defaults_to_three(self):
+        self.assertEqual(screener.parse_args([]).push_top, 3)
 
     def test_push_top_rejects_zero(self):
         with self.assertRaises(SystemExit):
@@ -2273,8 +2292,25 @@ class TestPreflight(unittest.TestCase):
         return [(datetime.combine(d, dtime(9, first_minute + i)),
                  101.0 + i, 99.0 - i, 100) for i in range(3)]
 
+    def test_a_warning_shows_up_as_warn_not_ok(self):
+        """警告要看得見。印不出來的警告跟沒有警告一樣 —— 這個專案一路在修這個。"""
+        self.assertTrue(config.warnings(), "出廠設定本來就該帶著警告")
+        r = preflight.check_config()
+        self.assertEqual(r.status, preflight.WARN)
+        self.assertIn("日虧上限", r.detail)
+
     def test_config_check_passes_and_fails(self):
-        self.assertEqual(preflight.check_config().status, preflight.OK)
+        # 出廠設定本身帶著警告（日虧上限高於 3 筆滿額、連敗停手不會出手），
+        # 所以先壓掉警告才驗「沒問題時是 OK」。
+        saved = {k: config.RISK[k] for k in ("max_daily_loss", "max_consecutive_losses")}
+        config.RISK["max_daily_loss"] = (config.RISK["per_trade_risk"]
+                                         * config.RISK["max_trades_per_day"])
+        config.RISK["max_consecutive_losses"] = 1
+        try:
+            self.assertEqual(config.warnings(), [])
+            self.assertEqual(preflight.check_config().status, preflight.OK)
+        finally:
+            config.RISK.update(saved)
         original = config.SIGNAL["reward_risk"]
         config.SIGNAL["reward_risk"] = -1
         try:
@@ -2672,7 +2708,7 @@ class TestBlockedCandidatesAreRecorded(unittest.TestCase):
         gate = RiskGate(FakeBroker(pnl_rows=[]))
         gate.state["signals_sent"] = config.RISK["max_signals_per_day"]
         st = ready_state("2330")
-        sig = evaluate(st, now=dtime(10, 0))
+        sig = evaluate(st, now=dtime(9, 3))
         msg, blocked = signals.try_emit(st, gate, threading.Lock(), sig)
         self.assertIsNone(msg)
         self.assertEqual(blocked, signals.BLOCK_DAILY_CAP)
@@ -2684,13 +2720,13 @@ class TestBlockedCandidatesAreRecorded(unittest.TestCase):
         gate = RiskGate(FakeBroker(pnl_rows=[]))
         st = ready_state("2330")
         lock = threading.Lock()
-        first = evaluate(st, now=dtime(10, 0))
+        first = evaluate(st, now=dtime(9, 3))
         msg, blocked = signals.try_emit(st, gate, lock, first)
         self.assertIsNotNone(msg)
         self.assertIsNone(blocked)
         # 第二次：舊行為是 evaluate 直接回 None，連算都不算
-        self.assertIsNone(evaluate(st, now=dtime(10, 30)))
-        again = evaluate(st, now=dtime(10, 30), ignore_symbol_cap=True)
+        self.assertIsNone(evaluate(st, now=dtime(9, 3)))
+        again = evaluate(st, now=dtime(9, 3), ignore_symbol_cap=True)
         self.assertIsNotNone(again)
         _, blocked = signals.try_emit(st, gate, lock, again,
                                       now=datetime(2026, 1, 2, 10, 30))
@@ -2701,7 +2737,7 @@ class TestBlockedCandidatesAreRecorded(unittest.TestCase):
         gate = RiskGate(FakeBroker(pnl_rows=[]))
         gate.state["signals_sent"] = config.RISK["max_signals_per_day"]
         st = ready_state("2330")
-        sig = evaluate(st, now=dtime(10, 0))
+        sig = evaluate(st, now=dtime(9, 3))
         lock = threading.Lock()
         t0 = datetime(2026, 1, 2, 10, 0, 0)
         recorded = []
@@ -2716,7 +2752,7 @@ class TestBlockedCandidatesAreRecorded(unittest.TestCase):
         gate = RiskGate(FakeBroker(pnl_rows=[]))
         gate.state["signals_sent"] = config.RISK["max_signals_per_day"]
         st = ready_state("2330")
-        sig = evaluate(st, now=dtime(10, 0))
+        sig = evaluate(st, now=dtime(9, 3))
         lock = threading.Lock()
         t0 = datetime(2026, 1, 2, 10, 0, 0)
         hits = 0
@@ -2728,7 +2764,7 @@ class TestBlockedCandidatesAreRecorded(unittest.TestCase):
 
     def test_record_candidate_writes_header_once_and_appends(self):
         st = ready_state("2330", or_high=100.0, last=101.0)
-        sig = evaluate(st, now=dtime(10, 0))
+        sig = evaluate(st, now=dtime(9, 3))
         signals.record_candidate(sig, signals.BLOCK_DAILY_CAP, path=self.path)
         signals.record_candidate(sig, signals.BLOCK_SYMBOL_CAP, path=self.path)
         rows = self._rows()
@@ -2745,7 +2781,7 @@ class TestBlockedCandidatesAreRecorded(unittest.TestCase):
 
     def test_write_failure_never_breaks_monitoring(self):
         st = ready_state("2330")
-        sig = evaluate(st, now=dtime(10, 0))
+        sig = evaluate(st, now=dtime(9, 3))
         bad = Path(self.tmp.name) / "nope" / "candidates.csv"   # 目錄不存在
         signals.record_candidate(sig, signals.BLOCK_DAILY_CAP, path=bad)  # 不可拋
 
@@ -2753,7 +2789,7 @@ class TestBlockedCandidatesAreRecorded(unittest.TestCase):
         """沒被擋的時候，行為要跟以前一模一樣。"""
         gate = RiskGate(FakeBroker(pnl_rows=[]))
         st = ready_state("2330")
-        sig = evaluate(st, now=dtime(10, 0))
+        sig = evaluate(st, now=dtime(9, 3))
         msg, blocked = signals.try_emit(st, gate, threading.Lock(), sig)
         self.assertIsNone(blocked)
         self.assertIn("決策錨點", msg)
@@ -2825,7 +2861,7 @@ class TestLotSizingFloatNoise(unittest.TestCase):
 
     def test_exact_division_is_not_eaten_by_float_noise(self):
         st = ready_state(or_high=20.0, last=20.2, vwap=20.1)
-        sig = evaluate(st, now=dtime(10, 0))
+        sig = evaluate(st, now=dtime(9, 3))
         self.assertEqual(sig["stop"], 19.9)
         self.assertEqual(sig["risk_per_lot"], 300)
         # 3000 / 300 剛好 10 張。沒 round 的話這裡會是 9。
@@ -2835,7 +2871,7 @@ class TestLotSizingFloatNoise(unittest.TestCase):
     def test_risk_per_lot_is_exact_cents(self):
         for or_high, last in ((20.0, 20.2), (100.0, 101.0), (500.0, 505.0)):
             sig = evaluate(ready_state(or_high=or_high, last=last, vwap=or_high),
-                           now=dtime(10, 0))
+                           now=dtime(9, 3))
             self.assertEqual(sig["risk_per_lot"],
                              round(sig["risk_per_lot"], 2),
                              f"{or_high}/{last} 的單張風險帶了浮點雜訊")
@@ -2847,21 +2883,21 @@ class TestWatchlistRank(unittest.TestCase):
     def test_rank_flows_into_the_signal(self):
         st = ready_state("2330")
         st.rank = 7
-        sig = evaluate(st, now=dtime(10, 0))
+        sig = evaluate(st, now=dtime(9, 3))
         self.assertEqual(sig["rank"], 7)
 
     def test_rank_defaults_to_zero_when_unknown(self):
-        sig = evaluate(ready_state("2330"), now=dtime(10, 0))
+        sig = evaluate(ready_state("2330"), now=dtime(9, 3))
         self.assertEqual(sig["rank"], 0)
 
     def test_category_flows_into_the_signal_too(self):
         """產業別是「輪動題材」唯一免費又客觀的代理 —— 合約物件上就有。"""
         st = ready_state("2330")
         st.category = "24"
-        self.assertEqual(evaluate(st, now=dtime(10, 0))["category"], "24")
+        self.assertEqual(evaluate(st, now=dtime(9, 3))["category"], "24")
 
     def test_category_defaults_to_blank_not_a_crash(self):
-        self.assertEqual(evaluate(ready_state("2330"), now=dtime(10, 0))["category"], "")
+        self.assertEqual(evaluate(ready_state("2330"), now=dtime(9, 3))["category"], "")
 
     def test_rank_reaches_outcomes_csv(self):
         sig = {"code": "2330", "time": "09:23:00", "entry": 121.0,
@@ -3467,6 +3503,20 @@ class TestReplayRules(unittest.TestCase):
            ("8050", "09:30:00", "09:35:00", oc.STOP, -1.00, -3100, 1),
            ("5309", "09:36:00", "09:38:00", oc.STOP, -1.00, -3107, 1),
            ("3094", "09:39:28", "09:52:00", oc.TARGET, 2.33, 5892, 3)]
+
+    # 這一組測的是**重跑邏輯**，不是今天的參數。釘住 10-01 當天生效的那組紅線，
+    # 否則每次調參數（v4 把訊號上限改成 3）這幾條就會壞掉 —— 而壞掉的原因
+    # 跟它們要驗的事情完全無關。這正是 v4 改版時學到的：測試該測規則，
+    # 不是測 config.py 現在剛好填什麼。
+    DAY_RISK = {"max_signals_per_day": 5, "max_trades_per_day": 4,
+                "max_daily_loss": 12000, "max_consecutive_losses": 3}
+
+    def setUp(self):
+        self._saved = {k: config.RISK[k] for k in self.DAY_RISK}
+        config.RISK.update(self.DAY_RISK)
+
+    def tearDown(self):
+        config.RISK.update(self._saved)
 
     def _rows(self, day=None):
         out = []
@@ -4174,7 +4224,7 @@ class TestStopNeverSitsAboveTheBreakout(unittest.TestCase):
         return st
 
     def _sig(self, price, **kw):
-        return evaluate(self._state(price, **kw), now=dtime(9, 17))
+        return evaluate(self._state(price, **kw), now=dtime(9, 3))
 
     def test_the_real_case_now_stops_below_the_breakout(self):
         sig = self._sig(27.25)
@@ -4230,7 +4280,7 @@ class TestStopNeverSitsAboveTheBreakout(unittest.TestCase):
         """區間補算不到的時候不要炸 —— 退回固定 %，而且要能發得出訊號。"""
         st = self._state(27.25)
         st.or_high = 0
-        sig = evaluate(st, now=dtime(9, 17))
+        sig = evaluate(st, now=dtime(9, 3))
         self.assertIsNotNone(sig)
         self.assertEqual(sig["stop_rule"], "固定 %")
         self.assertIsNone(sig["extension_pct"])
@@ -4267,7 +4317,7 @@ class TestRulesetStamping(unittest.TestCase):
         return st
 
     def test_the_signal_carries_the_version(self):
-        sig = evaluate(self._state(), now=dtime(9, 17))
+        sig = evaluate(self._state(), now=dtime(9, 3))
         self.assertEqual(sig["ruleset"], config.RULESET)
         self.assertTrue(config.RULESET)
 

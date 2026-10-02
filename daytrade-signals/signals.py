@@ -192,6 +192,24 @@ class RiskGate:
         log.warning("即時判定找不到對應訊號（%s %s），沒寫回 state.json", code, time_str)
         return False
 
+    def record_time_exit(self, code: str, time_str: str, price: float,
+                         at: str) -> bool:
+        """把 09:30「時間到」那一刻的價位寫回 state.json。
+
+        這一筆**不會因此結束追蹤** —— 使用者定的規則是「未達停損的由下單者
+        自己決定」，所以系統只記價、不替人平倉，而且繼續追到 13:25。
+        收盤後 outcome.py 會同時產出 exit_0930（照新規則）與 exit_day（續抱）。
+        只留一欄的話，「09:30 就走是不是比較好」這一題就永遠沒有對照組。
+        """
+        for sig in self.state.get("signals", []):
+            if str(sig.get("code")) == str(code) and str(sig.get("time")) == str(time_str):
+                sig["exit_0930_price"] = round(float(price), 2)
+                sig["exit_0930_at"] = at
+                self.save()
+                return True
+        log.warning("時間出場找不到對應訊號（%s %s），沒寫回 state.json", code, time_str)
+        return False
+
     def record_fill(self, code: str, time_str: str, low: float | None) -> bool:
         """把訊號後 5 分鐘內的最低成交價寫回 state.json 的那一筆訊號。
 
@@ -484,6 +502,64 @@ def record_candidate(sig: dict, reason: str, path=None) -> None:
         log.warning("候選寫檔失敗（不影響監看）：%s", e)
 
 
+BLOCK_BATCH_RANK = "批次排序未入選"
+
+
+class SignalBatch:
+    """09:02–09:05 收集突破，09:05:00 一次發出，按當下量能倍數排序取前 N 檔。
+
+    v3 以前是「誰先突破誰先發」。在三小時長的進場窗口裡那還說得過去 ——
+    先突破的確實是先動的那一檔。壓縮到三分鐘之後，先後差距只剩「哪一檔的
+    報價封包先到」，那是網路抖動不是市場資訊。排序用的量能倍數是今天
+    09:00–09:02 量出來的，比盤前量比（看的是昨天）新鮮。
+    """
+
+    def __init__(self, at, limit: int):
+        self.at = at
+        self.limit = limit
+        self.pending: dict[str, dict] = {}
+        self.flushed = False
+
+    def add(self, sig: dict) -> None:
+        # 同一檔只留第一次突破：那一筆的進場價才是「剛越過區間高」的價格，
+        # 之後再觸發只會更高，而追高正是 v4 要離開的那個毛病。
+        self.pending.setdefault(str(sig["code"]), sig)
+
+    def due(self, now: datetime) -> bool:
+        return not self.flushed and now.time() >= self.at
+
+    def take(self) -> tuple[list[dict], list[dict]]:
+        """回傳 (入選的, 落選的)。落選的照樣要進 candidates.csv —— 砍掉樣本
+        就等於把「只做前 3 名對不對」這一題變成無法回答。"""
+        self.flushed = True
+        ranked = sorted(
+            self.pending.values(),
+            # 量能高的優先；平手時用盤前名次，再平手用代號 —— 任何時候都要
+            # 有一個固定的順序，否則同一份資料重跑會得到不同的三檔。
+            key=lambda x: (-(x.get("volume_surge") or 0),
+                           x.get("rank") or 9999, str(x.get("code"))))
+        self.pending = {}
+        return ranked[:self.limit], ranked[self.limit:]
+
+
+def format_time_exit(o: "OpenSignal", price: float, at: str) -> str:
+    gross = (price - o.entry) / o.entry * 100
+    net = gross - config.round_trip_cost_pct()
+    risk = o.entry - o.stop
+    r = (price - o.entry) / risk if risk > 0 else 0.0
+    label = f"{o.code} {o.name}".strip()
+    return "\n".join([
+        f"⏰ {label} 時間到｜{at}",
+        "────────────────",
+        f"進場 {o.entry:.2f} → 現價 {price:.2f}",
+        f"{gross:+.2f}%（扣掉來回成本 {net:+.2f}%）　{r:+.2f}R",
+        f"停損 {o.stop:.2f} 還沒碰到。",
+        "────────────────",
+        "**走不走由你決定。** 系統只負責在這個時間提醒你，"
+        "不替你做這個決定；停損照舊有效，沒走的話它還在。",
+    ])
+
+
 def try_emit(st: SymbolState, gate: RiskGate, lock, sig: dict,
              now: datetime | None = None) -> tuple[str | None, str | None]:
     """在鎖內完成「再確認 → 過閘 → 記錄」。
@@ -626,11 +702,14 @@ class LiveTracker:
     必須在鎖內一次做完，否則同一筆會推播好幾次。推播本身留在鎖外，不卡行情。
     """
 
-    def __init__(self, on_resolved=None, on_fill=None):
+    def __init__(self, on_resolved=None, on_fill=None, on_time_exit=None):
         self.open: list[OpenSignal] = []
         self.fills: list[FillProbe] = []
         self.last_price: dict[str, float] = {}
         self._lock = threading.Lock()
+        self.time_exited = False
+        # 09:30「時間到」的價位交給誰記下來。同理：不寫回去就只活在推播裡。
+        self.on_time_exit = on_time_exit
         # 判定完要交給誰記下來。沒有它的話，即時結果只活在那則推播裡。
         self.on_resolved = on_resolved
         # 成交窗口收完要交給誰記下來。同理：不寫回去就只活在記憶體裡。
@@ -699,6 +778,37 @@ class LiveTracker:
         for p in closed:
             self._fill_handed_off(p)
         return [format_resolution(o, price, v) for o, v in done]
+
+    def time_exit(self, now: datetime | None = None) -> list[str]:
+        """09:30 的「時間到」訊號：報價、記下來，但**不結束追蹤**。
+
+        使用者定的規則是「未達停損訊號，由下單者自由決定」—— 所以系統不替人
+        平倉。同時這一刻的價位要存成 exit_0930，而這一筆繼續追到 13:25 存成
+        exit_day。兩欄並存，20 天後才答得出「09:30 就走是不是比較好」；
+        現在就把後半天砍掉，那個問題永遠沒有對照組。
+
+        已經碰到停損或目標的不會在這裡出現 —— 它們早就離開 self.open 了。
+        """
+        now = now or datetime.now()
+        at = now.strftime("%H:%M:%S")
+        with self._lock:
+            if self.time_exited:
+                return []
+            self.time_exited = True
+            marks = [(o, self.last_price.get(o.code)) for o in self.open]
+        msgs = []
+        for o, price in marks:
+            if price is None:
+                # 整天沒收到報價 —— 空白代表不知道，不可以用 0 或進場價頂替。
+                log.warning("%s 沒有報價，09:30 的時間出場價記不下來", o.code)
+                continue
+            if self.on_time_exit:
+                try:
+                    self.on_time_exit(o, price, at)
+                except Exception as e:   # 記錄失敗不可以讓提醒跟著沒了
+                    log.warning("時間出場寫回失敗（%s）：%s", o.code, e)
+            msgs.append(format_time_exit(o, price, at))
+        return msgs
 
     def flatten(self) -> list[str]:
         """13:25 還沒結束的，一律以最後看到的報價平倉。"""
@@ -820,6 +930,8 @@ def run():
     if errs:
         raise SystemExit("config.py 參數有問題，盤中不要硬上：\n" +
                          "\n".join(f"  - {e}" for e in errs))
+    for w in config.warnings():
+        log.warning("設定提醒：%s", w)
 
     if not config.WATCHLIST_FILE.exists():
         raise SystemExit(f"找不到 {config.WATCHLIST_FILE.name}，請先跑 screener.py")
@@ -854,7 +966,38 @@ def run():
     def _remember_fill(p: FillProbe):
         gate.record_fill(p.code, p.time, p.low)
 
-    tracker = LiveTracker(on_resolved=_remember, on_fill=_remember_fill)
+    def _remember_time_exit(o, price, at):
+        with signal_lock:
+            gate.record_time_exit(o.code, o.time, price, at)
+
+    tracker = LiveTracker(on_resolved=_remember, on_fill=_remember_fill,
+                          on_time_exit=_remember_time_exit)
+    batch = SignalBatch(_t(config.SIGNAL["signal_batch_at"]),
+                        config.RISK["max_signals_per_day"])
+
+    def flush_batch(now: datetime | None = None) -> None:
+        """09:05:00 到了就把收集到的突破排序、取前 N 檔發出去。
+
+        落選的照樣寫進 candidates.csv：被規則擋掉的樣本如果不留，20 天後
+        「只發三個夠不夠」「第四名是不是本來會賺」就只能回答「再測一次」。
+        """
+        now = now or datetime.now()
+        if not batch.due(now):
+            return
+        chosen, rest = batch.take()
+        for sig in rest:
+            record_candidate(sig, BLOCK_BATCH_RANK)
+        for sig in chosen:
+            st = states.get(str(sig["code"]))
+            if st is None:
+                continue
+            msg, blocked = try_emit(st, gate, signal_lock, sig, now)
+            if blocked:
+                record_candidate(sig, blocked)
+                continue
+            if msg:
+                tracker.track(sig)
+                notify(msg)
     # 盤中重開時，今天已經發過的訊號也要繼續盯 —— 否則它們的結局只剩收盤後才知道。
     # 代價是已經結束的那幾筆會被重新追蹤，價格再次碰到時會重複推播一次。
     for past in gate.state.get("signals", []):
@@ -877,15 +1020,11 @@ def run():
         # ignore_symbol_cap：連「這檔今天發過了」的那種也要算出來並記錄，
         # 否則「被洗掉後能不能重新進場」這一題永遠沒有資料可以回答。
         sig = evaluate(st, ignore_symbol_cap=True)
-        if not sig:
-            return
-        msg, blocked = try_emit(st, gate, signal_lock, sig)
-        if blocked:
-            record_candidate(sig, blocked)
-            return
-        if msg:
-            tracker.track(sig)
-            notify(msg)
+        if sig:
+            batch.add(sig)          # 先收集，不發 —— 09:05 排序完才一次送出
+        # 到點就送。從回呼觸發是因為 09:05 的報價很密，幾乎必然在一秒內進來；
+        # 下面的主迴圈是備援，萬一整批都沒報價也不會卡著不發。
+        flush_batch()
 
     import shioaji as sj  # 只有真的要訂閱行情時才需要
     for code in states:
@@ -905,6 +1044,7 @@ def run():
         backfill_opening_ranges(broker, states)
 
     close_at = _t(config.SIGNAL["market_close"])
+    exit_at = _t(config.SIGNAL["exit_signal_at"])
     poll_every = config.RISK["poll_interval_sec"]
     last_poll = time.monotonic()
     flattened = False
@@ -912,6 +1052,14 @@ def run():
         while datetime.now().time() < close_at:
             time.sleep(30)
             broker.ensure_session()
+            # 批次發訊號的備援。正常情況回呼早就送出去了，這裡是為了
+            # 「整批都沒有報價進來」那種日子 —— 不然訊號會卡在記憶體裡。
+            flush_batch()
+            # 09:30「時間到」。這裡**不平倉**，只提醒並記下價位，
+            # 部位繼續追到 13:25（exit_day），走不走由使用者決定。
+            if datetime.now().time() >= exit_at:
+                for msg in tracker.time_exit():
+                    notify(msg)
             # 13:25 還沒走完停損或目標的，一律平倉並告知結果。
             # 與 outcome.py 的收盤回推用同一個時間，兩邊才比得起來。
             if not flattened and datetime.now().time() >= outcome.FLATTEN_AT:

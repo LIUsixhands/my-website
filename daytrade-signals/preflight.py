@@ -42,6 +42,9 @@ def check_config(_broker=None) -> Result:
     errs = config.validate()
     if errs:
         return Result(FAIL, "config 參數", "；".join(errs))
+    warns = config.warnings()
+    if warns:
+        return Result(WARN, "config 參數", "；".join(warns))
     mode = "模擬" if config.SIMULATION else "真錢"
     return Result(OK, "config 參數",
                   f"無矛盾。模式：{mode}（SIMULATION={'1' if config.SIMULATION else '0'}）"

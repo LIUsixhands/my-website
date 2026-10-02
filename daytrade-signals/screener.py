@@ -249,7 +249,7 @@ def parse_args(argv=None):
                     help="只保留量比最高的 N 檔（不給就全部保留）")
     ap.add_argument("--push", action="store_true",
                     help="把名單推到 Telegram（配合排程用，人不用開電腦看）")
-    ap.add_argument("--push-top", type=int, default=5, metavar="N",
+    ap.add_argument("--push-top", type=int, default=3, metavar="N",
                     help="推播上顯示幾檔（預設 5）。不影響監看範圍")
     args = ap.parse_args(argv)
     if args.top is not None and args.top < 1:
@@ -263,6 +263,8 @@ def run(args) -> None:
     errs = config.validate()
     if errs:
         raise SystemExit("config.py 參數有問題：\n" + "\n".join(f"  - {e}" for e in errs))
+    for w in config.warnings():
+        log.warning("設定提醒：%s", w)
 
     broker = Broker()
     watchlist = screen(broker)

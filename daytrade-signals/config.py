@@ -153,12 +153,30 @@ SCREEN = {
 # v1  2026-09-24  1.5R / 單筆 2,000
 # v2  2026-09-29  2.5R / 單筆 3,000
 # v3  2026-10-02  停損加上結構線（區間高下方），停損不再飄到突破點之上
-RULESET = "v3"
+# v4  2026-10-02  **策略改版，不是調參數。** 使用者定的四條原則：
+#                 1. 09:00-09:05 出買入訊號（開盤區間縮成 09:00-09:02）
+#                 2. 09:30 發「時間到」賣出訊號，未達停損的由下單者自己決定
+#                 3. 目標回到 1.5R
+#                 4. 一天只發三個訊號
+#                 依據：前五天 25 筆，訊號全部發在 09:17 之後，而當日漲幅
+#                 幾乎都在 09:15 前就走完。10-02 五筆全停損，其中金山電
+#                 走到 1.67R（1.5R 的目標打得到，2.5R 打不到）才回頭。
+RULESET = "v4"
 
 SIGNAL = {
     "or_start": "09:00:00",         # 開盤區間起
-    "or_end": "09:15:00",           # 開盤區間迄（ORB 用）
-    "entry_window_end": "12:30:00", # 這時間之後不發新訊號（尾盤流動性與回補風險）
+    "or_end": "09:02:00",           # 開盤區間迄（ORB 用）
+    "entry_window_end": "09:05:00", # 這時間之後不發新訊號
+    # 訊號不是「誰先突破誰先發」，是 09:02-09:05 全部收集起來，
+    # 09:05:00 一次發出、按當下量能倍數排序取前 N 檔。
+    #
+    # 理由：09:05 之前沒有任何資訊可以排序，先來後到等於看哪一檔的報價封包
+    # 先到 —— 那是隨機的。舊設計的窗口有 3 小時長，先後差距還有意義；
+    # 壓縮到 3 分鐘之後，先後就只剩雜訊。
+    "signal_batch_at": "09:05:00",  # 收集到這個時間，然後一次發出
+    # 09:30 發「時間到」訊號。沒碰停損的部位由下單者自己決定走不走 ——
+    # 系統只負責提醒，不替人做那個決定。
+    "exit_signal_at": "09:30:00",
     "breakout_buffer_pct": 0.10,    # 突破要超過區間高點多少 % 才算數（防假突破）
     "volume_surge_ratio": 1.8,      # 突破當下 5 分鐘量能速率 / 前段量能速率
     "require_above_vwap": True,     # 多單需站上均價線；空單需跌破
@@ -180,7 +198,7 @@ SIGNAL = {
     # 比較低，這條不會生效；只有在追高之後才會接手，而且接手的方式是
     # 自動加大風險、減少張數 —— 系統自己踩煞車，不需要一條武斷的「不准追」。
     "stop_below_or_high_pct": 0.2,  # 區間高點往下這麼多 %（結構線）
-    "reward_risk": 2.5,             # 目標 = 2.5R
+    "reward_risk": 1.5,             # 目標 = 1.5R（v4 從 2.5R 調回）
     "allow_short": False,           # 先賣後買 v1 未實作（券源、軋空風險）
     "backfill_opening_range": True, # 09:15 後才啟動時，用分鐘 K 補算開盤區間
     "market_close": "13:30:00",     # 收工時間
@@ -188,8 +206,8 @@ SIGNAL = {
 
 # ── ③ 風控閘門（最重要的一層，不要調鬆）──────────────────
 RISK = {
-    "max_signals_per_day": 5,       # 一天最多推播幾個訊號
-    "max_trades_per_day": 4,        # 一天最多做幾筆
+    "max_signals_per_day": 3,       # 一天最多推播幾個訊號
+    "max_trades_per_day": 3,        # 一天最多做幾筆
     "max_daily_loss": 12000,        # 當日實現虧損達此數字 → 系統停止發訊號（元）
     "max_consecutive_losses": 3,    # 連續虧損筆數 → 當日停手
     "per_trade_risk": 3000,         # 單筆可承受虧損（元）→ 用來反推張數
@@ -303,6 +321,11 @@ def validate() -> list[str]:
         errs.append("SIGNAL.max_signals_per_symbol 必須 >= 1")
     if not s["or_start"] < s["or_end"] <= s["entry_window_end"] <= s["market_close"]:
         errs.append("時間順序必須是 or_start < or_end <= entry_window_end <= market_close")
+    if not s["or_end"] <= s["signal_batch_at"] <= s["entry_window_end"]:
+        errs.append("SIGNAL.signal_batch_at 必須落在 or_end 與 entry_window_end 之間 —— "
+                    "在區間鎖定之前發不出訊號，在進場窗口關掉之後發也沒有意義")
+    if not s["entry_window_end"] < s["exit_signal_at"] < s["market_close"]:
+        errs.append("SIGNAL.exit_signal_at 必須晚於 entry_window_end、早於 market_close")
     if s["allow_short"]:
         errs.append("SIGNAL.allow_short=True 但 v1 沒有實作空方訊號，"
                     "打開它只會讓你以為系統在看空單。要做空請先實作 evaluate() 的空方分支。")
@@ -318,11 +341,6 @@ def validate() -> list[str]:
         errs.append("RISK.max_consecutive_losses 必須 >= 1")
     if r["poll_interval_sec"] < 30:
         errs.append("RISK.poll_interval_sec 太短會撞到 Shioaji 流量上限（建議 >= 60）")
-    if r["per_trade_risk"] * r["max_trades_per_day"] < r["max_daily_loss"]:
-        errs.append(
-            f"紅線互相矛盾：單筆風險 {r['per_trade_risk']:,} × 最多 {r['max_trades_per_day']} 筆 "
-            f"= {r['per_trade_risk'] * r['max_trades_per_day']:,} 元，"
-            f"還沒到日虧上限 {r['max_daily_loss']:,} 元，日虧這條線形同虛設。")
 
     c = SCREEN
     if c["min_price"] >= c["max_price"]:
@@ -333,3 +351,31 @@ def validate() -> list[str]:
         errs.append("SCREEN.lookback_days 必須 >= 1")
 
     return errs
+
+
+def warnings() -> list[str]:
+    """不致命、但你應該知道的設定互動。印出來，不擋啟動。
+
+    紅線那條原本是**錯誤**，寫的是「日虧上限形同虛設」。那個算式錯了：
+    它假設每一筆都剛好賠 per_trade_risk，但 signals.py 的 oversized 路徑
+    （連一張都超過上限時，仍然給 1 張並標記）讓單筆風險可以超過上限。
+    以 stop_loss_pct=1.5%、per_trade_risk=3,000 來說，股價超過 200 元的
+    訊號每一筆都會超標 —— 三筆都抽到高價股就可能賠超過 3 × 3,000。
+    那正是日虧上限唯一會出手的時候，所以它不是虛設，不該擋住啟動。
+    """
+    w, r, s = [], RISK, SIGNAL
+    if r["per_trade_risk"] * r["max_trades_per_day"] < r["max_daily_loss"]:
+        cap = r["per_trade_risk"] / 1000 / (s["stop_loss_pct"] / 100) if s["stop_loss_pct"] else 0
+        w.append(
+            f"單筆風險 {r['per_trade_risk']:,} × 最多 {r['max_trades_per_day']} 筆 "
+            f"= {r['per_trade_risk'] * r['max_trades_per_day']:,} 元，低於日虧上限 "
+            f"{r['max_daily_loss']:,} 元。一般情況下日虧上限不會觸發；但股價高於約 "
+            f"{cap:,.0f} 元的訊號單筆風險會超標（強制 1 張），那時日虧上限就是"
+            f"唯一的煞車。確認這是你要的。")
+    if r["max_consecutive_losses"] >= r["max_signals_per_day"]:
+        w.append(
+            f"連敗停手 {r['max_consecutive_losses']} 筆 >= 當日訊號上限 "
+            f"{r['max_signals_per_day']} 個，而且訊號是在 {s['signal_batch_at']} "
+            f"一次發完的 —— 第一筆還沒出場，訊號就全發了，所以連敗停手"
+            f"**在當日永遠不會出手**。它現在只是一個紀錄欄位。")
+    return w
