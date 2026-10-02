@@ -49,7 +49,7 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
           "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
           "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
-          "exit_at", "ruleset")
+          "exit_at", "ruleset", "exit_0930", "r_0930")
 
 
 @dataclass
@@ -93,6 +93,18 @@ class Outcome:
     # mkt_open_pct 在任何訊號發出**之前**就已知，所以它是唯一有資格變成規則的那個。
     mkt_open_pct: float | None = None     # 09:15 時的大盤漲跌 %
     mkt_day_pct: float | None = None      # 當日收盤的大盤漲跌 %
+    # v4 原則二：09:30 發「時間到」訊號，未達停損的由下單者自己決定走不走。
+    # 系統不替人平倉，所以上面那幾欄（result / exit_price / r_multiple）照舊是
+    # 「照停損目標走到底、13:25 平倉」的機械結果 —— 也就是**續抱**的那個版本。
+    #
+    # 下面這兩欄記的是「09:30 就走」的版本。兩個並存、互不覆蓋，是因為
+    # 「09:30 就走是不是比較好」這一題需要對照組，而現在就把後半天砍掉的話，
+    # 20 天後只會有一個數字，沒有東西可以比。
+    #
+    # 已經在 09:30 之前碰到停損或目標的那幾筆是 None —— 那不是「沒走」，
+    # 是那時候已經沒有部位了。空白代表不適用，不是 0。
+    exit_0930: float | None = None        # 09:30 當下的價位
+    r_0930: float | None = None           # 同一刻換算成幾 R
     # 出場時間 "HH:MM:SS"。風控閘門看的是**已實現**損益，而一筆要出場了才算實現 ——
     # 沒有這一欄就答不出「這一筆發訊號的時候，前面幾筆已經結束了幾筆」，
     # 於是「照規則今天真的會做到哪幾筆」只能用「前 N 筆」粗估，而那會算錯。
@@ -252,6 +264,10 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
     low_5m = min((b[2] for b in bars[:FILL_WINDOW_BARS]), default=None)
     # 盤中 tick 量到的同一個窗口。沒有這個欄位（舊紀錄、或當天沒收到報價）就留空。
     fill_low = _num(sig.get("fill_low"))
+    # 09:30「時間到」那一刻的價位（signals.py 的 time_exit 寫回 state.json）。
+    # 這一筆如果在 09:30 之前就碰到停損或目標，就不會有這個欄位 —— 那時候
+    # 已經沒有部位了，留空代表不適用，不是 0。
+    mark_0930 = _num(sig.get("exit_0930_price"))
     return Outcome(
         date=date, code=str(sig["code"]), time=str(sig.get("time", "")),
         entry=entry, stop=stop, target=target, lots=int(sig.get("lots", 0) or 0),
@@ -274,6 +290,9 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         category=str(sig.get("category") or ""),
         exit_at=_exit_at(sig, fired, result, used, bars),
         ruleset=str(sig.get("ruleset") or ""),
+        exit_0930=mark_0930,
+        r_0930=(round((mark_0930 - entry) / risk, 2)
+                if mark_0930 is not None and risk > 0 else None),
     )
 
 
@@ -384,7 +403,8 @@ _BOOL_FIELDS = ("target_after_stop",)
 _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "vwap_gap_pct", "mae_pct", "mfe_pct", "low_5m_pct",
-                    "fill_low_pct", "mkt_open_pct", "mkt_day_pct")
+                    "fill_low_pct", "mkt_open_pct", "mkt_day_pct",
+                    "exit_0930", "r_0930")
 
 
 def _bool(value) -> bool | None:

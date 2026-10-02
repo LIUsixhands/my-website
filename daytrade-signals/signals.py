@@ -563,6 +563,20 @@ def format_too_late(now: datetime) -> str:
     ])
 
 
+def warn_if_too_late(now: datetime | None = None) -> bool:
+    """批次窗口已經過了就推一則警告，回傳有沒有推。
+
+    拆成獨立函式而不是寫在 run() 裡，是為了測得到。寫在 run() 裡的話，
+    把那個判斷改成 `if False:` 不會有任何測試失敗 —— 而那正是這個專案
+    一路在修的毛病：規則看起來在那裡，實際上沒有作用。
+    """
+    now = now or datetime.now()
+    if now.time() < _t(config.SIGNAL["signal_batch_at"]):
+        return False
+    notify(format_too_late(now))
+    return True
+
+
 def format_time_exit(o: "OpenSignal", price: float, at: str) -> str:
     gross = (price - o.entry) / o.entry * 100
     net = gross - config.round_trip_cost_pct()
@@ -1066,8 +1080,7 @@ def run():
 
     # 補算完區間也救不了「批次窗口已經過了」。這一則一定要推，不能只寫進 log：
     # log 在那個被導向檔案的黑視窗裡，沒有人會在早上九點去翻。
-    if datetime.now().time() >= _t(config.SIGNAL["signal_batch_at"]):
-        notify(format_too_late(datetime.now()))
+    warn_if_too_late()
 
     close_at = _t(config.SIGNAL["market_close"])
     exit_at = _t(config.SIGNAL["exit_signal_at"])

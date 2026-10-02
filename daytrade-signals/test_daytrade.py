@@ -13,11 +13,14 @@ os.environ["DAYTRADE_NO_PUSH"] = "1"
 
 import contextlib
 import csv
+import ast
+import inspect
 import io
 import json
 import os
 import sys
 import tempfile
+import textwrap
 import threading
 import time
 import unittest
@@ -4714,3 +4717,117 @@ class TestStartingTooLateIsNotAQuietDay(unittest.TestCase):
         """手上有部位的人最需要知道的是這件事。"""
         text = signals.format_too_late(datetime(2026, 10, 5, 9, 6))
         self.assertIn("停損照舊有效", text)
+
+
+class TestBothExitsAreKept(unittest.TestCase):
+    """v4 原則二：09:30 發「時間到」訊號，未達停損的由下單者自由決定。
+
+    系統不替人平倉，所以 result / exit_price / r_multiple 照舊是「走到停損或
+    目標、13:25 平倉」的機械結果 —— 也就是**續抱**的版本。exit_0930 / r_0930
+    記的是「09:30 就走」的版本。
+
+    兩個並存不互相覆蓋，是因為「09:30 就走是不是比較好」這一題需要對照組。
+    現在就把後半天砍掉，20 天後只會有一個數字，沒有東西可以比 —— 那時候就
+    只能回答「再測一次」，而那正是這個專案一路在避免的事。
+    """
+
+    DATE = "2026-09-24"
+    SIG = {"code": "8042", "time": "09:03:30", "entry": 121.50,
+           "stop": 120.00, "target": 123.75, "lots": 2}
+    # 09:30 之前都沒碰到停損或目標，收盤前才跌破 —— 和 10-02 金山電同一個形狀
+    BARS = [("09:05", 122.0, 121.0, 121.8), ("09:31", 123.0, 121.5, 122.5),
+            ("12:20", 122.0, 119.5, 119.8)]
+
+    def _resolve(self, **extra):
+        return oc.resolve(FakeKbarBroker(_kb(self.BARS)),
+                          dict(self.SIG, **extra), self.DATE)
+
+    def test_the_0930_price_becomes_its_own_column(self):
+        o = self._resolve(exit_0930_price=122.50)
+        self.assertAlmostEqual(o.exit_0930, 122.50)
+        # (122.50 - 121.50) / (121.50 - 120.00) = 0.67R
+        self.assertAlmostEqual(o.r_0930, 0.67, places=2)
+
+    def test_holding_on_is_still_recorded_separately(self):
+        """09:30 那一欄不可以蓋掉續抱的結果 —— 那是對照組的另一半。"""
+        o = self._resolve(exit_0930_price=122.50)
+        self.assertEqual(o.result, oc.STOP)
+        self.assertAlmostEqual(o.r_multiple, -1.00)
+        self.assertGreater(o.r_0930, 0)
+
+    def test_no_0930_mark_leaves_it_blank_rather_than_zero(self):
+        """09:30 前就出場的那幾筆沒有這個欄位。空白代表不適用，0 代表打平。"""
+        o = self._resolve()
+        self.assertIsNone(o.exit_0930)
+        self.assertIsNone(o.r_0930)
+
+    def test_a_losing_0930_mark_is_recorded_too(self):
+        o = self._resolve(exit_0930_price=120.75)
+        self.assertAlmostEqual(o.r_0930, -0.50, places=2)
+
+    def test_old_rows_without_the_columns_still_load(self):
+        """新增欄位時當成必填，舊的那幾列會在 KeyError 時被整列跳過 ——
+        累計勝率會無聲歸零。這條在 rank / fill_low_pct / exit_at 都踩過一次。"""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            old = [f for f in oc.FIELDS if f not in ("exit_0930", "r_0930")]
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.DictWriter(f, fieldnames=old)
+                w.writeheader()
+                w.writerow({**{k: "" for k in old},
+                            "date": "2026-09-24", "code": "3094", "time": "09:39:28",
+                            "entry": "65.6", "stop": "64.7", "target": "67.7",
+                            "lots": "3", "result": oc.TARGET, "exit_price": "67.7",
+                            "r_multiple": "2.33", "gross_pct": "3.2",
+                            "net_pct": "3.0", "bars": "4"})
+            rows = oc.load_csv(path)
+        self.assertEqual(len(rows), 1, "舊列必須讀得回來，不可以被跳過")
+        self.assertIsNone(rows[0].exit_0930)
+
+    def test_the_columns_survive_a_write_and_read_round_trip(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            oc.append_csv([self._resolve(exit_0930_price=122.50)], path)
+            back = oc.load_csv(path)
+        self.assertAlmostEqual(back[0].exit_0930, 122.50)
+        self.assertAlmostEqual(back[0].r_0930, 0.67, places=2)
+
+
+class TestTheLateStartWarningIsActuallyWired(unittest.TestCase):
+    """變異測試抓到的：`format_too_late` 有測試，但「run() 真的會推它」沒有。
+
+    把 run() 裡那個判斷改成 `if False:`，463 條測試一條都不會失敗 ——
+    規則看起來在那裡，實際上沒有作用。這正是這個專案一路在修的那種毛病，
+    所以這次連接線一起釘住。
+    """
+
+    def test_it_pushes_when_the_batch_window_has_passed(self):
+        sent = []
+        with unittest.mock.patch.object(signals, "notify", sent.append):
+            fired = signals.warn_if_too_late(datetime(2026, 10, 5, 9, 6))
+        self.assertTrue(fired)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("不會有任何買進訊號", sent[0])
+
+    def test_it_stays_quiet_before_the_window_closes(self):
+        """09:04 啟動還來得及，推一則「今天不會有訊號」是假警報。"""
+        sent = []
+        with unittest.mock.patch.object(signals, "notify", sent.append):
+            fired = signals.warn_if_too_late(datetime(2026, 10, 5, 9, 4, 59))
+        self.assertFalse(fired)
+        self.assertEqual(sent, [])
+
+    def test_run_actually_calls_it(self):
+        """run() 要連上券商才跑得起來，離線測不到，所以退一步檢查接線還在。
+
+        和三支 .bat 的橫幅用同一招 —— 不夠漂亮，但「沒有人在呼叫它」這種
+        壞法在這個專案已經發生過太多次（連敗停手、require_above_vwap、
+        LiveTracker 的回寫），寧可用一條粗測試擋住。
+        """
+        # 用 AST 找「真的有這個呼叫」，不是用字串比對 —— 變異測試證實字串比對
+        # 會被 `pass  # warn_if_too_late()` 這種註解騙過去，等於沒測。
+        tree = ast.parse(textwrap.dedent(inspect.getsource(signals.run)))
+        called = {n.func.id for n in ast.walk(tree)
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+        self.assertIn("warn_if_too_late", called,
+                      "run() 沒有真的呼叫 warn_if_too_late()")
