@@ -49,7 +49,7 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
           "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
           "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
-          "exit_at", "ruleset", "exit_0930", "r_0930")
+          "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio")
 
 
 @dataclass
@@ -105,6 +105,10 @@ class Outcome:
     # 是那時候已經沒有部位了。空白代表不適用，不是 0。
     exit_0930: float | None = None        # 09:30 當下的價位
     r_0930: float | None = None           # 同一刻換算成幾 R
+    # 開盤區間內的外盤成交 ÷ 內盤成交。量能倍數只數量的大小，分不出方向 ——
+    # 量放大但內盤居多，是有人在出貨給你。tick 沒帶 tick_type 時留空，
+    # 空白代表「判不出來」，不是「剛好打平」。
+    bid_ask_ratio: float | None = None
     # 出場時間 "HH:MM:SS"。風控閘門看的是**已實現**損益，而一筆要出場了才算實現 ——
     # 沒有這一欄就答不出「這一筆發訊號的時候，前面幾筆已經結束了幾筆」，
     # 於是「照規則今天真的會做到哪幾筆」只能用「前 N 筆」粗估，而那會算錯。
@@ -290,6 +294,7 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         category=str(sig.get("category") or ""),
         exit_at=_exit_at(sig, fired, result, used, bars),
         ruleset=str(sig.get("ruleset") or ""),
+        bid_ask_ratio=_num(sig.get("bid_ask_ratio")),
         exit_0930=mark_0930,
         r_0930=(round((mark_0930 - entry) / risk, 2)
                 if mark_0930 is not None and risk > 0 else None),
@@ -404,7 +409,7 @@ _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "vwap_gap_pct", "mae_pct", "mfe_pct", "low_5m_pct",
                     "fill_low_pct", "mkt_open_pct", "mkt_day_pct",
-                    "exit_0930", "r_0930")
+                    "exit_0930", "r_0930", "bid_ask_ratio")
 
 
 def _bool(value) -> bool | None:

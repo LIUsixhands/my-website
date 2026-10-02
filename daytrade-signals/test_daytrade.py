@@ -4959,3 +4959,116 @@ class TestWhatIfReplay(unittest.TestCase):
         text = "\n".join(whatif.render({}, 25, True)[:8])
         self.assertIn("對自己有利", text)
         self.assertIn("watchlist", text)
+
+
+class TestInsideOutsideVolume(unittest.TestCase):
+    """會長 SOP 第 3 條：看內外盤 + 成交明細（買盤是否連續）。
+
+    量能倍數只數「量有多大」，分不出方向 —— 量放大但內盤居多，是有人在
+    出貨給你。而這個資料我們本來就收得到：shioaji 的 tick 帶 `tick_type`
+    （1 = 外盤、2 = 內盤），`SymbolState.update()` 以前整個丟掉。
+
+    和 08:50–09:00 的試撮資料是同一種情況：東西一直在，只是沒人接。
+
+    **先記不排序。** 它還沒有任何資料支持，20 天後用算的決定要不要變成條件。
+    """
+
+    def _tick(self, kind, lots, cum, at="09:01:00", close=100.0):
+        # volume = 這一筆的張數；total_volume = 當日累計（shioaji 就是這樣）
+        return SimpleNamespace(
+            close=close, high=close, low=close, avg_price=close,
+            total_volume=cum, volume=lots, tick_type=kind,
+            datetime=datetime.strptime(f"2026-10-05 {at}", "%Y-%m-%d %H:%M:%S"))
+
+    def _state(self, ticks):
+        st = SymbolState("2330", 99.0)
+        cum = 0
+        for i, (kind, lots) in enumerate(ticks):
+            cum += lots
+            st.update(self._tick(kind, lots, cum), now=1_000_000.0 + i * 10)
+        return st
+
+    def test_it_separates_who_was_the_aggressor(self):
+        st = self._state([(1, 30), (1, 20), (2, 10)])
+        self.assertEqual((st.aggressive_buy, st.aggressive_sell), (50, 10))
+        self.assertAlmostEqual(st.bid_ask_ratio(), 5.0)
+
+    def test_heavy_volume_on_the_inside_is_not_strength(self):
+        """量一樣大，但方向相反 —— 量能倍數看不出這個差別，這一欄看得出。"""
+        strong = self._state([(1, 90), (2, 10)])
+        weak = self._state([(1, 10), (2, 90)])
+        self.assertEqual(strong.total_volume, weak.total_volume)
+        self.assertGreater(strong.bid_ask_ratio(), 1)
+        self.assertLess(weak.bid_ask_ratio(), 1)
+
+    def test_no_tick_type_means_unknown_not_balanced(self):
+        """舊版 shioaji 或某些商品不帶 tick_type。
+
+        回傳 0 或 1 會讓「不知道」看起來像「剛好打平」—— 這個專案已經為了
+        把 `0` 當成 `None` 吃過兩次虧（損益查不到、成交窗口沒報價）。
+        """
+        st = self._state([(0, 50), (0, 30)])
+        self.assertIsNone(st.bid_ask_ratio())
+        self.assertEqual(st.unclassified, 80)
+
+    def test_unclassified_volume_is_counted_but_not_taken_sides(self):
+        """判不出來的那些要知道有多少 —— 否則一個漂亮的比值底下可能
+        有九成的量根本沒被分類，而報表上看不出來。"""
+        st = self._state([(1, 10), (0, 900), (2, 10)])
+        self.assertEqual((st.aggressive_buy, st.aggressive_sell), (10, 10))
+        self.assertEqual(st.unclassified, 900)
+        self.assertAlmostEqual(st.bid_ask_ratio(), 1.0)
+
+    def test_all_outside_does_not_return_infinity(self):
+        """inf 寫進 CSV、讀回來是字串，那一整列會被跳過 ——
+        累計勝率會無聲少掉一筆。"""
+        st = self._state([(1, 40)])
+        self.assertEqual(st.bid_ask_ratio(), 99.0)
+        self.assertNotEqual(st.bid_ask_ratio(), float("inf"))
+
+    def test_it_only_counts_inside_the_opening_range(self):
+        """訊號要用的是「發訊號之前買盤有多強」。區間鎖定之後的成交
+        在 09:05 當下還不存在，混進來等於用未來的資料。"""
+        st = self._state([(1, 50)])
+        st.lock_opening_range(101.0, 99.0)
+        st.update(self._tick(2, 999, 1049, at="09:04:00"), now=1_000_100.0)
+        self.assertEqual(st.aggressive_sell, 0)
+
+    def test_the_signal_carries_it(self):
+        st = ready_state()
+        st.aggressive_buy, st.aggressive_sell, st.unclassified = 80, 20, 5
+        sig = evaluate(st, now=dtime(9, 3))
+        self.assertAlmostEqual(sig["bid_ask_ratio"], 4.0)
+        self.assertEqual(sig["unclassified_lots"], 5)
+
+    def test_it_reaches_the_outcome_row(self):
+        o = oc.resolve(FakeKbarBroker(_kb([("09:41", 101.0, 100.0, 100.5)])),
+                       {"code": "2330", "time": "09:03:30", "entry": 100.0,
+                        "stop": 99.0, "target": 101.5, "lots": 1,
+                        "bid_ask_ratio": 3.2}, "2026-09-24")
+        self.assertAlmostEqual(o.bid_ask_ratio, 3.2)
+
+    def test_old_rows_without_the_column_still_load(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            old = [f for f in oc.FIELDS if f != "bid_ask_ratio"]
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.DictWriter(f, fieldnames=old)
+                w.writeheader()
+                w.writerow({**{k: "" for k in old},
+                            "date": "2026-09-24", "code": "3094", "time": "09:39:28",
+                            "entry": "65.6", "stop": "64.7", "target": "67.7",
+                            "lots": "3", "result": oc.TARGET, "exit_price": "67.7",
+                            "r_multiple": "2.33", "gross_pct": "3.2",
+                            "net_pct": "3.0", "bars": "4"})
+            rows = oc.load_csv(path)
+        self.assertEqual(len(rows), 1, "舊列必須讀得回來，不可以被跳過")
+        self.assertIsNone(rows[0].bid_ask_ratio)
+
+    def test_it_does_not_change_which_signals_fire(self):
+        """**先記不排序。** 這一欄現在純粹是紀錄，不可以影響任何訊號的發與不發
+        —— 否則 v4 的結果就混進了第五個變數，週一的數字歸因不了。"""
+        weak = ready_state()
+        weak.aggressive_buy, weak.aggressive_sell = 5, 95   # 內盤壓倒性
+        self.assertIsNotNone(evaluate(weak, now=dtime(9, 3)),
+                             "內外盤比不該擋掉任何訊號")

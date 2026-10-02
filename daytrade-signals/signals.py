@@ -250,6 +250,27 @@ class SymbolState:
     category: str = ""                        # 產業類別代碼（輪動題材的客觀代理）
     candidates: int = 0                       # 今日已記錄幾個「被擋掉的候選」
     last_candidate_at: datetime | None = None # 候選之間的冷卻，避免每個 tick 記一筆
+    # 內外盤：成交是打在賣價（買方主動 = 外盤）還是打在買價（賣方主動 = 內盤）。
+    # 量能倍數只數「量有多大」，分不出方向 —— 量放大但內盤居多，是有人在出貨給你。
+    # tick_type：1 = 外盤、2 = 內盤、0 或缺 = 判不出來（不可以當成任何一邊）。
+    aggressive_buy: int = 0                   # 外盤成交張數
+    aggressive_sell: int = 0                  # 內盤成交張數
+    unclassified: int = 0                     # 判不出方向的張數 —— 要知道有多少沒算到
+
+    def bid_ask_ratio(self) -> float | None:
+        """外盤 ÷ 內盤。判不出方向的那些**不計入任何一邊**。
+
+        回傳 None 而不是 0 或 1：這一檔的 tick 根本沒帶 tick_type（舊版 shioaji、
+        或某些商品）時，「不知道」和「內外盤剛好打平」是兩件完全不同的事。
+        這個專案已經為了 `0` 當成 `None` 吃過兩次虧（損益查不到、成交窗口沒報價）。
+        """
+        if self.aggressive_buy <= 0 and self.aggressive_sell <= 0:
+            return None
+        if self.aggressive_sell <= 0:
+            # 全部都是外盤。給一個有上限的數字，不要回傳 inf —— inf 寫進 CSV
+            # 讀回來是字串，整列會被跳過。
+            return 99.0
+        return round(self.aggressive_buy / self.aggressive_sell, 2)
 
     def should_record_candidate(self, now: datetime) -> bool:
         """候選要記，但不能每個 tick 都記 —— 冷卻與上限都在這裡。"""
@@ -269,6 +290,18 @@ class SymbolState:
         self.last_price = float(tick.close)
         self.vwap = float(getattr(tick, "avg_price", 0) or self.vwap)
         self.total_volume = int(getattr(tick, "total_volume", 0) or 0)
+        # 內外盤只在開盤區間內累計 —— 訊號要用的是「發訊號之前買盤有多強」，
+        # 把整天的成交混進來，那一欄在 09:05 當下根本還不存在。
+        if not self.or_locked:
+            lots = int(getattr(tick, "volume", 0) or 0)
+            kind = int(getattr(tick, "tick_type", 0) or 0)
+            if lots > 0:
+                if kind == 1:
+                    self.aggressive_buy += lots
+                elif kind == 2:
+                    self.aggressive_sell += lots
+                else:
+                    self.unclassified += lots
         now = time.time() if now is None else now
         self.vol_marks.append((now, self.total_volume))
         self.vol_marks = [(t, v) for t, v in self.vol_marks
@@ -422,6 +455,10 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         "stop_rule": stop_rule,
         "vwap": round(st.vwap, 2),
         "volume_surge": round(surge, 2),
+        # 內外盤比：量能倍數說「量有多大」，這一欄說「那些量是誰主動的」。
+        # 先記不排序 —— 它還沒有任何資料支持，20 天後用算的決定要不要變成條件。
+        "bid_ask_ratio": st.bid_ask_ratio(),
+        "unclassified_lots": st.unclassified,
         "rank": st.rank,
         "category": st.category,
         "ruleset": config.RULESET,
