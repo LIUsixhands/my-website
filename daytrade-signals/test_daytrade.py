@@ -5102,5 +5102,86 @@ class TestInsideOutsideVolume(unittest.TestCase):
                              "內外盤比不該擋掉任何訊號")
 
 
+
+
+class TestDispositionStocksAreNotTradeableInThreeMinutes(unittest.TestCase):
+    """會長 SOP 第 1 條特別點名「非處置股」。查了永豐的合約之後，那個洞是真的。
+
+    處置股是**分盤撮合** —— 5 分鐘或 20 分鐘才撮合一次。v4 的進場窗口只有
+    09:02–09:05 三分鐘：20 分鐘分盤的標的在那三分鐘內一次都不會撮合，
+    5 分鐘分盤最多一次，「突破」這個概念不存在。發出去的訊號**物理上做不到**，
+    卻佔掉 20 檔監看、甚至 3 個訊號名額的其中一個。
+
+    原本只靠 `contract.day_trade`，而 `broker.is_day_tradable` 的註解寫著
+    「處置股／全額交割**通常**會是 No」—— 「通常」兩個字就是沒把握。
+    合約上其實有 `disposition_level` / `trading_suspended` /
+    `disposition_match_interval_min`，直接看它們，不要靠推測。
+    """
+
+    def _c(self, **kw):
+        base = dict(code="2330", name="台積電", day_trade="Yes", category="24",
+                    disposition_level=0, trading_suspended=False,
+                    disposition_match_interval_min=0, attention_flag=False)
+        return SimpleNamespace(**{**base, **kw})
+
+    def test_a_normal_stock_passes(self):
+        self.assertFalse(screener.is_disposition(self._c()))
+
+    def test_a_disposition_stock_is_skipped(self):
+        self.assertTrue(screener.is_disposition(self._c(disposition_level=1)))
+
+    def test_a_suspended_stock_is_skipped(self):
+        self.assertTrue(screener.is_disposition(self._c(trading_suspended=True)))
+
+    def test_call_auction_alone_is_enough_to_skip(self):
+        """就算 disposition_level 看起來正常，只要在分盤就不能用 —— 三分鐘的
+        窗口裡撮合不到幾次，突破根本量不出來。"""
+        self.assertTrue(screener.is_disposition(
+            self._c(disposition_match_interval_min=20)))
+
+    def test_a_missing_field_is_treated_as_normal_not_disposition(self):
+        """這幾欄是後來才有的。舊版 shioaji 沒有它們 —— 當成處置會把整個市場
+        砍光，那比漏掉幾檔處置股嚴重得多。往寬的那一側退。"""
+        self.assertFalse(screener.is_disposition(SimpleNamespace(code="2330")))
+
+    def test_a_junk_value_does_not_crash_the_whole_screen(self):
+        for bad in ("", "N/A", None, "一"):
+            with self.subTest(bad=bad):
+                screener.is_disposition(self._c(disposition_level=bad,
+                                                disposition_match_interval_min=bad))
+
+    def test_the_attention_flag_is_recorded_not_filtered(self):
+        """注意股照常撮合，所以不剔除 —— 但要記下來，20 天後才答得出
+        「注意股的突破是不是比較假」。剔除是一回事，留紀錄是另一回事。"""
+        self.assertFalse(screener.is_disposition(self._c(attention_flag=True)))
+
+    def test_the_removal_is_announced_at_info_not_buried_in_debug(self):
+        """靜靜砍掉幾檔，和「今天本來就比較少」長得一模一樣。
+
+        log.debug 在正常的執行層級下根本不會印出來 —— 那等於沒說。
+        用 AST 找真正的 log.info 呼叫，不用字串比對：變異測試證實字串比對
+        會被註解騙過去（`pass  # warn_if_too_late()` 那次）。
+        """
+        tree = ast.parse(textwrap.dedent(inspect.getsource(screener.screen)))
+        said = [n for n in ast.walk(tree)
+                if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute) and n.func.attr == "info"
+                and n.args and isinstance(n.args[0], ast.Constant)
+                and "處置" in str(n.args[0].value)]
+        self.assertTrue(said, "剔除處置股必須用 log.info 說出來")
+
+    def test_turning_the_rule_off_puts_them_back(self):
+        """開關要真的是開關 —— 關掉之後處置股必須回到名單裡，
+        否則這個設定就是裝飾品。"""
+        saved = config.SCREEN["skip_disposition"]
+        config.SCREEN["skip_disposition"] = False
+        try:
+            src = inspect.getsource(screener.screen)
+            self.assertIn('cfg["skip_disposition"]', src,
+                          "剔除必須受設定控制，不可以寫死")
+        finally:
+            config.SCREEN["skip_disposition"] = saved
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

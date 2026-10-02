@@ -98,21 +98,51 @@ def volume_baseline(ts_list, volume_list, lookback_days: int) -> float:
 PROGRESS_EVERY = 10
 
 
+def is_disposition(contract) -> bool:
+    """處置中或暫停交易？
+
+    `disposition_level` 0 = 正常，>0 = 處置中（分盤撮合）。
+    認不出來的值一律當成**正常**：這一欄是後來才有的，舊版 shioaji 沒有它，
+    當成處置會把整個市場砍光。真正危險的那一側（處置股混進來）由
+    `disposition_match_interval_min` 再擋一次 —— 它只要有值就代表在分盤。
+    """
+    if getattr(contract, "trading_suspended", False):
+        return True
+    try:
+        if int(getattr(contract, "disposition_level", 0) or 0) > 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    try:
+        if float(getattr(contract, "disposition_match_interval_min", 0) or 0) > 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
+
+
 def screen(broker: Broker) -> list[dict]:
     cfg = config.SCREEN
     contracts = broker.all_stocks()
     log.info("全市場商品檔：%d 檔", len(contracts))
 
     # 第一道：合約層級過濾（不打 API，先砍掉大半）
-    stage1 = []
+    stage1, skipped = [], []
     for c in contracts:
         code = getattr(c, "code", "")
         if not code.isdigit() or len(code) != 4:   # 排除 ETF/權證/特別股等非四碼普通股
             continue
         if cfg["require_day_trade"] and not broker.is_day_tradable(c):
             continue
+        if cfg["skip_disposition"] and is_disposition(c):
+            skipped.append(code)
+            continue
         stage1.append(c)
     log.info("可當沖 + 四碼普通股：%d 檔", len(stage1))
+    if skipped:
+        # 說出來。靜靜砍掉幾檔，和「今天本來就比較少」長得一模一樣。
+        log.info("處置／暫停交易剔除 %d 檔：%s", len(skipped),
+                 "、".join(skipped[:10]) + ("…" if len(skipped) > 10 else ""))
 
     # 第二道：昨日量價（snapshots 帶回昨日收盤資訊）
     # 代號→中文名稱。合約物件上就有，snapshot 上沒有，所以先在這裡收起來。
@@ -121,6 +151,10 @@ def screen(broker: Broker) -> list[dict]:
     # 這是「輪動題材」唯一客觀又免費的代理：題材在輪動時，整個族群會一起有量。
     # 存原始代碼不自己翻成中文 —— 翻錯比不翻糟，20 天後看實際出現哪些值再對照。
     cats = {getattr(c, "code", ""): str(getattr(c, "category", "") or "") for c in stage1}
+    # 注意股不剔除（它還是正常撮合），但要記下來 —— 20 天後才答得出
+    # 「注意股的突破是不是比較假」。剔除是一回事，留紀錄是另一回事。
+    flags = {getattr(c, "code", ""): bool(getattr(c, "attention_flag", False))
+             for c in stage1}
     snaps = broker.snapshots(stage1)
     rows = []
     for s in snaps:
@@ -129,6 +163,7 @@ def screen(broker: Broker) -> list[dict]:
             if row:
                 row["name"] = names.get(row["code"], "")
                 row["category"] = cats.get(row["code"], "")
+                row["attention_flag"] = flags.get(row["code"], False)
                 rows.append(row)
         except Exception as e:
             log.debug("skip %s: %s", getattr(s, "code", "?"), e)

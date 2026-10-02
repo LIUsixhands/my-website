@@ -136,6 +136,18 @@ SCREEN = {
     "min_amplitude_pct": 3.0,       # 前一日振幅下限（高-低)/收盤
     "max_universe": 20,             # 最多留幾檔進盤中監看
     "require_day_trade": True,      # 只留可現股當沖（Shioaji contract.day_trade）
+    # 處置股剔除。**這不是偏好，是 v4 之下的可執行性問題。**
+    #
+    # 處置股是分盤撮合 —— 5 分鐘或 20 分鐘才撮合一次。而 v4 的進場窗口只有
+    # 09:02–09:05 三分鐘：20 分鐘分盤的標的在那三分鐘內**一次都不會撮合**，
+    # 5 分鐘分盤最多撮合一次，「突破」這個概念根本不存在。發出去的訊號你
+    # 物理上做不到，卻佔掉 20 檔監看、甚至 3 個訊號名額的其中一個。
+    #
+    # 原本只靠 contract.day_trade，而 broker.is_day_tradable 的註解寫著
+    # 「處置股／全額交割**通常**會是 No」—— 「通常」兩個字就是沒把握。
+    # 合約物件上其實有 disposition_level / trading_suspended，直接看它們，
+    # 不要靠推測。
+    "skip_disposition": True,       # disposition_level > 0 或暫停交易 → 不收
     "lookback_days": 5,             # 量能均值回看天數
     "max_kbar_queries": 60,         # 只對前 N 名打 kbars —— API 有流量上限，超過會被停用一分鐘
     "kbar_sleep_sec": 0.3,          # 每次 kbars 之間的間隔
