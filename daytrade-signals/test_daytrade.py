@@ -116,6 +116,38 @@ def ready_state(code="2330", or_high=100.0, last=101.0, vwap=100.5, surge_ratio=
     return st
 
 
+class TestEveryTestActuallyRuns(unittest.TestCase):
+    """`unittest.main()` 以前卡在檔案中間，它後面的測試類別從來沒有被執行過。
+
+    `python test_daytrade.py`（README 與 CI 用的那個指令）會從上往下執行，
+    走到 `unittest.main()` 就開跑並結束 —— **下面的 class 連定義都不會定義**。
+    而 `python -m unittest test_daytrade` 是整個模組 import 進來，所以 490 條
+    全都跑得到。開發時用後者、使用者與 CI 用前者，於是 2026-10-02 當天新寫的
+    七個類別、53 條測試在 CI 上「全綠」，實際上一條都沒跑。
+
+    變異測試也一起失效了：它跑的是 `-m unittest`，接得住；但在使用者的環境裡
+    那些規則根本沒有人在看。
+
+    這正是這個專案一路在修的那種毛病 —— 檢查看起來在那裡，實際上沒有作用 ——
+    而這次是它長在測試檔自己身上。所以用一條測試把入口位置釘死。
+    """
+
+    def test_the_entry_point_is_the_last_thing_in_the_file(self):
+        src = Path(__file__).read_text(encoding="utf-8").splitlines()
+        entry = [i for i, l in enumerate(src) if l.startswith('if __name__')]
+        self.assertEqual(len(entry), 1, "入口只能有一個")
+        after = [f"{i + 1}: {l}" for i, l in enumerate(src[entry[0]:], entry[0])
+                 if l.startswith(("class ", "def "))]
+        self.assertEqual(after, [], "入口後面不可以再有測試 —— 它們不會被執行")
+
+    def test_both_ways_of_running_find_the_same_tests(self):
+        """`python test_daytrade.py` 與 `python -m unittest` 必須收到同一組測試。"""
+        loader = unittest.TestLoader()
+        mod = sys.modules[__name__]
+        found = loader.loadTestsFromModule(mod).countTestCases()
+        self.assertGreater(found, 480, f"只找到 {found} 條，入口位置可能又跑掉了")
+
+
 class TestConfig(unittest.TestCase):
     def test_round_trip_cost(self):
         # 手續費 0.001425 × 2折 × 來回 + 當沖稅 0.0015 = 0.00207 → 0.207%
@@ -4510,10 +4542,6 @@ class TestLoginRetry(unittest.TestCase):
         self.assertLessEqual(total, 10 * 60)
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class TestSignalBatchIsNotARace(unittest.TestCase):
     """v4：09:02–09:05 收集，09:05:00 一次發出，按當下量能倍數排序取前 N。
 
@@ -5072,3 +5100,7 @@ class TestInsideOutsideVolume(unittest.TestCase):
         weak.aggressive_buy, weak.aggressive_sell = 5, 95   # 內盤壓倒性
         self.assertIsNotNone(evaluate(weak, now=dtime(9, 3)),
                              "內外盤比不該擋掉任何訊號")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
