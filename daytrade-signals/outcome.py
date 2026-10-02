@@ -49,7 +49,7 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
           "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
           "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
-          "exit_at")
+          "exit_at", "ruleset")
 
 
 @dataclass
@@ -97,6 +97,9 @@ class Outcome:
     # 沒有這一欄就答不出「這一筆發訊號的時候，前面幾筆已經結束了幾筆」，
     # 於是「照規則今天真的會做到哪幾筆」只能用「前 N 筆」粗估，而那會算錯。
     exit_at: str = ""
+    # 產生這一筆的規則版本。沒有它，改過規則之後的資料就只能整批丟掉 ——
+    # 而「為了資料純淨所以什麼都不改」會變成無限迴圈。
+    ruleset: str = ""
 
     @property
     def is_win(self) -> bool:
@@ -270,6 +273,7 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         rank=int(sig.get("rank") or 0),
         category=str(sig.get("category") or ""),
         exit_at=_exit_at(sig, fired, result, used, bars),
+        ruleset=str(sig.get("ruleset") or ""),
     )
 
 
@@ -375,7 +379,7 @@ def append_candidates_csv(pairs: list[tuple], path=None) -> None:
             w.writerow(row)
 
 
-_STR_FIELDS = ("date", "code", "time", "result", "category", "exit_at")
+_STR_FIELDS = ("date", "code", "time", "result", "category", "exit_at", "ruleset")
 _BOOL_FIELDS = ("target_after_stop",)
 _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",

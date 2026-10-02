@@ -81,6 +81,18 @@ def _bucket(rows: list, key, labels: list) -> dict:
     return out
 
 
+def by_ruleset(rows: list) -> dict:
+    """按規則版本分組。**混在一起算等於把兩把不同的尺量出來的數字相加。**
+
+    09-29 改 R 值、10-02 改停損 —— 每一次都讓前後的資料不能直接比。
+    有這一欄才能「邊改邊累積」，而不是每改一次就要重新等 20 天。
+    """
+    out: dict = {}
+    for o in rows:
+        out.setdefault(o.ruleset or "（未標版本）", []).append(o)
+    return dict(sorted(out.items()))
+
+
 def by_rank(rows: list) -> dict:
     """盤前名次。0 = 不知道（舊紀錄，或當天沒跑盤前選股）。"""
     def key(o):
@@ -116,6 +128,21 @@ def by_fill(rows: list) -> dict:
             return None
         return "掛得到" if pct <= 0 else "掛不到"
     return _bucket(rows, key, ["掛得到", "掛不到"])
+
+
+def stopped_but_reached_target(rows: list) -> dict:
+    """被停損的那些，當天後來有沒有還是走到目標。
+
+    這是「停損是不是太緊」唯一直接的證據。比例高 = 你被雜訊掃出場，
+    而不是看錯方向。10-02 把停損加上結構線，就是為了這個 —— 但**要不要
+    再放寬，得看這個數字，不是看誰講話比較大聲**。
+    """
+    stopped = [o for o in rows if o.result == oc.STOP and o.target_after_stop is not None]
+    if not stopped:
+        return {"n": 0}
+    hit = [o for o in stopped if o.target_after_stop]
+    rate, lo, hi = win_rate_ci(len(hit), len(stopped))
+    return {"n": len(stopped), "hit": len(hit), "rate": rate, "lo": lo, "hi": hi}
 
 
 def group_stats(rows: list) -> dict:
@@ -190,6 +217,10 @@ def report(rows: list) -> list[str]:
     ]
 
     lines += render_group(
+        "〇、規則版本", by_ruleset(rows),
+        "改過規則的前後不能混算。這一組要是互相重疊，代表那次修改在目前的"
+        "樣本下看不出差別 —— 那也是一個答案。")
+    lines += render_group(
         "一、第幾個訊號", signal_order(rows),
         "「最好的能不能排第一個」—— 不能（訊號是事件，不是名單）。"
         "但如果後面的訊號系統性地比較好，「等一下再做」就有根據。")
@@ -205,6 +236,20 @@ def report(rows: list) -> list[str]:
     lines += render_group(
         "五、掛不掛得到", by_fill(rows),
         "買不到的那些不會進你的帳戶 —— 它們的勝率再高也不算數。")
+
+    stops = stopped_but_reached_target(rows)
+    lines += ["", "## 六、停損之後，當天還是走到目標了嗎", "",
+              "_「停損是不是太緊」唯一直接的證據。比例高 = 被雜訊掃出場，不是看錯方向。_", ""]
+    if not stops["n"]:
+        lines.append("_還沒有可判定的停損樣本。_")
+    elif stops["n"] < TOO_FEW:
+        lines.append(f"_只有 {stops['n']} 筆停損，太少，不給數字。_")
+    else:
+        lines.append(f"- **{stops['hit']}/{stops['n']} 筆**停損之後當天仍碰到目標"
+                     f"（{stops['rate']}%，區間 {stops['lo']}~{stops['hi']}）")
+        lines.append("")
+        lines.append("> 區間下界若明顯高於 50%，才有理由再放寬停損。"
+                     "**不到那個程度就不要動它** —— 停損是這套系統的地基。")
 
     lines += ["", "---", "",
               "*本分析只描述已發生的樣本，不預測未來，不構成投資建議。*"]

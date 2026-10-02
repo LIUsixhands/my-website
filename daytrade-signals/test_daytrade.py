@@ -4151,6 +4151,223 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
         self.assertNotIn(".env.template", self.lines)
 
 
+class TestStopNeverSitsAboveTheBreakout(unittest.TestCase):
+    """2026-10-02 美亞：區間高 26.70、進場 27.25、**停損 26.85**。
+
+    停損比突破點還高。那檔只要回測一下突破點 —— 突破之後最正常不過的動作 ——
+    就把你掃出場，而突破在技術上根本還沒失敗。
+
+    根因：停損只從進場價往下算固定 %，和開盤區間完全無關。於是訊號發得越晚、
+    進場價飄得越高，停損就跟著往上飄。而「跌回區間 = 突破失敗」才是這套策略
+    自己的前提 —— 停損在突破點之上，等於「突破還好好的，但我先出場了」。
+
+    那不是參數調不好，是實作沒做到它宣稱的事。
+    """
+
+    def _state(self, price, or_high=26.70, or_low=25.10, prev_close=26.20,
+               vwap=26.14, surge=1.86):
+        st = SymbolState("2020", prev_close, "美亞")
+        st.lock_opening_range(or_high, or_low)
+        st.last_price = price
+        st.vwap = vwap
+        st.volume_surge = lambda: surge
+        return st
+
+    def _sig(self, price, **kw):
+        return evaluate(self._state(price, **kw), now=dtime(9, 17))
+
+    def test_the_real_case_now_stops_below_the_breakout(self):
+        sig = self._sig(27.25)
+        self.assertLess(sig["stop"], 26.70)        # 區間高之下
+        self.assertLess(sig["stop"], 26.85)        # 比舊規則寬
+
+    def test_a_timely_entry_is_completely_unchanged(self):
+        """貼近突破點進場時，固定 % 本來就比較低 —— 結構線不可以插手。
+
+        這一條是整個修改的安全邊界：它只在壞掉的那些情況生效。
+        """
+        sig = self._sig(26.75)
+        expect = config.round_to_tick(
+            26.75 * (1 - config.SIGNAL["stop_loss_pct"] / 100), "up")
+        self.assertEqual(sig["stop"], expect)
+        self.assertEqual(sig["stop_rule"], "固定 %")
+
+    def test_chasing_higher_automatically_cuts_the_lot_size(self):
+        """系統自己踩煞車：追越高 → 停損越寬 → 風險越大 → 張數越少。
+
+        這比訂一條「不准追超過 X%」好 —— 那個 X 是我憑空decide的，
+        而這個是算出來的。
+        """
+        near, far = self._sig(26.75), self._sig(27.25)
+        self.assertGreater(near["lots"], far["lots"])
+        self.assertGreater(far["entry"] - far["stop"], near["entry"] - near["stop"])
+
+    def test_the_dollar_risk_stays_inside_the_cap_either_way(self):
+        """煞車不可以用「讓你多賠」的方式踩。單筆風險上限仍然要守住。"""
+        for price in (26.75, 27.00, 27.25, 27.60):
+            with self.subTest(entry=price):
+                sig = self._sig(price)
+                if not sig["oversized"]:
+                    risk = (sig["entry"] - sig["stop"]) * 1000 * sig["lots"]
+                    self.assertLessEqual(round(risk), config.RISK["per_trade_risk"])
+
+    def test_the_signal_says_which_rule_it_used(self):
+        """停損比平常寬的時候要講原因，否則看起來像算錯了。"""
+        text = format_signal(self._sig(27.25), 1)
+        self.assertIn("結構線", text)
+        self.assertIn("26.70", text)
+        far_text = format_signal(self._sig(26.75), 1)
+        self.assertNotIn("結構線", far_text)
+
+    def test_the_signal_shows_how_far_it_chased(self):
+        """追高幅度以前只進 outcomes.csv，20 天後才看得到 ——
+        但需要它的時候是訊號跳出來那 10 秒。"""
+        sig = self._sig(27.25)
+        self.assertAlmostEqual(sig["extension_pct"], 2.06, places=2)
+        self.assertIn("已追高 +2.06%", format_signal(sig, 1))
+
+    def test_no_opening_range_falls_back_instead_of_crashing(self):
+        """區間補算不到的時候不要炸 —— 退回固定 %，而且要能發得出訊號。"""
+        st = self._state(27.25)
+        st.or_high = 0
+        sig = evaluate(st, now=dtime(9, 17))
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig["stop_rule"], "固定 %")
+        self.assertIsNone(sig["extension_pct"])
+
+    def test_the_stop_is_still_never_at_or_above_the_entry(self):
+        """放寬停損不可以放寬到變成沒有停損。"""
+        for price in (26.75, 27.25, 28.00):
+            with self.subTest(entry=price):
+                sig = self._sig(price)
+                if sig:
+                    self.assertLess(sig["stop"], sig["entry"])
+
+    def test_target_still_respects_the_limit_up(self):
+        """停損變寬 → 目標跟著變遠，但不能飛出漲停。"""
+        sig = self._sig(27.25)
+        cap = config.limit_up(26.20)
+        self.assertLessEqual(sig["target"], cap)
+
+
+class TestRulesetStamping(unittest.TestCase):
+    """改規則不該讓既有資料整批報廢 —— 只要記得是哪一版產生的。
+
+    09-29 把 1.5R 改成 2.5R 時就已經造成這個問題，當時只靠我記得。
+    沒有這一欄，「為了資料純淨所以什麼都不改」會變成無限迴圈：
+    第 20 天改完又要再等 20 天。
+    """
+
+    def _state(self, price=26.75):
+        st = SymbolState("2020", 26.20, "美亞")
+        st.lock_opening_range(26.70, 25.10)
+        st.last_price = price
+        st.vwap = 26.40
+        st.volume_surge = lambda: 1.86
+        return st
+
+    def test_the_signal_carries_the_version(self):
+        sig = evaluate(self._state(), now=dtime(9, 17))
+        self.assertEqual(sig["ruleset"], config.RULESET)
+        self.assertTrue(config.RULESET)
+
+    def test_it_reaches_outcomes_csv(self):
+        sig = {"code": "2330", "time": "09:23:00", "entry": 121.0, "stop": 119.5,
+               "target": 123.5, "lots": 1, "ruleset": "v3"}
+        o = oc.resolve(FakeKbarBroker(_kb([("09:24", 123.6, 120.8, 123.4)])),
+                       sig, "2026-09-24")
+        self.assertEqual(o.ruleset, "v3")
+        self.assertIn("ruleset", oc.FIELDS)
+
+    def test_old_rows_without_it_still_load(self):
+        """9/24~10/01 寫下的列沒有這一欄，不可以因此讀不回來。"""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            keep = [f for f in oc.FIELDS if f != "ruleset"]
+            filled = {"date": "2026-09-24", "code": "6182", "time": "09:19:22",
+                      "entry": "100", "stop": "99", "target": "102.5", "lots": "1",
+                      "result": oc.TARGET, "exit_price": "102.5", "r_multiple": "2.5",
+                      "gross_pct": "2.5", "net_pct": "2.3", "bars": "3"}
+            path.write_text(",".join(keep) + "\n"
+                            + ",".join(filled.get(f, "") for f in keep) + "\n",
+                            encoding="utf-8")
+            back = oc.load_csv(path)
+        self.assertEqual(len(back), 1)
+        self.assertEqual(back[0].ruleset, "")
+
+    def test_analyse_splits_by_version(self):
+        rows = [oc.Outcome(date="2026-09-24", code="A", time="09:10", entry=100.0,
+                           stop=99.0, target=102.5, lots=1, result=oc.TARGET,
+                           exit_price=102.5, r_multiple=2.5, gross_pct=2.5,
+                           net_pct=2.3, bars=3, ruleset=v)
+                for v in ("v2", "v2", "v3")]
+        groups = analyse.by_ruleset(rows)
+        self.assertEqual(sorted(groups), ["v2", "v3"])
+        self.assertEqual(len(groups["v2"]), 2)
+
+    def test_unstamped_rows_are_their_own_group_not_merged(self):
+        """舊列沒有版本，不可以被塞進任何一版裡假裝是同一把尺。"""
+        rows = [oc.Outcome(date="2026-09-24", code="A", time="09:10", entry=100.0,
+                           stop=99.0, target=102.5, lots=1, result=oc.TARGET,
+                           exit_price=102.5, r_multiple=2.5, gross_pct=2.5,
+                           net_pct=2.3, bars=3, ruleset=v)
+                for v in ("", "v3")]
+        groups = analyse.by_ruleset(rows)
+        self.assertIn("（未標版本）", groups)
+        self.assertEqual(len(groups["（未標版本）"]), 1)
+
+
+class TestIsTheStopTooTight(unittest.TestCase):
+    """「被停損的那些，後來當天還是走到目標了嗎」—— 停損太緊唯一直接的證據。
+
+    10-02 把停損改成結構線是因為它會飄到突破點之上（那是矛盾，不是參數）。
+    但**要不要再放寬，得看這個數字**，不是看誰講話比較大聲。
+    """
+
+    def _rows(self, spec):
+        return [oc.Outcome(date="2026-10-02", code="T", time=f"09:{10+i}",
+                           entry=100.0, stop=99.0, target=102.5, lots=1,
+                           result=res, exit_price=99.0, r_multiple=-1.0,
+                           gross_pct=-1.0, net_pct=-1.2, bars=2,
+                           target_after_stop=after)
+                for i, (res, after) in enumerate(spec)]
+
+    def test_it_counts_only_stopped_trades_with_a_verdict(self):
+        rows = self._rows([(oc.STOP, True), (oc.STOP, False),
+                           (oc.TARGET, None), (oc.STOP, None)])
+        st = analyse.stopped_but_reached_target(rows)
+        self.assertEqual((st["n"], st["hit"]), (2, 1))
+
+    def test_it_refuses_a_number_when_there_are_too_few(self):
+        rows = self._rows([(oc.STOP, True), (oc.STOP, True)])
+        text = "\n".join(analyse.report(rows))
+        self.assertIn("太少", text)
+        self.assertNotIn("100.0%", text)
+
+    def test_it_reports_with_an_interval_once_there_are_enough(self):
+        rows = self._rows([(oc.STOP, i % 2 == 0) for i in range(10)])
+        st = analyse.stopped_but_reached_target(rows)
+        self.assertEqual(st["n"], 10)
+        self.assertLess(st["lo"], st["rate"])
+        self.assertGreater(st["hi"], st["rate"])
+        text = "\n".join(analyse.report(rows))
+        self.assertIn("停損之後，當天還是走到目標了嗎", text)
+
+    def test_no_stopped_trades_says_so(self):
+        text = "\n".join(analyse.report(self._rows([(oc.TARGET, None)])))
+        self.assertIn("還沒有可判定的停損樣本", text)
+
+    def test_a_trade_that_was_never_stopped_is_not_in_the_denominator(self):
+        # resolve() 目前只在 result == STOP 時才寫 target_after_stop，所以這樣的
+        # 一列正常跑不出來。但分母的定義是「被停損的那些」—— 一筆走到目標的單子
+        # 當然碰得到目標，把它算進分母會把比例沖高，然後拿一個根本不存在的證據
+        # 去主張「停損太緊、該放寬」。手改過的 CSV、或哪天 resolve() 改寫法，
+        # 都會餵進這種列，所以 analyse 這邊自己也要擋。
+        rows = self._rows([(oc.STOP, False), (oc.TARGET, True), (oc.TARGET, True)])
+        st = analyse.stopped_but_reached_target(rows)
+        self.assertEqual((st["n"], st["hit"]), (1, 0))
+
+
 class TestLoginRetry(unittest.TestCase):
     """2026-09-30 早上真的發生的事。
 

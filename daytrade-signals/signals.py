@@ -338,8 +338,28 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
     if cap and entry >= cap:
         log.warning("%s 現價 %.2f 已達漲停 %.2f，不發訊號", st.code, entry, cap)
         return None
-    # 停損往上進位（較緊的那一邊）：實際風險不會超過 stop_loss_pct 設定的上限。
-    stop = config.round_to_tick(entry * (1 - cfg["stop_loss_pct"] / 100), "up")
+    # 停損有兩條線，取**較寬**的那一條（較低的停損價）。
+    #
+    # 1. 固定 %：進場價往下 stop_loss_pct。往上進位（較緊的那一邊），
+    #    實際風險不會超過設定的上限。
+    # 2. 結構線：區間高點往下 stop_below_or_high_pct。
+    #
+    # 為什麼需要第二條：第一條和開盤區間完全無關，所以訊號發得越晚、進場價
+    # 飄得越高，停損就跟著往上飄 —— 會飄到突破點**之上**。2026-10-02 美亞：
+    # 區間高 26.70、進場 27.25、停損 26.85。那檔只要回測一下突破點就被掃，
+    # 而突破根本還沒失敗。「跌回區間 = 突破失敗」才是這套策略自己的前提。
+    #
+    # 進場貼近突破點時第一條本來就比較低，第二條不會生效；只有追高之後才
+    # 接手，而且接手的方式是自動加大風險、減少張數 —— 系統自己踩煞車。
+    pct_stop = config.round_to_tick(entry * (1 - cfg["stop_loss_pct"] / 100), "up")
+    structural_stop = None
+    if st.or_high:
+        structural_stop = config.round_to_tick(
+            st.or_high * (1 - cfg["stop_below_or_high_pct"] / 100), "down")
+    stop = min(pct_stop, structural_stop) if structural_stop else pct_stop
+    # 哪一條生效，要記下來也要講出來 —— 不然使用者看到一個比平常寬的停損，
+    # 會以為程式算錯了。
+    stop_rule = "結構線（區間高下方）" if stop != pct_stop else "固定 %"
     if stop >= entry:
         # 低價股在極小的 stop_loss_pct 下會進位到進場價，這種訊號沒有可執行的停損。
         log.warning("%s 停損進位後等於進場價（%.2f），不發訊號", st.code, entry)
@@ -376,10 +396,16 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         "oversized": oversized,
         "target_capped": target_capped,
         "or_high": st.or_high,
+        # 進場價比突破點高出幾 % —— 追高的程度。以前只進 outcomes.csv，
+        # 但看訊號的那一刻才是需要它的時候。
+        "extension_pct": (round((entry - st.or_high) / st.or_high * 100, 2)
+                          if st.or_high else None),
+        "stop_rule": stop_rule,
         "vwap": round(st.vwap, 2),
         "volume_surge": round(surge, 2),
         "rank": st.rank,
         "category": st.category,
+        "ruleset": config.RULESET,
     }
 
 
@@ -391,7 +417,12 @@ def format_signal(sig: dict, ordinal: int) -> str:
         f" 決策錨點｜{sig['time']}",
         "────────────────",
         f"方向：{sig['direction']}（開盤區間突破）",
-        f"進場：{sig['entry']:.2f}（區間高 {sig['or_high']:.2f}，均價 {sig['vwap']:.2f}）",
+        # 追高幅度印在進場價旁邊。這個數字以前只進 outcomes.csv，20 天後才看得到
+        # —— 但真正需要它的時候，是訊號跳出來、你在決定要不要下單的那 10 秒。
+        (f"進場：{sig['entry']:.2f}（區間高 {sig['or_high']:.2f} → "
+         f"已追高 +{sig['extension_pct']:.2f}%，均價 {sig['vwap']:.2f}）"
+         if sig.get("extension_pct") is not None else
+         f"進場：{sig['entry']:.2f}（區間高 {sig['or_high']:.2f}，均價 {sig['vwap']:.2f}）"),
         f"停損：{sig['stop']:.2f}  ← 跌破就走，不准往下修",
         (f"目標：{sig['target']:.2f}（貼齊漲停，"
          f"實際 {(sig['target'] - sig['entry']) / (sig['entry'] - sig['stop']):.2f}R）"
@@ -400,6 +431,12 @@ def format_signal(sig: dict, ordinal: int) -> str:
         f"建議張數：{sig['lots']} 張（單筆風險 {r['per_trade_risk']:,} 元）",
         f"量能倍數：{sig['volume_surge']:.2f}x",
     ]
+    if sig.get("stop_rule", "").startswith("結構"):
+        # 停損比平常寬的時候要講原因，否則看起來像算錯了。
+        lines.append(
+            f"ℹ️ 停損用的是區間高 {sig['or_high']:.2f} 下方的結構線，不是進場價的固定 %"
+            f" —— 因為這一筆已經追高 +{sig['extension_pct']:.2f}%，"
+            f"固定 % 會把停損放到突破點之上，回測一下就被掃。")
     if sig.get("oversized"):
         lines.append(
             f"⚠️ 這檔一張的停損風險就是 {sig['risk_per_lot']:,} 元，"
