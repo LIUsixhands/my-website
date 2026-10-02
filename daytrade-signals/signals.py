@@ -36,9 +36,8 @@ log = logging.getLogger("signals")
 UNKNOWN_RETRIES = 2
 UNKNOWN_RETRY_WAIT = 1.5      # 秒；在鎖內等待，所以不能太久
 
-RECENT_WINDOW_SEC = 300      # 「近期」量能取樣長度
-MIN_RECENT_SPAN_SEC = 60     # 近期樣本至少要橫跨這麼久才算得出速率
-MIN_OLDER_SPAN_SEC = 240     # 基準樣本至少要橫跨這麼久，否則基準不可信
+# 取樣視窗搬到 config.SIGNAL —— 它們不是實作細節，是會讓整條規則失效的參數。
+# 寫死在這裡的時候，把進場窗口從三小時改成三分鐘就會無聲地關掉量能過濾。
 VOL_MARK_KEEP_SEC = 900      # tick 量能足跡保留長度
 
 
@@ -295,14 +294,16 @@ class SymbolState:
         if len(self.vol_marks) < 4:
             return 0.0
         now = self.vol_marks[-1][0]
-        recent = [(t, v) for t, v in self.vol_marks if now - t <= RECENT_WINDOW_SEC]
-        older = [(t, v) for t, v in self.vol_marks if now - t > RECENT_WINDOW_SEC]
+        window = config.SIGNAL["volume_recent_sec"]
+        recent = [(t, v) for t, v in self.vol_marks if now - t <= window]
+        older = [(t, v) for t, v in self.vol_marks if now - t > window]
         if len(recent) < 2 or len(older) < 2:
             return 0.0
 
         recent_span = recent[-1][0] - recent[0][0]
         older_span = older[-1][0] - older[0][0]
-        if recent_span < MIN_RECENT_SPAN_SEC or older_span < MIN_OLDER_SPAN_SEC:
+        if (recent_span < config.SIGNAL["volume_min_recent_span_sec"]
+                or older_span < config.SIGNAL["volume_min_base_span_sec"]):
             return 0.0
 
         recent_rate = (recent[-1][1] - recent[0][1]) / recent_span
@@ -540,6 +541,26 @@ class SignalBatch:
                            x.get("rank") or 9999, str(x.get("code"))))
         self.pending = {}
         return ranked[:self.limit], ranked[self.limit:]
+
+
+def format_too_late(now: datetime) -> str:
+    """啟動太晚 —— 今天不會有訊號，而且畫面上看不出來。
+
+    v3 的進場窗口有三小時十五分，晚開只是少幾個訊號，補算完開盤區間還能繼續。
+    v4 的窗口只有三分鐘（09:02–09:05），**過了就整天掛零**，而「整天掛零」和
+    「今天沒有股票突破」在畫面上一模一樣 —— 那正是這個專案一路在修的那種事：
+    失敗要出聲，不然你會把故障當成行情。
+    """
+    cfg = config.SIGNAL
+    return "\n".join([
+        f"\u26a0\ufe0f {now.strftime('%H:%M:%S')} 盤中監看啟動太晚",
+        "────────────────",
+        f"發訊號的窗口是 {cfg['or_end']}–{cfg['signal_batch_at']}，現在已經過了。",
+        "**今天不會有任何買進訊號** —— 這不是今天沒行情，是程式沒趕上。",
+        "────────────────",
+        f"手上如果有部位，停損照舊有效，{cfg['exit_signal_at']} 的提醒也還會發。",
+        f"明天請確認 monitor.bat 在 {cfg['or_end']} 之前就跑起來。",
+    ])
 
 
 def format_time_exit(o: "OpenSignal", price: float, at: str) -> str:
@@ -1042,6 +1063,11 @@ def run():
     if (config.SIGNAL["backfill_opening_range"]
             and datetime.now().time() >= _t(config.SIGNAL["or_end"])):
         backfill_opening_ranges(broker, states)
+
+    # 補算完區間也救不了「批次窗口已經過了」。這一則一定要推，不能只寫進 log：
+    # log 在那個被導向檔案的黑視窗裡，沒有人會在早上九點去翻。
+    if datetime.now().time() >= _t(config.SIGNAL["signal_batch_at"]):
+        notify(format_too_late(datetime.now()))
 
     close_at = _t(config.SIGNAL["market_close"])
     exit_at = _t(config.SIGNAL["exit_signal_at"])

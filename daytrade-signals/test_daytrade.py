@@ -96,13 +96,18 @@ def ready_state(code="2330", or_high=100.0, last=101.0, vwap=100.5, surge_ratio=
     st.lock_opening_range(or_high, or_high - 2)
     st.last_price = last
     st.vwap = vwap
-    # vol_marks 每 60 秒一筆，橫跨 15 分鐘：
-    # 最後 5 分鐘的量能速率是 surge_ratio 張/秒，之前是 1 張/秒。
+    # vol_marks 照 config 的取樣視窗造，不要寫死秒數 —— v4 把近期視窗從
+    # 300 秒縮到 60 秒時，寫死的版本會算出別的倍數，而壞掉的原因跟這些測試
+    # 要驗的事情無關。
+    window = config.SIGNAL["volume_recent_sec"]
+    span = window + max(config.SIGNAL["volume_min_base_span_sec"], window) * 2
+    step = max(5, window // 6)
     now = 10_000.0
     marks, vol = [], 0.0
-    for offset in range(-900, 1, 60):
+    for offset in range(-span, 1, step):
         marks.append((now + offset, int(round(vol))))
-        vol += 60 * (1.0 if offset < -300 else surge_ratio)
+        # 最後 window 秒的量能速率是 surge_ratio 張/秒，之前是 1 張/秒
+        vol += step * (1.0 if offset < -window else surge_ratio)
     st.vol_marks = marks
     return st
 
@@ -4503,3 +4508,209 @@ class TestLoginRetry(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestSignalBatchIsNotARace(unittest.TestCase):
+    """v4：09:02–09:05 收集，09:05:00 一次發出，按當下量能倍數排序取前 N。
+
+    v3 以前是「誰先突破誰先發」。在三小時長的進場窗口裡那還說得過去 ——
+    先突破的確實是先動的那一檔。壓縮到三分鐘之後，先後差距只剩下「哪一檔的
+    報價封包先到」，那是網路抖動，不是市場資訊。一天只發三個訊號的時候，
+    用抖動決定發哪三檔，等於把最重要的那個決定交給運氣。
+    """
+
+    AT = dtime(9, 5)
+
+    def _sig(self, code, surge, rank=0):
+        return {"code": code, "volume_surge": surge, "rank": rank,
+                "entry": 100.0, "stop": 98.5, "target": 102.0}
+
+    def _batch(self, limit=3):
+        return signals.SignalBatch(self.AT, limit)
+
+    def _at(self, h, m, s=0):
+        return datetime(2026, 10, 5, h, m, s)
+
+    def test_nothing_comes_out_before_the_batch_time(self):
+        b = self._batch()
+        b.add(self._sig("A", 3.0))
+        self.assertFalse(b.due(self._at(9, 4, 59)))
+
+    def test_it_fires_once_the_time_arrives(self):
+        b = self._batch()
+        b.add(self._sig("A", 3.0))
+        self.assertTrue(b.due(self._at(9, 5, 0)))
+
+    def test_the_strongest_volume_goes_first(self):
+        b = self._batch()
+        for code, surge in (("A", 1.9), ("B", 4.2), ("C", 2.5), ("D", 3.1)):
+            b.add(self._sig(code, surge))
+        chosen, rest = b.take()
+        self.assertEqual([s["code"] for s in chosen], ["B", "D", "C"])
+        self.assertEqual([s["code"] for s in rest], ["A"])
+
+    def test_the_ones_that_miss_the_cut_are_still_written_down(self):
+        """砍掉樣本就等於把「只發三個夠不夠」變成無法回答的問題。"""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "candidates.csv"
+            b = self._batch()
+            for code, surge in (("A", 1.9), ("B", 4.2), ("C", 2.5), ("D", 3.1)):
+                b.add(self._sig(code, surge))
+            _, rest = b.take()
+            for sig in rest:
+                signals.record_candidate(sig, signals.BLOCK_BATCH_RANK, path=path)
+            text = path.read_text(encoding="utf-8-sig")
+        self.assertIn("A", text)
+        self.assertIn(signals.BLOCK_BATCH_RANK, text)
+
+    def test_the_same_symbol_keeps_only_its_first_breakout(self):
+        """第一次突破的進場價才是「剛越過區間高」的價格，後面只會更高 ——
+        而追高正是 v4 要離開的那個毛病。"""
+        b = self._batch()
+        first = self._sig("A", 2.0)
+        first["entry"] = 100.0
+        later = self._sig("A", 9.9)
+        later["entry"] = 104.0
+        b.add(first)
+        b.add(later)
+        chosen, _ = b.take()
+        self.assertEqual(len(chosen), 1)
+        self.assertAlmostEqual(chosen[0]["entry"], 100.0)
+
+    def test_ties_break_the_same_way_every_time(self):
+        """同一份資料、不同的到達順序，必須選出同一組三檔。
+
+        報價封包的先後是會變的；選出來的三檔不可以跟著變，否則回測算出來的
+        那一天和實盤跑出來的那一天就不是同一天，20 日的結論也就不成立。
+        """
+        data = {"A": (2.0, 4), "B": (2.0, 2), "C": (2.0, 3), "D": (2.0, 1)}
+        order = []
+        for codes in (("A", "B", "C", "D"), ("D", "C", "B", "A"), ("C", "A", "D", "B")):
+            b = self._batch()
+            for c in codes:
+                surge, rank = data[c]
+                b.add(self._sig(c, surge, rank=rank))
+            order.append([x["code"] for x in b.take()[0]])
+        self.assertEqual(order[0], order[1])
+        self.assertEqual(order[1], order[2])
+        self.assertEqual(order[0], ["D", "B", "C"], "平手時照盤前名次")
+
+    def test_it_only_fires_once(self):
+        b = self._batch()
+        b.add(self._sig("A", 3.0))
+        b.take()
+        self.assertFalse(b.due(self._at(9, 6)))
+        self.assertEqual(b.take(), ([], []))
+
+    def test_a_quiet_window_produces_nothing_rather_than_filler(self):
+        b = self._batch()
+        chosen, rest = b.take()
+        self.assertEqual((chosen, rest), ([], []))
+
+    def test_missing_volume_surge_sorts_last_instead_of_crashing(self):
+        b = self._batch(limit=1)
+        b.add(self._sig("A", None))
+        b.add(self._sig("B", 1.2))
+        chosen, _ = b.take()
+        self.assertEqual(chosen[0]["code"], "B")
+
+
+class TestTheTimeExitRemindsButDoesNotDecide(unittest.TestCase):
+    """v4 原則二：09:30 發賣出訊號，**未達停損的由下單者自由決定**。
+
+    所以系統報價、記下來，但不平倉，而且那一筆繼續追到 13:25。
+    兩個出場都要留：只留 09:30 的話，「09:30 就走是不是比較好」這一題
+    永遠沒有對照組 —— 而那正是這次改版最需要事後驗證的一條。
+    """
+
+    def _tracker(self, seen=None):
+        sink = seen if seen is not None else []
+        t = signals.LiveTracker(on_time_exit=lambda o, p, at: sink.append(
+            (o.code, p, at)))
+        t.track({"code": "2330", "name": "台積", "time": "09:05:00",
+                 "entry": 100.0, "stop": 98.5, "target": 102.5})
+        return t
+
+    def test_it_reports_the_current_price_and_the_r(self):
+        t = self._tracker()
+        t.on_price("2330", 101.0)
+        msgs = t.time_exit(datetime(2026, 10, 5, 9, 30))
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("時間到", msgs[0])
+        self.assertIn("101.00", msgs[0])
+        self.assertIn("+0.67R", msgs[0])
+
+    def test_the_position_is_still_being_tracked_afterwards(self):
+        """系統不替人平倉 —— 停損照舊有效，13:25 才收尾。"""
+        t = self._tracker()
+        t.on_price("2330", 101.0)
+        t.time_exit(datetime(2026, 10, 5, 9, 30))
+        self.assertEqual(len(t.open), 1, "09:30 不可以把部位從追蹤清單拿掉")
+        done = t.on_price("2330", 98.0)          # 之後才跌破停損
+        self.assertEqual(len(done), 1)
+        self.assertIn("停損", done[0])
+
+    def test_it_says_the_decision_is_yours(self):
+        t = self._tracker()
+        t.on_price("2330", 101.0)
+        msg = t.time_exit(datetime(2026, 10, 5, 9, 30))[0]
+        self.assertIn("由你決定", msg)
+
+    def test_a_trade_that_already_ended_is_not_reminded_about(self):
+        t = self._tracker()
+        t.on_price("2330", 98.0)                 # 先停損
+        self.assertEqual(t.time_exit(datetime(2026, 10, 5, 9, 30)), [])
+
+    def test_it_only_fires_once(self):
+        t = self._tracker()
+        t.on_price("2330", 101.0)
+        t.time_exit(datetime(2026, 10, 5, 9, 30))
+        self.assertEqual(t.time_exit(datetime(2026, 10, 5, 9, 31)), [])
+
+    def test_no_quote_means_no_number_rather_than_a_made_up_one(self):
+        """整天沒收到報價 —— 空白代表不知道。拿進場價或 0 頂替會變成假資料。"""
+        seen = []
+        t = self._tracker(seen)
+        self.assertEqual(t.time_exit(datetime(2026, 10, 5, 9, 30)), [])
+        self.assertEqual(seen, [])
+
+    def test_the_price_is_handed_off_to_be_written_down(self):
+        """不寫回 state.json 的話，這個價位只活在那則推播裡，收盤後就沒了。"""
+        seen = []
+        t = self._tracker(seen)
+        t.on_price("2330", 101.0)
+        t.time_exit(datetime(2026, 10, 5, 9, 30, 12))
+        self.assertEqual(seen, [("2330", 101.0, "09:30:12")])
+
+    def test_a_write_failure_never_swallows_the_reminder(self):
+        t = signals.LiveTracker(on_time_exit=lambda *a: 1 / 0)
+        t.track({"code": "2330", "name": "台積", "time": "09:05:00",
+                 "entry": 100.0, "stop": 98.5, "target": 102.5})
+        t.on_price("2330", 101.0)
+        with self.assertLogs(signals.log, level="WARNING"):
+            msgs = t.time_exit(datetime(2026, 10, 5, 9, 30))
+        self.assertEqual(len(msgs), 1)
+
+
+class TestStartingTooLateIsNotAQuietDay(unittest.TestCase):
+    """v3 的進場窗口有三小時十五分，晚開只是少幾個訊號。
+
+    v4 的窗口只有三分鐘 —— 09:06 才啟動的話整天掛零，而「整天掛零」和
+    「今天沒有股票突破」在畫面上一模一樣。失敗要出聲，不然你會把故障
+    當成行情，然後明天繼續用同一個排程。
+    """
+
+    def test_it_says_there_will_be_no_signals_at_all_today(self):
+        text = signals.format_too_late(datetime(2026, 10, 5, 9, 6, 30))
+        self.assertIn("09:06:30", text)
+        self.assertIn("不會有任何買進訊號", text)
+        self.assertIn(config.SIGNAL["signal_batch_at"], text)
+
+    def test_it_does_not_let_you_blame_the_market(self):
+        text = signals.format_too_late(datetime(2026, 10, 5, 9, 6))
+        self.assertIn("不是今天沒行情", text)
+
+    def test_it_still_tells_you_the_stop_is_live(self):
+        """手上有部位的人最需要知道的是這件事。"""
+        text = signals.format_too_late(datetime(2026, 10, 5, 9, 6))
+        self.assertIn("停損照舊有效", text)

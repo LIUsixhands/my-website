@@ -178,7 +178,17 @@ SIGNAL = {
     # 系統只負責提醒，不替人做那個決定。
     "exit_signal_at": "09:30:00",
     "breakout_buffer_pct": 0.10,    # 突破要超過區間高點多少 % 才算數（防假突破）
-    "volume_surge_ratio": 1.8,      # 突破當下 5 分鐘量能速率 / 前段量能速率
+    "volume_surge_ratio": 1.8,      # 突破當下的量能速率 / 基準量能速率
+    # 量能倍數的取樣視窗。**這三個必須跟著進場窗口一起縮**，否則整條規則無聲失效。
+    #
+    # v3 以前寫死在 signals.py：近期 300 秒、基準至少橫跨 240 秒。那是為
+    # 「15 分鐘區間 + 三小時進場窗口」設計的。v4 把窗口壓到 09:00–09:05，
+    # 總共只有 300 秒 —— 近期視窗一口氣吃掉全部樣本，「基準」那一組是空的，
+    # volume_surge() 回傳 0.0，於是**任何訊號都不成立，整天掛零而且不報錯**。
+    # 下面的 validate() 會擋住這種組合。
+    "volume_recent_sec": 60,        # 「現在」的量能取樣長度
+    "volume_min_recent_span_sec": 30,   # 近期樣本至少橫跨多久才算得出速率
+    "volume_min_base_span_sec": 60,     # 基準樣本至少橫跨多久，否則基準不可信
     "require_above_vwap": True,     # 多單需站上均價線；空單需跌破
     "max_signals_per_symbol": 1,    # 同一檔一天只發一次，杜絕凹單
     "stop_loss_pct": 1.5,           # 進場價往下這麼多 %（兩條停損的其中一條）
@@ -296,6 +306,11 @@ def push_enabled() -> bool:
     return bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
 
 
+def _seconds(hhmmss: str) -> int:
+    h, m, sec = (int(x) for x in hhmmss.split(":"))
+    return h * 3600 + m * 60 + sec
+
+
 def validate() -> list[str]:
     """開盤前自我檢查。回傳錯誤訊息，空清單才可以上線。
 
@@ -326,6 +341,19 @@ def validate() -> list[str]:
                     "在區間鎖定之前發不出訊號，在進場窗口關掉之後發也沒有意義")
     if not s["entry_window_end"] < s["exit_signal_at"] < s["market_close"]:
         errs.append("SIGNAL.exit_signal_at 必須晚於 entry_window_end、早於 market_close")
+    # 量能倍數要算得出來，開盤到發訊號那一刻必須容得下「基準 + 現在」兩段取樣。
+    # 容不下的話 volume_surge() 一律回 0.0，於是**整天發不出任何訊號，而且不報錯**。
+    # v4 把進場窗口從三小時壓到三分鐘時就踩到了：原本寫死的 300 秒近期視窗
+    # 一口氣吃掉全部樣本，基準那一組是空的。那種失效在畫面上和「今天沒行情」
+    # 一模一樣，所以要在啟動時就擋下來。
+    need = s["volume_recent_sec"] + s["volume_min_base_span_sec"]
+    have = _seconds(s["signal_batch_at"]) - _seconds(s["or_start"])
+    if have < need:
+        errs.append(
+            f"量能取樣放不進進場窗口：{s['or_start']} 到 {s['signal_batch_at']} 只有 "
+            f"{have} 秒，而基準 {s['volume_min_base_span_sec']} 秒 + 現在 "
+            f"{s['volume_recent_sec']} 秒要 {need} 秒。這樣 volume_surge() 一律是 "
+            f"0.0，整天一個訊號都發不出來而且不會報錯。")
     if s["allow_short"]:
         errs.append("SIGNAL.allow_short=True 但 v1 沒有實作空方訊號，"
                     "打開它只會讓你以為系統在看空單。要做空請先實作 evaluate() 的空方分支。")
