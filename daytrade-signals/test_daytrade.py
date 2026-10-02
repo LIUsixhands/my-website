@@ -32,6 +32,7 @@ from types import SimpleNamespace
 import config
 import preflight
 import review
+import whatif
 import broker as broker_mod
 from broker import Broker
 import outcome as oc
@@ -4831,3 +4832,130 @@ class TestTheLateStartWarningIsActuallyWired(unittest.TestCase):
                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
         self.assertIn("warn_if_too_late", called,
                       "run() 沒有真的呼叫 warn_if_too_late()")
+
+
+class TestWhatIfReplay(unittest.TestCase):
+    """whatif.py 的核心：拿同一份分鐘 K 重跑不同的進場／出場規則。
+
+    它要回答的是「使用者沒指定、我用猜的填進去」的那幾格 —— 區間 2 分鐘是
+    我選的，沒有任何數據支持。回測算得出來的事情就不要等 20 天。
+
+    但這支程式的結論對自己有利（只重跑當天真的突破了的那些股票），所以它的
+    報表第一行就要寫這件事。測試把那句話也釘住。
+    """
+
+    D = datetime(2026, 10, 2)
+
+    def _bars(self, spec):
+        """spec = [("09:01", high, low, close), ...]，label 是該分鐘的結束時間。"""
+        return [(datetime.combine(self.D.date(),
+                                  dtime(*(int(x) for x in t.split(":")))), h, l, c)
+                for t, h, l, c in spec]
+
+    # 09:00–09:02 區間 100.0/99.0；09:03 突破；之後走到 102 再回落
+    DAY = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
+           ("09:03", 100.8, 99.9, 100.6), ("09:04", 101.5, 100.2, 101.4),
+           ("09:05", 102.0, 101.0, 101.8), ("09:30", 101.2, 100.9, 101.0),
+           ("12:00", 101.0, 96.0, 96.5)]
+
+    def test_the_opening_range_uses_end_labelled_bars(self):
+        hi, lo = whatif.opening_range(self._bars(self.DAY), 2)
+        self.assertAlmostEqual(hi, 100.0)
+        self.assertAlmostEqual(lo, 99.0)
+
+    def test_a_longer_range_swallows_the_breakout(self):
+        """15 分鐘的區間把 09:03 那根也收進去 —— 區間高變成當日高，突破就不見了。
+        這正是回測要量的東西：區間長度直接決定了你買在哪裡。"""
+        hi, _ = whatif.opening_range(self._bars(self.DAY), 15)
+        self.assertAlmostEqual(hi, 102.0)
+
+    def test_it_enters_on_the_first_breakout_inside_the_window(self):
+        r = whatif.replay(self._bars(self.DAY), 2, 3, 1.5, None)
+        self.assertAlmostEqual(r.or_high, 100.0)
+        # 突破點 100.0 × 1.001 = 100.1，往上進位到合法檔位（0.5 檔）= 100.5
+        self.assertAlmostEqual(r.entry, 100.5)
+
+    def test_a_breakout_after_the_window_does_not_count(self):
+        late = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
+                ("09:03", 99.9, 99.1, 99.5), ("09:04", 99.8, 99.0, 99.4),
+                ("09:20", 105.0, 99.0, 104.0)]
+        self.assertIsNone(whatif.replay(self._bars(late), 2, 3, 1.5, None))
+
+    def test_the_pessimistic_entry_is_worse_than_the_optimistic_one(self):
+        """只報一個數字，會讓人把其中一端當成事實。
+
+        用一路往上的日子來比，兩邊都會到目標 —— 差別才純粹是進場價。
+        """
+        up = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
+              ("09:03", 101.0, 99.9, 100.9), ("09:20", 115.0, 101.0, 114.0)]
+        good = whatif.replay(self._bars(up), 2, 3, 1.5, None, optimistic=True)
+        bad = whatif.replay(self._bars(up), 2, 3, 1.5, None, optimistic=False)
+        self.assertLess(good.entry, bad.entry)
+        self.assertEqual((good.result, bad.result), (oc.TARGET, oc.TARGET))
+        self.assertGreater(good.net_pct, bad.net_pct)
+
+    def test_the_bar_that_contains_the_breakout_is_not_counted(self):
+        """那一根裡面有一段是突破前的價格。算進去會製造假停損 ——
+        09-24 五個訊號誤判了四個就是這個原因。"""
+        dip = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
+               ("09:03", 100.8, 98.0, 100.6),      # 同一根裡有突破前的 98.0
+               ("09:10", 103.0, 100.5, 102.8)]
+        r = whatif.replay(self._bars(dip), 2, 3, 1.5, None)
+        self.assertEqual(r.result, oc.TARGET)
+
+    def test_the_stop_never_sits_above_the_breakout(self):
+        r = whatif.replay(self._bars(self.DAY), 2, 3, 1.5, None)
+        self.assertLess(r.stop, r.or_high)
+
+    def test_the_time_exit_closes_at_that_bar(self):
+        r = whatif.replay(self._bars(self.DAY), 2, 3, 5.0, dtime(9, 30))
+        self.assertEqual(r.result, "時間到")
+        self.assertAlmostEqual(r.exit_price, 101.0)
+
+    def test_holding_on_instead_runs_into_the_later_stop(self):
+        """同一天、同一筆：09:30 走是賺的，抱著是賠的。這就是兩欄要並存的理由。"""
+        timed = whatif.replay(self._bars(self.DAY), 2, 3, 5.0, dtime(9, 30))
+        held = whatif.replay(self._bars(self.DAY), 2, 3, 5.0, None)
+        self.assertGreater(timed.r_multiple, 0)
+        self.assertEqual(held.result, oc.STOP)
+
+    def test_a_bar_touching_both_is_judged_a_stop(self):
+        both = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
+                ("09:03", 100.8, 99.9, 100.6),
+                ("09:05", 110.0, 90.0, 100.0)]       # 同一根同時到停損與目標
+        self.assertEqual(whatif.replay(self._bars(both), 2, 3, 1.5, None).result,
+                         oc.STOP)
+
+    def test_the_pre_open_bar_is_not_part_of_the_range(self):
+        """label 09:00 的那根涵蓋 (08:59, 09:00]，是**開盤前**的價格。
+
+        收進開盤區間的話，區間高會被盤前的單一筆成交污染，而突破就永遠
+        觸發不了。這和 09-24「包著訊號那一刻的 K 棒」是同一種 off-by-one。
+        """
+        with_pre = [("09:00", 130.0, 129.0, 129.5)] + self.DAY
+        hi, _ = whatif.opening_range(self._bars(with_pre), 2)
+        self.assertAlmostEqual(hi, 100.0, msg="盤前那根不可以算進開盤區間")
+
+    def test_the_structural_stop_takes_over_once_the_entry_has_chased(self):
+        """追高之後，固定 % 的停損會飄到突破點之上 —— 那是 v3 修掉的矛盾。
+
+        回測如果沒有把結構線一起算，它量到的就不是實際會發的那個規則。
+        """
+        chased = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
+                  ("09:03", 103.5, 99.9, 103.0),       # 這一根直接衝高 3%
+                  ("09:20", 110.0, 102.0, 109.0)]
+        r = whatif.replay(self._bars(chased), 2, 3, 1.5, None, optimistic=False)
+        self.assertAlmostEqual(r.entry, 103.0)
+        self.assertLess(r.stop, r.or_high, "停損必須在突破點之下")
+        # 固定 % 會算出 103.0 × 0.985 = 101.46 → 進位 101.5，在 100.0 之上
+        self.assertLess(r.stop, 101.5)
+
+    def test_summarise_refuses_to_invent_numbers_from_nothing(self):
+        self.assertEqual(whatif.summarise([]), {"n": 0})
+
+    def test_the_report_leads_with_its_own_bias(self):
+        """結論偏樂觀這件事要寫在最前面，不是藏在附註裡 ——
+        埋在下面沒有人會讀到，等於沒有揭露。"""
+        text = "\n".join(whatif.render({}, 25, True)[:8])
+        self.assertIn("對自己有利", text)
+        self.assertIn("watchlist", text)
