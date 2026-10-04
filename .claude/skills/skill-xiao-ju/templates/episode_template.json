@@ -1,0 +1,384 @@
+{
+  "title": "穿藍白拖的客人",
+  "ep": 1,
+  "next": "下集｜琳達的業績，全部歸零？",
+  "style": "Semi-realistic 2.5D anime illustration in the style of a premium Chinese donghua / Korean webtoon drama. Detailed expressive faces, clean line art, soft cinematic lighting with warm gold accents, shallow depth of field, high detail, vertical 9:16 cinematic frame. No text, no letters, no watermark, no logo.",
+  "location": "A luxurious modern Taiwanese pre-sale real estate sales center (showroom lobby): polished white marble floor, floor-to-ceiling glass walls, warm gold pendant lights, a large glass-cased architectural scale model of a slim high-rise residential tower on a white plinth in the center, beige leather sofas, a reception counter with a small orchid, plain blank wall with NO signage, NO logo, NO lettering anywhere.",
+  "characters": {
+    "bo": {
+      "name": "阿伯（林董）",
+      "desc": "a thin, tanned Taiwanese man around 70 years old, short grey buzz-cut hair, deep wrinkles, calm sharp eyes, wearing a plain white cotton sleeveless undershirt, loose beige shorts, and blue-and-white plastic slippers, carrying a red-and-white striped plastic shopping bag",
+      "voice": "FS8UtxyDrvYcNCxVaziq"
+    },
+    "linda": {
+      "name": "琳達（資深業務）",
+      "desc": "a glamorous Taiwanese woman around 32 years old, sleek black hair in a tight low ponytail, sharp winged eyeliner, red lipstick, pearl stud earrings, wearing a fitted black blazer suit with a small gold name badge on the lapel",
+      "voice": "1AKkSX7KMPHIWuz76m0n"
+    },
+    "zhe": {
+      "name": "阿哲（新人業務）",
+      "desc": "an earnest young Taiwanese man around 24 years old, neat short black hair, kind eyes, wearing a slightly oversized white dress shirt neatly tucked into dark grey trousers with a black leather belt, a navy tie and a small gold name badge",
+      "voice": "R55vTH9XmVSyAcM6YvtV"
+    },
+    "chen": {
+      "name": "陳經理",
+      "desc": "a Taiwanese man around 45 years old, slicked-back hair, thin metal-rimmed glasses, wearing a navy business suit and white shirt, visibly sweating and anxious",
+      "voice": "42bu2zNrjJXYzreZrTEu"
+    }
+  },
+  "shots": [
+    {
+      "id": "s01",
+      "type": "anim",
+      "chars": [
+        "bo"
+      ],
+      "dur": 4.4,
+      "img": "Extreme close-up at floor level showing ONLY the old man's feet and ankles (nothing above the knees is visible): worn blue-and-white plastic flip-flop slippers on thin tanned feet stepping onto the shiny polished white marble floor, warm gold light reflections on the marble, the luxury lobby far behind is heavily blurred bokeh.",
+      "motion": "The slippers step forward slowly onto the marble floor, camera stays low, slight push-in.",
+      "vo": {
+        "who": "linda",
+        "text": "[annoyed] 欸欸欸——阿伯！這裡不能發傳單喔！"
+      },
+      "subs": [
+        "欸欸欸——阿伯！",
+        "這裡不能發傳單喔！"
+      ]
+    },
+    {
+      "id": "s02",
+      "type": "talk",
+      "chars": [
+        "bo"
+      ],
+      "img": "Chest-up medium close-up portrait: the old man's face is large and clearly visible in the upper part of the frame, facing the camera at a slight three-quarter angle, calm plain expression, the handle of the red-and-white striped plastic bag visible at his shoulder, luxury lobby softly blurred behind him.",
+      "line": {
+        "who": "bo",
+        "text": "[calm] 我不是發傳單的。我來看房子。"
+      },
+      "prompt": "The old man speaks calmly and plainly, slight head movement.",
+      "subs": [
+        "我不是發傳單的",
+        "我來看房子"
+      ]
+    },
+    {
+      "id": "s03",
+      "type": "talk",
+      "chars": [
+        "linda"
+      ],
+      "img": "Medium close-up of the woman in the black blazer suit, arms crossed, chin raised, a contemptuous half-smirk, looking down at the viewer, gold lights and glass walls blurred behind her.",
+      "line": {
+        "who": "linda",
+        "text": "[sarcastic] 看房子？頂樓那戶，三千八百萬欸。阿伯……你看看就好。"
+      },
+      "prompt": "The woman speaks with a mocking, condescending tone, raising an eyebrow, arms crossed.",
+      "subs": [
+        "看房子？",
+        "頂樓那戶，三千八百萬欸",
+        "阿伯……你看看就好"
+      ],
+      "label": [
+        "琳達",
+        "接待中心銷售冠軍"
+      ]
+    },
+    {
+      "id": "s04",
+      "type": "anim",
+      "chars": [
+        "bo"
+      ],
+      "dur": 2.6,
+      "img": "Medium shot from the side: the old man quietly lowers his gaze to his blue-and-white plastic slippers, holding the plastic bag, while in the blurred background two young sales staff in black suits whisper and giggle behind their hands.",
+      "motion": "The old man slowly lowers his head and looks at his slippers; in the background the staff whisper and laugh."
+    },
+    {
+      "id": "s05",
+      "type": "talk",
+      "chars": [
+        "zhe"
+      ],
+      "img": "Medium close-up of the young man in the white shirt and navy tie, holding a paper cup of hot tea with both hands, leaning forward slightly with a warm sincere smile, facing the camera, sales center lobby blurred behind.",
+      "line": {
+        "who": "zhe",
+        "text": "[warmly] 阿伯，外面很熱，先喝杯茶。我帶您看。"
+      },
+      "prompt": "The young man speaks warmly and politely, offering the cup of tea with both hands.",
+      "subs": [
+        "阿伯，外面很熱，先喝杯茶",
+        "我帶您看"
+      ],
+      "label": [
+        "阿哲",
+        "報到第三天的新人"
+      ]
+    },
+    {
+      "id": "s06",
+      "type": "talk",
+      "chars": [
+        "linda"
+      ],
+      "img": "Close-up of the woman in the black blazer suit, turned three-quarters toward the camera, eyes narrowed coldly, speaking in a low warning voice, the blurred shoulder of a young man in a white shirt in the foreground edge.",
+      "line": {
+        "who": "linda",
+        "text": "[whispers coldly] 新來的……你業績不想要了喔？"
+      },
+      "prompt": "The woman whispers a cold warning, eyes narrowed, lips barely moving.",
+      "subs": [
+        "新來的……你業績不想要了喔？"
+      ]
+    },
+    {
+      "id": "s07",
+      "type": "anim",
+      "chars": [
+        "bo",
+        "zhe"
+      ],
+      "dur": 3.0,
+      "img": "Medium wide shot: the young man in the white shirt and navy tie stands beside the old man in front of the glass-cased architectural model of the high-rise tower, the young man pointing up at the top floor of the model, the old man looking at it holding his paper cup of tea.",
+      "motion": "The young man points to the top floor of the tower model and explains; the old man looks up at the model and nods slightly."
+    },
+    {
+      "id": "s08",
+      "type": "talk",
+      "chars": [
+        "zhe"
+      ],
+      "img": "Chest-up medium close-up of the young man in the white shirt and navy tie, face large and clearly visible, speaking honestly and earnestly toward someone just outside the frame (that person is NOT visible), the glass-cased tower model blurred behind his shoulder. No other people in the frame.",
+      "line": {
+        "who": "zhe",
+        "text": "[sincere] 跟您說實話，頂樓會西曬，夏天比較熱。可是這一戶……看得到整條河。"
+      },
+      "prompt": "The young man speaks sincerely and honestly, with a gentle hand gesture toward the model.",
+      "subs": [
+        "跟您說實話，頂樓會西曬",
+        "夏天比較熱",
+        "可是這一戶……看得到整條河"
+      ]
+    },
+    {
+      "id": "s09",
+      "type": "talk",
+      "chars": [
+        "bo"
+      ],
+      "img": "Close-up of the old man's face, a subtle knowing smile spreading across his wrinkled face, calm sharp eyes looking slightly off camera, holding a paper cup of tea near his chest, warm gold light.",
+      "line": {
+        "who": "bo",
+        "text": "[chuckles softly] 少年仔，你是今天第一個……跟我講缺點的。"
+      },
+      "prompt": "The old man smiles knowingly and speaks softly with approval.",
+      "subs": [
+        "少年仔",
+        "你是今天第一個……跟我講缺點的"
+      ]
+    },
+    {
+      "id": "s10",
+      "type": "anim",
+      "chars": [
+        "chen"
+      ],
+      "dur": 2.4,
+      "img": "Medium wide shot from inside the lobby: the tall glass entrance door swinging open as the man in the navy suit and glasses rushes in, sweating and panicked, suit jacket flapping.",
+      "motion": "The glass door swings open and the man in the navy suit rushes in fast toward the camera, panicked."
+    },
+    {
+      "id": "s11",
+      "type": "talk",
+      "chars": [
+        "chen"
+      ],
+      "img": "Medium close-up of the man in the navy suit and glasses bowing deeply and nervously toward someone off camera, sweat on his forehead, hands pressed together, panicked respectful expression.",
+      "line": {
+        "who": "chen",
+        "text": "[panicked, stuttering] 董、董事長！您怎麼……自己來了？"
+      },
+      "prompt": "The man bows nervously and stutters in panic, sweating.",
+      "subs": [
+        "董、董事長！",
+        "您怎麼……自己來了？"
+      ]
+    },
+    {
+      "id": "s12",
+      "type": "anim",
+      "chars": [
+        "linda"
+      ],
+      "dur": 2.6,
+      "img": "Close-up of the woman in the black blazer suit frozen in shock, eyes wide, face turning pale, her tablet slipping out of her hands.",
+      "motion": "The woman freezes in shock, her eyes widen, and the tablet slips from her hands; slow dramatic push-in."
+    },
+    {
+      "id": "s13",
+      "type": "talk",
+      "chars": [
+        "bo"
+      ],
+      "img": "Chest-up medium close-up from a slightly low camera angle: the old man standing tall and dignified, face large and clearly visible, calm powerful gaze straight at the camera, still in his white sleeveless undershirt, hands not visible, the tower model blurred behind him, dramatic warm gold rim light.",
+      "line": {
+        "who": "bo",
+        "text": "[calm, authoritative] 我來看看……誰會好好賣我蓋的房子。"
+      },
+      "prompt": "The old man speaks slowly, calm and authoritative, looking straight ahead.",
+      "subs": [
+        "我來看看……",
+        "誰會好好賣我蓋的房子"
+      ],
+      "label": [
+        "林董",
+        "這個建案的董事長"
+      ]
+    },
+    {
+      "id": "s14",
+      "type": "card",
+      "chars": [
+        "linda"
+      ],
+      "dur": 3.0,
+      "img": "Close-up of the woman in the black blazer suit, pale and trembling, biting her lip, eyes glossy with fear, dramatic dark cinematic lighting.",
+      "motion": "The woman trembles slightly, biting her lip, eyes glossy with fear; very slow dramatic push-in."
+    }
+  ],
+  "vo_offset": 0.2,
+  "brand": {
+    "logo": "~/.claude/skills/skill-sixhands-brand/logo_white.png",
+    "logo_end": "~/.claude/skills/skill-sixhands-brand/logo_full_white.png",
+    "line": "Sixhands Studio AI數字員工｜AI 短劇試播"
+  },
+  "sfx": [
+    {
+      "name": "slippers",
+      "prompt": "Two slow steps of cheap plastic flip-flop slippers slapping on a polished marble floor in a quiet, echoey luxury lobby",
+      "dur": 2.0,
+      "at": "s01",
+      "offset": 0,
+      "vol": 0.8
+    },
+    {
+      "name": "giggle",
+      "prompt": "Two young women stifling giggles and whispering quietly behind their hands in a quiet lobby",
+      "dur": 2.5,
+      "at": "s04",
+      "offset": 0.2,
+      "vol": 0.55
+    },
+    {
+      "name": "door",
+      "prompt": "A heavy glass door pushed open hard followed by hurried leather-shoe footsteps running in on marble",
+      "dur": 2.5,
+      "at": "s10",
+      "offset": 0,
+      "vol": 1.8
+    },
+    {
+      "name": "sting",
+      "prompt": "Dramatic short-drama shock stinger: fast whoosh into a deep orchestral hit with a low boom, reveal moment",
+      "dur": 2.0,
+      "at": "s12",
+      "offset": -0.05,
+      "vol": 0.55
+    },
+    {
+      "name": "cliff",
+      "prompt": "TV drama cliffhanger ending: one heavy low drum hit followed by a tense sustained low string drone with a long reverb tail, ominous",
+      "dur": 3.2,
+      "at": "s14",
+      "offset": 0,
+      "vol": 0.8
+    }
+  ],
+  "music": {
+    "global": [
+      "cinematic TV drama underscore",
+      "instrumental",
+      "modern Asian short-drama soundtrack"
+    ],
+    "negative": [
+      "vocals",
+      "singing",
+      "lyrics",
+      "EDM drop"
+    ],
+    "volume": 0.34,
+    "sections": [
+      {
+        "name": "Mocking tension",
+        "from": "s01",
+        "styles": [
+          "playful sneaky pizzicato strings",
+          "light comedic tension",
+          "sparse ticking percussion",
+          "condescending mood"
+        ]
+      },
+      {
+        "name": "Warm sincerity",
+        "from": "s05",
+        "styles": [
+          "gentle warm solo piano",
+          "soft sustained strings",
+          "hopeful and sincere",
+          "quiet"
+        ]
+      },
+      {
+        "name": "Reveal",
+        "from": "s10",
+        "styles": [
+          "sudden dramatic build",
+          "big taiko drum hits",
+          "bold brass stabs",
+          "epic cinematic reveal",
+          "ends on an unresolved cliffhanger chord"
+        ]
+      }
+    ]
+  },
+  "fixes": {
+    "pick": {
+      "s06": "s06_omni"
+    },
+    "crop_top": {
+      "s10": 0.85
+    },
+    "slow": {}
+  },
+  "_說明": {
+    "shots.type": "talk＝角色開口說話（Kling 對嘴，長度跟著音檔）；anim＝動作鏡頭（Hailuo，要填 dur 秒數）；card＝片尾鏡頭（放最後，會疊下集預告）；kf＝首尾幀鏡頭（Kling v2.1 pro，填 img＋end_img＋motion＋dur）；hold＝定格上一鏡最後一格（填 dur，不花錢）",
+    "line/vo": "line＝畫面上的人講話；vo＝畫外音（只放在 anim 鏡頭）。text 開頭方括號是情緒標籤，會被演出來但不會念出來",
+    "subs": "字幕切段，一段一行、12 字內最好讀",
+    "label": "角色第一次出場的字卡 [名字, 身分]",
+    "fixes": "scan.py 看到壞鏡頭才填：pick 換版本、crop_top 裁掉底部（0.85＝留上面 85%）、slow 只取前段放慢（0.65＝用前 65% 放慢）",
+    "brand": "logo 路徑留空就不放；學員替客戶做的片要換成客戶的 logo 或留空",
+    "thumb": "縮圖設定（make_thumb.py 用）：hook＝中間紅帶大字；top／bottom 各抓一鏡的畫面，shot＝鏡頭 id、t＝第幾秒、zoom＝臉太小就調大(1.3左右)、crop＝取垂直哪一段(0最上 1最下)、x＝放大後取水平哪一段；bubble 第 2 行會是紅字，不要對話框就拿掉",
+    "characters.photo": "選填。放本人照片路徑（例如 ~/短劇/角色照片/我.jpg），gen_refs.py 會照這張臉做定裝圖。只能用你自己、或已取得本人書面同意的人的照片",
+    "endcard": "選填。{text, sub} 節慶／單支片片尾大字，會取代下集預告；show_title: false 可不疊片名"
+  },
+  "thumb": {
+    "hook": "他到底是誰？",
+    "top": {
+      "shot": "s03",
+      "t": 1.2,
+      "zoom": 1.0,
+      "crop": 0.2,
+      "bubble": [
+        "頂樓那戶，",
+        "你看看就好"
+      ]
+    },
+    "bottom": {
+      "shot": "s02",
+      "t": 1.0,
+      "zoom": 1.0,
+      "crop": 0.25
+    },
+    "tag": "穿藍白拖的客人｜第1集"
+  }
+}

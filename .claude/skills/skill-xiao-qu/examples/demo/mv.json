@@ -1,0 +1,30 @@
+{
+  "_說明": "環境驗證用 demo。素材是程式生成的假圖，音軌是 440Hz 測試音。",
+  "ratio": "9:16",
+  "fps": 30,
+  "audio": "audio/take1.mp3",
+  "out": "demo_9x16.mp4",
+  "brand": true,
+  "accent": [214, 40, 40],
+  "sub_y": 0.63,
+  "sub_chars": 13,
+  "shots": [
+    {"id":"s01","t0":0.0,"t1":1.8,"type":"image","src":"assets/01.jpg","mode":"fill","cx":0.5,"cy":0.45,"zoom":"in"},
+    {"id":"s02","t0":1.8,"t1":3.4,"type":"image","src":"assets/02.jpg","mode":"fill","cx":0.5,"cy":0.4,"zoom":"out"},
+    {"id":"s03","t0":3.4,"t1":5.0,"type":"image","src":"assets/03.jpg","mode":"band","cy":0.5,"zoom":"in"},
+    {"id":"s04","t0":5.0,"t1":6.2,"type":"card","big":"熱的剛剛好","sub":"環境驗證用"},
+    {"id":"s05","t0":6.2,"t1":7.0,"type":"image","src":"assets/01.jpg","mode":"fit","zoom":"none","big":"轉角那盞燈","big_alpha":0.35}
+  ],
+  "subs": [
+    {"t0":0.2,"t1":1.8,"text":"每天經過那個轉角"},
+    {"t0":1.9,"t1":3.4,"text":"招牌的燈一直亮著"},
+    {"t0":3.5,"t1":5.0,"text":"說好改天要進去看看檢查換行是否正常"},
+    {"t0":6.2,"t1":7.0,"text":"轉角那盞燈 一直等你"}
+  ],
+  "endcard": {
+    "t0": 7.0,
+    "title": "○○早餐店",
+    "lines": ["台南市東區○○路 123 號", "每天 06:00 - 11:30", "LINE：@demo"],
+    "cta": "私訊幫你留一份"
+  }
+}
