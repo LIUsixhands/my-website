@@ -123,8 +123,12 @@ feat_rows += (f'<tr><td>實登 高樓層 26F+ 二手中位</td><td class="num">{
               f'<td>{S["樓層帶"][2]["二手"]["n"]} 筆，107–115</td></tr>')
 
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
+PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands-studio.netlify.app'
+CONTACT = f'助哥 {PHONE}　｜　LINE {LINE_ID}　｜　{WEB}'
+
 def foot(n):
-    return f'<div class="foot"><span>{DISC}</span><span>富邦天空樹 銷售報告書　{n}</span></div>'
+    return (f'<div class="foot"><div>{DISC}<br><span class="ct">{CONTACT}</span></div>'
+            f'<span>富邦天空樹 銷售報告書　{n}</span></div>')
 
 # 試算：典型 240 坪、3 車位（約 33 坪、450 萬）
 main_area = 240 - 33
@@ -150,7 +154,11 @@ tr.ex td {{ color: #a9a090; text-decoration: line-through; }}
 .num {{ font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }}
 .b {{ font-weight: 700; }}
 .g {{ color: #A47A35; }}
-.foot {{ position: absolute; bottom: 0; left: 0; right: 0; height: 11mm; background: #3a2c12; color: #d9c9a3; font-size: 6.6pt; display: flex; align-items: center; justify-content: space-between; padding: 0 15mm; }}
+.foot {{ position: absolute; bottom: 0; left: 0; right: 0; height: 11mm; background: #3a2c12; color: #d9c9a3; font-size: 6.4pt; line-height: 1.6; display: flex; align-items: center; justify-content: space-between; padding: 0 15mm; }}
+.foot .ct {{ color: #F0D9A4; font-weight: 700; letter-spacing: .03em; }}
+.qr {{ background: #fff; padding: 1.6mm; border-radius: 2px; text-align: center; }}
+.qr img {{ display: block; width: 100%; }}
+.qr div {{ font-size: 6.6pt; color: #3a2c12; margin-top: .8mm; font-weight: 700; }}
 .kpi {{ display: flex; gap: 3.5mm; margin-bottom: 5mm; }}
 .kpi > div {{ flex: 1; background: #fff; border: 1px solid #e6dcc6; border-top: 3px solid #B8893E; padding: 3.5mm 2mm; text-align: center; }}
 .kpi .v {{ font-family: "Noto Serif CJK TC", serif; font-size: 19pt; color: #3a2c12; font-weight: 700; line-height: 1.1; }}
@@ -189,6 +197,16 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
         首售期（105–106）中位為 不含車 {FS['net']:.1f}／含車 {FS['gross']:.1f} 萬。<br>
         <span style="color:#D8B26A">用比首購者更低的單價，買進同一座森林。</span>
       </div>
+    </div>
+  </div>
+  <div style="position:absolute;left:14mm;bottom:22mm;width:82mm;color:#FBF7EE">
+    <div style="font-size:7.4pt;color:#D8B26A;letter-spacing:.3em">預約帶看</div>
+    <div style="white-space:nowrap;margin-top:1.5mm"><span class="serif" style="font-size:17pt;font-weight:700">助哥</span>
+      <span style="font-size:15pt;font-weight:700;letter-spacing:.04em;color:#F0D9A4;margin-left:2.5mm">{PHONE}</span></div>
+    <div style="display:flex;gap:3mm;align-items:flex-end;margin-top:3mm">
+      <div class="qr" style="width:20mm"><img src="{img('QR_LINE.png')}"><div>LINE</div></div>
+      <div class="qr" style="width:20mm"><img src="{img('QR_網站.png')}"><div>網站</div></div>
+      <div style="font-size:7.2pt;color:#cdbf9f;line-height:1.8;white-space:nowrap">LINE {LINE_ID}<br>{WEB}</div>
     </div>
   </div>
   <div style="position:absolute;left:14mm;bottom:9mm;font-size:6.2pt;color:#a8987a;width:80mm;line-height:1.7">資料基準：內政部實價登錄 101/01–115/10（查詢 2026-10-04）<br>{DISC}</div>
@@ -494,7 +512,15 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
     本報告書為不動產經紀業務之行銷參考資料，非不動產估價師出具之估價報告。報告中之行情統計、試算與情境分析，係依公開實價登錄資料整理，不構成任何價格保證、投資建議或獲利承諾。實際交易價格、面積、車位、產權及使用現況，以權狀、謄本、不動產說明書及買賣契約記載為準。建案特色說明引用公開資料，實際設施以現況為準。買方應自行或委託專業人士查證後再做決定。
     <div style="position:absolute;right:8mm;top:50%;margin-top:-12mm;width:24mm;height:24mm;border:2.5px solid #b3261e;border-radius:50%;color:#b3261e;display:flex;align-items:center;justify-content:center;text-align:center;font-family:'Noto Serif CJK TC',serif;font-size:8.4pt;font-weight:700;line-height:1.3;transform:rotate(-12deg)">僅供<br>參考</div>
   </div>
-  <div style="margin-top:8mm;text-align:center;font-size:9pt;color:#3a2c12" class="serif">永慶不動產 七期河南市政店　｜　劉力助</div>
+  <div style="margin-top:8mm;display:flex;align-items:center;justify-content:center;gap:7mm;background:#3a2c12;padding:5mm 7mm;border-radius:2px">
+    <div style="color:#FBF7EE">
+      <div style="font-size:7.4pt;color:#D8B26A;letter-spacing:.3em">預約帶看・行情諮詢</div>
+      <div class="serif" style="font-size:16pt;font-weight:700;margin-top:1mm">助哥　<span style="color:#F0D9A4">{PHONE}</span></div>
+      <div style="font-size:8pt;color:#cdbf9f;margin-top:1mm;line-height:1.7">永慶不動產 七期河南市政店<br>LINE {LINE_ID}　｜　{WEB}</div>
+    </div>
+    <div class="qr" style="width:24mm"><img src="{img('QR_LINE.png')}"><div>加 LINE</div></div>
+    <div class="qr" style="width:24mm"><img src="{img('QR_網站.png')}"><div>看網站</div></div>
+  </div>
 </div>{foot(10)}</div>
 
 </body></html>'''

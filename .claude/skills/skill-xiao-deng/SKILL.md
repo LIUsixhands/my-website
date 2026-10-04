@@ -80,6 +80,7 @@ description: Sixhands Studio 市場部「小登」— 實登行情數據官（�
 2. 請助哥撈實登，三個一起要（撈法見下方「撈實登指令」）
 3. 小登跑：扣車位重算 → 分預售/成屋 → 分樓層帶 → 算投報 → 建卡
 4. 產報告：python3 references/商辦估價報告產生器.py（換棟只改 D 字典）
+   ⭐ 封面＋每頁頁尾＋末頁必加「助哥 0925-313-570｜LINE @080akczk｜sixhands-studio.netlify.app」與 LINE／官網 QR，不寫本名（規格見 `skill-sixhands-brand` §6.5）
 5. 視覺 QA（pdftoppm 逐頁看）→ 交付 → 寫 Notion 交付登記表
 ```
 
