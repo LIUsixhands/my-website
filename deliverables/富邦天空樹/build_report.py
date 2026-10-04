@@ -209,7 +209,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
         <tr><td>基地面積</td><td>9,108 ㎡ ≒ 2,755 坪</td></tr>
         <tr><td>建築面積</td><td>1,605 ㎡（約佔基地 17.6%）</td></tr>
         <tr><td>總樓地板</td><td>52,279 ㎡</td></tr>
-        <tr><td>樓層</td><td>4B / 39F / 3PH，高 173.1 m</td></tr>
+        <tr><td>樓層</td><td>39F / 4B，高 173.1 m</td></tr>
         <tr><td>總戶數</td><td>72 戶（每層 2 戶）</td></tr>
         <tr><td>公設比</td><td>33.01%</td></tr>
         <tr><td>結構</td><td>地下層 SRC、地上層 SS 鋼骨造</td></tr>
@@ -270,7 +270,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
   <div class="eyebrow">03 · LANDSCAPE</div>
   <div class="ttl">夢寐以求的森林庭園</div>
   <div class="sub">建築只佔基地約 17.6%，把其餘的土地留給樹。國美館特區裡的一座私人森林。</div>
-  <div class="photo"><img src="{img('配置圖_森林庭園.jpg')}" style="height:66mm"></div>
+  <div class="photo"><img src="{img('配置圖_森林庭園_平面.jpg')}" style="height:70mm"></div>
   <div class="cap">全區配置：左側塔樓、右側 400 坪生態水池與環湖步道</div>
   <div class="kpi" style="margin-top:5mm">
     <div><div class="v">~300<span class="u"> 棵</span></div><div class="l">園內種植大樹</div></div>
