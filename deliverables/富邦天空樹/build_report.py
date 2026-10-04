@@ -89,7 +89,9 @@ list_rows, fee_rows, fee_per = '', '', []
 for L in LS['物件']:
     base = L['建坪'] - L['車位坪']
     pv = L['車位數'] * PARK
-    gross = L['開價'] / L['建坪']
+    extra = L.get('車位另購數', 0)
+    # 車位另購者：含車單價以社區每席中位補上車位價與車位坪試算（標 *）
+    gross = (L['開價'] + extra * PARK) / (L['建坪'] + L.get('車位另購坪', 0))
     net = (L['開價'] - pv) / base
     t = tier_of(L['樓層'])
     ref = t['二手']['不含車中位']
@@ -97,14 +99,28 @@ for L in LS['物件']:
     tw = df[(df['棟'] == '169') & (df['樓層'] == L['樓層'])].sort_values('交易日期', ascending=False)
     twin = f'{tw.iloc[0].交易日期}<br>{tw.iloc[0].不含車單價:.1f}' if len(tw) else '—'
     cut = f'<br><span style="color:#8a7d64;font-size:7pt">原 {wan(L["原開價"])}</span>' if L['原開價'] else ''
-    park = f'{L["車位數"]} 平面' if L['車位數'] else '<b style="color:#a8382e">無</b>'
+    park = f'{L["車位數"]} 平面' if L['車位數'] else f'另購 {extra} 平面'
     list_rows += (f'<tr><td class="b">{L["門牌"]}號<br>{L["樓層"]}F</td><td class="num">{L["建坪"]:.2f}</td><td class="num">{L["主建物"]:.2f}</td>'
-                  f'<td>{park}</td><td class="num b">{wan(L["開價"])}{cut}</td><td class="num">{gross:.1f}</td><td class="num b">{net:.1f}</td>'
+                  f'<td>{park}</td><td class="num b">{wan(L["開價"])}{cut}</td><td class="num">{gross:.1f}{"*" if extra else ""}</td><td class="num b">{net:.1f}</td>'
                   f'<td class="num">{t["帶"][:3]} {ref:.1f}</td><td class="num b" style="color:{"#a8382e" if net/ref-1 > .15 else "#3d6b2c"}">{(net/ref-1)*100:+.0f}%</td>'
                   f'<td class="num">{twin}</td><td class="num">{wan(lo_p)}–<br>{wan(hi_p)}</td></tr>')
     per = L['管理費月'] / L['建坪']; fee_per.append(per)
     fee_rows += (f'<tr><td>{L["門牌"]}號 {L["樓層"]}F</td><td class="num">{L["建坪"]:.2f}</td><td class="num">{L["管理費月"]:,}</td>'
                  f'<td class="num">{per:.0f}</td><td class="num">{L["管理費月"]*12/10000:.1f}</td></tr>')
+
+F34 = next(L for L in LS['物件'] if L['樓層'] == 34)
+feat_rows = ''
+for L in sorted(LS['物件'], key=lambda L: L['樓層'] != 34):
+    pv = L['車位數'] * PARK
+    net, per_main = (L['開價'] - pv) / (L['建坪'] - L['車位坪']), (L['開價'] - pv) / L['主建物']
+    cls = ' class="hl"' if L['樓層'] == 34 else ''
+    feat_rows += (f'<tr{cls}><td>市售 167號 {L["樓層"]}F</td><td class="num">{net:.1f}</td><td class="num">{per_main:.0f}</td>'
+                  f'<td>開價 {wan(L["開價"])} 萬</td></tr>')
+for b, fl, why in [('169', 34, '同層對戶，最近一次成交'), ('169', 30, '高樓層最近成交')]:
+    r = df[(df['棟'] == b) & (df['樓層'] == fl)].sort_values('交易日期').iloc[-1]
+    feat_rows += f'<tr><td>實登 {b}號 {fl}F（{r.交易日期}）</td><td class="num">{r.不含車單價:.1f}</td><td class="num">—</td><td>{why}</td></tr>'
+feat_rows += (f'<tr><td>實登 高樓層 26F+ 二手中位</td><td class="num">{S["樓層帶"][2]["二手"]["不含車中位"]:.1f}</td><td class="num">—</td>'
+              f'<td>{S["樓層帶"][2]["二手"]["n"]} 筆，107–115</td></tr>')
 
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
 def foot(n):
@@ -339,7 +355,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
     <tr><th>物件</th><th class="num">建坪(含車)</th><th class="num">主建物</th><th>車位</th><th class="num">開價(萬)</th><th class="num">含車單價</th><th class="num">不含車單價</th><th class="num">同樓層帶<br>二手中位</th><th class="num">開價差距</th><th class="num">同層 169 號<br>最近成交(不含車)</th><th class="num">實登參考<br>總價帶(萬)</th></tr>
     {list_rows}
   </table>
-  <div class="cap" style="margin-top:2mm">單位：萬元／坪。不含車單價＝(開價 − 車位數 × {PARK:.0f} 萬) ÷ (建坪 − 車位坪)；車位價採社區實登揭露每席中位。「開價差距」以不含車單價對比同樓層帶二手成交中位；「同層 169 號」為同一樓層另一戶的最近一筆實登（169 號 19F 該筆總面積僅 168 坪，條件不同僅供參考）。<br>
+  <div class="cap" style="margin-top:2mm">單位：萬元／坪。不含車單價＝(開價 − 車位數 × {PARK:.0f} 萬) ÷ (建坪 − 車位坪)；車位價採社區實登揭露每席中位。「開價差距」以不含車單價對比同樓層帶二手成交中位；34F 車位另購，含車單價以 3 席 × {PARK:.0f} 萬、38.27 坪試算（*）；「同層 169 號」為同一樓層另一戶的最近一筆實登（169 號 19F 該筆總面積僅 168 坪，條件不同僅供參考）。<br>
   「實登參考總價帶」下緣＝近三年不含車中位 {N3['net']:.1f} 萬，上緣＝同樓層帶首售期中位；均為依實登推算的參考，不是估價，也不代表屋主願意成交的價格。</div>
 
   <div style="display:flex;gap:5mm;margin-top:5mm">
@@ -348,14 +364,14 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
       <ul>
         <li>19F、22F、30F 開價換算不含車約 <b>76–86 萬／坪</b>，比同樓層帶實登二手中位高出四成以上——<b>議價空間是主要課題</b>。</li>
         <li>30F 的同層對戶（169 號 30F）114/09 剛以不含車 <b>53.0</b> 萬成交，是最直接的比價依據。</li>
-        <li>34F 開價不含車約 <b>59 萬／坪</b>，與同層對戶 169 號 34F（111/02，60.5 萬）及高樓層二手中位 60.3 萬相當，已降價一次（15,888 → 14,768 萬）。</li>
+        <li>34F 為<b>建商餘屋</b>，開價不含車約 <b>59 萬／坪</b>，與同層對戶 169 號 34F（111/02，60.5 萬）及高樓層二手中位 60.3 萬相當，已降價一次（15,888 → 14,768 萬）。詳見下一頁。</li>
         <li>22F 已從 15,200 萬降到 14,808 萬（−2.6%），屋主有調價意願。</li>
       </ul>
     </div>
     <div style="flex:1" class="warn">
       <div class="b" style="font-size:10pt;margin-bottom:1.5mm">看屋前要確認</div>
       <ul>
-        <li><b>34F 無車位</b>：刊登資料土地持分顯示 0 坪，需調閱謄本確認土地持分與車位取得方式。</li>
+        <li><b>34F 車位另購</b>：B3 連號三平面（38.27 坪），價格另議；刊登土地持分顯示 0 坪，需調閱謄本確認。</li>
         <li>19F 刊登格局僅「1廳」、34F 為毛胚，<b>裝修預算</b>要另外估。</li>
         <li>建坪含車位與公設，比較時以<b>主建物坪數</b>為準：19F 120.7、22F 112.6、30F 134.1、34F 145.3 坪。</li>
       </ul>
@@ -363,9 +379,62 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
   </div>
 </div>{foot(7)}</div>
 
+<!-- P8 主推 34F -->
+<div class="page"><div class="pad">
+  <div class="eyebrow">07 · FEATURED</div>
+  <div class="ttl">主推：167 號 34F 超高樓層・建商餘屋</div>
+  <div class="sub">市售 4 戶中，唯一開價貼近實登行情的一戶。建商直售、毛胚交屋，空間可以完全照自己的方式規劃。</div>
+  <div style="display:flex;gap:6mm">
+    <div style="flex:1.2">
+      <div class="kpi" style="margin-bottom:4mm">
+        <div><div class="v">{F34["開價"]:,}</div><div class="l">開價（萬）<br>原 {F34["原開價"]:,}（{(F34["開價"]/F34["原開價"]-1)*100:.1f}%）</div></div>
+        <div><div class="v">{F34["主建物"]:.1f}</div><div class="l">主建物（坪）<br>市售 4 戶最大</div></div>
+      </div>
+      <table class="spec">
+        <tr><td>樓層</td><td>34F／39F，超高樓層・邊間・建物朝東</td></tr>
+        <tr><td>建物（不含車位）</td><td>{F34["建坪"]:.2f} 坪</td></tr>
+        <tr><td>主建物</td><td>{F34["主建物"]:.2f} 坪</td></tr>
+        <tr><td>陽台</td><td>{F34["附屬"]:.2f} 坪（市售 4 戶最大）</td></tr>
+        <tr><td>共同使用</td><td>{F34["共有"]:.2f} 坪</td></tr>
+        <tr><td>車位</td><td><b>另購</b>：B3 連號三平面，38.27 坪，價格另議</td></tr>
+        <tr><td>屋況</td><td>毛胚（建商餘屋，無前手使用）</td></tr>
+        <tr><td>管理費</td><td>每月約 {F34["管理費月"]:,} 元</td></tr>
+      </table>
+    </div>
+    <div style="flex:.8"><div class="photo"><img src="{img('外觀_仰視.jpg')}" style="height:98mm;object-fit:cover;object-position:top"></div>
+      <div class="cap">34F 位於量體上段、枝葉向外展開的區段</div></div>
+  </div>
+
+  <div class="ttl" style="font-size:13pt;margin-top:6mm">同一把尺比一比</div>
+  <table>
+    <tr><th>比較對象</th><th class="num">不含車單價(萬/坪)</th><th class="num">主建物單價(萬/坪)</th><th>說明</th></tr>
+    {feat_rows}
+  </table>
+  <div class="cap" style="margin-top:1.5mm">主建物單價＝(開價 − 車位價) ÷ 主建物坪數，市售各戶車位以每席 {PARK:.0f} 萬扣除；34F 開價不含車位，直接相除。實登列為不含車單價。</div>
+
+  <div style="display:flex;gap:5mm;margin-top:5mm">
+    <div style="flex:1" class="note">
+      <div class="b" style="font-size:10pt;margin-bottom:1.5mm">為什麼值得看</div>
+      <ul>
+        <li>開價不含車 <b>{F34["開價"]/F34["建坪"]:.1f}</b> 萬／坪，與同層 169 號 34F 實登 60.5 萬相當，<b>不需要先砍四成</b>才進入行情區間。</li>
+        <li>每 1 坪主建物約 <b>{F34["開價"]/F34["主建物"]:.0f}</b> 萬，是市售 4 戶最低。</li>
+        <li>毛胚交屋：不用拆前手裝潢，格局、機電、收納可以一次規劃到位。</li>
+      </ul>
+    </div>
+    <div style="flex:1" class="warn">
+      <div class="b" style="font-size:10pt;margin-bottom:1.5mm">要先算清楚</div>
+      <ul>
+        <li><b>總預算＝房屋 {F34["開價"]:,} 萬＋車位＋裝修。</b>車位若以社區每席中位 {PARK:.0f} 萬試算，3 席約 {3*PARK:,.0f} 萬，合計約 <b>{F34["開價"]+3*PARK:,.0f}</b> 萬（不含裝修）。</li>
+        <li>建商持有約 9 年未售，產權、土地持分（刊登顯示 0 坪）、車位產權登記方式，<b>簽約前調謄本確認</b>。</li>
+        <li>毛胚戶裝修需申請室內裝修許可，工期與預算另估。</li>
+      </ul>
+    </div>
+  </div>
+</div>{foot(8)}</div>
+
 <!-- P7 價格解讀 -->
 <div class="page"><div class="pad">
-  <div class="eyebrow">07 · BUYER'S VIEW</div>
+  <div class="eyebrow">08 · BUYER'S VIEW</div>
   <div class="ttl">給買方的價格解讀</div>
   <div class="sub">把行情轉成你出價時用得到的數字。</div>
   <div style="display:flex;gap:5mm">
@@ -393,11 +462,11 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
   </table>
   <div class="cap" style="margin-top:1.5mm">依市售刊登資訊（車位管理費含在大樓管理費內），約每坪每月 {min(fee_per):.0f}–{max(fee_per):.0f} 元（以刊登建坪計）。實際收費標準與公基金請向管委會確認；另有房屋稅、地價稅與保險。</div>
   <div class="note" style="margin-top:4mm"><b>租金行情：</b>本社區查無租賃實價登錄紀錄（查詢 2026-10-04），無法以實際租金試算投報率。天空樹是<b>自住型頂級產品</b>，購買理由應是居住品質、建築稀缺性與森林環境，而不是收租。</div>
-</div>{foot(8)}</div>
+</div>{foot(9)}</div>
 
 <!-- P8 誠實揭露 + 免責 -->
 <div class="page"><div class="pad">
-  <div class="eyebrow">08 · DISCLOSURE</div>
+  <div class="eyebrow">09 · DISCLOSURE</div>
   <div class="ttl">誠實揭露：購買前請一併評估</div>
   <div class="warn">
     <ul>
@@ -426,7 +495,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
     <div style="position:absolute;right:8mm;top:50%;margin-top:-12mm;width:24mm;height:24mm;border:2.5px solid #b3261e;border-radius:50%;color:#b3261e;display:flex;align-items:center;justify-content:center;text-align:center;font-family:'Noto Serif CJK TC',serif;font-size:8.4pt;font-weight:700;line-height:1.3;transform:rotate(-12deg)">僅供<br>參考</div>
   </div>
   <div style="margin-top:8mm;text-align:center;font-size:9pt;color:#3a2c12" class="serif">永慶不動產 七期河南市政店　｜　劉力助</div>
-</div>{foot(9)}</div>
+</div>{foot(10)}</div>
 
 </body></html>'''
 
