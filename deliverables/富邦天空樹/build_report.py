@@ -94,14 +94,16 @@ for L in LS['物件']:
     t = tier_of(L['樓層'])
     ref = t['二手']['不含車中位']
     lo_p, hi_p = base * N3['net'] + pv, base * t['首售']['不含車中位'] + pv
+    tw = df[(df['棟'] == '169') & (df['樓層'] == L['樓層'])].sort_values('交易日期', ascending=False)
+    twin = f'{tw.iloc[0].交易日期}<br>{tw.iloc[0].不含車單價:.1f}' if len(tw) else '—'
     cut = f'<br><span style="color:#8a7d64;font-size:7pt">原 {wan(L["原開價"])}</span>' if L['原開價'] else ''
     park = f'{L["車位數"]} 平面' if L['車位數'] else '<b style="color:#a8382e">無</b>'
-    list_rows += (f'<tr><td class="b">{L["代號"]}</td><td>{L["樓層"]}F</td><td class="num">{L["建坪"]:.2f}</td><td class="num">{L["主建物"]:.2f}</td>'
+    list_rows += (f'<tr><td class="b">{L["門牌"]}號<br>{L["樓層"]}F</td><td class="num">{L["建坪"]:.2f}</td><td class="num">{L["主建物"]:.2f}</td>'
                   f'<td>{park}</td><td class="num b">{wan(L["開價"])}{cut}</td><td class="num">{gross:.1f}</td><td class="num b">{net:.1f}</td>'
                   f'<td class="num">{t["帶"][:3]} {ref:.1f}</td><td class="num b" style="color:{"#a8382e" if net/ref-1 > .15 else "#3d6b2c"}">{(net/ref-1)*100:+.0f}%</td>'
-                  f'<td class="num">{wan(lo_p)}–{wan(hi_p)}</td></tr>')
+                  f'<td class="num">{twin}</td><td class="num">{wan(lo_p)}–<br>{wan(hi_p)}</td></tr>')
     per = L['管理費月'] / L['建坪']; fee_per.append(per)
-    fee_rows += (f'<tr><td>{L["代號"]}（{L["樓層"]}F）</td><td class="num">{L["建坪"]:.2f}</td><td class="num">{L["管理費月"]:,}</td>'
+    fee_rows += (f'<tr><td>{L["門牌"]}號 {L["樓層"]}F</td><td class="num">{L["建坪"]:.2f}</td><td class="num">{L["管理費月"]:,}</td>'
                  f'<td class="num">{per:.0f}</td><td class="num">{L["管理費月"]*12/10000:.1f}</td></tr>')
 
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
@@ -332,29 +334,30 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
 <div class="page"><div class="pad">
   <div class="eyebrow">06 · LISTINGS</div>
   <div class="ttl">目前市售物件 vs 實登行情</div>
-  <div class="sub">2026-10-04 市場上刊登中的 4 戶，用同一把尺（含車／不含車）和實價登錄比較。開價是屋主的期待，成交價才是市場的答案。</div>
+  <div class="sub">2026-10-04 市場上刊登中的 4 戶，皆為 167 號。用同一把尺（含車／不含車）和實價登錄比較。開價是屋主的期待，成交價才是市場的答案。</div>
   <table>
-    <tr><th>物件</th><th>樓層</th><th class="num">建坪(含車)</th><th class="num">主建物</th><th>車位</th><th class="num">開價(萬)</th><th class="num">含車單價</th><th class="num">不含車單價</th><th class="num">實登二手中位(同樓層帶)</th><th class="num">開價差距</th><th class="num">實登參考總價帶(萬)</th></tr>
+    <tr><th>物件</th><th class="num">建坪(含車)</th><th class="num">主建物</th><th>車位</th><th class="num">開價(萬)</th><th class="num">含車單價</th><th class="num">不含車單價</th><th class="num">同樓層帶<br>二手中位</th><th class="num">開價差距</th><th class="num">同層 169 號<br>最近成交(不含車)</th><th class="num">實登參考<br>總價帶(萬)</th></tr>
     {list_rows}
   </table>
-  <div class="cap" style="margin-top:2mm">單位：萬元／坪。不含車單價＝(開價 − 車位數 × {PARK:.0f} 萬) ÷ (建坪 − 車位坪)；車位價採社區實登揭露每席中位。「開價差距」以不含車單價對比同樓層帶二手成交中位。<br>
+  <div class="cap" style="margin-top:2mm">單位：萬元／坪。不含車單價＝(開價 − 車位數 × {PARK:.0f} 萬) ÷ (建坪 − 車位坪)；車位價採社區實登揭露每席中位。「開價差距」以不含車單價對比同樓層帶二手成交中位；「同層 169 號」為同一樓層另一戶的最近一筆實登（169 號 19F 該筆總面積僅 168 坪，條件不同僅供參考）。<br>
   「實登參考總價帶」下緣＝近三年不含車中位 {N3['net']:.1f} 萬，上緣＝同樓層帶首售期中位；均為依實登推算的參考，不是估價，也不代表屋主願意成交的價格。</div>
 
   <div style="display:flex;gap:5mm;margin-top:5mm">
     <div style="flex:1" class="note">
       <div class="b" style="font-size:10pt;margin-bottom:1.5mm">讀表重點</div>
       <ul>
-        <li>A、B、C 三戶開價換算不含車約 <b>76–86 萬／坪</b>，比同樓層帶實登二手中位高出四成以上——<b>議價空間是主要課題</b>。</li>
-        <li>D（34F）開價不含車約 <b>59 萬／坪</b>，與高樓層實登二手中位 60.3 萬接近，已降價一次（15,888 → 14,768 萬）。</li>
-        <li>B 已從 15,200 萬降到 14,808 萬（−2.6%），屋主有調價意願。</li>
+        <li>19F、22F、30F 開價換算不含車約 <b>76–86 萬／坪</b>，比同樓層帶實登二手中位高出四成以上——<b>議價空間是主要課題</b>。</li>
+        <li>30F 的同層對戶（169 號 30F）114/09 剛以不含車 <b>53.0</b> 萬成交，是最直接的比價依據。</li>
+        <li>34F 開價不含車約 <b>59 萬／坪</b>，與同層對戶 169 號 34F（111/02，60.5 萬）及高樓層二手中位 60.3 萬相當，已降價一次（15,888 → 14,768 萬）。</li>
+        <li>22F 已從 15,200 萬降到 14,808 萬（−2.6%），屋主有調價意願。</li>
       </ul>
     </div>
     <div style="flex:1" class="warn">
       <div class="b" style="font-size:10pt;margin-bottom:1.5mm">看屋前要確認</div>
       <ul>
-        <li><b>D 無車位</b>：刊登資料土地持分顯示 0 坪，需調閱謄本確認土地持分與車位取得方式。</li>
-        <li>A 刊登格局僅「1廳」、D 為毛胚，<b>裝修預算</b>要另外估。</li>
-        <li>建坪含車位與公設，比較時以<b>主建物坪數</b>為準：A 120.7、B 112.6、C 134.1、D 145.3 坪。</li>
+        <li><b>34F 無車位</b>：刊登資料土地持分顯示 0 坪，需調閱謄本確認土地持分與車位取得方式。</li>
+        <li>19F 刊登格局僅「1廳」、34F 為毛胚，<b>裝修預算</b>要另外估。</li>
+        <li>建坪含車位與公設，比較時以<b>主建物坪數</b>為準：19F 120.7、22F 112.6、30F 134.1、34F 145.3 坪。</li>
       </ul>
     </div>
   </div>
