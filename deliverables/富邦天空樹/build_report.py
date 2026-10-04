@@ -112,14 +112,16 @@ F34 = next(L for L in LS['物件'] if L['樓層'] == 34)
 feat_rows = ''
 for L in sorted(LS['物件'], key=lambda L: L['樓層'] != 34):
     pv = L['車位數'] * PARK
-    net, per_main = (L['開價'] - pv) / (L['建坪'] - L['車位坪']), (L['開價'] - pv) / L['主建物']
+    net = (L['開價'] - pv) / (L['建坪'] - L['車位坪'])
+    ex = L.get('車位另購數', 0)
+    gross = (L['開價'] + ex * PARK) / (L['建坪'] + L.get('車位另購坪', 0))
     cls = ' class="hl"' if L['樓層'] == 34 else ''
-    feat_rows += (f'<tr{cls}><td>市售 167號 {L["樓層"]}F</td><td class="num">{net:.1f}</td><td class="num">{per_main:.0f}</td>'
+    feat_rows += (f'<tr{cls}><td>市售 167號 {L["樓層"]}F</td><td class="num">{gross:.1f}{"*" if ex else ""}</td><td class="num">{net:.1f}</td>'
                   f'<td>開價 {wan(L["開價"])} 萬</td></tr>')
 for b, fl, why in [('169', 34, '同層對戶，最近一次成交'), ('169', 30, '高樓層最近成交')]:
     r = df[(df['棟'] == b) & (df['樓層'] == fl)].sort_values('交易日期').iloc[-1]
-    feat_rows += f'<tr><td>實登 {b}號 {fl}F（{r.交易日期}）</td><td class="num">{r.不含車單價:.1f}</td><td class="num">—</td><td>{why}</td></tr>'
-feat_rows += (f'<tr><td>實登 高樓層 26F+ 二手中位</td><td class="num">{S["樓層帶"][2]["二手"]["不含車中位"]:.1f}</td><td class="num">—</td>'
+    feat_rows += f'<tr><td>實登 {b}號 {fl}F（{r.交易日期}）</td><td class="num">{r.含車單價:.1f}</td><td class="num">{r.不含車單價:.1f}</td><td>{why}</td></tr>'
+feat_rows += (f'<tr><td>實登 高樓層 26F+ 二手中位</td><td class="num">{S["樓層帶"][2]["二手"]["含車中位"]:.1f}</td><td class="num">{S["樓層帶"][2]["二手"]["不含車中位"]:.1f}</td>'
               f'<td>{S["樓層帶"][2]["二手"]["n"]} 筆，107–115</td></tr>')
 
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
@@ -425,17 +427,17 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.5pt; line-height: 1.8; margin-bo
 
   <div class="ttl" style="font-size:13pt;margin-top:6mm">同一把尺比一比</div>
   <table>
-    <tr><th>比較對象</th><th class="num">不含車單價(萬/坪)</th><th class="num">主建物單價(萬/坪)</th><th>說明</th></tr>
+    <tr><th>比較對象</th><th class="num">含車單價(萬/坪)</th><th class="num">不含車單價(萬/坪)</th><th>說明</th></tr>
     {feat_rows}
   </table>
-  <div class="cap" style="margin-top:1.5mm">主建物單價＝(開價 − 車位價) ÷ 主建物坪數，市售各戶車位以每席 {PARK:.0f} 萬扣除；34F 開價不含車位，直接相除。實登列為不含車單價。</div>
+  <div class="cap" style="margin-top:1.5mm">含車單價＝總價 ÷ 總面積；不含車單價＝(總價 − 車位價) ÷ (總面積 − 車位面積)。市售各戶車位以每席 {PARK:.0f} 萬換算；34F 車位另購，含車單價以 3 席 × {PARK:.0f} 萬、38.27 坪試算（*）。</div>
 
   <div style="display:flex;gap:5mm;margin-top:5mm">
     <div style="flex:1" class="note">
       <div class="b" style="font-size:10pt;margin-bottom:1.5mm">為什麼值得看</div>
       <ul>
         <li>開價不含車 <b>{F34["開價"]/F34["建坪"]:.1f}</b> 萬／坪，與同層 169 號 34F 實登 60.5 萬相當，<b>不需要先砍四成</b>才進入行情區間。</li>
-        <li>每 1 坪主建物約 <b>{F34["開價"]/F34["主建物"]:.0f}</b> 萬，是市售 4 戶最低。</li>
+        <li>主建物 <b>{F34["主建物"]:.1f}</b> 坪、陽台 <b>{F34["附屬"]:.1f}</b> 坪，空間是市售 4 戶最大。</li>
         <li>毛胚交屋：不用拆前手裝潢，格局、機電、收納可以一次規劃到位。</li>
       </ul>
     </div>
