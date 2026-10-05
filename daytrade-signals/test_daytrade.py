@@ -201,8 +201,11 @@ class TestConfig(unittest.TestCase):
         original = config.RISK["max_daily_loss"]
         config.RISK["max_daily_loss"] = 999_999
         try:
-            # 3,000 ÷ 1000 ÷ 1.5% = 200 元
-            self.assertIn("200", " ".join(config.warnings()))
+            # 門檻 = 單筆上限 ÷ 1000 股 ÷ 停損%。寫死數字的話，改參數就壞，
+            # 而壞掉的原因跟這條在驗的事（警告講不講得出門檻）完全無關。
+            threshold = (config.RISK["per_trade_risk"] / 1000
+                         / (config.SIGNAL["stop_loss_pct"] / 100))
+            self.assertIn(f"{threshold:,.0f}", " ".join(config.warnings()))
         finally:
             config.RISK["max_daily_loss"] = original
 
@@ -432,17 +435,18 @@ class TestEvaluate(unittest.TestCase):
 
     def test_lot_sizing_from_per_trade_risk(self):
         sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.IN_WINDOW)
-        # 一張風險 = (101 - 99.5) × 1000 = 1500 元；3000 / 1500 → 2 張
+        cap = config.RISK["per_trade_risk"]
+        # 一張風險 = (101 - 99.5) × 1000 = 1500 元
         self.assertEqual(sig["risk_per_lot"], 1500)
-        self.assertEqual(sig["lots"], 2)
+        self.assertEqual(sig["lots"], int(cap // 1500))
 
         cheap = ready_state(or_high=20.0, last=20.2, vwap=20.1)
         sig2 = evaluate(cheap, now=self.IN_WINDOW)
         # 20.2 × (1-1.5%) = 19.897 → 進位到 0.05 檔位 = 19.90
         self.assertAlmostEqual(sig2["stop"], 19.9)
-        # 一張風險 = 300 元；3000 / 300 → 10 張
+        # 一張風險 = 300 元
         self.assertEqual(sig2["risk_per_lot"], 300)
-        self.assertEqual(sig2["lots"], 10)
+        self.assertEqual(sig2["lots"], int(cap // 300))
         self.assertFalse(sig2["oversized"])
 
     def test_prices_land_on_legal_ticks(self):
@@ -477,7 +481,12 @@ class TestEvaluate(unittest.TestCase):
 
     def test_flags_oversized_single_lot(self):
         """高價股一張的停損金額就超過單筆上限 → 必須標記，不能假裝 1 張沒事。"""
-        pricey = ready_state(or_high=280.0, last=283.0, vwap=281.0)
+        # 283 元在 per_trade_risk=3,000 時超額，改成 4,000 之後剛好壓線不超。
+        # 挑一個「不管上限設多少都確定超額」的價位：門檻的 1.5 倍。
+        threshold = (config.RISK["per_trade_risk"] / 1000
+                     / (config.SIGNAL["stop_loss_pct"] / 100))
+        last = config.round_to_tick(threshold * 1.5, "up")
+        pricey = ready_state(or_high=last - 3.0, last=last, vwap=last - 2.0)
         sig = evaluate(pricey, now=self.IN_WINDOW)
         self.assertEqual(sig["lots"], 1)
         self.assertTrue(sig["oversized"])
@@ -2334,23 +2343,32 @@ class TestPreflight(unittest.TestCase):
 
     def test_a_warning_shows_up_as_warn_not_ok(self):
         """警告要看得見。印不出來的警告跟沒有警告一樣 —— 這個專案一路在修這個。"""
-        self.assertTrue(config.warnings(), "出廠設定本來就該帶著警告")
+        ws = config.warnings()
+        self.assertTrue(ws, "出廠設定本來就該帶著警告")
         r = preflight.check_config()
         self.assertEqual(r.status, preflight.WARN)
-        self.assertIn("日虧上限", r.detail)
+        # 不釘某一句話 —— 釘了之後換一條警告就會失敗，而失敗的理由
+        # 跟這條在驗的事（警告有沒有被印出來）無關。驗的是每一條都在。
+        for w in ws:
+            self.assertIn(w, r.detail)
 
     def test_config_check_passes_and_fails(self):
         # 出廠設定本身帶著警告（日虧上限高於 3 筆滿額、連敗停手不會出手），
         # 所以先壓掉警告才驗「沒問題時是 OK」。
         saved = {k: config.RISK[k] for k in ("max_daily_loss", "max_consecutive_losses")}
+        saved_price = config.SCREEN["max_price"]
         config.RISK["max_daily_loss"] = (config.RISK["per_trade_risk"]
                                          * config.RISK["max_trades_per_day"])
         config.RISK["max_consecutive_losses"] = 1
+        # 價格死區那條也要壓掉：上限壓到「一張不會超額」的門檻以下。
+        config.SCREEN["max_price"] = (config.RISK["per_trade_risk"] / 1000
+                                      / (config.SIGNAL["stop_loss_pct"] / 100)) - 1
         try:
             self.assertEqual(config.warnings(), [])
             self.assertEqual(preflight.check_config().status, preflight.OK)
         finally:
             config.RISK.update(saved)
+            config.SCREEN["max_price"] = saved_price
         original = config.SIGNAL["reward_risk"]
         config.SIGNAL["reward_risk"] = -1
         try:
@@ -5270,6 +5288,92 @@ class TestAQuietDayIsNotSilence(unittest.TestCase):
         self.assertTrue(calls,
                         "format_window_closed 必須在 flush_batch 的最外層呼叫，"
                         "不可以藏在迴圈或 if 裡面")
+
+
+
+class TestTheThreeRedLinesMeet(unittest.TestCase):
+    """單筆風險 × 當日筆數 要等於日虧上限。
+
+    v2：3,000 × 4 = 12,000 ✅
+    v4：筆數改成 3，單筆沒跟著動 → 3,000 × 3 = 9,000，日虧上限有 3,000
+        永遠用不到。v5 把單筆改成 4,000 補回來。
+    這條不是在釘數字，是在釘「它們必須相等」這個關係。
+    """
+
+    def test_they_multiply_to_the_daily_cap(self):
+        r = config.RISK
+        self.assertEqual(r["per_trade_risk"] * r["max_trades_per_day"],
+                         r["max_daily_loss"],
+                         "三條紅線不對齊：改其中一個就要一起改")
+
+    def test_the_alignment_warning_is_silent_while_they_meet(self):
+        self.assertNotIn("低於日虧上限", " ".join(config.warnings()))
+
+
+class TestThePriceDeadZoneIsAnnounced(unittest.TestCase):
+    """選股價格上限高於「一張就超額」的門檻時，要講出來。
+
+    系統減不了碼（最小單位一張 1,000 股），所以那個區間裡的每一筆都只能
+    標 ⚠️ 超額 —— 等於把一條你自己定的規則，變成每次臨場重新決定一次。
+    看不見的話，你會以為單筆上限一直在保護你。
+    """
+
+    def _threshold(self):
+        return (config.RISK["per_trade_risk"] / 1000
+                / (config.SIGNAL["stop_loss_pct"] / 100))
+
+    def test_factory_settings_announce_it(self):
+        text = " ".join(config.warnings())
+        self.assertIn("價格上限", text)
+        self.assertIn(f"{self._threshold():,.0f}", text)
+
+    def test_it_goes_quiet_once_the_ceiling_is_low_enough(self):
+        saved = config.SCREEN["max_price"]
+        config.SCREEN["max_price"] = self._threshold() - 1
+        try:
+            self.assertNotIn("價格上限", " ".join(config.warnings()))
+        finally:
+            config.SCREEN["max_price"] = saved
+
+    def test_it_names_both_ways_out(self):
+        """只說「有問題」而不說「怎麼解」的警告，使用者只能來問我。"""
+        text = " ".join(config.warnings())
+        self.assertIn("max_price", text)
+        self.assertIn("per_trade_risk", text)
+
+    def test_the_zone_really_produces_oversized_signals(self):
+        """警告說的事要是真的 —— 門檻以上的訊號必須真的被標超額。"""
+        last = config.round_to_tick(self._threshold() * 1.2, "up")
+        st = ready_state(or_high=last - 3.0, last=last, vwap=last - 2.0)
+        sig = evaluate(st, now=dtime(9, 3))
+        self.assertTrue(sig["oversized"])
+        self.assertEqual(sig["lots"], 1)
+
+
+class TestChangingPositionSizeChangesTheRuleset(unittest.TestCase):
+    """R 不受倉位影響，**金額**會。改了單筆風險就必須換版本號。
+
+    不換的話，analyse.py 會把 3,000 時代和 4,000 時代的「元」加在一起 ——
+    拿兩把尺量出來的數字相加。R 可以跨版本看，元不行。
+    """
+
+    def test_signals_carry_the_ruleset(self):
+        sig = evaluate(ready_state(), now=dtime(9, 3))
+        self.assertEqual(sig["ruleset"], config.RULESET)
+
+    def test_the_ruleset_moved_past_v4(self):
+        self.assertNotEqual(config.RULESET, "v4",
+                            "單筆風險改了，版本號必須跟著動，否則金額會被混算")
+
+    def test_analyse_splits_by_ruleset(self):
+        """接線：分組函式真的存在而且真的分得開。"""
+        import analyse, types
+        rows = [types.SimpleNamespace(ruleset="v4"),
+                types.SimpleNamespace(ruleset="v5"),
+                types.SimpleNamespace(ruleset="v5")]
+        groups = analyse.by_ruleset(rows)
+        self.assertEqual(sorted(groups), ["v4", "v5"])
+        self.assertEqual(len(groups["v5"]), 2)
 
 
 

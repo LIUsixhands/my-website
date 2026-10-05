@@ -173,7 +173,15 @@ SCREEN = {
 #                 依據：前五天 25 筆，訊號全部發在 09:17 之後，而當日漲幅
 #                 幾乎都在 09:15 前就走完。10-02 五筆全停損，其中金山電
 #                 走到 1.67R（1.5R 的目標打得到，2.5R 打不到）才回頭。
-RULESET = "v4"
+# v5  2026-10-05  **只動倉位大小，四條原則不變。** per_trade_risk 3,000 → 4,000。
+#                 理由：v4 把當日筆數從 4 改成 3，但單筆風險沒跟著動，於是
+#                 3,000 × 3 = 9,000，日虧上限有 3,000 元永遠用不到。改成
+#                 4,000 × 3 = 12,000，三條紅線重新對齊（v2 時代本來就是對齊的）。
+#                 為什麼要換版本號：R 倍數不受倉位影響，但**金額**會。10-05 之前
+#                 的 26 筆是用 3,000 算的，之後是 4,000 —— 累計元直接相加等於
+#                 拿兩把尺量出來的數字相加。analyse.py 的「〇、規則版本」那一節
+#                 會把兩段分開，R 可以跨版本看，元不行。
+RULESET = "v5"
 
 SIGNAL = {
     "or_start": "09:00:00",         # 開盤區間起
@@ -232,7 +240,7 @@ RISK = {
     "max_trades_per_day": 3,        # 一天最多做幾筆
     "max_daily_loss": 12000,        # 當日實現虧損達此數字 → 系統停止發訊號（元）
     "max_consecutive_losses": 3,    # 連續虧損筆數 → 當日停手
-    "per_trade_risk": 3000,         # 單筆可承受虧損（元）→ 用來反推張數
+    "per_trade_risk": 4000,         # 單筆可承受虧損（元）→ 用來反推張數
     "halt_when_pnl_unknown": True,  # 損益查不到 → 直接關閘（模擬模式不適用，見 README）
     "poll_interval_sec": 300,       # 沒有訊號時，每隔多久主動查一次損益（API 有流量上限）
 }
@@ -412,6 +420,20 @@ def warnings() -> list[str]:
             f"{r['max_daily_loss']:,} 元。一般情況下日虧上限不會觸發；但股價高於約 "
             f"{cap:,.0f} 元的訊號單筆風險會超標（強制 1 張），那時日虧上限就是"
             f"唯一的煞車。確認這是你要的。")
+    # 價格死區：一張的風險就超過單筆上限的股票，照樣選得進來。
+    # 系統減不了碼（最小單位就是一張 1,000 股），只能標 ⚠️ 超額 —— 也就是
+    # 把一個你自己定的規則，變成每次都要臨場重新決定一次的事。
+    if s["stop_loss_pct"] > 0:
+        oversized_from = r["per_trade_risk"] / 1000 / (s["stop_loss_pct"] / 100)
+        if SCREEN["max_price"] > oversized_from:
+            w.append(
+                f"選股價格上限 {SCREEN['max_price']:,.0f} 元，但股價超過約 "
+                f"{oversized_from:,.0f} 元時，一張的停損風險就超過單筆上限 "
+                f"{r['per_trade_risk']:,} 元（最小單位一張，減不了碼）。"
+                f"也就是 {oversized_from:,.0f}–{SCREEN['max_price']:,.0f} 元之間的"
+                f"訊號每一筆都會標超額，要不要做變成你臨場決定。"
+                f"要消掉這個區間：max_price 調到 {oversized_from:,.0f} 以下，"
+                f"或 per_trade_risk 調高。")
     if r["max_consecutive_losses"] >= r["max_signals_per_day"]:
         w.append(
             f"連敗停手 {r['max_consecutive_losses']} 筆 >= 當日訊號上限 "
