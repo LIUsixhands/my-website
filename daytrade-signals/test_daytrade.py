@@ -5462,5 +5462,121 @@ class TestTodaysWatchlistSurvivesTomorrowMorning(unittest.TestCase):
 
 
 
+class TestWhyNotRebuildsTheFourGates(unittest.TestCase):
+    """重建 evaluate() 的四道閘。每一關都要能被單獨指認出來。
+
+    這支程式存在的理由：那四關全部是靜音的 `return None`，所以 2026-10-05
+    那天另外 19 檔卡在哪裡，事後完全查不到。
+    """
+
+    def _bars(self, rng=(100.0, 99.0), window=None, base_vol=100.0,
+              hit_vol=300.0):
+        """造一天的分鐘 K。label 是該分鐘的**結束**時間。
+
+        09:01、09:02 兩根 = 開盤區間；09:03–09:05 = 進場窗口。
+        """
+        import whynot
+        day = datetime(2026, 10, 5)
+        bars = [(day.replace(hour=9, minute=1), rng[0], rng[1], rng[0], base_vol),
+                (day.replace(hour=9, minute=2), rng[0], rng[1], rng[0], base_vol)]
+        for i, (hi, vol) in enumerate(window or [], start=3):
+            bars.append((day.replace(hour=9, minute=i), hi, hi - 1.0, hi, vol))
+        return bars
+
+    def test_no_breakout_is_named(self):
+        import whynot
+        # 觸發價 = 100 × 1.001 = 100.10，窗口最高只到 100.05
+        d = whynot.diagnose(self._bars(window=[(100.05, 300.0)]))
+        self.assertEqual(d["verdict"], whynot.BLOCK_NO_BREAKOUT)
+        self.assertAlmostEqual(d["window_high"], 100.05)
+
+    def test_a_clean_breakout_passes(self):
+        import whynot
+        d = whynot.diagnose(self._bars(window=[(105.0, 400.0)]))
+        self.assertEqual(d["verdict"], whynot.PASS)
+        self.assertEqual(d["hit_at"].strftime("%H:%M"), "09:03")
+
+    def test_weak_volume_is_named(self):
+        import whynot
+        # 突破那一分鐘的量只跟區間平均一樣 → 比值 1.0，低於門檻 1.8
+        d = whynot.diagnose(self._bars(window=[(105.0, 100.0)]))
+        self.assertEqual(d["verdict"], whynot.BLOCK_VOLUME)
+        self.assertAlmostEqual(d["vol_ratio"], 1.0)
+
+    def test_below_vwap_is_named(self):
+        """均價線那關要比量能先判 —— 順序跟 evaluate() 一致。"""
+        import whynot
+        # 區間那兩根的典型價 ≈ 99.67，突破價 100.10 在它上面，所以要讓
+        # 均價被前面的大量拉高：區間給一根很高的價、很大的量。
+        day = datetime(2026, 10, 5)
+        bars = [(day.replace(hour=9, minute=1), 100.0, 99.0, 100.0, 100.0),
+                (day.replace(hour=9, minute=2), 100.0, 99.0, 100.0, 100.0),
+                (day.replace(hour=9, minute=3), 100.2, 99.0, 99.0, 1.0)]
+        # 把均價推到突破價之上
+        bars.insert(0, (day.replace(hour=9, minute=0), 200.0, 200.0, 200.0, 10000.0))
+        d = whynot.diagnose(bars)
+        self.assertEqual(d["verdict"], whynot.BLOCK_VWAP)
+
+    def test_limit_up_is_named(self):
+        import whynot
+        # 昨收 100 → 漲停 110。突破價就在漲停上。
+        d = whynot.diagnose(self._bars(window=[(110.0, 400.0)]), prev_close=100.0)
+        self.assertEqual(d["verdict"], whynot.BLOCK_LIMIT_UP)
+
+    def test_bars_are_end_labelled(self):
+        """09:00–09:02 的區間收的是 label 09:01 和 09:02 那兩根。
+
+        broker.py 第 222 行說 ts 是「該分鐘的起點」，跟同檔第 281 行和
+        whatif.py 相反。這條把這支程式用的是哪一個版本釘死。
+        """
+        import whynot
+        day = datetime(2026, 10, 5)
+        bars = [(day.replace(hour=9, minute=0), 999.0, 999.0, 999.0, 1.0),  # 盤前
+                (day.replace(hour=9, minute=1), 100.0, 99.0, 100.0, 100.0),
+                (day.replace(hour=9, minute=2), 101.0, 99.5, 101.0, 100.0),
+                (day.replace(hour=9, minute=3), 105.0, 100.0, 105.0, 400.0)]
+        d = whynot.diagnose(bars)
+        self.assertEqual(d["or_high"], 101.0, "09:00 那根是盤前，不可以算進區間")
+
+    def test_a_breakout_after_the_window_does_not_count(self):
+        """09:05 之後才突破的，就是沒突破 —— 那正是 v4 的代價。"""
+        import whynot
+        day = datetime(2026, 10, 5)
+        bars = [(day.replace(hour=9, minute=1), 100.0, 99.0, 100.0, 100.0),
+                (day.replace(hour=9, minute=2), 100.0, 99.0, 100.0, 100.0),
+                (day.replace(hour=9, minute=7), 120.0, 100.0, 120.0, 900.0)]
+        d = whynot.diagnose(bars)
+        self.assertEqual(d["verdict"], whynot.BLOCK_NO_BREAKOUT)
+
+    def test_the_report_says_it_is_a_reconstruction(self):
+        """沒講清楚是事後重建的話，這張表會被當成盤中紀錄。"""
+        import whynot
+        text = "\n".join(whynot.render("2026-10-05", []))
+        self.assertIn("重建", text)
+        self.assertIn("近似", text)
+
+    def test_an_empty_volume_cell_is_a_dash_not_a_dash_x(self):
+        """沒突破的那幾檔沒有量能數字，印成「—x」會讓人以為是個單位。"""
+        import whynot
+        rows = [("9933", "中鼎", {"verdict": whynot.BLOCK_NO_BREAKOUT,
+                                  "or_high": 48.0, "trigger": 48.05,
+                                  "window_high": 47.6, "hit_at": None,
+                                  "vwap": None, "vol_ratio": None})]
+        text = "\n".join(whynot.render("2026-10-05", rows))
+        self.assertNotIn("—x", text)
+
+    def test_the_report_counts_every_verdict(self):
+        import whynot
+        rows = [("1", "甲", {"verdict": whynot.BLOCK_VOLUME, "or_high": 1.0,
+                             "trigger": 1.0, "window_high": 1.0, "hit_at": None,
+                             "vwap": None, "vol_ratio": None}),
+                ("2", "乙", {"verdict": whynot.BLOCK_VOLUME, "or_high": 1.0,
+                             "trigger": 1.0, "window_high": 1.0, "hit_at": None,
+                             "vwap": None, "vol_ratio": None})]
+        text = "\n".join(whynot.render("2026-10-05", rows))
+        self.assertIn(f"**{whynot.BLOCK_VOLUME}**：2 檔", text)
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
