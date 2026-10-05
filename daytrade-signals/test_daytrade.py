@@ -5578,5 +5578,125 @@ class TestWhyNotRebuildsTheFourGates(unittest.TestCase):
 
 
 
+class TestWhyNotRechecksEveryBarLikeTheLiveLoop(unittest.TestCase):
+    """2026-10-05 的加高：第一版 whynot 判它「量能 0.23x 擋掉」，而它盤中
+    明明在 09:04:38 以 1.94x 發出了訊號。
+
+    原因是盤中 evaluate() 每個 tick 都重判，09:03 被擋、09:04 過了就發；
+    第一版只判第一根越過觸發價的 K 棒，被擋就結案。這是整張表裡唯一有
+    標準答案的一列，而它答錯了。
+    """
+
+    def _day(self):
+        day = datetime(2026, 10, 5)
+        return lambda m: day.replace(hour=9, minute=m)
+
+    def test_blocked_at_0903_but_passing_at_0904_is_a_pass(self):
+        import whynot
+        t = self._day()
+        bars = [(t(1), 47.40, 46.80, 47.20, 1000.0),   # 開盤兩根量很大
+                (t(2), 47.40, 47.00, 47.30, 1000.0),
+                (t(3), 47.50, 47.20, 47.45, 300.0),    # 第一次越過，量不夠
+                (t(4), 48.40, 47.40, 48.30, 2500.0)]   # 量衝上來
+        d = whynot.diagnose(bars)
+        self.assertEqual(d["verdict"], whynot.PASS,
+                         "盤中每個 tick 都重判 —— 第一根被擋，後面過了就算過")
+        self.assertEqual(d["hit_at"].strftime("%H:%M"), "09:04")
+
+    def test_it_reports_how_many_times_it_crossed(self):
+        import whynot
+        t = self._day()
+        bars = [(t(1), 100.0, 99.0, 100.0, 100.0),
+                (t(2), 100.0, 99.0, 100.0, 100.0),
+                (t(3), 101.0, 100.0, 101.0, 100.0),
+                (t(4), 101.0, 100.0, 101.0, 100.0),
+                (t(5), 101.0, 100.0, 101.0, 100.0)]
+        d = whynot.diagnose(bars)
+        self.assertEqual(d["verdict"], whynot.BLOCK_VOLUME)
+        self.assertEqual(d["attempts"], 3)
+
+    def test_the_volume_base_grows_like_the_live_one(self):
+        """09:04 判的時候，基準是 09:01–09:03 全部，不是只有開盤區間那兩根。"""
+        import whynot
+        t = self._day()
+        bars = [(t(1), 1, 1, 1, 100.0), (t(2), 1, 1, 1, 100.0),
+                (t(3), 1, 1, 1, 400.0), (t(4), 1, 1, 1, 400.0)]
+        # 基準 = (100+100+400)/3 = 200 → 400/200 = 2.0
+        self.assertAlmostEqual(whynot.volume_ratio(bars, t(4), dtime(9, 0)), 2.0)
+
+    def test_the_0900_bar_is_not_in_the_volume_base(self):
+        """09:00 那根含開盤集合競價；盤中用累計量相減，那一筆本來就被減掉了。"""
+        import whynot
+        t = self._day()
+        bars = [(t(0), 1, 1, 1, 99999.0),
+                (t(1), 1, 1, 1, 100.0), (t(2), 1, 1, 1, 100.0),
+                (t(3), 1, 1, 1, 200.0)]
+        self.assertAlmostEqual(whynot.volume_ratio(bars, t(3), dtime(9, 0)), 2.0)
+
+
+class TestWhyNotChecksItsOwnAnswers(unittest.TestCase):
+    """拿盤中真的發出去的訊號對答案，對不上就放在報表第一段。"""
+
+    def _row(self, code, verdict):
+        import whynot
+        return (code, "", {"verdict": verdict, "or_high": 1.0, "trigger": 1.0,
+                           "window_high": 1.0, "hit_at": None, "vwap": None,
+                           "vol_ratio": None})
+
+    def test_a_signal_the_reconstruction_blocked_is_shouted(self):
+        """就是 10-05 加高那個情況。"""
+        import whynot
+        rows = [self._row("8182", whynot.BLOCK_VOLUME)]
+        text = "\n".join(whynot.crosscheck_lines({"8182"}, rows))
+        self.assertIn("🛑", text)
+        self.assertIn("8182", text)
+        self.assertIn("不能全信", text)
+
+    def test_a_pass_that_never_fired_is_named_too(self):
+        import whynot
+        rows = [self._row("8182", whynot.PASS), self._row("3441", whynot.PASS)]
+        text = "\n".join(whynot.crosscheck_lines({"8182"}, rows))
+        self.assertIn("3441", text)
+
+    def test_agreement_says_so(self):
+        import whynot
+        rows = [self._row("8182", whynot.PASS),
+                self._row("3441", whynot.BLOCK_NO_BREAKOUT)]
+        text = "\n".join(whynot.crosscheck_lines({"8182"}, rows))
+        self.assertIn("✅", text)
+        self.assertNotIn("🛑", text)
+
+    def test_no_record_means_unverified_not_correct(self):
+        """沒有紀錄可以對，不等於對 —— 要明講沒驗證過。"""
+        import whynot
+        text = "\n".join(whynot.crosscheck_lines(None, []))
+        self.assertIn("無法對答案", text)
+        self.assertNotIn("✅", text)
+
+    def test_the_check_comes_before_the_table(self):
+        """放在最後的警告等於沒有警告。"""
+        import whynot
+        rows = [self._row("8182", whynot.BLOCK_VOLUME)]
+        lines = whynot.render("2026-10-05", rows, actual={"8182"}, check=True)
+        warn = next(i for i, l in enumerate(lines) if "🛑" in l)
+        table = next(i for i, l in enumerate(lines) if l.startswith("| 代號"))
+        self.assertLess(warn, table)
+
+    def test_main_always_checks(self):
+        """接線：main() 呼叫 render 時一定帶 check=True。"""
+        import ast, io as _io, whynot
+        tree = ast.parse(_io.open(whynot.__file__, encoding="utf-8").read())
+        main = next(n for n in ast.walk(tree)
+                    if isinstance(n, ast.FunctionDef) and n.name == "main")
+        calls = [c for c in ast.walk(main) if isinstance(c, ast.Call)
+                 and getattr(c.func, "id", "") == "render"]
+        self.assertTrue(calls, "main() 沒有呼叫 render")
+        for c in calls:
+            kw = {k.arg: k.value for k in c.keywords}
+            self.assertIn("check", kw, "main() 呼叫 render 沒帶 check")
+            self.assertIs(getattr(kw["check"], "value", None), True)
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -87,13 +87,18 @@ def vwap_upto(bars, upto) -> float | None:
     return (num / den) if den else None
 
 
-def volume_ratio(bars, hit_time, or_start: dtime, or_end: dtime) -> float | None:
-    """突破那一分鐘的量 ÷ 開盤區間每分鐘的平均量。
+def volume_ratio(bars, hit_time, or_start: dtime) -> float | None:
+    """這一分鐘的量 ÷ 開盤後到前一分鐘為止的每分鐘平均量。
 
-    這是「加速度」的分鐘版近似。盤中那個 volume_surge() 比的是
-    最近 60 秒的每秒成交率 vs 更早的基準 —— 同樣的意思，粗很多的尺。
+    盤中的 volume_surge() 比的是「最近 60 秒的每秒成交率」vs「更早那一段
+    的每秒成交率」，而更早那一段會一路往後長 —— 09:04 判的時候，基準包含
+    09:01–09:03 全部。所以這裡的基準也是「這一根之前、開盤之後的全部」，
+    不是固定只看開盤區間那兩根。
+
+    09:00 那一根（label 09:00 = 08:59–09:00，含開盤集合競價那一筆）不算：
+    盤中是用累計量相減，第一筆的累計值本身就被減掉了。
     """
-    base = [b[4] for b in bars if in_range(b[0].time(), or_start, or_end)]
+    base = [b[4] for b in bars if or_start < b[0].time() < hit_time.time()]
     hit = next((b[4] for b in bars if b[0] == hit_time), None)
     if not base or hit is None:
         return None
@@ -122,41 +127,82 @@ def diagnose(bars, prev_close: float | None = None) -> dict:
     window = [b for b in bars if in_range(b[0].time(), or_end, win_end)]
     out["window_high"] = max((b[1] for b in window), default=None)
 
-    hit = next((b for b in window if b[1] >= trigger), None)
-    if hit is None:
+    crossings = [b for b in window if b[1] >= trigger]
+    if not crossings:
         return out                      # 連突破都沒有，後面幾關不必判
-    out["hit_at"], out["hit_price"] = hit[0], hit[1]
 
-    # ① 均價線
-    if cfg["require_above_vwap"]:
-        vw = vwap_upto(bars, hit[0])
-        out["vwap"] = vw
-        if vw is None or hit[1] < vw:
-            out["verdict"] = BLOCK_VWAP
-            return out
-
-    # ② 量能
-    vr = volume_ratio(bars, hit[0], or_start, or_end)
-    out["vol_ratio"] = vr
-    if vr is None or vr < cfg["volume_surge_ratio"]:
-        out["verdict"] = BLOCK_VOLUME
-        return out
-
-    # ③ 漲停
+    # 盤中的 evaluate() **每個 tick 都重判一次**：09:03 被量能擋下，09:04
+    # 量能衝上來就過了。第一版只判第一根越過觸發價的 K 棒、被擋就結案 ——
+    # 2026-10-05 的加高就這樣被誤判成「量能 0.23x 擋掉」，而它盤中明明在
+    # 09:04:38 以 1.94x 發出了訊號。所以：窗口裡每一根越過的都要判，
+    # 任何一根全過就算通過；都沒過，報「走得最遠」的那一次卡在哪。
     cap = config.limit_up(prev_close) if prev_close else None
-    if cap and hit[1] >= cap:
-        out["verdict"] = BLOCK_LIMIT_UP
-        return out
+    best, best_key = None, None
+    for b in crossings:
+        vw = vwap_upto(bars, b[0]) if cfg["require_above_vwap"] else None
+        vr = volume_ratio(bars, b[0], or_start)
+        if cfg["require_above_vwap"] and (vw is None or b[1] < vw):
+            verdict, rank = BLOCK_VWAP, 0
+        elif vr is None or vr < cfg["volume_surge_ratio"]:
+            verdict, rank = BLOCK_VOLUME, 1
+        elif cap and b[1] >= cap:
+            verdict, rank = BLOCK_LIMIT_UP, 2
+        else:
+            verdict, rank = PASS, 3
+        # 走得越遠越好；同樣卡在量能的，量能比較高的那次比較接近過關
+        key = (rank, vr or 0.0)
+        if best_key is None or key > best_key:
+            best, best_key = (b, vw, vr, verdict), key
+        if verdict == PASS:
+            break                       # 盤中第一次全過就發了，後面不用看
 
-    out["verdict"] = PASS
+    b, vw, vr, verdict = best
+    out.update(hit_at=b[0], hit_price=b[1], vwap=vw, vol_ratio=vr,
+               verdict=verdict, attempts=len(crossings))
     return out
 
 
-def render(date: str, rows: list) -> list[str]:
+def crosscheck_lines(actual: set | None, rows) -> list[str]:
+    """拿 outcomes.csv 裡當天真的發出去的訊號，對重建結果的答案。
+
+    這一段存在的原因：第一版 whynot 把 2026-10-05 的加高判成「量能 0.23x
+    擋掉」，而它盤中明明發出了訊號。那是這張表裡**唯一有標準答案的一列**，
+    而它答錯了。沒有人去對，這張表就會被當成真的。
+
+    所以每次都對，對不上就放在報表第一段，不是埋在最後。
+    """
+    if actual is None:
+        return ["> ⚠️ **無法對答案**：outcomes.csv 裡沒有這一天的訊號紀錄，"
+                "這張表的準確度沒有被驗證過。", ""]
+    passed = {code for code, _, d in rows if d["verdict"] == PASS}
+    missed = sorted(actual - passed)         # 盤中發了，重建說擋掉
+    extra = sorted(passed - actual)          # 重建說會發，盤中沒發
+    if not missed and not extra:
+        return [f"> ✅ **對過答案了**：盤中當天發出 {len(actual)} 個訊號"
+                f"（{'、'.join(sorted(actual)) or '無'}），重建結果完全一致。", ""]
+    out = ["> 🛑 **重建跟盤中紀錄對不上 —— 下面這張表不能全信。**"]
+    for code in missed:
+        d = next((d for c, _, d in rows if c == code), None)
+        why = d["verdict"] if d else "不在名單裡"
+        out.append(f"> - {code}：盤中**有發**訊號，重建卻判定「{why}」"
+                   f" —— 重建比盤中嚴格，被擋的那幾檔可能其實會過")
+    for code in extra:
+        out.append(f"> - {code}：重建判定**會發**，盤中卻沒發"
+                   f" —— 可能是批次只取前 {config.RISK['max_signals_per_day']} 檔，"
+                   f"或盤中 tick 層級的細節分鐘 K 看不到")
+    return out + [""]
+
+
+def render(date: str, rows: list, actual: set | None = None,
+           check: bool = False) -> list[str]:
     cfg = config.SIGNAL
     out = [
         f"# whynot —— {date} 監看的 {len(rows)} 檔，各自卡在哪一關",
         "",
+    ]
+    if check:
+        out += crosscheck_lines(actual, rows)
+    out += [
         "> **這是用分鐘 K 事後重建的，不是盤中那條路徑的紀錄。**",
         "> 量能倍數是分鐘版近似（盤中用 tick 的每秒成交率），均價線也是估的",
         "> （kbars 沒有 Amount，用 (高+低+收)/3 × 量 累加）。",
@@ -167,7 +213,7 @@ def render(date: str, rows: list) -> list[str]:
         f"進場窗口到 {cfg['entry_window_end'][:5]}，"
         f"量能門檻 {cfg['volume_surge_ratio']}x",
         "",
-        "| 代號 | 名稱 | 區間高 | 觸發價 | 窗口內最高 | 突破時間 | 均價線 | 量能近似 | 卡在哪一關 |",
+        "| 代號 | 名稱 | 區間高 | 觸發價 | 窗口內最高 | 判定那根 | 均價線 | 量能近似 | 卡在哪一關 |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
     for code, name, d in rows:
@@ -247,7 +293,14 @@ def main(argv=None):
         rows.append((code, it.get("name", ""),
                      diagnose(bars, it.get("prev_close"))))
 
-    text = "\n".join(render(args.date, rows))
+    actual = None
+    try:
+        import outcome as oc
+        today = [r for r in oc.load_csv() if r.date == args.date]
+        actual = {str(r.code) for r in today} if today else None
+    except Exception as e:
+        log.warning("outcomes.csv 讀不到，無法對答案：%s", e)
+    text = "\n".join(render(args.date, rows, actual=actual, check=True))
     print()
     print(text)
     out = args.out or (config.JOURNAL_DIR / f"whynot-{args.date.replace('-', '')}.md")
