@@ -20,7 +20,8 @@ from types import SimpleNamespace
 import config
 import review
 import signals
-from signals import RiskGate, SymbolState, evaluate, format_signal, _t
+from signals import (RiskGate, SymbolState, evaluate, format_signal,
+                     format_window_closed, _t)
 
 
 class FakeBroker:
@@ -154,6 +155,7 @@ def main():
             return
         chosen, rest = batch.take()
         blocked.extend(rest)
+        sent = 0
         for sig in chosen:
             st = states[str(sig["code"])]
             if not gate.check():
@@ -163,8 +165,13 @@ def main():
             ordinal = gate.record(sig)
             fired.append(sig)
             tracker.track(sig)
-            print(format_signal(sig, ordinal))
+            print(format_signal(sig, ordinal, len(chosen)))
             print()
+            sent += 1
+        # 收尾訊息也要走一遍。它存在的理由就是「0 檔的日子不能是靜音的」，
+        # 而 dryrun 是我們唯一會刻意製造 0 檔的地方。
+        print(format_window_closed(sent, len(states)))
+        print()
 
     exited = []
     for t, n, code, price, total_volume, avg, hi, lo in streams:

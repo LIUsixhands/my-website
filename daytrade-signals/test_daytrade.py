@@ -482,7 +482,7 @@ class TestEvaluate(unittest.TestCase):
         self.assertEqual(sig["lots"], 1)
         self.assertTrue(sig["oversized"])
         self.assertGreater(sig["risk_per_lot"], config.RISK["per_trade_risk"])
-        self.assertIn("超過單筆上限", format_signal(sig, 1))
+        self.assertIn("超過單筆上限", format_signal(sig, 1, 1))
 
     def test_blocked_before_range_locked(self):
         st = ready_state()
@@ -571,8 +571,7 @@ class TestRiskGate(unittest.TestCase):
         sig = evaluate(ready_state(), now=dtime(9, 3))
         ordinal = gate.record(sig)
         self.assertEqual(ordinal, 1)
-        self.assertIn(f"今日第 1/{config.RISK['max_signals_per_day']} 個訊號",
-                      format_signal(sig, ordinal))
+        self.assertIn("今日第 1/1 個訊號", format_signal(sig, ordinal, 1))
         self.assertEqual(gate.record(sig), 2)
 
     def test_closes_on_daily_signal_limit(self):
@@ -866,11 +865,11 @@ class TestSymbolNames(unittest.TestCase):
         st = SymbolState("2330", 100.0, "台積電")
         st.lock_opening_range(101.0, 99.0)
         sig = dict(SIGNAL_FIXTURE, code="2330", name="台積電")
-        self.assertIn("2330 台積電", format_signal(sig, 1))
+        self.assertIn("2330 台積電", format_signal(sig, 1, 1))
 
     def test_signal_without_name_has_no_stray_space(self):
         sig = dict(SIGNAL_FIXTURE, code="2330", name="")
-        self.assertIn("2330 決策錨點", format_signal(sig, 1))
+        self.assertIn("2330 決策錨點", format_signal(sig, 1, 1))
 
 
 class TestLiveTracker(unittest.TestCase):
@@ -1474,7 +1473,7 @@ class TestPriceLimits(unittest.TestCase):
                "entry": 158.0, "stop": 156.0, "target": 160.0, "lots": 1,
                "risk_per_lot": 2000, "oversized": False, "target_capped": True,
                "or_high": 154.5, "vwap": 151.06, "volume_surge": 1.8}
-        text = signals.format_signal(sig, 5)
+        text = signals.format_signal(sig, 5, 5)
         self.assertIn("貼齊漲停", text)
         self.assertIn("1.00R", text)
 
@@ -4304,10 +4303,10 @@ class TestStopNeverSitsAboveTheBreakout(unittest.TestCase):
 
     def test_the_signal_says_which_rule_it_used(self):
         """停損比平常寬的時候要講原因，否則看起來像算錯了。"""
-        text = format_signal(self._sig(27.25), 1)
+        text = format_signal(self._sig(27.25), 1, 1)
         self.assertIn("結構線", text)
         self.assertIn("26.70", text)
-        far_text = format_signal(self._sig(26.75), 1)
+        far_text = format_signal(self._sig(26.75), 1, 1)
         self.assertNotIn("結構線", far_text)
 
     def test_the_signal_shows_how_far_it_chased(self):
@@ -4315,7 +4314,7 @@ class TestStopNeverSitsAboveTheBreakout(unittest.TestCase):
         但需要它的時候是訊號跳出來那 10 秒。"""
         sig = self._sig(27.25)
         self.assertAlmostEqual(sig["extension_pct"], 2.06, places=2)
-        self.assertIn("已追高 +2.06%", format_signal(sig, 1))
+        self.assertIn("已追高 +2.06%", format_signal(sig, 1, 1))
 
     def test_no_opening_range_falls_back_instead_of_crashing(self):
         """區間補算不到的時候不要炸 —— 退回固定 %，而且要能發得出訊號。"""
@@ -5181,6 +5180,97 @@ class TestDispositionStocksAreNotTradeableInThreeMinutes(unittest.TestCase):
                           "剔除必須受設定控制，不可以寫死")
         finally:
             config.SCREEN["skip_disposition"] = saved
+
+
+class TestTheMessageDoesNotPromiseSignalsThatCannotCome(unittest.TestCase):
+    """2026-10-05：只發了一個訊號，訊息卻寫「今日第 1/3 個訊號」。
+
+    看起來像「還有兩個額度，等等可能再來」。但訊號是 09:05 一次發完的，
+    窗口當場就關了 —— 那兩個額度今天不可能被用到。分母印上限等於撒謊。
+    """
+
+    def _sig(self):
+        return {"time": "09:04:38", "code": "8182", "name": "加高",
+                "direction": "做多", "entry": 48.40, "stop": 47.30,
+                "target": 50.10, "lots": 2, "risk_per_lot": 1100,
+                "oversized": False, "target_capped": False,
+                "or_high": 47.40, "vwap": 47.12, "volume_surge": 1.94,
+                "extension_pct": 2.11, "stop_rule": "結構線（區間高下方）"}
+
+    def test_the_denominator_is_todays_total_not_the_cap(self):
+        text = signals.format_signal(self._sig(), 1, 1)
+        self.assertIn("今日第 1/1 個訊號", text)
+        self.assertNotIn("今日第 1/3 個訊號", text)
+
+    def test_the_cap_is_still_visible_just_not_as_the_denominator(self):
+        text = signals.format_signal(self._sig(), 1, 1)
+        self.assertIn(f"上限 {config.RISK['max_signals_per_day']}", text)
+
+    def test_three_signals_still_read_one_of_three(self):
+        text = signals.format_signal(self._sig(), 2, 3)
+        self.assertIn("今日第 2/3 個訊號", text)
+
+    def test_batch_total_has_no_default(self):
+        """不給預設值，是為了逼每個呼叫端想一次「今天總共幾個」。
+
+        給了預設值，新的呼叫點會靜靜地沿用舊的錯誤。
+        """
+        import inspect
+        sigspec = inspect.signature(signals.format_signal)
+        self.assertIs(sigspec.parameters["batch_total"].default,
+                      inspect.Parameter.empty)
+
+
+class TestAQuietDayIsNotSilence(unittest.TestCase):
+    """0 個訊號和「程式當掉」在手機上不可以長得一樣。
+
+    修之前：chosen 是空的時候 flush_batch 什麼都不發，使用者從 08:50 的
+    開工確認一路安靜到 13:30，無從分辨今天是沒機會還是程式死了。
+    """
+
+    def test_zero_signals_still_sends_a_message(self):
+        text = signals.format_window_closed(0, 20)
+        self.assertIn("0 個", text)
+        self.assertIn("20 檔", text)
+
+    def test_zero_signals_says_the_program_is_still_alive(self):
+        """這是這則訊息存在的唯一理由，少了這句就白發了。"""
+        text = signals.format_window_closed(0, 20)
+        self.assertIn("不是當掉", text)
+        self.assertIn("13:30", text)
+
+    def test_it_says_no_more_entries_are_coming(self):
+        for sent in (0, 1, 3):
+            with self.subTest(sent=sent):
+                self.assertIn("不會再有新的買入訊號",
+                              signals.format_window_closed(sent, 20))
+
+    def test_it_names_the_window_and_the_time_exit(self):
+        text = signals.format_window_closed(1, 20)
+        self.assertIn(config.SIGNAL["signal_batch_at"][:5], text)
+        self.assertIn(config.SIGNAL["exit_signal_at"][:5], text)
+
+    def test_flush_batch_always_sends_it(self):
+        """接線測試：用 AST 確認 flush_batch 真的呼叫了它，而且不在 if 裡面。
+
+        先前那個版本的毛病就是「空的時候什麼都不做」——
+        把呼叫寫進 `for sig in chosen:` 或 `if sent:` 底下，等於沒修。
+        """
+        import ast, inspect, textwrap
+        src = textwrap.dedent(inspect.getsource(signals.run))
+        tree = ast.parse(src)
+        flush = next(n for n in ast.walk(tree)
+                     if isinstance(n, ast.FunctionDef) and n.name == "flush_batch")
+        calls = [n for n in flush.body
+                 if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)
+                 and any(getattr(a, "id", "") == "format_window_closed"
+                         or getattr(getattr(a, "func", None), "id", "")
+                         == "format_window_closed"
+                         for a in ast.walk(n.value))]
+        self.assertTrue(calls,
+                        "format_window_closed 必須在 flush_batch 的最外層呼叫，"
+                        "不可以藏在迴圈或 if 裡面")
+
 
 
 if __name__ == "__main__":

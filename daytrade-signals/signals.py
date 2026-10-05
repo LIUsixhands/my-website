@@ -465,8 +465,14 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
     }
 
 
-def format_signal(sig: dict, ordinal: int) -> str:
-    """ordinal = 這是今日第幾個訊號（1 起算）。"""
+def format_signal(sig: dict, ordinal: int, batch_total: int) -> str:
+    """ordinal = 這是今日第幾個訊號（1 起算），batch_total = 今天總共幾個。
+
+    batch_total 是必填，不給預設值。以前這裡印的是 `1/max_signals_per_day`
+    —— 2026-10-05 只發了一個訊號，訊息卻寫「今日第 1/3 個訊號」，看起來像
+    「還有兩個額度，等等可能再來」。但訊號是 09:05 一次發完的，窗口當場就
+    關了，那兩個額度今天**不可能**被用到。分母寫上限等於對使用者撒謊。
+    """
     r = config.RISK
     lines = [
         f"📌 {sig['code']}{(' ' + sig['name']) if sig.get('name') else ''}"
@@ -499,9 +505,40 @@ def format_signal(sig: dict, ordinal: int) -> str:
             f"已超過單筆上限 {r['per_trade_risk']:,} 元。要做就自己認這個超額，或直接跳過。")
     lines += [
         "────────────────",
-        f"今日第 {ordinal}/{r['max_signals_per_day']} 個訊號",
+        f"今日第 {ordinal}/{batch_total} 個訊號（今日全部；上限 {r['max_signals_per_day']}）",
         "⚠️ 這是規則觸發，不是預測。你有權不做；但做了就照停損走。",
     ]
+    return "\n".join(lines)
+
+
+def format_window_closed(sent: int, watched: int) -> str:
+    """09:05 批次發完之後**一定**要發的一則 —— 包括一個訊號都沒有的時候。
+
+    2026-10-05 之前，chosen 是空的時候 flush_batch 什麼都不發。於是手機上
+    「今天沒有一檔通過閘門」和「程式當掉了」長得一模一樣：08:50 的開工確認
+    之後一路安靜到 13:30。沉默不是一種回報。
+
+    sent 是真的推出去的檔數，由呼叫端在發完之後算 —— 訊號那一則印的分母是
+    批次挑中的檔數，萬一其中有人被風控擋掉，以這一則的數字為準。
+    """
+    cfg, r = config.SIGNAL, config.RISK
+    at = cfg["signal_batch_at"][:5]
+    lines = [f"🔒 {at} 進場窗口已關閉", "────────────────"]
+    if sent:
+        lines += [
+            f"今日訊號：{sent} 個（上限 {r['max_signals_per_day']}）",
+            "不會再有新的買入訊號。",
+            f"接下來只剩 🛑 停損 ／ ✅ 目標 ／ ⏰ {cfg['exit_signal_at'][:5]} 時間到。",
+        ]
+    else:
+        lines += [
+            f"今日訊號：0 個",
+            f"監看的 {watched} 檔，沒有一檔在 {cfg['or_end'][:5]}–{at} 之間"
+            "同時通過突破、均價線、量能三道閘。",
+            "",
+            "不會再有新的買入訊號。",
+            "⚠️ 這不是當掉。程式還在跑，會執行到 13:30 —— 只是今天不出手。",
+        ]
     return "\n".join(lines)
 
 
@@ -633,7 +670,8 @@ def format_time_exit(o: "OpenSignal", price: float, at: str) -> str:
 
 
 def try_emit(st: SymbolState, gate: RiskGate, lock, sig: dict,
-             now: datetime | None = None) -> tuple[str | None, str | None]:
+             now: datetime | None = None,
+             batch_total: int = 1) -> tuple[str | None, str | None]:
     """在鎖內完成「再確認 → 過閘 → 記錄」。
 
     回傳 (要推播的訊息, 被擋掉的原因)，兩者恰有一個是 None。被擋的原因要回傳，
@@ -660,7 +698,7 @@ def try_emit(st: SymbolState, gate: RiskGate, lock, sig: dict,
             return None, blocked
         st.signaled += 1
         ordinal = gate.record(sig)
-    return format_signal(sig, ordinal), None
+    return format_signal(sig, ordinal, batch_total), None
 
 
 # ══════════════════════════════════════════════════════
@@ -1059,17 +1097,23 @@ def run():
         chosen, rest = batch.take()
         for sig in rest:
             record_candidate(sig, BLOCK_BATCH_RANK)
+        sent = 0
         for sig in chosen:
             st = states.get(str(sig["code"]))
             if st is None:
                 continue
-            msg, blocked = try_emit(st, gate, signal_lock, sig, now)
+            msg, blocked = try_emit(st, gate, signal_lock, sig, now,
+                                    batch_total=len(chosen))
             if blocked:
                 record_candidate(sig, blocked)
                 continue
             if msg:
                 tracker.track(sig)
                 notify(msg)
+                sent += 1
+        # 無論發了幾檔（含 0 檔）都要收尾。這一則是「今天不會再有買入訊號」
+        # 的唯一出口，少了它，安靜的一天就無法跟當掉區分。
+        notify(format_window_closed(sent, len(states)))
     # 盤中重開時，今天已經發過的訊號也要繼續盯 —— 否則它們的結局只剩收盤後才知道。
     # 代價是已經結束的那幾筆會被重新追蹤，價格再次碰到時會重複推播一次。
     for past in gate.state.get("signals", []):
