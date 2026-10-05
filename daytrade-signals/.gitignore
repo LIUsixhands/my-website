@@ -14,6 +14,9 @@ candidates_outcomes.csv
 # 交易日誌含個人損益與持股，不進版控。
 # 要給 Claude 做跨日稽核時，直接把本機的 journal/ 目錄丟給它。
 journal/*.md
+# 當日候選池存檔（screener.py 自己寫的）。裡面是你每天在盯哪些股票，
+# 跟 watchlist.json 是同一份東西，只是多了日期 —— 排除理由一樣。
+journal/watchlist-*.json
 
 __pycache__/
 *.pyc

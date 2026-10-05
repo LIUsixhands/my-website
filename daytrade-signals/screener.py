@@ -215,6 +215,44 @@ def label(row: dict) -> str:
     return f"{row['code']} {name}" if name else str(row["code"])
 
 
+def watchlist_archive_path(date: str):
+    """當日存檔的位置。date 是 payload 裡的 YYYY-MM-DD。"""
+    return config.JOURNAL_DIR / f"watchlist-{date.replace('-', '')}.json"
+
+
+def archive_watchlist(payload: dict) -> bool:
+    """把當日候選池另存一份帶日期的。回傳有沒有寫成功。
+
+    為什麼需要：`watchlist.json` 是單一檔案，每天 08:40 直接覆蓋。於是
+    「今天監看了哪 20 檔」這件事，隔天早上就永久消失了。
+
+    2026-10-05 就撞上：量比第一名的聯一光當天漲停 +9.95%，而系統沒發
+    訊號。想回答「開盤區間拉長會不會抓到它」，就得重跑那 20 檔的分鐘 K
+    —— 但 whatif.py 只重跑 outcomes.csv 裡有的股票，也就是**當天真的
+    發出過訊號**的那幾檔。沒發訊號的從來沒進過任何紀錄。
+
+    這個偏誤 whatif.py 的 docstring 早就寫明了，解法也寫了：「需要每天
+    完整的 watchlist.json 存檔」。但那時是靠人手動 copy，漏一天就永遠
+    補不回來。改成程式自己存。
+
+    寫失敗不中斷選股 —— 盤前那幾分鐘，當日的 watchlist.json 比歷史存檔
+    重要得多。但**一定要出聲**：靜悄悄漏掉的存檔，等於沒有存檔。
+    """
+    path = watchlist_archive_path(payload["date"])
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+        log.info("候選池存檔：%s", path.name)
+        return True
+    except OSError as e:
+        log.error("候選池存檔失敗（%s）—— 今天的 20 檔明天就會被覆蓋掉，"
+                  "要留的話現在手動 copy watchlist.json：%s", path.name, e)
+        print(f"\n[!] 候選池存檔失敗：{e}")
+        print(f"[!] watchlist.json 明天 08:40 會被覆蓋。要留就現在手動複製一份。")
+        return False
+
+
 def format_watchlist(payload: dict, rows: list, total: int | None = None) -> str:
     """推到手機上的版本。窄螢幕看得懂就好，不要照搬終端機的表格。
 
@@ -317,6 +355,7 @@ def run(args) -> None:
     config.WATCHLIST_FILE.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    archive_watchlist(payload)
 
     print(f"\n=== {payload['date']} 當沖候選池（{len(watchlist)} 檔）===")
     print(f"來回成本基準：{payload['round_trip_cost_pct']}%（你的停利要遠大於這個數字）\n")

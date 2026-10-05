@@ -4230,7 +4230,7 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
     # 會寫進個人交易紀錄或金鑰的檔案，一個都不能漏
     MUST_IGNORE = (".env", "state.json", "watchlist.json", "outcomes.csv",
                    "candidates.csv", "candidates_outcomes.csv", "journal/*.md",
-                   "logs/")
+                   "journal/watchlist-*.json", "logs/")
 
     def setUp(self):
         if not self.IGNORE.exists():
@@ -5374,6 +5374,91 @@ class TestChangingPositionSizeChangesTheRuleset(unittest.TestCase):
         groups = analyse.by_ruleset(rows)
         self.assertEqual(sorted(groups), ["v4", "v5"])
         self.assertEqual(len(groups["v5"]), 2)
+
+
+
+class TestTodaysWatchlistSurvivesTomorrowMorning(unittest.TestCase):
+    """`watchlist.json` 每天 08:40 被覆蓋，所以「今天盯了哪 20 檔」隔天就沒了。
+
+    2026-10-05 撞上：量比第一名的聯一光漲停 +9.95%，系統沒發訊號。想回答
+    「區間拉長會不會抓到它」就得重跑那 20 檔 —— 但 whatif.py 只重跑
+    outcomes.csv 裡有的，也就是真的發過訊號的那幾檔。沒發訊號的不留痕跡。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.saved = config.JOURNAL_DIR
+        config.JOURNAL_DIR = Path(self.tmp.name) / "journal"
+
+    def tearDown(self):
+        config.JOURNAL_DIR = self.saved
+        self.tmp.cleanup()
+
+    def _payload(self, date="2026-10-05"):
+        return {"date": date, "generated_at": f"{date}T08:40:00",
+                "round_trip_cost_pct": 0.207,
+                "items": [{"code": "3441", "name": "聯一光"},
+                          {"code": "8182", "name": "加高"}]}
+
+    def test_it_writes_a_dated_copy(self):
+        p = self._payload()
+        self.assertTrue(screener.archive_watchlist(p))
+        path = screener.watchlist_archive_path("2026-10-05")
+        self.assertTrue(path.exists())
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), p)
+
+    def test_two_days_do_not_overwrite_each_other(self):
+        """重點就在這裡 —— 不同日期必須是不同檔案，否則等於沒存。"""
+        screener.archive_watchlist(self._payload("2026-10-05"))
+        screener.archive_watchlist(self._payload("2026-10-06"))
+        names = sorted(p.name for p in config.JOURNAL_DIR.glob("watchlist-*.json"))
+        self.assertEqual(names, ["watchlist-20261005.json",
+                                 "watchlist-20261006.json"])
+
+    def test_it_uses_the_payload_date_not_todays_date(self):
+        """補跑舊資料時，存檔要跟著那一天走，不是跟著電腦時鐘走。"""
+        screener.archive_watchlist(self._payload("2026-09-24"))
+        self.assertTrue(screener.watchlist_archive_path("2026-09-24").exists())
+
+    def test_it_creates_the_journal_folder(self):
+        self.assertFalse(config.JOURNAL_DIR.exists())
+        self.assertTrue(screener.archive_watchlist(self._payload()))
+
+    def test_a_failed_archive_is_loud_and_does_not_crash_the_screener(self):
+        """盤前存檔失敗不能中斷選股，但也不能靜悄悄 —— 那等於沒存。"""
+        import unittest.mock as mock
+        with mock.patch.object(Path, "write_text",
+                               side_effect=OSError("磁碟滿了")):
+            with self.assertLogs("screener", level="ERROR") as logged:
+                self.assertFalse(screener.archive_watchlist(self._payload()))
+        self.assertTrue(any("存檔失敗" in m for m in logged.output))
+
+    def test_whoever_writes_the_watchlist_also_archives_it(self):
+        """接線測試，驗的是契約不是函式名。
+
+        第一版寫成「main() 要呼叫它」，但寫入點其實在 run() —— 測試失敗的
+        理由跟它要驗的事無關。改成：**掃出哪個函式寫了 WATCHLIST_FILE，
+        就要求同一個函式呼叫 archive_watchlist**。以後搬家或改名都不會漏。
+        """
+        import ast, io as _io
+        tree = ast.parse(_io.open(screener.__file__, encoding="utf-8").read())
+        writers, archivers = set(), set()
+        for fn in (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)):
+            for c in ast.walk(fn):
+                if not isinstance(c, ast.Call):
+                    continue
+                # config.WATCHLIST_FILE.write_text(...)
+                f = c.func
+                if (isinstance(f, ast.Attribute) and f.attr == "write_text"
+                        and isinstance(f.value, ast.Attribute)
+                        and f.value.attr == "WATCHLIST_FILE"):
+                    writers.add(fn.name)
+                if getattr(f, "id", "") == "archive_watchlist":
+                    archivers.add(fn.name)
+        self.assertTrue(writers, "找不到寫 watchlist.json 的地方")
+        self.assertTrue(writers <= archivers,
+                        f"{writers - archivers} 寫了 watchlist.json 卻沒存檔 "
+                        f"—— 那一天的候選池明天就會被覆蓋掉")
 
 
 
