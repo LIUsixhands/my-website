@@ -118,16 +118,59 @@ www.sixhands.tw  CNAME -> sixhands-studio.netlify.app.   ✅
 
 ---
 
-## ⏭️ 下一步：Netlify 端（助哥操作，Claude 進不去）
+## ✅ Netlify 端 — 2026-10-05 18:19 完成
 
-DNS 生效後才做。Claude 的環境**連不上 `app.netlify.com`**，這段只能由助哥點。
+```
+Production domains
+  sixhands-studio.netlify.app   Netlify subdomain
+  sixhands.tw                   ★ Primary domain
+  www.sixhands.tw               Redirects automatically to primary domain
+```
 
-1. Netlify 後台 → 該站 → Domain management → Add a domain → 輸入 `sixhands.tw`
-2. 同時加 `www.sixhands.tw`
-3. 設定 **primary domain**
-4. SSL 憑證 Netlify 會自動申請（Let's Encrypt，免費）
+**加完 `sixhands.tw` 後 Netlify 自動建立 `www` 並設定轉址，不需手動加第二個。**
 
-> ✅ **加網域不需要重新建置**，所以 2026-10-26 前的額度凍結期間照樣可以做。
+### 操作路徑（下次或換站時照走）
+
+```
+Netlify → Projects → sixhands-studio → Domain management
+  → Add a domain ⌄
+     ⛔ Buy a new domain              ← 不是這個（這是買新網域）
+     ✅ Add a domain you already own  ← 是這個
+  → 輸入 sixhands.tw → Verify → Add domain
+  → 往下捲到 HTTPS / SSL/TLS certificate
+```
+
+> 🩸 **踩過的坑**：Domain management 頁面上的「**Find a new domain**」（網址含 `/buy-domain`）
+> 是**賣你新網域**的頁面，不是加入既有網域。助哥第一次點進去就是那裡。
+> 分辨方式看網址：`/domain-management` 才對，`/domain-management/buy-domain` 是買。
+
+### SSL 憑證
+
+| 時間 | 狀態 |
+|:--|:--|
+| 加完網域當下 | ❌ `We could not provision a Let's Encrypt certificate` |
+| 按 **Verify DNS configuration** | ✅ `DNS verification was successful` |
+| 按 **Provision certificate** | ⚙️ `Waiting on DNS propagation`（自動進行中） |
+
+**第一次失敗是正常的時間差**，不是設定錯誤——當下已獨立驗證 DNS 全部正確：
+
+```
+sixhands.tw      A     -> 75.2.60.5                     ✅
+www.sixhands.tw  CNAME -> sixhands-studio.netlify.app.  ✅ (解析到 Netlify IP)
+CAA                    -> 無                             ✅ 沒有紀錄阻擋發憑證
+NS                     -> cns1/cns2.net-chinese.com.tw  ✅
+```
+
+→ 處理方式：按「Verify DNS configuration」重試即可。進入 `Waiting on DNS propagation`
+後 Netlify 會自動完成，**不需要再按任何按鈕**。
+
+⛔ **不要按「Provide your own certificate」**——那是要自己花錢買憑證，Netlify 的 Let's Encrypt 免費且自動續期。
+
+> ⚠️ **Claude 無法驗證憑證結果。** 本執行環境的 egress proxy 擋住 `sixhands.tw`、
+> `netlify.app`、`app.netlify.com`、`crt.sh`（憑證透明度查詢站），全部回 403。
+> **最後一哩只能由助哥用瀏覽器開 `sixhands.tw` 看有沒有鎖頭。**
+
+> ✅ **全程不需要建置**，在 2026-10-26 額度凍結期間順利完成。
 > 真正要等 10/26 的是「全站 349 處網址改寫」那批。
 
 ---
