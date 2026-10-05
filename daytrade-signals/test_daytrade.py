@@ -4192,9 +4192,15 @@ class TestAnalyseRefusesToOverclaim(unittest.TestCase):
         self.assertIn("沒有**重疊", text)
 
     def test_unknown_values_are_dropped_not_bucketed_as_zero(self):
-        """大盤查不到的那幾天不能算成「開低」—— None 是不知道，不是負的。"""
-        rows = self._rows([("2026-10-01", "09:10", True, 0, None, None, None),
-                           ("2026-10-01", "09:11", True, 0, 0.5, None, None)])
+        """大盤查不到的那幾天不能算成「開低」—— None 是不知道，不是負的。
+
+        訊號時間原本隨手填 09:10/09:11。by_market 改成只收「訊號前就已知」
+        的大盤之後，09:15 的數字對 09:10 的訊號是事後資訊，兩筆都會被排除 ——
+        那是另一條規則（見 TestMarketMustBeKnownBeforeTheSignal），不是這條
+        要驗的事。改成 09:20/09:21，讓它繼續只驗 None。
+        """
+        rows = self._rows([("2026-10-01", "09:20", True, 0, None, None, None),
+                           ("2026-10-01", "09:21", True, 0, 0.5, None, None)])
         groups = analyse.by_market(rows)
         self.assertEqual(sum(len(v) for v in groups.values()), 1)
 
@@ -5695,6 +5701,165 @@ class TestWhyNotChecksItsOwnAnswers(unittest.TestCase):
             kw = {k.arg: k.value for k in c.keywords}
             self.assertIn("check", kw, "main() 呼叫 render 沒帶 check")
             self.assertIs(getattr(kw["check"], "value", None), True)
+
+
+
+import types as _types
+
+
+class TestMarketMustBeKnownBeforeTheSignal(unittest.TestCase):
+    """拿來分組的大盤數字，必須是那一筆訊號發出**之前**就知道的。
+
+    broker.py、outcome.py、analyse.py 三處原本都寫著「09:15 的大盤在任何訊號
+    發出之前就已知，所以它是唯一有資格變成規則的」。v1–v3 訊號全部發在 09:17
+    之後，那時是對的；v4 起 09:05 就批次發完，09:15 變成事後十分鐘的資訊。
+    拿事後資訊去定「大盤走弱就不做」的規則，就是未來函數。
+    """
+
+    def _o(self, time, open_pct=None, signal_pct=None):
+        return _types.SimpleNamespace(time=time, mkt_open_pct=open_pct,
+                                     mkt_signal_pct=signal_pct)
+
+    def test_a_v4_signal_does_not_get_the_0915_market(self):
+        """就是 10-05 加高：09:04:38 發的，09:15 是十分鐘之後的事。"""
+        self.assertIsNone(analyse.market_known_before(self._o("09:04:38", 2.30)))
+
+    def test_a_v2_signal_after_0915_may_use_it(self):
+        """v1–v3 訊號全在 09:17 之後 —— 對它們 09:15 是事前的，舊資料照樣能用。"""
+        self.assertEqual(analyse.market_known_before(self._o("10:30:00", 0.8)), 0.8)
+
+    def test_exactly_0915_is_not_before(self):
+        """09:15 那一刻發的訊號，09:15 的收盤不算「之前」。"""
+        self.assertIsNone(analyse.market_known_before(self._o("09:15:00", 0.8)))
+
+    def test_the_decision_time_reading_wins_when_present(self):
+        self.assertEqual(
+            analyse.market_known_before(self._o("09:05:00", 2.30, 0.4)), 0.4)
+
+    def test_the_report_no_longer_claims_0915_is_always_before(self):
+        """報表上原本寫「這是唯一在訊號發出前就已知的因子」，標題寫 09:15。
+        那一句是印給使用者看的 —— 錯的說法印在報表上，比錯在註解裡更糟。"""
+        import io as _io
+        src = _io.open(analyse.__file__, encoding="utf-8").read()
+        self.assertNotIn("當日大盤方向（09:15）", src)
+        text = "\n".join(analyse.report([]))   # 空資料也不能炸
+        self.assertNotIn("唯一在訊號發出前就已知的因子。", src.split("def market_known_before")[1])
+
+    def test_by_market_drops_the_hindsight_rows(self):
+        rows = [_types.SimpleNamespace(time="09:04:38", mkt_open_pct=2.3,
+                                   mkt_signal_pct=None, is_win=False,
+                                   r_multiple=-1.0, net_amount=-2401.0),
+                _types.SimpleNamespace(time="10:30:00", mkt_open_pct=0.8,
+                                   mkt_signal_pct=None, is_win=True,
+                                   r_multiple=1.5, net_amount=3000.0)]
+        groups = analyse.by_market(rows)
+        self.assertEqual(sum(len(v) for v in groups.values()), 1)
+
+
+class TestDecisionTimeMarketIsRecorded(unittest.TestCase):
+    """決策當下的大盤要記下來，而且量測時間要跟著決策時間走。"""
+
+    def _kb(self, date, rows):
+        """rows = [(HH:MM, close)]；前一天收盤固定 100。"""
+        import broker as br
+        def ns(dt):
+            return int(dt.replace(tzinfo=dt_timezone.utc).timestamp() * 1e9)
+        prev = datetime.strptime(date, "%Y-%m-%d") - timedelta(days=1)
+        ts = [ns(prev.replace(hour=13, minute=30))]
+        cl = [100.0]
+        for hm, c in rows:
+            h, m = (int(x) for x in hm.split(":"))
+            ts.append(ns(datetime.strptime(date, "%Y-%m-%d").replace(hour=h, minute=m)))
+            cl.append(c)
+        return _types.SimpleNamespace(ts=ts, Close=cl)
+
+    def _broker(self, kb):
+        import broker as br
+        b = br.Broker.__new__(br.Broker)
+        b.kbars = lambda code, start, end: kb
+        return b
+
+    def test_market_at_reads_the_bar_ending_at_that_minute(self):
+        kb = self._kb("2026-10-05", [("09:01", 100.2), ("09:05", 101.0),
+                                     ("09:15", 102.0), ("13:30", 102.3)])
+        b = self._broker(kb)
+        self.assertEqual(b.market_at("09:05", "2026-10-05"), 1.0)
+        self.assertEqual(b.market_at("09:15", "2026-10-05"), 2.0)
+
+    def test_market_at_missing_data_is_none_not_zero(self):
+        b = self._broker(_types.SimpleNamespace(ts=[], Close=[]))
+        self.assertIsNone(b.market_at("09:05", "2026-10-05"))
+
+    def test_a_day_with_data_but_not_at_that_minute_is_none_not_zero(self):
+        """當天有資料、只是沒有那個時間點 —— 不可以回 0。
+
+        第一版的「沒資料」測試給的是整個空的 K 棒，在更前面就回 None 了，
+        從來沒走到這條路。變異測試把這裡改成回 0.0，結果全部通過。0 是
+        「平盤」，那是一個有意義的答案；拿不到就是拿不到。
+        """
+        kb = self._kb("2026-10-05", [("09:01", 100.2), ("09:03", 100.5)])
+        b = self._broker(kb)
+        self.assertIsNone(b.market_at("09:05", "2026-10-05"))
+        self.assertIsNone(b.market_day("2026-10-05")[0])
+
+    def test_market_day_still_returns_the_same_pair(self):
+        """refactor 不可以改到 market_day 的契約。"""
+        kb = self._kb("2026-10-05", [("09:15", 102.0), ("13:30", 102.3)])
+        self.assertEqual(self._broker(kb).market_day("2026-10-05"), (2.0, 2.3))
+
+    def test_the_measurement_follows_signal_batch_at(self):
+        """寫死一個時間，下次改決策時間它又會像 09:15 那樣悄悄變成事後資訊。"""
+        import outcome as _oc
+        asked = []
+        class FakeB:
+            def market_day(self, date=None):
+                return 0.8, 1.2
+            def market_at(self, hhmm, date=None):
+                asked.append(hhmm)
+                return 0.4
+        saved = config.SIGNAL["signal_batch_at"]
+        config.SIGNAL["signal_batch_at"] = "09:07:00"
+        try:
+            with unittest.mock.patch.object(_oc, "resolve",
+                                   side_effect=lambda b, s, d: _types.SimpleNamespace(
+                                       mkt_open_pct=None, mkt_day_pct=None,
+                                       mkt_signal_pct=None)):
+                out = _oc.resolve_all(FakeB(), [{"code": "8182"}], "2026-10-05")
+        finally:
+            config.SIGNAL["signal_batch_at"] = saved
+        self.assertEqual(asked, ["09:07"])
+        self.assertEqual(out[0].mkt_signal_pct, 0.4)
+
+    def test_an_old_broker_without_market_at_does_not_break_the_review(self):
+        import outcome as _oc
+        class OldB:
+            def market_day(self, date=None):
+                return 0.8, 1.2
+        with unittest.mock.patch.object(_oc, "resolve",
+                               side_effect=lambda b, s, d: _types.SimpleNamespace(
+                                   mkt_open_pct=None, mkt_day_pct=None,
+                                   mkt_signal_pct=None)):
+            out = _oc.resolve_all(OldB(), [{"code": "8182"}], "2026-10-05")
+        self.assertIsNone(out[0].mkt_signal_pct)
+        self.assertEqual(out[0].mkt_open_pct, 0.8)
+
+    def test_old_rows_without_the_column_read_back_as_none(self):
+        import outcome as _oc
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "outcomes.csv"
+            old_fields = [f for f in _oc.FIELDS if f != "mkt_signal_pct"]
+            with open(p, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.DictWriter(f, fieldnames=old_fields)
+                w.writeheader()
+                row = {k: "" for k in old_fields}
+                row.update(date="2026-10-02", code="2020", time="10:30:00",
+                           entry="27.25", stop="26.85", target="28.25",
+                           result="stop", exit_price="26.85", r_multiple="-1.0",
+                           gross_pct="-1.47", net_pct="-1.67", bars="5", lots="2")
+                w.writerow(row)
+            back = _oc.load_csv(p)
+        self.assertEqual(len(back), 1)
+        self.assertIsNone(back[0].mkt_signal_pct)
 
 
 

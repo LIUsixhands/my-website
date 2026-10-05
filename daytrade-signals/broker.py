@@ -11,6 +11,10 @@ from datetime import datetime, timedelta, timezone
 
 import config
 
+# 盤初大盤的量測點。v1–v3 的訊號全部發在 09:17 之後，對它們來說這是事前資訊；
+# v4 起 09:05 就批次發完，對那之後的訊號它是事後資訊。analyse.py 逐筆判斷。
+MARKET_EARLY_AT = "09:15"
+
 # shioaji 是專有套件，測試環境不一定裝得起來。
 # 這裡容許缺席，讓純邏輯（訊號、風控、稽核）可以離線測試；
 # 真的要連線時才在 Broker.__init__ 擋下來。
@@ -236,19 +240,8 @@ class Broker:
     # 「今天大盤是往上還是往下」這個量級的答案。
     MARKET_PROXY = "0050"
 
-    def market_day(self, date: str | None = None, code: str | None = None):
-        """回傳 (09:15 時的大盤漲跌 %, 當日收盤漲跌 %)。拿不到就回 (None, None)。
-
-        為什麼要記這個：這套系統**只做多**。多方突破在大盤走弱的日子結構上就是
-        逆風，而同一套規則在紅盤日與綠盤日的勝率可能差很多 —— 不記下來，20 天後
-        看到的只是「平均」，而平均把兩種完全不同的日子混在一起。
-
-        09:15 那個數字特別重要：它在任何訊號發出**之前**就已經知道了。
-        所以它是唯一有資格變成規則的（例如「大盤開盤 15 分鐘走弱就不做多」）——
-        收盤漲跌只能事後解釋，不能當進場條件。20 天後用資料決定，現在只記。
-
-        拿不到一律回 None，不要猜 0 —— 0 是「平盤」，那是一個有意義的答案。
-        """
+    def _market_series(self, date: str | None, code: str | None):
+        """(昨收, 當日 [(時間, 收盤), ...] 照時間排序)。拿不到回 None。"""
         code = code or self.MARKET_PROXY
         date = date or datetime.now().strftime("%Y-%m-%d")
         start = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=10)).strftime("%Y-%m-%d")
@@ -256,13 +249,13 @@ class Broker:
             kb = self.kbars(code, start, date)
         except Exception as e:
             log.warning("大盤代理 %s 分鐘 K 取得失敗：%s", code, e)
-            return None, None
+            return None
 
         ts_list = list(getattr(kb, "ts", []) or [])
         close_list = list(getattr(kb, "Close", []) or [])
         if len(ts_list) != len(close_list) or not ts_list:
             log.warning("大盤代理 %s 分鐘 K 欄位長度不一致或為空", code)
-            return None, None
+            return None
 
         today, before = [], []
         for ts, c in zip(ts_list, close_list):
@@ -272,17 +265,56 @@ class Broker:
             (today if t.strftime("%Y-%m-%d") == date else before).append((t, float(c)))
         if not today or not before:
             log.warning("大盤代理 %s 缺當日或前一日資料，不猜數字", code)
-            return None, None
+            return None
 
         prev_close = max(before, key=lambda r: r[0])[1]
         if not prev_close:
-            return None, None
+            return None
         today.sort(key=lambda r: r[0])
-        # 分鐘 K 的 label 是該分鐘的結束時間，所以 09:15 那根的收盤就是 09:15 的價格。
-        at_open = next((c for t, c in today if t.strftime("%H:%M") >= "09:15"), None)
-        day_close = today[-1][1]
-        pct = lambda v: round((v - prev_close) / prev_close * 100, 3)
-        return (pct(at_open) if at_open is not None else None), pct(day_close)
+        return prev_close, today
+
+    @staticmethod
+    def _pct_at(prev_close: float, today, hhmm: str):
+        """第一根 label ≥ hhmm 的收盤。label 是該分鐘的結束時間，所以 09:05
+        那根的收盤就是 09:05 那一刻的價格。拿不到回 None，不要猜 0。"""
+        at = next((c for t, c in today if t.strftime("%H:%M") >= hhmm), None)
+        return None if at is None else round((at - prev_close) / prev_close * 100, 3)
+
+    def market_day(self, date: str | None = None, code: str | None = None):
+        """回傳 (MARKET_EARLY_AT 時的大盤漲跌 %, 當日收盤漲跌 %)。拿不到就回 (None, None)。
+
+        為什麼要記這個：這套系統**只做多**。多方突破在大盤走弱的日子結構上就是
+        逆風，而同一套規則在紅盤日與綠盤日的勝率可能差很多 —— 不記下來，20 天後
+        看到的只是「平均」，而平均把兩種完全不同的日子混在一起。
+
+        **09:15 那個數字是不是事前資訊，要看訊號是幾點發的。** 這裡原本寫著
+        「它在任何訊號發出之前就已經知道了，所以它是唯一有資格變成規則的」——
+        v1–v3 的進場窗口開到 12:15、訊號全部發在 09:17 之後，那時候是對的。
+        v4 起訊號 09:05 就批次發完，09:15 變成事後十分鐘的資訊，拿它當進場
+        條件就是未來函數。改 v4 的時候沒有人回頭看這一句。
+
+        決策當下的大盤用 market_at(訊號發出時間) 另外量，記在 mkt_signal_pct。
+
+        拿不到一律回 None，不要猜 0 —— 0 是「平盤」，那是一個有意義的答案。
+        """
+        series = self._market_series(date, code)
+        if series is None:
+            return None, None
+        prev_close, today = series
+        day_close = round((today[-1][1] - prev_close) / prev_close * 100, 3)
+        return self._pct_at(prev_close, today, MARKET_EARLY_AT), day_close
+
+    def market_at(self, hhmm: str, date: str | None = None, code: str | None = None):
+        """hhmm 那一刻的大盤漲跌 %。拿不到回 None。
+
+        給「決策當下的大盤」用：呼叫端傳 config.SIGNAL["signal_batch_at"]，
+        量測點就跟著決策時間走。寫死一個時間的話，下次改決策時間它又會像
+        09:15 那樣，悄悄從事前資訊變成事後資訊。
+        """
+        series = self._market_series(date, code)
+        if series is None:
+            return None
+        return self._pct_at(*series, hhmm)
 
     def short_sources(self, codes):
         """借券／券源查詢，先賣後買才需要。回傳 {code: 可用張數}"""

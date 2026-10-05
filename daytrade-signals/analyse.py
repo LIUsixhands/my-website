@@ -102,12 +102,34 @@ def by_rank(rows: list) -> dict:
     return _bucket(rows, key, ["名次 1-5", "名次 6-10", "名次 11+"])
 
 
+def market_known_before(o) -> float | None:
+    """這一筆的訊號發出**之前**就已知的大盤漲跌 %。沒有就回 None。
+
+    這裡原本直接用 09:15 的大盤，docstring 寫著「這是唯一在訊號發出前就已知
+    的因子」。v1–v3 訊號全部發在 09:17 之後，那時是對的；v4 起 09:05 就批次
+    發完，09:15 變成事後十分鐘的資訊。拿事後資訊分組，再拿分組結果去定「大盤
+    走弱就不做」的規則，就是未來函數 —— 回測好看，實盤用不了。
+
+    所以逐筆判斷：
+      1. 有決策當下的大盤（mkt_signal_pct，v5 起才有）→ 用它
+      2. 沒有，但訊號時間晚於 09:15 → 09:15 那個數字對這一筆是事前的，可以用
+      3. 都不是 → None。寧可少一筆，也不要混進一筆事後資訊
+    """
+    from broker import MARKET_EARLY_AT
+    if o.mkt_signal_pct is not None:
+        return o.mkt_signal_pct
+    if o.mkt_open_pct is not None and (o.time or "")[:5] > MARKET_EARLY_AT:
+        return o.mkt_open_pct
+    return None
+
+
 def by_market(rows: list) -> dict:
-    """當天 09:15 的大盤方向。這是唯一在訊號發出前就已知的因子。"""
+    """訊號發出前就已知的大盤方向。怎麼判「事前」見 market_known_before()。"""
     def key(o):
-        if o.mkt_open_pct is None:
+        pct = market_known_before(o)
+        if pct is None:
             return None
-        return "大盤開高" if o.mkt_open_pct > 0 else "大盤開低"
+        return "大盤開高" if pct > 0 else "大盤開低"
     return _bucket(rows, key, ["大盤開高", "大盤開低"])
 
 
@@ -228,8 +250,9 @@ def report(rows: list) -> list[str]:
         "二、盤前名次", by_rank(rows),
         "「只做前幾名會不會比較好」—— 回答要不要砍監看名單。")
     lines += render_group(
-        "三、當日大盤方向（09:15）", by_market(rows),
-        "這套系統只做多。綠盤日逆風多少？這是唯一在訊號發出前就已知的因子。")
+        "三、訊號發出前的大盤方向", by_market(rows),
+        "這套系統只做多。綠盤日逆風多少？只收訊號發出**之前**就已知的大盤 ——"
+        "v4 起訊號 09:05 就發完，09:15 的大盤對那些訊號是事後資訊，不算進來。")
     lines += render_group(
         "四、量能倍數", by_volume_surge(rows),
         "量能門檻該訂多高。")

@@ -49,7 +49,8 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "or_high", "vwap", "volume_surge", "extension_pct", "vwap_gap_pct",
           "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
           "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
-          "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio")
+          "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio",
+          "mkt_signal_pct")
 
 
 @dataclass
@@ -90,7 +91,11 @@ class Outcome:
     category: str = ""            # 產業類別代碼 —— 「輪動題材」的客觀代理
     # 當日大盤（0050 代理）。這套系統只做多，多方突破在綠盤日結構上逆風，
     # 不分開看等於把兩種完全不同的日子平均在一起。
-    # mkt_open_pct 在任何訊號發出**之前**就已知，所以它是唯一有資格變成規則的那個。
+    #
+    # mkt_open_pct 是 09:15 的大盤。這裡原本寫著「它在任何訊號發出之前就已知，
+    # 所以它是唯一有資格變成規則的那個」—— v1–v3 訊號全部發在 09:17 之後，
+    # 那時是對的；v4 起 09:05 就發完，它變成事後十分鐘的資訊。是不是事前，
+    # 要逐筆看訊號時間，analyse.by_market() 就是這樣判的。
     mkt_open_pct: float | None = None     # 09:15 時的大盤漲跌 %
     mkt_day_pct: float | None = None      # 當日收盤的大盤漲跌 %
     # v4 原則二：09:30 發「時間到」訊號，未達停損的由下單者自己決定走不走。
@@ -109,6 +114,9 @@ class Outcome:
     # 量放大但內盤居多，是有人在出貨給你。tick 沒帶 tick_type 時留空，
     # 空白代表「判不出來」，不是「剛好打平」。
     bid_ask_ratio: float | None = None
+    # 決策當下的大盤：量測時間跟著 config.SIGNAL["signal_batch_at"] 走。
+    # 這才是 v4 之後唯一「訊號發出前就已知」的大盤數字。舊列沒有這一欄 —— 留空。
+    mkt_signal_pct: float | None = None
     # 出場時間 "HH:MM:SS"。風控閘門看的是**已實現**損益，而一筆要出場了才算實現 ——
     # 沒有這一欄就答不出「這一筆發訊號的時候，前面幾筆已經結束了幾筆」，
     # 於是「照規則今天真的會做到哪幾筆」只能用「前 N 筆」粗估，而那會算錯。
@@ -318,8 +326,14 @@ def resolve_all(broker, sigs: list[dict], date: str | None = None) -> list[Outco
         except Exception as e:                       # 大盤查不到不該讓整份覆盤產不出來
             log.warning("大盤取得失敗：%s", e)
             mkt_open = mkt_day = None
+        try:
+            mkt_sig = broker.market_at(config.SIGNAL["signal_batch_at"][:5], date)
+        except Exception as e:
+            log.warning("決策當下的大盤取得失敗：%s", e)
+            mkt_sig = None
         for o in out:
             o.mkt_open_pct, o.mkt_day_pct = mkt_open, mkt_day
+            o.mkt_signal_pct = mkt_sig
     return out
 
 
@@ -409,7 +423,7 @@ _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "vwap_gap_pct", "mae_pct", "mfe_pct", "low_5m_pct",
                     "fill_low_pct", "mkt_open_pct", "mkt_day_pct",
-                    "exit_0930", "r_0930", "bid_ask_ratio")
+                    "exit_0930", "r_0930", "bid_ask_ratio", "mkt_signal_pct")
 
 
 def _bool(value) -> bool | None:
