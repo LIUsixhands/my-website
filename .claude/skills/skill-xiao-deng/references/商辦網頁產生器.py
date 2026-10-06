@@ -13,7 +13,7 @@ import json, pathlib
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[3]                      # /home/user/my-website
 D = json.load(open(HERE / "七期商辦_九案數據.json", encoding="utf-8"))
-SITE = "https://sixhands-studio.netlify.app"
+SITE = "https://sixhands.tw"
 LINE = "https://line.me/R/ti/p/@080akczk"
 TIER = {"入門": "#2F8F5B", "中階": "#C98A2E", "頂級": "#A8384F"}   # validate_palette PASS
 SLUG = {"市政壹號廣場":"shizheng-yihao","聯聚中維大廈":"lianju-zhongwei","聯聚中雍大廈":"lianju-zhongyong",
