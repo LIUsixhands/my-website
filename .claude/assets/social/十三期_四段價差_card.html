@@ -1,0 +1,53 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<style>
+@font-face{font-family:'NSerif';src:url('NotoSerifTC-700.ttf');font-weight:700}
+@font-face{font-family:'NSerif';src:url('NotoSerifTC-400.ttf');font-weight:400}
+@font-face{font-family:'NSans';src:url('NotoSansTC-500.ttf');font-weight:500}
+:root{--forest:#1F3A2E;--brass:#B08D3F;--brass-lite:#D8BC7E;--cream:#F3EEE2}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:1080px;height:1080px;background:var(--forest);color:var(--cream);
+     font-family:'NSans',sans-serif;padding:76px 80px;display:flex;flex-direction:column}
+.eyebrow{font-size:23px;letter-spacing:.22em;color:var(--brass-lite);font-weight:500}
+.rule{width:62px;height:3px;background:var(--brass);margin:26px 0 30px}
+h1{font-family:'NSerif';font-weight:700;font-size:78px;line-height:1.24;letter-spacing:.01em}
+h1 em{font-style:normal;color:var(--brass-lite)}
+.sub{margin-top:22px;font-size:27px;line-height:1.6;color:#cfd8cd}
+.chart{margin-top:auto;margin-bottom:34px}
+.row{display:grid;grid-template-columns:112px 1fr 128px;align-items:center;height:76px}
+.nm{font-size:30px;font-weight:500}
+.track{position:relative;height:3px;background:rgba(216,188,126,.22);border-radius:99px}
+.dot{position:absolute;top:50%;width:26px;height:26px;border-radius:50%;
+     background:var(--brass);transform:translate(-50%,-50%);box-shadow:0 0 0 5px var(--forest)}
+.dot.hi{background:var(--brass-lite)}
+.val{text-align:right;font-family:'NSerif';font-weight:700;font-size:40px}
+.axis{display:grid;grid-template-columns:112px 1fr 128px;font-size:20px;color:#8fa295;margin-top:2px}
+.axis span{display:flex;justify-content:space-between}
+.foot{border-top:1px solid rgba(216,188,126,.3);padding-top:28px;display:flex;
+      justify-content:space-between;align-items:flex-end}
+.slogan{font-family:'NSerif';font-weight:700;font-size:34px;color:var(--brass-lite)}
+.url{font-size:30px;letter-spacing:.04em;font-weight:500}
+.note{font-size:19px;color:#8fa295;margin-top:8px}
+</style></head><body>
+<div class="eyebrow">SIXHANDS STUDIO ・ 台中十三期土地</div>
+<div class="rule"></div>
+<h1>同樣叫十三期<br><em>四個段差 8%</em></h1>
+<div class="sub">483 筆實價登錄，逐筆扣車位重算。<br>近三年中位單價（萬／坪）：</div>
+
+<div class="chart">
+  <div class="row"><div class="nm">樂田段</div>
+    <div class="track"><div class="dot hi" style="left:66.7%"></div></div><div class="val">70.00</div></div>
+  <div class="row"><div class="nm">昌明段</div>
+    <div class="track"><div class="dot" style="left:58.1%"></div></div><div class="val">68.71</div></div>
+  <div class="row"><div class="nm">楓溪段</div>
+    <div class="track"><div class="dot" style="left:32.5%"></div></div><div class="val">64.87</div></div>
+  <div class="row"><div class="nm">大慶段</div>
+    <div class="track"><div class="dot" style="left:31.8%"></div></div><div class="val">64.77</div></div>
+  <div class="axis"><i></i><span><b>60</b><b>75</b></span><i></i></div>
+</div>
+
+<div class="foot">
+  <div><div class="slogan">不賣房子，賣判斷。</div>
+       <div class="note">資料：內政部實價登錄　撈取日 2026-10</div></div>
+  <div class="url">sixhands.tw</div>
+</div>
+</body></html>
