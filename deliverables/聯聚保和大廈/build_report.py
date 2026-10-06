@@ -129,7 +129,7 @@ site = '''<svg viewBox="0 0 300 190" width="100%" xmlns="http://www.w3.org/2000/
 </svg>'''
 
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
-PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands-studio.netlify.app'
+PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands.tw'
 CONTACT = f'助哥 {PHONE}　｜　LINE {LINE_ID}　｜　{WEB}'
 
 def foot(n):
