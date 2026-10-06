@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1988" height="1600" viewBox="0 0 1988 1600" font-family="WenQuanYi Zen Hei, sans-serif">
+<rect width="1988" height="1600" fill="#182a21"/>
+<text x="66" y="80" font-size="52" font-weight="bold" fill="#f3efe2">七期重劃區範圍 × 三個次分區 ＋ 聯聚保和大廈</text>
+<text x="66" y="128" font-size="28" fill="#9fb3a6">示意圖，非按實際比例與地籍界線（依助哥 v4 三分區圖重繪）</text>
+<!-- zone 2 -->
+<polygon points="776,198 926,325 830,733 630,590" fill="#3b5e48"/>
+<!-- zone 1 -->
+<polygon points="926,325 1320,598 1325,630 1240,752 1240,1035 830,733" fill="#6b5f30"/>
+<!-- zone 3 -->
+<polygon points="830,733 1240,1035 1240,1382 1188,1430 985,1373 893,1045 860,760" fill="#5a4330"/>
+<!-- cut lines -->
+<line x1="926" y1="325" x2="830" y2="733" stroke="#c9a86a" stroke-width="3"/>
+<line x1="830" y1="733" x2="1240" y2="1035" stroke="#c9a86a" stroke-width="4"/>
+<line x1="925" y1="1150" x2="1238" y2="1175" stroke="#c9b99a" stroke-width="2" stroke-dasharray="10 8"/>
+<!-- boundary -->
+<polygon points="776,198 1320,598 1325,630 1240,752 1240,1382 1188,1430 985,1373 893,1045 860,760 830,733 630,590" fill="none" stroke="#f3efe2" stroke-width="6"/>
+<!-- road labels -->
+<text x="905" y="262" font-size="34" font-weight="bold" fill="#f3efe2" transform="rotate(36 905 262)">台灣大道</text>
+<text x="620" y="520" font-size="28" font-weight="bold" fill="#f3efe2" transform="rotate(-68 620 520)">環中路三段</text>
+<text x="845" y="620" font-size="24" font-weight="bold" fill="#f3efe2" transform="rotate(77 845 620)">朝富路</text>
+<text x="985" y="850" font-size="34" font-weight="bold" fill="#f3efe2" transform="rotate(36 985 850)">市政路</text>
+<text x="1255" y="935" font-size="34" font-weight="bold" fill="#f3efe2" transform="rotate(90 1255 935)">文心路</text>
+<text x="850" y="930" font-size="28" font-weight="bold" fill="#f3efe2" transform="rotate(85 850 930)">河南路四段</text>
+<text x="915" y="1225" font-size="26" font-weight="bold" fill="#f3efe2" transform="rotate(72 915 1225)">黎明東街</text>
+<text x="1040" y="1228" font-size="26" font-weight="bold" fill="#e6dcc4" transform="rotate(4 1040 1228)">公益路二段</text>
+<text x="1040" y="1490" font-size="32" font-weight="bold" fill="#f3efe2">大墩四街</text>
+<!-- zone labels -->
+<circle cx="708" cy="475" r="20" fill="none" stroke="#c9b99a" stroke-width="3"/><text x="708" y="485" text-anchor="middle" font-size="24" fill="#f3efe2">2</text>
+<text x="738" y="485" font-size="28" font-weight="bold" fill="#f3efe2">朝馬七期西側</text>
+<text x="738" y="520" font-size="22" fill="#d9d2bf">西七期</text>
+<text x="700" y="585" font-size="22" fill="#e6dcc4">● 潮洋環保公園</text>
+<text x="700" y="628" font-size="22" fill="#e6dcc4">● 朝馬足球場</text>
+<circle cx="926" cy="548" r="24" fill="#b08d45" stroke="#e6d3a3" stroke-width="3"/><text x="926" y="558" text-anchor="middle" font-size="26" fill="#182a21" font-weight="bold">1</text>
+<text x="965" y="560" font-size="36" font-weight="bold" fill="#f3efe2">市政廊帶區</text>
+<text x="965" y="600" font-size="24" fill="#d9d2bf">北七期・新市政專用區</text>
+<text x="932" y="678" font-size="24" fill="#e6dcc4">● 秋紅谷・老虎城・林酒店</text>
+<text x="932" y="745" font-size="24" fill="#e6dcc4">● 國家歌劇院・夏綠地公園</text>
+<text x="932" y="812" font-size="24" fill="#e6dcc4">● 台中市政府</text>
+<circle cx="986" cy="995" r="24" fill="#9a5a3c" stroke="#e6c3a3" stroke-width="3"/><text x="986" y="1005" text-anchor="middle" font-size="26" fill="#f3efe2" font-weight="bold">3</text>
+<text x="1024" y="1007" font-size="36" font-weight="bold" fill="#f3efe2">公益向上</text>
+<text x="1024" y="1047" font-size="24" fill="#d9d2bf">南七期</text>
+<text x="965" y="1120" font-size="24" fill="#e6dcc4">● 惠文國小・惠文高中</text>
+<text x="1030" y="1322" font-size="24" fill="#e6dcc4">● 文心森林公園</text>
+<!-- 保和 -->
+<circle cx="1200" cy="1045" r="16" fill="#e74c3c" stroke="#fff" stroke-width="4"/>
+<line x1="1214" y1="1052" x2="1420" y2="1120" stroke="#e74c3c" stroke-width="3"/>
+<rect x="1420" y="1085" width="500" height="150" rx="12" fill="#2a1c17" stroke="#e74c3c" stroke-width="3"/>
+<text x="1445" y="1130" font-size="32" font-weight="bold" fill="#ff8b7d">聯聚保和大廈</text>
+<text x="1445" y="1170" font-size="24" fill="#f3efe2">市政路 25 號・市政路南側</text>
+<text x="1445" y="1208" font-size="22" fill="#d9d2bf">→ ③ 公益向上（建物朝北面市政路）</text>
+<!-- outside -->
+<rect x="100" y="928" width="447" height="430" rx="14" fill="none" stroke="#9fb3a6" stroke-width="3" stroke-dasharray="16 10"/>
+<text x="323" y="1095" text-anchor="middle" font-size="38" font-weight="bold" fill="#9fb3a6">單元二</text>
+<text x="323" y="1150" text-anchor="middle" font-size="38" font-weight="bold" fill="#9fb3a6">黎明商圈</text>
+<text x="323" y="1215" text-anchor="middle" font-size="26" fill="#8aa092">常被誤稱七期・實際在界外</text>
+<rect x="1425" y="563" width="497" height="430" rx="14" fill="none" stroke="#9fb3a6" stroke-width="3" stroke-dasharray="16 10"/>
+<text x="1673" y="740" text-anchor="middle" font-size="40" font-weight="bold" fill="#9fb3a6">五期</text>
+<text x="1673" y="800" text-anchor="middle" font-size="26" fill="#8aa092">文心路以東・常被誤稱七期</text>
+<path d="M1855 290 L1855 225" stroke="#f3efe2" stroke-width="4"/><polygon points="1843,240 1867,240 1855,215" fill="#f3efe2"/>
+<text x="1855" y="325" text-anchor="middle" font-size="28" fill="#f3efe2">北</text>
+<text x="66" y="1560" font-size="22" fill="#8aa092">※ 保和南北側依棟別圖與信義刊登「建物朝向：北」判定；東西向位置為示意（低門牌，推估近文心路端）。製作：小登 · Sixhands Studio</text>
+</svg>
