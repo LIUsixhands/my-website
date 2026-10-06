@@ -93,6 +93,18 @@ def snap(code="2330", close=100.0, high=104.0, low=100.0, volume=9000, avg=101.0
                            total_volume=volume, average_price=avg)
 
 
+# 下面幾組測試寫的是**機制**（結構停損、張數反推、漲停貼齊、1.5R 目標），
+# 數字是照 v5 的參數算的（停損 1.5%、1.5R、當沖）。v6 把停損改成 3%、目標改成
+# +8%、可以抱到隔天 —— 機制沒變，只是參數變了。把這幾組釘在 v5 參數上，
+# 測試才繼續證明那些機制是對的；v6 的數字另外有自己的測試（TestV6...）。
+V5_SIGNAL = {"stop_loss_pct": 1.5, "target_pct": None, "max_hold_days": 1}
+
+
+def under_v5_rules(cls):
+    return unittest.mock.patch.dict(config.SIGNAL, V5_SIGNAL)(cls)
+
+
+
 def ready_state(code="2330", or_high=100.0, last=101.0, vwap=100.5, surge_ratio=3.0):
     """造一個「萬事俱備」的個股狀態：區間已鎖、價格突破、站上均價、量能達標。"""
     # 昨收跟著標的價位走，否則高價股的測試會誤觸漲停夾擠
@@ -159,7 +171,9 @@ class TestConfig(unittest.TestCase):
     def test_validate_catches_bad_params(self):
         cases = [
             (config.SIGNAL, "stop_loss_pct", 0, "stop_loss_pct"),
-            (config.SIGNAL, "reward_risk", -1, "reward_risk"),
+            (config.SIGNAL, "target_pct", -1, "target_pct"),
+            (config.SIGNAL, "max_hold_days", 3, "max_hold_days"),
+            (config.COST, "tax_rate_overnight", 0.001, "tax_rate_overnight"),
             (config.SIGNAL, "allow_short", True, "allow_short"),
             (config.SIGNAL, "or_end", "08:00:00", "時間順序"),
             (config.RISK, "max_daily_loss", 0, "max_daily_loss"),
@@ -178,6 +192,14 @@ class TestConfig(unittest.TestCase):
                     self.assertIn(expect, errs)
                 finally:
                     section[key] = original
+
+    def test_reward_risk_is_checked_only_when_it_is_the_one_in_use(self):
+        """target_pct 有設時 reward_risk 不參與計算 —— 拿它擋啟動是假警報；
+        target_pct 設成 None 退回 R 倍數時，它就必須是正數。"""
+        with unittest.mock.patch.dict(config.SIGNAL, {"reward_risk": -1, "target_pct": 8.0}):
+            self.assertNotIn("reward_risk", " / ".join(config.validate()))
+        with unittest.mock.patch.dict(config.SIGNAL, {"reward_risk": -1, "target_pct": None}):
+            self.assertIn("reward_risk", " / ".join(config.validate()))
 
     def test_red_line_mismatch_warns_but_does_not_block_startup(self):
         """單筆風險 × 筆數上限 < 日虧上限 —— 是提醒，不是錯誤。
@@ -418,6 +440,7 @@ class TestVolumeSurge(unittest.TestCase):
         self.assertEqual(st.volume_surge(), 0.0)
 
 
+@under_v5_rules
 class TestEvaluate(unittest.TestCase):
     IN_WINDOW = dtime(9, 3)      # 進場窗口 09:02–09:05 之內
 
@@ -1438,6 +1461,7 @@ class TestFillWindow(unittest.TestCase):
         self.assertIsNotNone(o.low_5m_pct)
 
 
+@under_v5_rules
 class TestPriceLimits(unittest.TestCase):
     """停損與目標都不可以落在漲跌停之外 —— 那是永遠不會成交的委託。
 
@@ -2369,14 +2393,10 @@ class TestPreflight(unittest.TestCase):
         finally:
             config.RISK.update(saved)
             config.SCREEN["max_price"] = saved_price
-        original = config.SIGNAL["reward_risk"]
-        config.SIGNAL["reward_risk"] = -1
-        try:
+        with unittest.mock.patch.dict(config.SIGNAL, {"target_pct": -1}):
             r = preflight.check_config()
             self.assertEqual(r.status, preflight.FAIL)
-            self.assertIn("reward_risk", r.detail)
-        finally:
-            config.SIGNAL["reward_risk"] = original
+            self.assertIn("target_pct", r.detail)
 
     def test_contracts_empty_is_fail(self):
         r = preflight.check_contracts(Broker(api=FakeApi()))
@@ -2914,6 +2934,7 @@ class TestCandidateOutcomes(unittest.TestCase):
             self.assertEqual(len(list(csv.DictReader(f))), 1)
 
 
+@under_v5_rules
 class TestLotSizingFloatNoise(unittest.TestCase):
     """(20.2-19.9)*1000 = 300.0000000000007，整除時會少算一整張。"""
 
@@ -4265,6 +4286,7 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
         self.assertNotIn(".env.template", self.lines)
 
 
+@under_v5_rules
 class TestStopNeverSitsAboveTheBreakout(unittest.TestCase):
     """2026-10-02 美亞：區間高 26.70、進場 27.25、**停損 26.85**。
 
@@ -4885,6 +4907,7 @@ class TestTheLateStartWarningIsActuallyWired(unittest.TestCase):
                       "run() 沒有真的呼叫 warn_if_too_late()")
 
 
+@under_v5_rules
 class TestWhatIfReplay(unittest.TestCase):
     """whatif.py 的核心：拿同一份分鐘 K 重跑不同的進場／出場規則。
 
@@ -5821,7 +5844,7 @@ class TestDecisionTimeMarketIsRecorded(unittest.TestCase):
         config.SIGNAL["signal_batch_at"] = "09:07:00"
         try:
             with unittest.mock.patch.object(_oc, "resolve",
-                                   side_effect=lambda b, s, d: _types.SimpleNamespace(
+                                   side_effect=lambda b, s, d, through=None: _types.SimpleNamespace(
                                        mkt_open_pct=None, mkt_day_pct=None,
                                        mkt_signal_pct=None)):
                 out = _oc.resolve_all(FakeB(), [{"code": "8182"}], "2026-10-05")
@@ -5836,7 +5859,7 @@ class TestDecisionTimeMarketIsRecorded(unittest.TestCase):
             def market_day(self, date=None):
                 return 0.8, 1.2
         with unittest.mock.patch.object(_oc, "resolve",
-                               side_effect=lambda b, s, d: _types.SimpleNamespace(
+                               side_effect=lambda b, s, d, through=None: _types.SimpleNamespace(
                                    mkt_open_pct=None, mkt_day_pct=None,
                                    mkt_signal_pct=None)):
             out = _oc.resolve_all(OldB(), [{"code": "8182"}], "2026-10-05")
@@ -5861,6 +5884,467 @@ class TestDecisionTimeMarketIsRecorded(unittest.TestCase):
         self.assertEqual(len(back), 1)
         self.assertIsNone(back[0].mkt_signal_pct)
 
+
+
+# ══════════════════════════════════════════════════════
+# v6：停損 3%、目標 +8%、最多抱到隔天
+# ══════════════════════════════════════════════════════
+V6_SIGNAL = {"stop_loss_pct": 3.0, "target_pct": 8.0, "max_hold_days": 2}
+
+
+class _DaysBroker:
+    """跨日的假 kbars，帶開盤價。days = {日期: [(HH:MM, 開, 高, 低, 收), ...]}。
+
+    kbars(code, start, end) 只回傳日期落在 [start, end] 的那幾根 ——
+    「隔天是哪一天」要靠這個才測得出來（週五的隔天是週一）。
+    """
+
+    def __init__(self, days):
+        self.days = days
+        self.calls = []
+
+    def kbars(self, code, start, end):
+        self.calls.append((code, start, end))
+        ts, o, h, l, c = [], [], [], [], []
+        for day in sorted(self.days):
+            if not start <= day <= end:
+                continue
+            for hhmm, op, hi, lo, cl in self.days[day]:
+                t = datetime(int(day[:4]), int(day[5:7]), int(day[8:10]),
+                             int(hhmm[:2]), int(hhmm[3:]), tzinfo=dt_timezone.utc)
+                ts.append(int(t.timestamp() * 1e9))
+                o.append(op); h.append(hi); l.append(lo); c.append(cl)
+        return SimpleNamespace(ts=ts, Open=o, High=h, Low=l, Close=c)
+
+
+# 一筆 v6 訊號：進場 100、停損 97、目標 108
+V6_SIG = {"code": "2330", "name": "測試", "time": "09:05:00", "entry": 100.0,
+          "stop": 97.0, "target": 108.0, "lots": 1, "max_hold_days": 2,
+          "ruleset": "v6"}
+DAY1, DAY2 = "2026-10-07", "2026-10-08"
+# 第一天：沒碰停損也沒到目標，收在 103
+QUIET_DAY1 = [("09:07", 100.5, 102.0, 99.0, 101.0), ("11:00", 101.0, 104.0, 100.0, 103.5),
+              ("13:25", 103.5, 103.6, 102.5, 103.0), ("13:30", 103.0, 103.0, 103.0, 103.0)]
+
+
+@unittest.mock.patch.dict(config.SIGNAL, V6_SIGNAL)
+class TestV6TheSignal(unittest.TestCase):
+    IN_WINDOW = dtime(9, 3)
+
+    def test_stop_is_three_percent_below_entry(self):
+        sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.IN_WINDOW)
+        self.assertEqual(sig["stop"], config.round_to_tick(101.0 * 0.97, "up"))
+
+    def test_target_is_eight_percent_above_entry_rounded_up(self):
+        sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.IN_WINDOW)
+        # 101 × 1.08 = 109.08 → 0.5 檔位往上 = 109.5（到價時報酬不會低於 8%）
+        self.assertEqual(sig["target"], 109.5)
+        self.assertGreaterEqual((sig["target"] - 101.0) / 101.0 * 100, 8.0)
+
+    def test_the_signal_remembers_how_long_it_may_be_held(self):
+        sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.IN_WINDOW)
+        self.assertEqual(sig["max_hold_days"], 2)
+
+    def test_a_target_beyond_todays_limit_up_is_kept_and_explained(self):
+        """當天漲停 +10%，進場已經 +6%：+8% 今天物理上到不了。抱兩天時不貼齊，
+        而是講明白 —— 貼齊等於把明天的機會砍掉。"""
+        st = ready_state(or_high=105.5, last=106.0, vwap=105.0)
+        st.prev_close = 100.0
+        sig = evaluate(st, now=self.IN_WINDOW)
+        self.assertEqual(sig["target"], config.round_to_tick(106.0 * 1.08, "up"))
+        self.assertFalse(sig["target_capped"])
+        self.assertTrue(sig["beyond_today_limit"])
+        self.assertEqual(sig["limit_up"], 110.0)
+        self.assertIn("今天到不了", format_signal(sig, 1, 1))
+
+    def test_a_day_trade_still_caps_the_target_at_limit_up(self):
+        with unittest.mock.patch.dict(config.SIGNAL, {"max_hold_days": 1}):
+            st = ready_state(or_high=105.5, last=106.0, vwap=105.0)
+            st.prev_close = 100.0
+            sig = evaluate(st, now=self.IN_WINDOW)
+        self.assertEqual(sig["target"], 110.0)
+        self.assertTrue(sig["target_capped"])
+        self.assertFalse(sig["beyond_today_limit"])
+
+    def test_the_message_says_eight_percent_and_warns_about_the_gap(self):
+        sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.IN_WINDOW)
+        text = format_signal(sig, 1, 1)
+        self.assertIn("+8%", text)
+        self.assertIn("留倉", text)
+        self.assertIn("跳空", text)
+        with unittest.mock.patch.dict(config.SIGNAL, {"max_hold_days": 1}):
+            self.assertNotIn("留倉", format_signal(sig, 1, 1))
+
+    def test_overnight_costs_full_tax(self):
+        fee = config.COST["fee_rate"] * config.COST["fee_discount"] * 2
+        self.assertAlmostEqual(config.round_trip_cost_pct(overnight=True),
+                               (fee + config.COST["tax_rate_overnight"]) * 100)
+        self.assertGreater(config.round_trip_cost_pct(True), config.round_trip_cost_pct())
+
+    def test_the_shipped_config_is_v6(self):
+        self.assertEqual(config.RULESET, "v6")
+        self.assertEqual(config.validate(), [])
+
+
+class TestV6TwoDayOutcome(unittest.TestCase):
+    """收盤回推：第一天沒結束 → 留倉中；拿到隔天 K 棒 → 結局。"""
+
+    def test_a_quiet_first_day_is_carried_not_flattened(self):
+        o = oc.resolve(_DaysBroker({DAY1: QUIET_DAY1}), V6_SIG, DAY1)
+        self.assertEqual(o.result, oc.CARRY)
+        self.assertEqual(o.exit_price, 103.0)         # 標記用：第一天收盤
+        self.assertEqual(o.exit_at, "")               # 還沒出場
+        self.assertAlmostEqual(o.net_pct, round(3.0 - config.round_trip_cost_pct(True), 3))
+
+    def test_an_old_signal_without_hold_days_is_still_a_day_trade(self):
+        sig = {k: v for k, v in V6_SIG.items() if k != "max_hold_days"}
+        o = oc.resolve(_DaysBroker({DAY1: QUIET_DAY1}), sig, DAY1, through=DAY2)
+        self.assertEqual(o.result, oc.FLAT)
+        self.assertEqual(o.exit_price, 103.0)          # 13:25 那一根
+        self.assertEqual(o.exit_date, "")
+
+    def test_the_closing_auction_counts_when_you_hold_overnight(self):
+        """你沒在 13:25 走，13:30 那一下碰到停損就是碰到了。"""
+        day1 = QUIET_DAY1[:-1] + [("13:30", 97.5, 97.5, 96.5, 96.5)]
+        o = oc.resolve(_DaysBroker({DAY1: day1}), V6_SIG, DAY1)
+        self.assertEqual(o.result, oc.STOP)
+        self.assertEqual(o.exit_at, "13:30:00")
+
+    def test_a_gap_down_through_the_stop_exits_at_the_open_not_the_stop(self):
+        days = {DAY1: QUIET_DAY1, DAY2: [("09:01", 94.0, 95.0, 93.5, 94.5),
+                                         ("09:02", 94.5, 99.0, 94.0, 98.0)]}
+        o = oc.resolve(_DaysBroker(days), V6_SIG, DAY1, through=DAY2)
+        self.assertEqual(o.result, oc.STOP)
+        self.assertEqual(o.exit_price, 94.0)           # 開盤價，不是 97
+        self.assertEqual(o.r_multiple, -2.0)
+        self.assertEqual(o.exit_date, DAY2)
+        self.assertEqual(o.exit_at, "09:01:00")
+        self.assertTrue(o.overnight)
+        self.assertAlmostEqual(o.net_pct, round(-6.0 - config.round_trip_cost_pct(True), 3))
+
+    def test_a_gap_up_above_the_target_exits_at_the_open(self):
+        days = {DAY1: QUIET_DAY1, DAY2: [("09:01", 109.0, 110.0, 108.5, 109.5)]}
+        o = oc.resolve(_DaysBroker(days), V6_SIG, DAY1, through=DAY2)
+        self.assertEqual((o.result, o.exit_price), (oc.TARGET, 109.0))
+
+    def test_reaching_the_target_on_day_two(self):
+        days = {DAY1: QUIET_DAY1, DAY2: [("09:01", 103.0, 104.0, 102.0, 103.5),
+                                         ("10:00", 103.5, 108.5, 103.0, 108.0),
+                                         ("11:00", 108.0, 112.0, 107.0, 111.0)]}
+        o = oc.resolve(_DaysBroker(days), V6_SIG, DAY1, through=DAY2)
+        self.assertEqual((o.result, o.exit_price, o.exit_at), (oc.TARGET, 108.0, "10:00:00"))
+        self.assertEqual(o.bars, len(QUIET_DAY1) + 2)
+        # 續抱分析要的：達標後還走到 112（+12%）
+        self.assertEqual(o.mfe_pct, 12.0)
+
+    def test_neither_on_day_two_flattens_at_1325(self):
+        days = {DAY1: QUIET_DAY1, DAY2: [("09:01", 103.0, 104.0, 102.0, 103.5),
+                                         ("13:25", 104.0, 105.0, 103.5, 104.5),
+                                         ("13:30", 104.5, 104.5, 90.0, 90.0)]}
+        o = oc.resolve(_DaysBroker(days), V6_SIG, DAY1, through=DAY2)
+        self.assertEqual((o.result, o.exit_price, o.exit_at), (oc.FLAT, 104.5, "13:25:00"))
+
+    def test_same_bar_stop_and_target_on_day_two_is_a_stop(self):
+        days = {DAY1: QUIET_DAY1, DAY2: [("09:01", 103.0, 104.0, 102.0, 103.5),
+                                         ("09:30", 103.5, 109.0, 96.0, 100.0)]}
+        o = oc.resolve(_DaysBroker(days), V6_SIG, DAY1, through=DAY2)
+        self.assertEqual((o.result, o.exit_price), (oc.STOP, 97.0))
+
+    def test_the_next_session_after_friday_is_monday(self):
+        fri, mon = "2026-10-09", "2026-10-12"
+        days = {fri: QUIET_DAY1, mon: [("09:01", 108.5, 109.0, 108.0, 108.5)]}
+        b = _DaysBroker(days)
+        self.assertEqual(oc.next_session_bars(b, "2330", fri, mon)[0], mon)
+        o = oc.resolve(b, V6_SIG, fri, through=mon)
+        self.assertEqual((o.result, o.exit_date), (oc.TARGET, mon))
+
+    def test_day_three_is_never_part_of_the_hold(self):
+        """review 晚兩天才跑時，through 之前會有兩個交易日。規則是最多兩天 ——
+        第三天碰到目標不算，第二天 13:25 就平倉了。"""
+        day3 = "2026-10-09"
+        days = {DAY1: QUIET_DAY1,
+                DAY2: [("09:01", 103.0, 104.0, 102.0, 103.5), ("13:25", 104, 105, 103.5, 104.5)],
+                day3: [("09:01", 110.0, 111.0, 109.0, 110.0)]}
+        o = oc.resolve(_DaysBroker(days), V6_SIG, DAY1, through=day3)
+        self.assertEqual((o.result, o.exit_price, o.exit_date), (oc.FLAT, 104.5, DAY2))
+        self.assertEqual(o.mfe_pct, 5.0)
+
+    def test_no_next_session_yet_stays_carried(self):
+        o = oc.resolve(_DaysBroker({DAY1: QUIET_DAY1}), V6_SIG, DAY1, through=DAY2)
+        self.assertEqual(o.result, oc.CARRY)
+
+    def test_a_day_two_tick_verdict_wins_and_is_marked_overnight(self):
+        sig = dict(V6_SIG, live_result=oc.STOP, live_exit=95.5, live_at="09:00:12",
+                   live_date=DAY2)
+        days = {DAY1: QUIET_DAY1, DAY2: [("09:01", 96.0, 99.0, 95.0, 98.0)]}
+        o = oc.resolve(_DaysBroker(days), sig, DAY1, through=DAY2)
+        self.assertEqual((o.result, o.exit_price, o.exit_date, o.exit_at),
+                         (oc.STOP, 95.5, DAY2, "09:00:12"))
+        self.assertAlmostEqual(o.net_pct, round(-4.5 - config.round_trip_cost_pct(True), 3))
+        self.assertEqual(o.mae_pct, -5.0)              # 隔天的低點也算進來
+
+    def test_writing_yesterdays_carried_row_keeps_yesterdays_other_rows(self):
+        """以前同一天的列是整批刪掉重寫的 —— 昨天留倉的那一筆今天才寫進去，
+        會把昨天當天就結束的那幾筆一起刪掉，累計勝率無聲少幾筆。"""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "o.csv"
+            b = _DaysBroker({DAY1: QUIET_DAY1 + [], DAY2: [("09:01", 109, 110, 108, 109)]})
+            stopped_day1 = dict(V6_SIG, code="1111", live_result=oc.STOP,
+                                live_exit=97.0, live_at="09:20:00", live_date=DAY1)
+            oc.append_csv([oc.resolve(b, stopped_day1, DAY1)], path)
+            oc.append_csv([oc.resolve(b, V6_SIG, DAY1, through=DAY2)], path)
+            rows = oc.load_csv(path)
+            self.assertEqual(sorted(r.code for r in rows), ["1111", "2330"])
+            again = oc.resolve(b, V6_SIG, DAY1, through=DAY2)
+            oc.append_csv([again], path)                # 重跑：同一筆換掉，不重複
+            self.assertEqual(len(oc.load_csv(path)), 2)
+            self.assertEqual([r.exit_date for r in oc.load_csv(path) if r.code == "2330"], [DAY2])
+
+    def test_an_overnight_exit_is_not_realised_on_the_signal_day(self):
+        """exit_at 是隔天的時間；拿去跟當天的訊號時間比，會以為它早就出場了。"""
+        mk = lambda code, t, net, exit_at, exit_date="": oc.Outcome(
+            date=DAY1, code=code, time=t, entry=100.0, stop=97.0, target=108.0, lots=10,
+            result=oc.STOP, exit_price=94.0, r_multiple=-2.0, gross_pct=net,
+            net_pct=net, bars=1, exit_at=exit_at, exit_date=exit_date)
+        rows = [mk("A", "09:05:00", -6.0, "09:01:00", DAY2),
+                mk("B", "09:05:01", -6.0, "09:30:00"),
+                mk("C", "09:05:02", -6.0, "09:31:00")]
+        with unittest.mock.patch.dict(config.RISK, {"max_daily_loss": 1000,
+                                                     "max_trades_per_day": 9}):
+            r = oc.replay_rules(rows)
+        self.assertEqual([o.code for o in r["taken"]], ["A", "B", "C"])
+
+
+class TestV6TheTracker(unittest.TestCase):
+    def _sig(self, **kw):
+        return dict(V6_SIG, **kw)
+
+    def test_at_1325_a_two_day_position_is_carried_not_flattened(self):
+        seen = []
+        t = signals.LiveTracker(on_resolved=lambda *a: seen.append(a))
+        t.track(self._sig())
+        t.on_price("2330", 103.0)
+        msgs = t.flatten()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("留倉過夜", msgs[0])
+        self.assertEqual(seen, [])        # 沒結束，不寫任何判定回 state.json
+
+    def test_at_1325_on_day_two_it_is_flattened(self):
+        seen = []
+        t = signals.LiveTracker(on_resolved=lambda *a: seen.append(a))
+        t.track(self._sig(), carried=True)
+        t.on_price("2330", 103.0)
+        msgs = t.flatten()
+        self.assertIn(oc.FLAT, msgs[0])
+        self.assertEqual(seen[0][2], oc.FLAT)
+
+    def test_a_day_trade_signal_is_still_flattened(self):
+        t = signals.LiveTracker()
+        t.track(self._sig(max_hold_days=1))
+        t.on_price("2330", 103.0)
+        self.assertIn(oc.FLAT, t.flatten()[0])
+
+    def test_a_carried_position_gets_no_0930_reminder(self):
+        t = signals.LiveTracker()
+        t.track(self._sig(), carried=True)
+        t.track(self._sig(code="2317", time="09:05:01"))
+        t.on_price("2330", 103.0); t.on_price("2317", 103.0)
+        msgs = t.time_exit()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("2317", msgs[0])
+
+    def test_a_carried_position_has_no_fill_window(self):
+        t = signals.LiveTracker()
+        now = datetime.combine(datetime.now().date(), dtime(9, 5, 30))
+        t.track(self._sig(), now=now, carried=True)
+        self.assertEqual(t.fills, [])
+
+    def test_a_gap_through_the_stop_is_reported_at_the_real_price(self):
+        o = signals.OpenSignal("2330", "測試", "09:05:00", 100.0, 97.0, 108.0,
+                               hold_days=2, carried=True)
+        text = signals.format_resolution(o, 94.0, oc.STOP)
+        self.assertIn("出場 94.00", text)
+        self.assertIn("-2.00R", text)
+        # 當沖那一筆照舊記停損價（穿價是滑價，另外寫）
+        o.carried = False
+        self.assertIn("出場 97.00", signals.format_resolution(o, 94.0, oc.STOP))
+
+    def test_reaching_the_target_says_holding_on_is_your_call(self):
+        """使用者：「有的選對股，甚至再留達 20% 都有可能，交由自己下單者決定」。"""
+        o = signals.OpenSignal("2330", "測試", "09:05:00", 100.0, 97.0, 108.0, hold_days=2)
+        text = signals.format_resolution(o, 108.0, oc.TARGET)
+        self.assertIn("續抱與否由你決定", text)
+        self.assertNotIn("續抱", signals.format_resolution(o, 97.0, oc.STOP))
+
+    def test_the_tick_verdict_on_a_carried_position_is_written_back(self):
+        with tempfile.TemporaryDirectory() as d:
+            with unittest.mock.patch.object(config, "STATE_FILE", Path(d) / "s.json"):
+                gate = RiskGate(FakeBroker())
+                gate.state["carried"] = [dict(V6_SIG, carry_from=DAY1)]
+                self.assertTrue(gate.record_live_result("2330", "09:05:00", oc.STOP, 94.0))
+                c = gate.state["carried"][0]
+        self.assertEqual((c["live_result"], c["live_exit"]), (oc.STOP, 94.0))
+        self.assertEqual(c["live_date"], datetime.now().strftime("%Y-%m-%d"))
+
+
+class TestV6CarryOver(unittest.TestCase):
+    """隔天開盤前，從昨天的 state.json 接手還沒結束的部位。"""
+
+    def _prev(self, *sigs):
+        return {"date": DAY1, "signals": list(sigs)}
+
+    def test_an_open_two_day_position_is_carried(self):
+        carried, notes = signals.carry_over(
+            self._prev(dict(V6_SIG)), _DaysBroker({DAY1: QUIET_DAY1}), DAY2)
+        self.assertEqual(len(carried), 1)
+        self.assertEqual(carried[0]["carry_from"], DAY1)
+        self.assertEqual(carried[0]["day1_close"], 103.0)
+        self.assertEqual(notes, [])
+
+    def test_finished_or_day_trade_positions_are_not(self):
+        prev = self._prev(dict(V6_SIG, code="1", live_result=oc.STOP),
+                          dict(V6_SIG, code="2", live_result=oc.TARGET),
+                          dict(V6_SIG, code="3", max_hold_days=1))
+        carried, _ = signals.carry_over(prev, _DaysBroker({DAY1: QUIET_DAY1}), DAY2)
+        self.assertEqual(carried, [])
+
+    def test_a_stop_the_live_loop_missed_is_caught_from_the_bars(self):
+        """那天程式中途掛了，tick 沒收到停損 —— 只信 tick 會盯一筆早就沒了的部位。"""
+        day1 = [("09:07", 100.0, 101.0, 96.0, 96.5), ("13:30", 98, 98, 98, 98)]
+        carried, notes = signals.carry_over(self._prev(dict(V6_SIG)),
+                                            _DaysBroker({DAY1: day1}), DAY2)
+        self.assertEqual(carried, [])
+        self.assertIn("停損", notes[0])
+
+    def test_a_skipped_session_means_the_hold_is_already_over(self):
+        b = _DaysBroker({DAY1: QUIET_DAY1, DAY2: [("09:01", 103, 104, 102, 103)]})
+        carried, notes = signals.carry_over(self._prev(dict(V6_SIG)), b, "2026-10-09")
+        self.assertEqual(carried, [])
+        self.assertIn(DAY2, notes[0])
+
+    def test_no_bars_still_carries_and_says_so(self):
+        carried, notes = signals.carry_over(self._prev(dict(V6_SIG)), _DaysBroker({}), DAY2)
+        self.assertEqual(len(carried), 1)
+        self.assertIn("照樣接著盯", notes[0])
+
+    def test_yesterdays_live_fields_are_not_carried_into_today(self):
+        sig = dict(V6_SIG, live_at="13:00:00", live_exit=101.0)   # 沒有 live_result
+        carried, _ = signals.carry_over(self._prev(sig), _DaysBroker({DAY1: QUIET_DAY1}), DAY2)
+        self.assertNotIn("live_at", carried[0])
+        self.assertNotIn("live_exit", carried[0])
+
+    def test_only_an_earlier_state_file_is_read(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "s.json"
+            path.write_text(json.dumps({"date": "2000-01-01", "signals": []}), encoding="utf-8")
+            self.assertEqual(signals.load_previous_state(path)["date"], "2000-01-01")
+            path.write_text(json.dumps({"date": datetime.now().strftime("%Y-%m-%d")}),
+                            encoding="utf-8")
+            self.assertEqual(signals.load_previous_state(path), {})
+
+    def test_a_carried_code_gets_no_new_signal_today(self):
+        states = {"2330": SymbolState("2330", 99.0), "2317": SymbolState("2317", 99.0)}
+        signals.block_carried_codes(states, [dict(V6_SIG)])
+        self.assertGreaterEqual(states["2330"].signaled, config.SIGNAL["max_signals_per_symbol"])
+        self.assertEqual(states["2317"].signaled, 0)
+
+    def test_the_start_message_lists_stop_and_target(self):
+        text = signals.format_carry_start([dict(V6_SIG, day1_close=103.0)], ["x 照樣接著盯"])
+        for part in ("2330", "97.00", "108.00", "103.00", "照樣接著盯"):
+            self.assertIn(part, text)
+
+    def test_run_reads_yesterday_before_the_gate_overwrites_it(self):
+        """RiskGate 一存檔，昨天的 state.json 就沒了。順序反過來，留倉永遠接不回來。"""
+        src = inspect.getsource(signals.run)
+        self.assertLess(src.index("load_previous_state()"), src.index("RiskGate(broker)"))
+        tree = ast.parse(textwrap.dedent(src))
+        called = {n.func.id for n in ast.walk(tree)
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+        for fn in ("carry_over", "block_carried_codes", "format_carry_start"):
+            self.assertIn(fn, called)
+
+
+class TestV6Review(unittest.TestCase):
+    def _state(self, d, state):
+        path = Path(d) / "state.json"
+        path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        return unittest.mock.patch.object(config, "STATE_FILE", path)
+
+    def test_carried_positions_come_from_todays_state(self):
+        today = datetime.now().strftime("%Y-%m-%d")
+        with tempfile.TemporaryDirectory() as d, self._state(
+                d, {"date": today, "signals": [], "carried": [dict(V6_SIG, carry_from=DAY1)]}):
+            self.assertEqual([c["code"] for c in review.load_carried()], ["2330"])
+
+    def test_no_monitor_today_still_finds_yesterdays_open_positions(self):
+        """今天沒開 signals.py，state.json 還是昨天的。不補這一步，那幾筆的結局
+        永遠不會進 outcomes.csv，而且沒有任何錯誤訊息。"""
+        state = {"date": "2000-01-03", "signals": [
+            dict(V6_SIG), dict(V6_SIG, code="1", live_result=oc.TARGET),
+            dict(V6_SIG, code="2", max_hold_days=1)]}
+        with tempfile.TemporaryDirectory() as d, self._state(d, state):
+            got = review.load_carried()
+        self.assertEqual([(c["code"], c["carry_from"]) for c in got], [("2330", "2000-01-03")])
+
+    def test_carried_rows_are_resolved_against_their_own_day(self):
+        b = _DaysBroker({DAY1: QUIET_DAY1, DAY2: [("09:01", 109, 110, 108, 109)]})
+        b.market_day = lambda date=None: (None, None)
+        b.market_at = lambda hhmm, date=None: None
+        out = review.resolve_carried(b, [dict(V6_SIG, carry_from=DAY1)], through=DAY2)
+        self.assertEqual((out[0].date, out[0].result, out[0].exit_date), (DAY1, oc.TARGET, DAY2))
+
+    def test_a_carried_row_is_shown_but_not_counted(self):
+        carry = oc.resolve(_DaysBroker({DAY1: QUIET_DAY1}), V6_SIG, DAY1)
+        text = "\n".join(review.outcome_section([V6_SIG], [carry]))
+        self.assertIn("留倉過夜 **1 筆**", text)
+        self.assertNotIn("勝率（扣成本後為正才算贏）", text)
+        push = review.format_push([V6_SIG], [carry], [])
+        self.assertIn("留倉過夜", push)
+        self.assertIn("0 勝 0 敗", push)
+
+    def test_yesterdays_result_gets_its_own_section(self):
+        b = _DaysBroker({DAY1: QUIET_DAY1, DAY2: [("09:01", 94, 95, 93, 94)]})
+        o = oc.resolve(b, V6_SIG, DAY1, through=DAY2)
+        text = "\n".join(review.carried_section([o]))
+        self.assertIn("昨日留倉的結局", text)
+        self.assertIn(DAY2, text)
+        self.assertIn("昨日留倉的結局", review.format_push([], [], [], [o]))
+
+    def test_run_never_writes_a_carry_row(self):
+        src = inspect.getsource(review.run)
+        self.assertEqual(src.count("oc.append_csv("), src.count("!= oc.CARRY]"))
+
+
+class TestRunOnAfterTarget(unittest.TestCase):
+    """續抱分析：到 +8% 之後，持有期內最高又走到哪。"""
+
+    def _o(self, result, mfe):
+        return oc.Outcome(date=DAY1, code="2330", time="09:05:00", entry=100.0, stop=97.0,
+                          target=108.0, lots=1, result=result, exit_price=108.0,
+                          r_multiple=2.67, gross_pct=8.0, net_pct=7.6, bars=1, mfe_pct=mfe)
+
+    def test_counts_how_many_ran_past_each_level(self):
+        rows = [self._o(oc.TARGET, m) for m in (8.5, 11.0, 13.0, 21.0, 9.0, 20.0)]
+        rows += [self._o(oc.STOP, 30.0)]                # 停損的不算：它沒到目標
+        run = analyse.after_target(rows)
+        self.assertEqual(run["n"], 6)
+        got = {lv["level"]: lv["hit"] for lv in run["levels"]}
+        # 剛好碰到 +20.00% 就算到了
+        self.assertEqual(got, {10.0: 4, 12.0: 3, 15.0: 2, 20.0: 2})
+        self.assertEqual(run["best"][0][2], 21.0)
+
+    def test_too_few_gives_no_rates(self):
+        text = "\n".join(analyse.render_after_target(
+            analyse.after_target([self._o(oc.TARGET, 21.0)])))
+        self.assertIn("太少", text)
+        self.assertNotIn("+20% 以上 |", text)
+
+    def test_the_report_includes_it_with_its_caveats(self):
+        rows = [self._o(oc.TARGET, m) for m in (8.5, 11.0, 13.0, 21.0, 9.0)]
+        text = "\n".join(analyse.report(rows))
+        self.assertIn("續抱分析", text)
+        self.assertIn("天花板", text)
+        self.assertIn("+20% 以上", text)
 
 
 if __name__ == "__main__":

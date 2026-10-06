@@ -181,7 +181,18 @@ SCREEN = {
 #                 的 26 筆是用 3,000 算的，之後是 4,000 —— 累計元直接相加等於
 #                 拿兩把尺量出來的數字相加。analyse.py 的「〇、規則版本」那一節
 #                 會把兩段分開，R 可以跨版本看，元不行。
-RULESET = "v5"
+# v6  2026-10-07  **策略改版：當沖改成「最多抱兩天」。** 使用者定的三條：
+#                 1. 停損 3%（結構線那條照留，取較寬的）
+#                 2. 目標 = 進場價 +8%，不再用 R 倍數
+#                 3. 當天沒碰停損就可以留倉，隔天賣；隔天 13:25 還沒結束就平倉
+#                 理由（使用者原話）：「當天 8% 較難，兩天較容易」。進場價通常
+#                 已經比昨收高 3–6%，當天漲停只有 +10%，+8% 第一天常常物理上
+#                 到不了；第二天漲停線從第一天收盤重算，才有空間。
+#                 代價要記著：留倉有跳空風險（隔天開盤直接穿過停損，跌停是 -10%，
+#                 等於 3.3R），留倉證交稅是 0.3% 不是 0.15%。
+#                 批次前三檔照舊用量能倍數排序 ——「勝率最高的前三檔」要等資料夠了
+#                 再定義，現在沒有任何數字支持哪一種排法。
+RULESET = "v6"
 
 SIGNAL = {
     "or_start": "09:00:00",         # 開盤區間起
@@ -211,7 +222,7 @@ SIGNAL = {
     "volume_min_base_span_sec": 60,     # 基準樣本至少橫跨多久，否則基準不可信
     "require_above_vwap": True,     # 多單需站上均價線；空單需跌破
     "max_signals_per_symbol": 1,    # 同一檔一天只發一次，杜絕凹單
-    "stop_loss_pct": 1.5,           # 進場價往下這麼多 %（兩條停損的其中一條）
+    "stop_loss_pct": 3.0,           # 進場價往下這麼多 %（兩條停損的其中一條；v6 起 3%）
     # 停損另外有一條結構線：區間高點下方這麼多 %。
     #
     # 原本只有 stop_loss_pct（進場價往下固定 %），而它和開盤區間完全無關。
@@ -228,7 +239,15 @@ SIGNAL = {
     # 比較低，這條不會生效；只有在追高之後才會接手，而且接手的方式是
     # 自動加大風險、減少張數 —— 系統自己踩煞車，不需要一條武斷的「不准追」。
     "stop_below_or_high_pct": 0.2,  # 區間高點往下這麼多 %（結構線）
-    "reward_risk": 1.5,             # 目標 = 1.5R（v4 從 2.5R 調回）
+    "reward_risk": 1.5,             # 目標 = 1.5R（v4 從 2.5R 調回）；target_pct 有設時不用
+    # v6：目標改成「進場價往上固定 %」。設成 None 就退回上面的 reward_risk。
+    #
+    # 只抱一天（max_hold_days=1）時目標會貼齊當天漲停 —— 超過漲停的價位當天
+    # 不存在。抱兩天時**不貼齊**：今天到不了，明天的漲停線是從今天收盤重算的。
+    "target_pct": 8.0,
+    # 最多抱幾個交易日。1 = 當沖（13:25 平倉）；2 = 當天沒結束就留倉，
+    # 隔天 13:25 還沒碰停損或目標就平倉。
+    "max_hold_days": 2,
     "allow_short": False,           # 先賣後買 v1 未實作（券源、軋空風險）
     "backfill_opening_range": True, # 09:15 後才啟動時，用分鐘 K 補算開盤區間
     "market_close": "13:30:00",     # 收工時間
@@ -250,6 +269,8 @@ COST = {
     "fee_rate": 0.001425,           # 券商手續費率
     "fee_discount": 0.20,           # 你的折讓（2 折 = 0.20，務必填真實值）
     "tax_rate": 0.0015,             # 當沖證交稅減半（0.3% → 0.15%）
+    # 留倉過夜就不是當沖，證交稅回到全額。來回成本從 0.207% 變 0.357%。
+    "tax_rate_overnight": 0.003,
     "min_fee": 1,                   # 最低手續費
 }
 
@@ -301,10 +322,14 @@ def limit_down(prev_close: float) -> float | None:
     return round_to_tick(prev_close * (1 - PRICE_LIMIT_PCT / 100), "up")
 
 
-def round_trip_cost_pct() -> float:
-    """來回一趟的成本（%）。策略期望值必須先跨過這條線。"""
+def round_trip_cost_pct(overnight: bool = False) -> float:
+    """來回一趟的成本（%）。策略期望值必須先跨過這條線。
+
+    overnight=True：隔天才賣，不是當沖，證交稅是全額。
+    """
     fee = COST["fee_rate"] * COST["fee_discount"] * 2
-    return (fee + COST["tax_rate"]) * 100
+    tax = COST["tax_rate_overnight"] if overnight else COST["tax_rate"]
+    return (fee + tax) * 100
 
 
 def push_enabled() -> bool:
@@ -346,8 +371,16 @@ def validate() -> list[str]:
     s = SIGNAL
     if s["stop_loss_pct"] <= 0:
         errs.append("SIGNAL.stop_loss_pct 必須 > 0，否則停損等於進場價")
-    if s["reward_risk"] <= 0:
-        errs.append("SIGNAL.reward_risk 必須 > 0")
+    if s.get("target_pct") is None:
+        if s["reward_risk"] <= 0:
+            errs.append("SIGNAL.reward_risk 必須 > 0")
+    elif s["target_pct"] <= 0:
+        errs.append("SIGNAL.target_pct 必須 > 0（不要用目標就設成 None，退回 reward_risk）")
+    if s.get("max_hold_days", 1) not in (1, 2):
+        errs.append("SIGNAL.max_hold_days 只能是 1（當沖）或 2（最多抱到隔天）—— "
+                    "三天以上的追蹤沒有實作")
+    if COST.get("tax_rate_overnight", 0) < COST["tax_rate"]:
+        errs.append("COST.tax_rate_overnight 不可以低於當沖稅率 tax_rate")
     if s["breakout_buffer_pct"] < 0:
         errs.append("SIGNAL.breakout_buffer_pct 不可為負")
     if s["volume_surge_ratio"] < 1:

@@ -181,15 +181,26 @@ class RiskGate:
 
         tick 是實際成交，分鐘 K 是事後的摘要 —— 兩邊衝突時以 tick 為準。
         """
-        for sig in self.state.get("signals", []):
+        for sig in self._all_signals():
             if str(sig.get("code")) == str(code) and str(sig.get("time")) == str(time_str):
                 sig["live_result"] = result
                 sig["live_exit"] = round(float(exit_price), 2)
                 sig["live_at"] = datetime.now().strftime("%H:%M:%S")
+                # 哪一天判定的。昨天留倉的那一筆今天才結束，outcome.py 要靠這一欄
+                # 知道它是隔天出場（成本用留倉稅率、exit_at 是今天的時間）。
+                sig["live_date"] = datetime.now().strftime("%Y-%m-%d")
                 self.save()
                 return True
         log.warning("即時判定找不到對應訊號（%s %s），沒寫回 state.json", code, time_str)
         return False
+
+    def _all_signals(self) -> list[dict]:
+        """今天發的 + 昨天留倉過來的。兩邊都可能被盤中 tick 判定。
+
+        同一檔可能昨天留倉、今天又在名單裡 —— 但今天不會再對它發訊號
+        （見 block_carried_codes），所以 (代號, 訊號時間) 仍然唯一。
+        """
+        return list(self.state.get("signals", [])) + list(self.state.get("carried", []))
 
     def record_time_exit(self, code: str, time_str: str, price: float,
                          at: str) -> bool:
@@ -349,6 +360,22 @@ class SymbolState:
 # ══════════════════════════════════════════════════════
 # 訊號判斷
 # ══════════════════════════════════════════════════════
+def holds_overnight() -> bool:
+    """這一版規則允許留倉過夜嗎（v6 起最多抱到隔天）。"""
+    return config.SIGNAL.get("max_hold_days", 1) >= 2
+
+
+def target_price(entry: float, stop: float) -> float:
+    """目標價：有設 target_pct 就是進場價往上固定 %，否則是 reward_risk 個 R。
+
+    兩條路都往上進位到合法檔位 —— 真的到價時，報酬不會低於設定值。
+    """
+    cfg = config.SIGNAL
+    if cfg.get("target_pct") is not None:
+        return config.round_to_tick(entry * (1 + cfg["target_pct"] / 100), "up")
+    return config.round_to_tick(entry + (entry - stop) * cfg["reward_risk"], "up")
+
+
 def evaluate(st: SymbolState, now: dtime | None = None, *,
              ignore_symbol_cap: bool = False) -> dict | None:
     """ignore_symbol_cap=True 時照樣算出訊號內容，不管「一檔一天只發一次」。
@@ -416,12 +443,16 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         # 低價股在極小的 stop_loss_pct 下會進位到進場價，這種訊號沒有可執行的停損。
         log.warning("%s 停損進位後等於進場價（%.2f），不發訊號", st.code, entry)
         return None
-    # 目標同樣往上進位：真的到價時，R 倍數不會低於設定值。
-    target = config.round_to_tick(entry + (entry - stop) * cfg["reward_risk"], "up")
+    # 目標同樣往上進位：真的到價時，報酬不會低於設定值。
+    target = target_price(entry, stop)
     # 但目標不可以超過漲停價。2026-09-24 的嘉晶就是這樣：昨收 145.5、漲停 160.0，
     # 而我們發了一個 161.00 的目標 —— 那一筆被判成「收盤平倉」，不是因為它沒走到，
     # 是因為那個價位當天不存在。貼齊漲停，並在訊號上講明賺賠比因此縮水。
-    target_capped = bool(cap and target > cap)
+    #
+    # v6 抱兩天時例外：今天的漲停到不了，明天的漲停線是從今天收盤重算的。
+    # 這時不貼齊，改成在訊號上講明「今天到不了，要靠明天」。
+    beyond_today = bool(cap and target > cap)
+    target_capped = beyond_today and not holds_overnight()
     if target_capped:
         target = cap
 
@@ -447,6 +478,10 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         "risk_per_lot": round(risk_per_lot),
         "oversized": oversized,
         "target_capped": target_capped,
+        # 目標高過今天的漲停 —— 今天物理上到不了。只在抱兩天時會是 True 而
+        # 目標沒被貼齊；記下漲停價，訊息上才講得出「今天最多到哪」。
+        "beyond_today_limit": beyond_today and not target_capped,
+        "limit_up": cap,
         "or_high": st.or_high,
         # 進場價比突破點高出幾 % —— 追高的程度。以前只進 outcomes.csv，
         # 但看訊號的那一刻才是需要它的時候。
@@ -462,7 +497,21 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         "rank": st.rank,
         "category": st.category,
         "ruleset": config.RULESET,
+        # 這一筆照規則可以抱幾天。記在訊號上，不是收盤時再去看 config ——
+        # 隔天程式重開、或拿新版程式回推舊訊號，都要照**當時**的規則走。
+        "max_hold_days": config.SIGNAL.get("max_hold_days", 1),
     }
+
+
+def _target_line(sig: dict) -> str:
+    risk = sig["entry"] - sig["stop"]
+    r_mult = (sig["target"] - sig["entry"]) / risk if risk > 0 else 0.0
+    if sig.get("target_capped"):
+        return f"目標：{sig['target']:.2f}（貼齊漲停，實際 {r_mult:.2f}R）"
+    pct = config.SIGNAL.get("target_pct")
+    if pct is not None:
+        return f"目標：{sig['target']:.2f}（+{pct:g}%，約 {r_mult:.2f}R）"
+    return f"目標：{sig['target']:.2f}（{config.SIGNAL['reward_risk']}R）"
 
 
 def format_signal(sig: dict, ordinal: int, batch_total: int) -> str:
@@ -486,13 +535,18 @@ def format_signal(sig: dict, ordinal: int, batch_total: int) -> str:
          if sig.get("extension_pct") is not None else
          f"進場：{sig['entry']:.2f}（區間高 {sig['or_high']:.2f}，均價 {sig['vwap']:.2f}）"),
         f"停損：{sig['stop']:.2f}  ← 跌破就走，不准往下修",
-        (f"目標：{sig['target']:.2f}（貼齊漲停，"
-         f"實際 {(sig['target'] - sig['entry']) / (sig['entry'] - sig['stop']):.2f}R）"
-         if sig.get("target_capped") else
-         f"目標：{sig['target']:.2f}（{config.SIGNAL['reward_risk']}R）"),
+        _target_line(sig),
         f"建議張數：{sig['lots']} 張（單筆風險 {r['per_trade_risk']:,} 元）",
         f"量能倍數：{sig['volume_surge']:.2f}x",
     ]
+    if sig.get("beyond_today_limit") and sig.get("limit_up"):
+        lines.append(
+            f"ℹ️ 今天漲停是 {sig['limit_up']:.2f}，目標今天到不了 —— 要留到明天。")
+    if holds_overnight():
+        lines.append(
+            f"⏳ 今天沒碰停損就留倉，最晚明天 {outcome.FLATTEN_AT:%H:%M} 平倉。"
+            f"留倉有跳空風險：明天一開盤就穿過停損，實際賠的會比停損多"
+            f"（證交稅也從 0.15% 變 0.3%）。")
     if sig.get("stop_rule", "").startswith("結構"):
         # 停損比平常寬的時候要講原因，否則看起來像算錯了。
         lines.append(
@@ -530,6 +584,8 @@ def format_window_closed(sent: int, watched: int) -> str:
             "不會再有新的買入訊號。",
             f"接下來只剩 🛑 停損 ／ ✅ 目標 ／ ⏰ {cfg['exit_signal_at'][:5]} 時間到。",
         ]
+        if holds_overnight():
+            lines.append(f"{outcome.FLATTEN_AT:%H:%M} 還沒結束的 📦 留倉到明天，不平倉。")
     else:
         lines += [
             f"今日訊號：0 個",
@@ -762,6 +818,10 @@ class OpenSignal:
     entry: float
     stop: float
     target: float
+    # 照規則可以抱幾天（訊號上記的）。>= 2 的，13:25 還沒結束就留倉，不平倉。
+    hold_days: int = 1
+    # 昨天留倉過來的。今天 13:25 一律平倉，不會再留；成本用留倉稅率。
+    carried: bool = False
 
     def verdict(self, price: float) -> str:
         """這個價位讓這筆結束了嗎。停損先判：往壞處算。"""
@@ -779,8 +839,14 @@ def format_resolution(o: OpenSignal, price: float, verdict: str) -> str:
     拿其中一邊去驗另一邊。跳空穿過去的部分另外寫在訊息裡，不混進報酬率。
     """
     exit_price = {outcome.TARGET: o.target, outcome.STOP: o.stop}.get(verdict, price)
+    # 留倉過夜的那一筆，隔天一開盤就跳過停損 —— 你賣到的是那個價，不是停損價。
+    # 當沖時那一點穿價是滑價，可以另外寫；跳空可以是好幾 %，不計入就是假帳。
+    if o.carried and verdict == outcome.STOP:
+        exit_price = min(price, o.stop)
+    elif o.carried and verdict == outcome.TARGET:
+        exit_price = max(price, o.target)
     gross = (exit_price - o.entry) / o.entry * 100
-    net = gross - config.round_trip_cost_pct()
+    net = gross - config.round_trip_cost_pct(overnight=o.carried)
     risk = o.entry - o.stop
     r = (exit_price - o.entry) / risk if risk > 0 else 0.0
     label = f"{o.code} {o.name}".strip()
@@ -793,10 +859,45 @@ def format_resolution(o: OpenSignal, price: float, verdict: str) -> str:
     ]
     if abs(price - exit_price) >= 0.01:
         lines.append(f"觸發時報價 {price:.2f}（穿過去的部分不計入上面的報酬率）")
+    if o.carried:
+        lines.append("（昨天留倉過來的，成本以留倉稅率 0.3% 計）")
+    if verdict == outcome.TARGET:
+        # 使用者原話：「有的選對股，甚至再留達 20% 都有可能，交由自己下單者決定」。
+        # 系統不替人決定續不續抱；紀錄照規則記在目標價，續抱走多遠由
+        # outcomes.csv 的 mfe_pct 回答（analyse.py「續抱分析」那一節）。
+        lines.append("🎯 目標到了。**續抱與否由你決定** —— 要續抱的話，停損建議"
+                     "自己上移（例如移到進場價保本）。系統的紀錄照規則記在目標價，"
+                     "達標後還走了多遠另外記，20 天後看「續抱分析」。")
     lines += [
         f"訊號發出於 {o.time}",
         "────────────────",
         "驗證期不下單。這是照規則做會有的結果，不是你的實際損益。",
+    ]
+    return "\n".join(lines)
+
+
+def format_carry(o: OpenSignal, price: float | None) -> str:
+    """第一天 13:25 還沒結束 —— 照 v6 規則留倉到明天。
+
+    這一則取代當沖時代的「⏹ 收盤平倉」。不發的話，使用者會以為系統忘了這一筆，
+    或照舊習慣在尾盤把它賣掉。
+    """
+    label = f"{o.code} {o.name}".strip()
+    lines = [f"📦 {label} 留倉過夜｜{datetime.now().strftime('%H:%M:%S')}",
+             "────────────────"]
+    if price is not None:
+        gross = (price - o.entry) / o.entry * 100
+        risk = o.entry - o.stop
+        r = (price - o.entry) / risk if risk > 0 else 0.0
+        lines.append(f"進場 {o.entry:.2f} → 現價 {price:.2f}　{gross:+.2f}%（未實現）　{r:+.2f}R")
+    else:
+        lines.append(f"進場 {o.entry:.2f}（今天沒收到報價，現價不明）")
+    lines += [
+        f"今天沒碰停損 {o.stop:.2f}、也沒到目標 {o.target:.2f}。",
+        f"照 v6 規則留到明天：停損、目標不變，明天 {outcome.FLATTEN_AT:%H:%M} 還沒結束就平倉。",
+        "────────────────",
+        "⚠️ 明天一開盤就跳空穿過停損的話，實際賣到的是開盤價，會比停損賠更多。",
+        f"明天記得照常在 {config.SIGNAL['or_start'][:5]} 前開好監看，系統才會接著盯這一筆。",
     ]
     return "\n".join(lines)
 
@@ -841,20 +942,23 @@ class LiveTracker:
         except Exception as e:      # 同理：記錄失敗不可以影響盤中
             log.warning("成交窗口寫回失敗（%s）：%s", p.code, e)
 
-    def track(self, sig: dict, now: datetime | None = None) -> None:
+    def track(self, sig: dict, now: datetime | None = None,
+              carried: bool = False) -> None:
         now = now or datetime.now()
         probe = None
         fired = parse_fired_at(sig.get("time", ""), now)
         # 盤中重開時還原舊訊號：窗口早就過了，這時候收到的報價和「當時買不買得到」
         # 無關，記下去會是個假數字。寧可空白 —— 空白代表不知道，0 代表買得到。
-        if fired is not None and now - fired < FILL_WINDOW:
+        # 昨天留倉的那一筆，「今天的 09:05」跟它的成交窗口毫無關係。
+        if not carried and fired is not None and now - fired < FILL_WINDOW:
             probe = FillProbe(code=str(sig["code"]), time=str(sig.get("time", "")),
                               entry=float(sig["entry"]), fired=fired)
         with self._lock:
             self.open.append(OpenSignal(
                 code=str(sig["code"]), name=str(sig.get("name", "")),
                 time=str(sig.get("time", "")), entry=float(sig["entry"]),
-                stop=float(sig["stop"]), target=float(sig["target"])))
+                stop=float(sig["stop"]), target=float(sig["target"]),
+                hold_days=int(sig.get("max_hold_days") or 1), carried=carried))
             if probe is not None:
                 self.fills.append(probe)
 
@@ -905,7 +1009,9 @@ class LiveTracker:
             if self.time_exited:
                 return []
             self.time_exited = True
-            marks = [(o, self.last_price.get(o.code)) for o in self.open]
+            # 昨天留倉的不在這裡：09:30「時間到」是第一天的規則，
+            # 留倉那一筆今天只看停損、目標、13:25。
+            marks = [(o, self.last_price.get(o.code)) for o in self.open if not o.carried]
         msgs = []
         for o, price in marks:
             if price is None:
@@ -921,7 +1027,12 @@ class LiveTracker:
         return msgs
 
     def flatten(self) -> list[str]:
-        """13:25 還沒結束的，一律以最後看到的報價平倉。"""
+        """13:25 還沒結束的：當沖的平倉；可以抱到隔天的（v6）留倉。
+
+        昨天留倉過來的那一筆今天一律平倉 —— 規則是最多兩天，不會再留。
+        留倉的那一筆**不寫**任何判定回 state.json：它還沒結束。隔天程式啟動時
+        從昨天的 state.json 接手，收盤後 outcome.py 拿兩天的 K 棒回推。
+        """
         with self._lock:
             rest, self.open = self.open, []
             probes, self.fills = self.fills, []
@@ -931,6 +1042,9 @@ class LiveTracker:
         msgs = []
         for o in rest:
             price = self.last_price.get(o.code)
+            if o.hold_days >= 2 and not o.carried:
+                msgs.append(format_carry(o, price))
+                continue
             if price is None:
                 log.warning("%s 整天沒收到報價，無法即時平倉（收盤後仍會由 "
                             "outcome.py 用分鐘 K 回推）", o.code)
@@ -981,6 +1095,102 @@ def restore_signaled(states: dict, gate: RiskGate) -> int:
                     restored,
                     "、".join(f"{c}×{s.signaled}" for c, s in states.items() if s.signaled))
     return restored
+
+
+# ── 留倉（v6）──────────────────────────────────────────
+# 昨天的 state.json 在今天 RiskGate 第一次存檔時就會被今天的蓋掉。
+# 所以要在建 RiskGate 之前先讀出來，把還沒結束的那幾筆搬進今天的
+# state["carried"] —— 從那一刻起它們就跟著今天的 state.json 走，
+# 盤中重開不會重搬，收盤後 review.py 也從同一個地方讀。
+_LIVE_KEYS = ("live_result", "live_exit", "live_at", "live_date")
+
+
+def load_previous_state(path=None) -> dict:
+    """state.json 如果是**今天以前**的，原樣讀出來；否則回空 dict。"""
+    path = pathlib.Path(path) if path else config.STATE_FILE
+    if not path.exists():
+        return {}
+    try:
+        s = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        log.warning("讀不到之前的 state.json（留倉部位接不回來）：%s", e)
+        return {}
+    return s if str(s.get("date", "")) < datetime.now().strftime("%Y-%m-%d") else {}
+
+
+def carry_over(prev: dict, broker, today: str) -> tuple[list[dict], list[str]]:
+    """從前一個交易日的 state 找出今天要接著盯的部位。回傳 (留倉清單, 說明)。
+
+    留倉的條件：
+      1. 那一筆照當時的規則可以抱兩天（訊號上的 max_hold_days）。
+      2. 盤中 tick 沒有判定它停損或到目標。
+      3. 拿那一天的分鐘 K 再確認一次也沒結束 —— tick 可能沒收到（程式那天中途
+         掛掉），只信 tick 的話，一筆早就停損的部位今天會被當成還在、還推播。
+      4. 中間沒有隔著別的交易日。昨天沒開程式、今天才開 —— 那一筆的「隔天」
+         已經過去了，今天盯它沒有意義（結局由 review.py 用 K 棒回推）。
+
+    分鐘 K 拿不到時**照樣接**：寧可多盯一筆（多一則推播），不要漏掉一筆真的
+    還在的部位。說明裡會講。
+    """
+    notes: list[str] = []
+    if not prev or str(prev.get("date", "")) >= today:
+        return [], notes
+    day1 = str(prev["date"])
+    yesterday = (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    out = []
+    for sig in prev.get("signals", []):
+        if int(sig.get("max_hold_days") or 1) < 2:
+            continue
+        if sig.get("live_result") in (outcome.STOP, outcome.TARGET):
+            continue
+        code = str(sig.get("code"))
+        try:
+            o = outcome.resolve(broker, sig, day1)
+        except Exception as e:
+            log.warning("%s 留倉確認失敗：%s", code, e)
+            o = None
+        if o is not None and o.result != outcome.CARRY:
+            notes.append(f"{code} 在 {day1} 當天就{o.result}了（盤中沒收到那一筆），不接")
+            continue
+        missed, _ = outcome.next_session_bars(broker, code, day1, yesterday)
+        if missed:
+            notes.append(f"{code} 是 {day1} 的訊號，{missed} 就該結束了（那天沒開監看），"
+                         "今天不接；結局由 review.py 回推")
+            continue
+        if o is None:
+            notes.append(f"{code} 拿不到 {day1} 的分鐘 K 確認，照樣接著盯")
+        c = {k: v for k, v in sig.items() if k not in _LIVE_KEYS}
+        c["carry_from"] = day1
+        c["day1_close"] = o.exit_price if o is not None else None
+        out.append(c)
+    return out, notes
+
+
+def format_carry_start(carried: list[dict], notes: list[str]) -> str:
+    """開盤前告訴使用者：昨天留下來的，今天繼續盯。"""
+    lines = [f"📦 昨日留倉 {len(carried)} 檔，今天接著盯", "────────────────"]
+    for c in carried:
+        label = f"{c['code']} {c.get('name') or ''}".strip()
+        mark = (f"，昨收 {float(c['day1_close']):.2f}"
+                if c.get("day1_close") is not None else "")
+        lines.append(f"{label}：進場 {float(c['entry']):.2f}{mark}")
+        lines.append(f"　停損 {float(c['stop']):.2f}／目標 {float(c['target']):.2f}")
+    lines += ["────────────────",
+              f"今天 {outcome.FLATTEN_AT:%H:%M} 還沒碰停損或目標就平倉，不會再留。",
+              "這幾檔今天不會再發新的買入訊號（不加碼）。"]
+    lines += [f"ℹ️ {n}" for n in notes]
+    return "\n".join(lines)
+
+
+def block_carried_codes(states: dict, carried: list[dict]) -> int:
+    """留倉中的那幾檔，今天不再發新訊號 —— 手上已經有了，再發一次等於加碼。"""
+    n = 0
+    for c in carried:
+        st = states.get(str(c.get("code")))
+        if st is not None:
+            st.signaled = max(st.signaled, config.SIGNAL["max_signals_per_symbol"])
+            n += 1
+    return n
 
 
 def backfill_opening_ranges(broker: Broker, states: dict):
@@ -1052,6 +1262,8 @@ def run():
         raise SystemExit("watchlist 是空的，今天沒有標的可監看。")
 
     broker = Broker()
+    # 一定要在 RiskGate 之前：它一存檔，昨天的 state.json 就沒了。
+    previous = load_previous_state()
     gate = RiskGate(broker)
     if gate.state["closed"]:
         raise SystemExit(f"今日風控閘門已關閉（{gate.state['closed_reason']}），不再啟動。")
@@ -1065,6 +1277,15 @@ def run():
         st.category = str(i.get("category", "") or "")
         states[i["code"]] = st
     restore_signaled(states, gate)
+
+    # 留倉：今天第一次啟動才從昨天的 state 搬過來；盤中重開時 state 裡已經有了。
+    carry_notes: list[str] = []
+    if "carried" not in gate.state:
+        gate.state["carried"], carry_notes = carry_over(
+            previous, broker, datetime.now().strftime("%Y-%m-%d"))
+        gate.save()
+    carried = gate.state["carried"]
+    block_carried_codes(states, carried)
 
     signal_lock = threading.Lock()
     def _remember(o, price, verdict):
@@ -1120,14 +1341,23 @@ def run():
         if past.get("live_result"):
             continue        # 盤中已經判定完的，重開後不要再追一次把結果蓋掉
         tracker.track(past)
+    for c in carried:
+        if not c.get("live_result"):
+            tracker.track(c, carried=True)
     if gate.state.get("signals"):
         log.warning("已還原 %d 個今日訊號繼續追蹤結局（重開前已結束的可能會再推一次）",
                     len(gate.state["signals"]))
 
     @broker.api.on_tick_stk_v1()
     def on_tick(exchange, tick):
+        if getattr(tick, "simtrade", 0):
+            return
         st = states.get(tick.code)
-        if not st or getattr(tick, "simtrade", 0):
+        if not st:
+            # 不在今天名單裡、但昨天留倉的那幾檔：只看停損目標，不算訊號。
+            if tick.code in carried_codes:
+                for done in tracker.on_price(tick.code, float(tick.close)):
+                    notify(done)
             return
         st.update(tick)
         # 先看已發出的訊號有沒有走完，再看要不要發新的
@@ -1142,8 +1372,9 @@ def run():
         # 下面的主迴圈是備援，萬一整批都沒報價也不會卡著不發。
         flush_batch()
 
+    carried_codes = {str(c["code"]) for c in carried} - set(states)
     import shioaji as sj  # 只有真的要訂閱行情時才需要
-    for code in states:
+    for code in list(states) + sorted(carried_codes):
         broker.api.quote.subscribe(
             broker.stock(code),
             quote_type=sj.constant.QuoteType.Tick,
@@ -1154,6 +1385,8 @@ def run():
            f"紅線：最多 {config.RISK['max_signals_per_day']} 訊號／"
            f"{config.RISK['max_trades_per_day']} 筆／虧損上限 "
            f"{config.RISK['max_daily_loss']:,} 元")
+    if carried or carry_notes:
+        notify(format_carry_start(carried, carry_notes))
 
     if (config.SIGNAL["backfill_opening_range"]
             and datetime.now().time() >= _t(config.SIGNAL["or_end"])):

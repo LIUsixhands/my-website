@@ -36,6 +36,55 @@ def load_signals() -> tuple[list[dict], dict]:
     return s.get("signals", []), s
 
 
+def load_carried() -> list[dict]:
+    """之前留倉、今天要回推結局的那幾筆（v6）。
+
+    正常情況：今天 signals.py 啟動時已經從昨天的 state 搬進 state["carried"]。
+    但如果今天**沒開監看**，state.json 還是昨天的 —— 那就從它直接挑出可以
+    抱兩天、盤中沒判定結束的那幾筆。不做這一步，那幾筆的結局永遠不會進
+    outcomes.csv，而且不會有任何錯誤訊息。
+    """
+    if not config.STATE_FILE.exists():
+        return []
+    s = json.loads(config.STATE_FILE.read_text(encoding="utf-8"))
+    today = datetime.now().strftime("%Y-%m-%d")
+    date = str(s.get("date", ""))
+    if date == today:
+        return list(s.get("carried", []))
+    if date > today:
+        return []
+    out = []
+    for sig in s.get("signals", []):
+        if int(sig.get("max_hold_days") or 1) < 2:
+            continue
+        if sig.get("live_result") in ("停損", "目標"):
+            continue
+        out.append(dict(sig, carry_from=date))
+    if out:
+        log.warning("今天沒開監看；從 %s 的 state.json 補回留倉 %d 筆", date, len(out))
+    return out
+
+
+def resolve_carried(broker, carried: list[dict], through: str | None = None) -> list:
+    """留倉的那幾筆用「發訊號那天 + 下一個交易日」的 K 棒回推。
+
+    按發訊號的日期分組再丟給 resolve_all —— 大盤欄位要查的是**那一天**的大盤。
+    """
+    import outcome as oc
+    through = through or datetime.now().strftime("%Y-%m-%d")
+    groups: dict[str, list] = {}
+    for c in carried:
+        groups.setdefault(str(c.get("carry_from") or ""), []).append(c)
+    out = []
+    for day, sigs in sorted(groups.items()):
+        if not day:
+            log.warning("留倉紀錄沒有 carry_from，無法回推：%s",
+                        "、".join(str(c.get("code")) for c in sigs))
+            continue
+        out += oc.resolve_all(broker, sigs, day, through=through)
+    return out
+
+
 def _trade_code(t):
     return getattr(getattr(t, "contract", None), "code", None)
 
@@ -117,7 +166,8 @@ def _connect():
 
 
 def render(signals: list[dict], trades: list, state: dict,
-           pnl: float | None, note: str = "", outcomes: list | None = None) -> list[str]:
+           pnl: float | None, note: str = "", outcomes: list | None = None,
+           carried: list | None = None) -> list[str]:
     """把覆盤內容算成 Markdown 行。抽出來讓 dryrun.py 也能用同一份版型。"""
     pnl_text = f"{pnl:,.0f} 元" if pnl is not None else "未知（查詢失敗）"
     if state.get("closed"):
@@ -152,6 +202,7 @@ def render(signals: list[dict], trades: list, state: dict,
         lines.append("| — | — | — | — | — | — | — |")
 
     lines += outcome_section(signals, outcomes)
+    lines += carried_section(carried)
 
     lines += ["", "## 三、實際成交", "",
               "| 代號 | 買賣 | 成交均價 | 成交量 | 狀態 |",
@@ -224,6 +275,15 @@ def outcome_section(signals: list[dict], outcomes: list | None) -> list[str]:
                      f"| {o.gross_pct:+.3f} | {o.net_pct:+.3f} | {o.bars} "
                      f"| {_fill_cell(o)} |")
 
+    # 留倉中的不是結局：出場價只是今天收盤，報酬是未實現的。不進勝率。
+    holding = [o for o in outcomes if o.result == oc.CARRY]
+    outcomes = [o for o in outcomes if o.result != oc.CARRY]
+    if holding:
+        lines += ["", f"- 留倉過夜 **{len(holding)} 筆**（上表「{oc.CARRY}」那幾列的出場價是"
+                  "今天收盤、報酬是未實現的）—— 明天收盤後才有結局，不計入今天的勝率。"]
+    if not outcomes:
+        return lines
+
     st = oc.summarise(outcomes)
     fills = oc.fill_stats(outcomes)
     rules = oc.replay_rules(outcomes)
@@ -241,6 +301,26 @@ def outcome_section(signals: list[dict], outcomes: list | None) -> list[str]:
         "未計滑價；13:25 前一律平倉。**實際成績只會比這裡差，不會更好。**",
     ]
     lines += rules_section(rules)
+    return lines
+
+
+def carried_section(carried: list | None) -> list[str]:
+    """昨天留倉、今天才結束的那幾筆。它們的 date 是昨天，結局是今天。"""
+    if not carried:
+        return []
+    import outcome as oc
+    lines = ["", "## 二之一、昨日留倉的結局", "",
+             "| 代號 | 訊號日 | 結果 | 出場日 | 出場價 | R | 扣成本後% | 持有期最高% |",
+             "|------|--------|------|--------|--------|---|-----------|-------------|"]
+    for o in carried:
+        mfe = f"{o.mfe_pct:+.2f}" if o.mfe_pct is not None else "？"
+        lines.append(f"| {o.code} | {o.date} | {o.result} | {o.exit_date or '—'} | "
+                     f"{o.exit_price:.2f} | {o.r_multiple:+.2f} | {o.net_pct:+.3f} | {mfe} |")
+    if any(o.result == oc.CARRY for o in carried):
+        lines += ["", f"_「{oc.CARRY}」= 還拿不到下一個交易日的 K 棒，明天重跑會補上。_"]
+    lines += ["", f"> 留倉的成本以證交稅全額計（來回 "
+              f"{config.round_trip_cost_pct(overnight=True):.3f}%）。"
+              "隔天跳空穿過停損的，出場價記開盤價，不記停損價。"]
     return lines
 
 
@@ -287,7 +367,8 @@ def write_journal(lines: list[str], date: str | None = None) -> "Path":
     return path
 
 
-def format_push(signals: list[dict], outcomes, history: list) -> str:
+def format_push(signals: list[dict], outcomes, history: list,
+                carried: list | None = None) -> str:
     """推到手機上的當日結果。
 
     覆盤寫進 journal 而沒有人看，等於沒寫。這則訊息的工作是讓你在手機上
@@ -309,9 +390,12 @@ def format_push(signals: list[dict], outcomes, history: list) -> str:
     elif not outcomes:
         lines.append(f"今天有 {len(signals)} 個訊號，但一筆都回推不出來。")
     else:
-        day = oc.summarise(outcomes)
+        holding = [o for o in outcomes if o.result == oc.CARRY]
+        outcomes = [o for o in outcomes if o.result != oc.CARRY]
+        day = oc.summarise(outcomes) if outcomes else {"wins": 0, "n": 0}
         lines.append(f"今日 {len(signals)} 個訊號｜"
-                     f"{day['wins']} 勝 {day['n'] - day['wins']} 敗")
+                     f"{day['wins']} 勝 {day['n'] - day['wins']} 敗"
+                     + (f"｜留倉 {len(holding)}" if holding else ""))
         amount = lambda rows: sum(round(o.net_amount) for o in rows)
         lines.append(f"合計 {sum(o.r_multiple for o in outcomes):+.2f}R　"
                      f"{amount(outcomes):+,.0f} 元")
@@ -332,6 +416,21 @@ def format_push(signals: list[dict], outcomes, history: list) -> str:
         for o in outcomes:
             label = f"{o.code} {names.get(o.code, '')}".strip()
             lines.append(f"{RESOLUTION_MARK.get(o.result, '')} {label}　{o.result}")
+            lines.append(f"　{o.r_multiple:+.2f}R　{round(o.net_amount):+,.0f} 元")
+        for o in holding:
+            label = f"{o.code} {names.get(o.code, '')}".strip()
+            lines.append(f"\U0001f4e6 {label}　留倉過夜")
+            lines.append(f"　收盤 {o.exit_price:.2f}（未實現 {o.gross_pct:+.2f}%）"
+                         f"　停損 {o.stop:.2f}／目標 {o.target:.2f}")
+
+    if carried:
+        lines += ["────────────────", "昨日留倉的結局"]
+        for o in carried:
+            if o.result == oc.CARRY:
+                lines.append(f"\U0001f4e6 {o.code}　還沒有隔天的 K 棒，明天重跑補上")
+                continue
+            lines.append(f"{RESOLUTION_MARK.get(o.result, '')} {o.code}　{o.result}"
+                         f"（{o.exit_date or '當天'}）")
             lines.append(f"　{o.r_multiple:+.2f}R　{round(o.net_amount):+,.0f} 元")
 
     if history:
@@ -356,7 +455,7 @@ def format_push(signals: list[dict], outcomes, history: list) -> str:
     return "\n".join(lines)
 
 
-def push_summary(signals: list[dict], outcomes) -> None:
+def push_summary(signals: list[dict], outcomes, carried: list | None = None) -> None:
     """推播失敗不該讓覆盤跟著失敗 —— journal 已經寫好了。"""
     from signals import notify
     import outcome as oc
@@ -366,7 +465,7 @@ def push_summary(signals: list[dict], outcomes) -> None:
         log.warning("讀不到 outcomes.csv，累計數字先略過：%s", e)
         history = []
     try:
-        notify(format_push(signals, outcomes, history))
+        notify(format_push(signals, outcomes, history, carried))
     except Exception as e:
         log.error("當日結果推播失敗：%s", e)
 
@@ -415,9 +514,15 @@ def run(args) -> None:
     signals, state = load_signals()
     trades, pnl, note, broker = _connect()
     outcomes = None
+    carried_out = None
     if broker is not None and signals:
         outcomes = oc.resolve_all(broker, signals)
-        oc.append_csv(outcomes)
+        # 留倉中的那幾筆還沒有結局，不寫 —— 明天回推出來才寫。
+        oc.append_csv([o for o in outcomes if o.result != oc.CARRY])
+    carried = load_carried()
+    if broker is not None and carried:
+        carried_out = resolve_carried(broker, carried)
+        oc.append_csv([o for o in carried_out if o.result != oc.CARRY])
     if broker is not None:
         # 被上限擋掉的候選也回推一份，寫到另一份檔。
         # 刻意不進日報 —— 每天看到「你少賺了多少」只會讓人想把上限拆掉。
@@ -427,12 +532,12 @@ def run(args) -> None:
                 oc.append_candidates_csv(oc.resolve_candidates(broker, pending))
         except Exception as e:                   # 候選壞掉不可以讓日報產不出來
             log.warning("候選回推失敗（不影響日報）：%s", e)
-    lines = render(signals, trades, state, pnl, note, outcomes)
+    lines = render(signals, trades, state, pnl, note, outcomes, carried_out)
     path = write_journal(lines)
     print("\n".join(lines))
     print(f"\n→ 已寫入 {path}")
     if not args.no_push:
-        push_summary(signals, outcomes)
+        push_summary(signals, outcomes, carried_out)
 
 
 def main(argv=None):

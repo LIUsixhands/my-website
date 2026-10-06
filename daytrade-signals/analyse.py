@@ -167,6 +167,37 @@ def stopped_but_reached_target(rows: list) -> dict:
     return {"n": len(stopped), "hit": len(hit), "rate": rate, "lo": lo, "hi": hi}
 
 
+# 續抱分析看的幾條線（離進場價 +%）。+20% 是使用者自己舉的例子。
+RUN_ON_LEVELS = (10.0, 12.0, 15.0, 20.0)
+
+
+def after_target(rows: list, levels=RUN_ON_LEVELS) -> dict:
+    """到目標之後，持有期內最高又走到哪 —— 回答「到 +8% 該不該續抱」。
+
+    使用者的說法：「有的選對股，甚至再留達 20% 都有可能，交由自己下單者決定」。
+    系統照規則把這些記在目標價出場；這一節看的是**沒走的話**最高碰到哪裡。
+
+    三個限制要一起看，不然這個數字會把續抱講得太好：
+      1. mfe_pct 是**最高價**，碰到一下不等於賣得到那個價，更不等於你會在
+         那一刻賣。它是續抱的天花板，不是續抱的成績。
+      2. 第一天就到目標的，只看得到第一天收盤為止 —— 隔天的 K 棒在當天覆盤時
+         還不存在。所以「抱到隔天會到哪」這一題對它們是低估。
+      3. 續抱的另一面（到 +8% 後又跌回來）這裡看不到 —— 那要看你續抱時
+         停損放在哪，而那是你的決定，系統沒有紀錄。
+    """
+    hits = [o for o in rows if o.result == oc.TARGET and o.mfe_pct is not None]
+    out = {"n": len(hits), "levels": []}
+    if not hits:
+        return out
+    for lv in levels:
+        n = sum(1 for o in hits if o.mfe_pct >= lv)
+        rate, lo, hi = win_rate_ci(n, len(hits))
+        out["levels"].append({"level": lv, "hit": n, "rate": rate, "lo": lo, "hi": hi})
+    best = sorted(hits, key=lambda o: -o.mfe_pct)[:3]
+    out["best"] = [(o.date, o.code, o.mfe_pct) for o in best]
+    return out
+
+
 def group_stats(rows: list) -> dict:
     wins = sum(1 for o in rows if o.is_win)
     rate, lo, hi = win_rate_ci(wins, len(rows))
@@ -212,6 +243,30 @@ def render_group(title: str, groups: dict, question: str) -> list[str]:
     else:
         lines.append("> 各組的信賴區間**沒有**重疊。這是目前唯一可以說「真的有差」"
                      "的分組 —— 但仍然只是觀察，不是保證。")
+    return lines
+
+
+def render_after_target(run: dict) -> list[str]:
+    lines = ["", "## 七、續抱分析：到目標之後，最高又走到哪", "",
+             "_系統照規則記在目標價出場；續不續抱由你決定。這一節回答「沒走的話，"
+             "最高碰到哪裡」—— 是續抱的**天花板**，不是續抱的成績。_", ""]
+    if not run["n"]:
+        return lines + ["_還沒有到目標的樣本。_"]
+    if run["n"] < TOO_FEW:
+        lines.append(f"_只有 {run['n']} 筆到目標，太少，不給比例。_")
+    else:
+        lines += ["| 進場後最高碰到 | 筆數 | 比例（95% 區間） |", "|---|---|---|"]
+        for lv in run["levels"]:
+            lines.append(f"| +{lv['level']:g}% 以上 | {lv['hit']}/{run['n']} | "
+                         f"{lv['rate']}%（{lv['lo']}~{lv['hi']}） |")
+    lines.append("")
+    lines.append("- 走最遠的幾筆：" + "、".join(
+        f"{d} {c} +{m:.2f}%" for d, c, m in run.get("best", [])))
+    lines += ["",
+              "> 三個限制：①最高價碰到一下不等於賣得到；②第一天就到目標的只看得到"
+              "當天收盤，隔天的走勢沒算進來（低估）；③續抱後又跌回來的那一面這裡"
+              "看不到，那取決於你續抱時停損放哪。**+20% 那一列的區間下界明顯高於 0，"
+              "才算「續抱常常有肉」；只有一兩筆是運氣，不是規則。**"]
     return lines
 
 
@@ -273,6 +328,8 @@ def report(rows: list) -> list[str]:
         lines.append("")
         lines.append("> 區間下界若明顯高於 50%，才有理由再放寬停損。"
                      "**不到那個程度就不要動它** —— 停損是這套系統的地基。")
+
+    lines += render_after_target(after_target(rows))
 
     lines += ["", "---", "",
               "*本分析只描述已發生的樣本，不預測未來，不構成投資建議。*"]

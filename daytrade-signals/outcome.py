@@ -29,9 +29,15 @@ log = logging.getLogger("outcome")
 STOP = "停損"
 TARGET = "目標"
 FLAT = "收盤平倉"
+# v6：第一天收盤時還沒碰停損也沒到目標 —— 留倉過夜，結局要等明天。
+# 這不是結局，所以**不寫進 outcomes.csv**、不進勝率；日報上另外列。
+CARRY = "留倉中"
 
 # 當沖平倉的最後時點。13:25 之後進尾盤集合競價，不保證出得掉。
 FLATTEN_AT = dtime(13, 25)
+# 收盤。留倉過夜的那一筆，第一天要看到這一根為止 —— 你沒有在 13:25 走，
+# 尾盤集合競價那一下碰到停損，就是碰到了。
+SESSION_CLOSE = dtime(13, 30)
 
 OUTCOME_FILE = config.BASE_DIR / "outcomes.csv"
 
@@ -50,7 +56,7 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
           "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
           "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio",
-          "mkt_signal_pct")
+          "mkt_signal_pct", "exit_date")
 
 
 @dataclass
@@ -124,6 +130,13 @@ class Outcome:
     # 產生這一筆的規則版本。沒有它，改過規則之後的資料就只能整批丟掉 ——
     # 而「為了資料純淨所以什麼都不改」會變成無限迴圈。
     ruleset: str = ""
+    # v6 起可以抱到隔天。出場那天的日期；空白 = 當天就出場（當沖）。
+    # 有值時 exit_at 是**那一天**的時間，成本用留倉稅率算。
+    exit_date: str = ""
+
+    @property
+    def overnight(self) -> bool:
+        return bool(self.exit_date) and self.exit_date != self.date
 
     @property
     def is_win(self) -> bool:
@@ -167,7 +180,8 @@ def _parse_signal_time(sig: dict, date: str) -> datetime | None:
     return None
 
 
-def bars_after(broker, code: str, date: str, after: datetime) -> list[tuple]:
+def bars_after(broker, code: str, date: str, after: datetime,
+               until: dtime = FLATTEN_AT) -> list[tuple]:
     """回傳 (時間, 高, 低, 收) 的清單，只留**完全在訊號之後**、13:25 之前的 K 棒。
 
     K 棒的時間戳是該分鐘的**結束**時間（實機驗證過：09:00~09:01 那根標 09:01）。
@@ -205,32 +219,82 @@ def bars_after(broker, code: str, date: str, after: datetime) -> list[tuple]:
     out = []
     for raw, h, l, c in zip(ts, highs, lows, closes):
         t = _bar_time(raw)
-        if t is None or t < first_ok or t.time() > FLATTEN_AT:
+        if t is None or t < first_ok or t.time() > until:
             continue
         out.append((t, float(h), float(l), float(c)))
     out.sort(key=lambda r: r[0])
     return out
 
 
-def _exit_at(sig: dict, fired: datetime, result: str, used: int, bars: list) -> str:
-    """這一筆什麼時候出場。tick 判定有真實時間戳；分鐘 K 判定只能用 K 棒推。
+def next_session_bars(broker, code: str, date: str,
+                      through: str) -> tuple[str, list[tuple]]:
+    """date 之後、through（含）之前的**第一個**交易日的分鐘 K。
 
-    tick 判定（live_at）是實際成交那一刻，最準。分鐘 K 判定取那根 K 棒的
-    label（該分鐘的結束時間）—— 誤差在一分鐘內，而閘門的判斷用不到比這更細。
-    收盤平倉一律記 13:25，和 FLATTEN_AT 同一個時間。
+    回傳 (那一天, [(時間, 開, 高, 低, 收), ...])，只留到 13:25。找不到就回 ("", [])。
+
+    「隔天」不能用日曆加一天：週五的隔天是週一，遇到連假更遠。拿 date+1 到
+    through 這一段的 K 棒，第一根出現的那天就是下一個交易日。
+
+    這裡要「開」：留倉最大的風險是跳空。隔天一開盤就在停損之下，你賣到的是
+    開盤價，不是停損價 —— 用停損價記，等於把跳空的損失從帳上抹掉。
     """
-    live_at = str(sig.get("live_at") or "").strip()
-    if live_at and sig.get("live_result"):
-        return live_at
-    if result == FLAT:
-        return FLATTEN_AT.strftime("%H:%M:%S")
-    if used and len(bars) >= used:
-        return bars[used - 1][0].strftime("%H:%M:%S")
-    return ""
+    from broker import _bar_time
+    start = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    if start > through:
+        return "", []
+    try:
+        kb = broker.kbars(code, start, through)
+    except Exception as e:
+        log.warning("%s 隔日分鐘 K 取得失敗：%s", code, e)
+        return "", []
+    cols = [list(getattr(kb, k, []) or []) for k in ("ts", "Open", "High", "Low", "Close")]
+    if len({len(c) for c in cols}) != 1:
+        log.warning("%s 隔日分鐘 K 欄位長度不一致，跳過", code)
+        return "", []
+    rows = []
+    for raw, o, h, l, c in zip(*cols):
+        t = _bar_time(raw)
+        if t is None or t.time() > FLATTEN_AT:
+            continue
+        rows.append((t, float(o), float(h), float(l), float(c)))
+    if not rows:
+        return "", []
+    rows.sort(key=lambda r: r[0])
+    day = rows[0][0].date()
+    return day.strftime("%Y-%m-%d"), [r for r in rows if r[0].date() == day]
 
 
-def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
-    """回推單一訊號的結局。拿不到 K 棒就回 None（不要猜）。"""
+def walk_day2(bars: list[tuple], stop: float, target: float) -> tuple[str, float, int]:
+    """隔天的分鐘 K（含開盤價）由早到晚走一遍，回傳 (結果, 出場價, 用到第幾根)。
+
+    第一根先看開盤價：跳空開在停損之下 → 以開盤價停損（比停損價更差）；
+    跳空開在目標之上 → 以開盤價出場（比目標更好，同樣照實記）。
+    之後同一根同時碰到停損與目標 → 判停損，跟第一天同一個保守假設。
+    都沒碰到 → 13:25 收盤平倉。
+    """
+    if not bars:
+        return "", 0.0, 0
+    first_open = bars[0][1]
+    if first_open <= stop:
+        return STOP, first_open, 1
+    if first_open >= target:
+        return TARGET, first_open, 1
+    for i, (_, _o, high, low, _c) in enumerate(bars, 1):
+        if low <= stop:
+            return STOP, stop, i
+        if high >= target:
+            return TARGET, target, i
+    return FLAT, bars[-1][4], len(bars)
+
+
+def resolve(broker, sig: dict, date: str | None = None,
+            through: str | None = None) -> Outcome | None:
+    """回推單一訊號的結局。拿不到 K 棒就回 None（不要猜）。
+
+    through：可以看到哪一天為止（含）。只對可以留倉的訊號有意義 ——
+    第一天沒結束的那一筆，要拿 through 之前的下一個交易日接著走。
+    沒給（或下一個交易日還沒到）就回傳 result=CARRY：結局未定，不是結局。
+    """
     date = date or datetime.now().strftime("%Y-%m-%d")
     fired = _parse_signal_time(sig, date)
     if fired is None:
@@ -241,7 +305,13 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         log.warning("%s 停損不在進場價之下，無法計算 R", sig.get("code"))
         return None
 
-    bars = bars_after(broker, str(sig["code"]), date, fired)
+    code = str(sig["code"])
+    # 這一筆可以抱幾天，看**發訊號當時**的規則，不看現在的 config ——
+    # v5 的舊訊號拿 v6 的程式重跑，還是當沖。舊紀錄沒有這一欄 = 當沖。
+    hold = int(_num(sig.get("max_hold_days")) or 1)
+    # 會留倉的那一筆，第一天要看到收盤那一根：你沒在 13:25 走。
+    bars = bars_after(broker, code, date, fired,
+                      until=SESSION_CLOSE if hold >= 2 else FLATTEN_AT)
     # 盤中 LiveTracker 用 tick 判定過的，以它為準。
     #
     # bars_after() 刻意丟掉訊號後的頭 60 秒（那一根 K 棒涵蓋訊號發出**前**的時間，
@@ -251,8 +321,16 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
     # tick 是實際成交，分鐘 K 是事後摘要；衝突時以 tick 為準。
     live_result = str(sig.get("live_result") or "")
     live_exit = _num(sig.get("live_exit"))
+    live_date = str(sig.get("live_date") or "")
+    exit_date, exit_at = "", ""
+    day2: list[tuple] = []
     if live_result and live_exit is not None:
         result, exit_price, used = live_result, live_exit, 0   # 0 = 由 tick 判定
+        exit_at = str(sig.get("live_at") or "")
+        if live_date and live_date != date:
+            exit_date = live_date            # 隔天盤中 tick 判定的
+            if through:                      # 極值要算到隔天，K 棒還是要拿
+                _, day2 = next_session_bars(broker, code, date, through)
     elif bars:
         result, exit_price, used = FLAT, bars[-1][3], len(bars)
         for i, (_, high, low, _close) in enumerate(bars, 1):
@@ -263,16 +341,37 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
             if hit_target:
                 result, exit_price, used = TARGET, target, i
                 break
+        if result == FLAT:
+            if hold >= 2:
+                result = CARRY            # 出場價暫記第一天收盤，只是標記
+            else:
+                exit_at = FLATTEN_AT.strftime("%H:%M:%S")
+        else:
+            exit_at = bars[used - 1][0].strftime("%H:%M:%S")
     else:
         return None                        # 沒有 tick 判定也沒有 K 棒 —— 不要猜
 
+    if result == CARRY and through:
+        day2_date, day2 = next_session_bars(broker, code, date, through)
+        if day2:
+            result, exit_price, n2 = walk_day2(day2, stop, target)
+            used = len(bars) + n2
+            exit_date = day2_date
+            exit_at = (FLATTEN_AT.strftime("%H:%M:%S") if result == FLAT
+                       else day2[n2 - 1][0].strftime("%H:%M:%S"))
+
+    # 留倉中的那一筆，成本先照「隔天賣」算 —— 它沒有當沖這個選項了。
+    overnight = bool(exit_date) or result == CARRY
     gross = (exit_price - entry) / entry * 100
     or_high, vwap = _num(sig.get("or_high")), _num(sig.get("vwap"))
-    # 整天的極端值：算的是**全部** K 棒，不是只算到出場那一根。
-    # 問題是「如果我沒出場會怎樣」，只看到出場為止就答不出來。
+    # 整段持有期的極端值：算的是**全部** K 棒，不是只算到出場那一根。
+    # 問題是「如果我沒出場會怎樣」，只看到出場為止就答不出來。抱到隔天的，
+    # 隔天的 K 棒也算進來 —— 「到 +8% 之後續抱，最高走到哪」就是這兩欄在回答。
     # 極值仍然要用 K 棒算；沒有 K 棒（只有 tick 判定）時留空，不要猜一個數字出來。
-    day_high = max((b[1] for b in bars), default=None)
-    day_low = min((b[2] for b in bars), default=None)
+    highs = [b[1] for b in bars] + [b[2] for b in day2]
+    lows = [b[2] for b in bars] + [b[3] for b in day2]
+    day_high = max(highs, default=None)
+    day_low = min(lows, default=None)
     low_5m = min((b[2] for b in bars[:FILL_WINDOW_BARS]), default=None)
     # 盤中 tick 量到的同一個窗口。沒有這個欄位（舊紀錄、或當天沒收到報價）就留空。
     fill_low = _num(sig.get("fill_low"))
@@ -281,12 +380,12 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
     # 已經沒有部位了，留空代表不適用，不是 0。
     mark_0930 = _num(sig.get("exit_0930_price"))
     return Outcome(
-        date=date, code=str(sig["code"]), time=str(sig.get("time", "")),
+        date=date, code=code, time=str(sig.get("time", "")),
         entry=entry, stop=stop, target=target, lots=int(sig.get("lots", 0) or 0),
         result=result, exit_price=round(exit_price, 2),
         r_multiple=round((exit_price - entry) / risk, 2),
         gross_pct=round(gross, 3),
-        net_pct=round(gross - config.round_trip_cost_pct(), 3),
+        net_pct=round(gross - config.round_trip_cost_pct(overnight=overnight), 3),
         bars=used,
         or_high=or_high, vwap=vwap,
         volume_surge=_num(sig.get("volume_surge")),
@@ -300,20 +399,22 @@ def resolve(broker, sig: dict, date: str | None = None) -> Outcome | None:
         fill_low_pct=_pct_above(fill_low, entry) if fill_low is not None else None,
         rank=int(sig.get("rank") or 0),
         category=str(sig.get("category") or ""),
-        exit_at=_exit_at(sig, fired, result, used, bars),
+        exit_at=exit_at,
         ruleset=str(sig.get("ruleset") or ""),
         bid_ask_ratio=_num(sig.get("bid_ask_ratio")),
         exit_0930=mark_0930,
         r_0930=(round((mark_0930 - entry) / risk, 2)
                 if mark_0930 is not None and risk > 0 else None),
+        exit_date=exit_date,
     )
 
 
-def resolve_all(broker, sigs: list[dict], date: str | None = None) -> list[Outcome]:
+def resolve_all(broker, sigs: list[dict], date: str | None = None,
+                through: str | None = None) -> list[Outcome]:
     out = []
     for s in sigs:
         try:
-            o = resolve(broker, s, date)
+            o = resolve(broker, s, date, through=through)
         except Exception as e:                       # 一檔壞掉不該讓整份覆盤產不出來
             log.warning("%s 回推失敗：%s", s.get("code"), e)
             o = None
@@ -337,20 +438,29 @@ def resolve_all(broker, sigs: list[dict], date: str | None = None) -> list[Outco
     return out
 
 
+def _row_key(row: dict) -> tuple:
+    return (str(row.get("date", "")), str(row.get("code", "")), str(row.get("time", "")))
+
+
 def append_csv(outcomes: list[Outcome], path=None) -> None:
     """累積到 outcomes.csv —— 20 天之後的統計靠這一份，不靠解析 Markdown。
 
-    同一天重跑會先把當天的舊列刪掉，避免 review.py 跑兩次就重複計算。
+    重跑會先把同一筆（日期 + 代號 + 訊號時間）的舊列刪掉，避免 review.py 跑兩次
+    就重複計算。
+
+    以前是「整天的舊列全部刪掉」。v6 之後那會出事：昨天留倉的那一筆今天才有
+    結局，它的 date 是**昨天** —— 用日期刪，會把昨天當天就結束的那幾筆一起
+    刪掉，累計勝率就無聲少了幾筆。
     """
     if not outcomes:
         return
     path = path or OUTCOME_FILE
-    dates = {o.date for o in outcomes}
+    keys = {_row_key(asdict(o)) for o in outcomes}
     kept = []
     if path.exists():
         # utf-8-sig 讀得了有 BOM 與沒有 BOM 的檔，所以舊檔照樣接得下去
         with open(path, newline="", encoding="utf-8-sig") as f:
-            kept = [r for r in csv.DictReader(f) if r.get("date") not in dates]
+            kept = [r for r in csv.DictReader(f) if _row_key(r) not in keys]
     # 寫成帶 BOM 的 UTF-8：台灣的 Excel 預設用 cp950 開 csv，沒有 BOM 的話
     # 「停損」「目標」會變成一串亂碼。這份檔是要給人看的，不是只給程式讀的。
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
@@ -417,7 +527,8 @@ def append_candidates_csv(pairs: list[tuple], path=None) -> None:
             w.writerow(row)
 
 
-_STR_FIELDS = ("date", "code", "time", "result", "category", "exit_at", "ruleset")
+_STR_FIELDS = ("date", "code", "time", "result", "category", "exit_at", "ruleset",
+               "exit_date")
 _BOOL_FIELDS = ("target_after_stop",)
 _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
@@ -540,7 +651,10 @@ def replay_rules(outcomes: list[Outcome]) -> dict:
     for o in ordered:
         if not reason:
             # 這一刻已經出場的那些，才算「已實現」。
-            closed = [t for t in taken if t.exit_at and str(t.exit_at) <= str(o.time)]
+            # 隔天才出場的（exit_date 有值）那天一定還沒實現 —— 它的 exit_at
+            # 是隔天的時間，拿來跟今天的訊號時間比會把它當成早就出場了。
+            closed = [t for t in taken if t.exit_at and not t.overnight
+                      and str(t.exit_at) <= str(o.time)]
             realised = sum(t.net_amount for t in closed)
             streak = trailing_losses([t.net_amount for t in closed])
             if len(taken) >= cap_trades:
