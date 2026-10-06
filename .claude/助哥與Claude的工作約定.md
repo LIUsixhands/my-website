@@ -26,6 +26,23 @@
 
 ---
 
+## 🌐 網站網址：一律用 `sixhands.tw`
+
+**定案 2026-10-06。** 助哥通知：網站已更名為 **`https://sixhands.tw`**（2026-10-05 18:21 上線，詳見 `網域_sixhands-tw_資產記錄.md`）。
+
+| 用途 | 規則 |
+|:--|:--|
+| **所有新產出**（社群貼文、LINE 文案、EDM、QR Code、名片、簡報、影片字幕、報告） | ✅ **一律寫 `https://sixhands.tw/…`**，路徑不變（例：`https://sixhands.tw/qiqi-realestate.html`） |
+| 從舊檔複製連結 | 看到 `sixhands-studio.netlify.app` → **換成 `sixhands.tw` 再給助哥** |
+| 網站 HTML 內的 canonical／og:url／JSON-LD／sitemap | ⏸ 仍是舊網址，**等 2026-10-26 額度重置後一次改**（`部署凍結與待辦_2026-10.md` 第 1 項） |
+| 根目錄文件（`連結總表.md`、`LINE_OA內容包.md`、`助哥_換新對話框必讀.md`） | ⏸ 改了會觸發建置，**併入同一批 10/26 處理**；在那之前引用時自行換網域 |
+
+- 舊網址 `sixhands-studio.netlify.app` 仍是同一個站，不會壞；但**對外不要再發舊網址**，免得搜尋信任分散在兩個網域。
+- 其他獨立站**不改**：`sixhands-ninepalace.netlify.app`（九宮遊戲）、`incense-picker.netlify.app`（檀香粉盤）。
+- `GSC_2026-10-01_網頁.csv` 等歷史匯出檔保留原網址，那是當時的紀錄，不要改。
+
+---
+
 ## 🧠 資料與記憶
 
 **定案 2026-09～10。**
