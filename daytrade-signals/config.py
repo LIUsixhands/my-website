@@ -192,22 +192,38 @@ SCREEN = {
 #                 等於 3.3R），留倉證交稅是 0.3% 不是 0.15%。
 #                 批次前三檔照舊用量能倍數排序 ——「勝率最高的前三檔」要等資料夠了
 #                 再定義，現在沒有任何數字支持哪一種排法。
-RULESET = "v6"
+# v7  2026-10-07  **只動進場窗口，v6 的停損／目標／抱兩天不變。** 使用者定的兩條：
+#                 1. 進場窗口從 09:02–09:05 延長到 09:30。09:02–09:05 突破的那批
+#                    照舊收集、09:05 按量能排序發出；09:05 之後突破的一出現就發，
+#                    直到湊滿 3 個或 09:30 截止。
+#                 2. 取消 09:30「時間到」提醒 —— 那是當沖時代的規則，跟抱兩天
+#                    互相打架（09:29 發的訊號，09:30 就叫你考慮走）。
+#                 依據：10-07（v6 第一天）20 檔沒有一檔在 09:02–09:05 同時通過
+#                 突破、均價線、量能；whynot 10-05／10-06 也是「沒突破」佔 13–14/20
+#                 —— 瓶頸是窗口太短，不是名單或濾網。
+#                 代價：09:05 之後的訊號是先到先發，而且越晚發的越可能已經追高；
+#                 訊號上的「已追高 +x%」就是看這個的。
+RULESET = "v7"
 
 SIGNAL = {
     "or_start": "09:00:00",         # 開盤區間起
     "or_end": "09:02:00",           # 開盤區間迄（ORB 用）
-    "entry_window_end": "09:05:00", # 這時間之後不發新訊號
-    # 訊號不是「誰先突破誰先發」，是 09:02-09:05 全部收集起來，
+    "entry_window_end": "09:30:00", # 這時間之後不發新訊號（v7 起 09:30）
+    # 09:02-09:05 突破的不是「誰先突破誰先發」，是全部收集起來，
     # 09:05:00 一次發出、按當下量能倍數排序取前 N 檔。
     #
     # 理由：09:05 之前沒有任何資訊可以排序，先來後到等於看哪一檔的報價封包
-    # 先到 —— 那是隨機的。舊設計的窗口有 3 小時長，先後差距還有意義；
-    # 壓縮到 3 分鐘之後，先後就只剩雜訊。
+    # 先到 —— 那是隨機的。開盤頭三分鐘的先後只剩雜訊。
+    #
+    # 09:05 之後（v7）一出現就發，直到湊滿 max_signals_per_day 或 entry_window_end。
+    # 那時候先後已經是真的先後了 —— 晚十分鐘突破，跟晚兩秒收到封包不是同一件事。
     "signal_batch_at": "09:05:00",  # 收集到這個時間，然後一次發出
-    # 09:30 發「時間到」訊號。沒碰停損的部位由下單者自己決定走不走 ——
-    # 系統只負責提醒，不替人做那個決定。
-    "exit_signal_at": "09:30:00",
+    # 「時間到」提醒的時間。None = 不發（v7 起）。
+    #
+    # v4 的規則是 09:30 提醒「沒碰停損的要不要走」。v6 改成抱兩天之後它就跟
+    # 規則打架，v7 把進場窗口延到 09:30 之後更是直接撞在一起。要恢復就填時間，
+    # 但必須晚於 entry_window_end。
+    "exit_signal_at": None,
     "breakout_buffer_pct": 0.10,    # 突破要超過區間高點多少 % 才算數（防假突破）
     "volume_surge_ratio": 1.8,      # 突破當下的量能速率 / 基準量能速率
     # 量能倍數的取樣視窗。**這三個必須跟著進場窗口一起縮**，否則整條規則無聲失效。
@@ -392,8 +408,10 @@ def validate() -> list[str]:
     if not s["or_end"] <= s["signal_batch_at"] <= s["entry_window_end"]:
         errs.append("SIGNAL.signal_batch_at 必須落在 or_end 與 entry_window_end 之間 —— "
                     "在區間鎖定之前發不出訊號，在進場窗口關掉之後發也沒有意義")
-    if not s["entry_window_end"] < s["exit_signal_at"] < s["market_close"]:
-        errs.append("SIGNAL.exit_signal_at 必須晚於 entry_window_end、早於 market_close")
+    if (s.get("exit_signal_at") is not None
+            and not s["entry_window_end"] < s["exit_signal_at"] < s["market_close"]):
+        errs.append("SIGNAL.exit_signal_at 必須晚於 entry_window_end、早於 market_close"
+                    "（不要提醒就設成 None）")
     # 量能倍數要算得出來，開盤到發訊號那一刻必須容得下「基準 + 現在」兩段取樣。
     # 容不下的話 volume_surge() 一律回 0.0，於是**整天發不出任何訊號，而且不報錯**。
     # v4 把進場窗口從三小時壓到三分鐘時就踩到了：原本寫死的 300 秒近期視窗
@@ -470,7 +488,7 @@ def warnings() -> list[str]:
     if r["max_consecutive_losses"] >= r["max_signals_per_day"]:
         w.append(
             f"連敗停手 {r['max_consecutive_losses']} 筆 >= 當日訊號上限 "
-            f"{r['max_signals_per_day']} 個，而且訊號是在 {s['signal_batch_at']} "
-            f"一次發完的 —— 第一筆還沒出場，訊號就全發了，所以連敗停手"
+            f"{r['max_signals_per_day']} 個 —— 要連輸 {r['max_consecutive_losses']} 筆，"
+            f"得先發滿 {r['max_signals_per_day']} 個訊號，那時當日額度已經用完了，所以連敗停手"
             f"**在當日永遠不會出手**。它現在只是一個紀錄欄位。")
     return w

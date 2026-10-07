@@ -503,6 +503,16 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
     }
 
 
+def _ordinal_line(ordinal: int, batch_total: int | None) -> str:
+    cap = config.RISK["max_signals_per_day"]
+    head = f"今日第 {ordinal} 個訊號（上限 {cap}）"
+    if batch_total:
+        head += f"｜{config.SIGNAL['signal_batch_at'][:5]} 這一批共 {batch_total} 個"
+    if ordinal >= cap:
+        return head + "\n今天的額度用完了，不會再有新的買入訊號。"
+    return head + f"\n{config.SIGNAL['entry_window_end'][:5]} 前還可能有新的訊號。"
+
+
 def _target_line(sig: dict) -> str:
     risk = sig["entry"] - sig["stop"]
     r_mult = (sig["target"] - sig["entry"]) / risk if risk > 0 else 0.0
@@ -514,13 +524,16 @@ def _target_line(sig: dict) -> str:
     return f"目標：{sig['target']:.2f}（{config.SIGNAL['reward_risk']}R）"
 
 
-def format_signal(sig: dict, ordinal: int, batch_total: int) -> str:
-    """ordinal = 這是今日第幾個訊號（1 起算），batch_total = 今天總共幾個。
+def format_signal(sig: dict, ordinal: int, batch_total: int | None) -> str:
+    """ordinal = 這是今日第幾個訊號（1 起算）。batch_total = 09:05 那一批共幾個；
+    09:05 之後即時發的那些是 None。
 
-    batch_total 是必填，不給預設值。以前這裡印的是 `1/max_signals_per_day`
-    —— 2026-10-05 只發了一個訊號，訊息卻寫「今日第 1/3 個訊號」，看起來像
-    「還有兩個額度，等等可能再來」。但訊號是 09:05 一次發完的，窗口當場就
-    關了，那兩個額度今天**不可能**被用到。分母寫上限等於對使用者撒謊。
+    batch_total 是必填，不給預設值。2026-10-05 只發了一個訊號，訊息卻寫
+    「今日第 1/3 個訊號」，看起來像「還有兩個額度，等等可能再來」—— 那時訊號
+    是 09:05 一次發完的，那兩個額度**不可能**被用到。
+
+    v7 起進場窗口到 09:30，額度沒用完的話**真的**還可能有。所以這一行要講的是
+    實話：額度用完了就說用完了，沒用完就說「窗口結束前還可能有」。
     """
     r = config.RISK
     lines = [
@@ -559,14 +572,15 @@ def format_signal(sig: dict, ordinal: int, batch_total: int) -> str:
             f"已超過單筆上限 {r['per_trade_risk']:,} 元。要做就自己認這個超額，或直接跳過。")
     lines += [
         "────────────────",
-        f"今日第 {ordinal}/{batch_total} 個訊號（今日全部；上限 {r['max_signals_per_day']}）",
+        _ordinal_line(ordinal, batch_total),
         "⚠️ 這是規則觸發，不是預測。你有權不做；但做了就照停損走。",
     ]
     return "\n".join(lines)
 
 
 def format_window_closed(sent: int, watched: int) -> str:
-    """09:05 批次發完之後**一定**要發的一則 —— 包括一個訊號都沒有的時候。
+    """進場窗口關掉時**一定**要發的一則 —— 包括一個訊號都沒有的時候。
+    v7 起是 09:30（entry_window_end），不再是 09:05 批次那一刻。
 
     2026-10-05 之前，chosen 是空的時候 flush_batch 什麼都不發。於是手機上
     「今天沒有一檔通過閘門」和「程式當掉了」長得一模一樣：08:50 的開工確認
@@ -576,13 +590,16 @@ def format_window_closed(sent: int, watched: int) -> str:
     批次挑中的檔數，萬一其中有人被風控擋掉，以這一則的數字為準。
     """
     cfg, r = config.SIGNAL, config.RISK
-    at = cfg["signal_batch_at"][:5]
+    at = cfg["entry_window_end"][:5]
     lines = [f"🔒 {at} 進場窗口已關閉", "────────────────"]
     if sent:
+        after = "🛑 停損 ／ ✅ 目標"
+        if cfg.get("exit_signal_at"):
+            after += f" ／ ⏰ {cfg['exit_signal_at'][:5]} 時間到"
         lines += [
             f"今日訊號：{sent} 個（上限 {r['max_signals_per_day']}）",
             "不會再有新的買入訊號。",
-            f"接下來只剩 🛑 停損 ／ ✅ 目標 ／ ⏰ {cfg['exit_signal_at'][:5]} 時間到。",
+            f"接下來只剩 {after}。",
         ]
         if holds_overnight():
             lines.append(f"{outcome.FLATTEN_AT:%H:%M} 還沒結束的 📦 留倉到明天，不平倉。")
@@ -673,6 +690,74 @@ class SignalBatch:
         return ranked[:self.limit], ranked[self.limit:]
 
 
+class EntryDesk:
+    """進場窗口的整條流程（v7）：
+
+      09:02–09:05  突破的先收集（SignalBatch），09:05 按量能排序發出前 N 個
+      09:05–09:30  突破的一出現就發，直到湊滿當日上限
+      09:30        窗口關閉，**一定**推一則 🔒（包括一個都沒有的時候）
+
+    抽成獨立的東西，是因為 run() 與 dryrun.py 都要走這條路。之前 dryrun 自己
+    抄了一份批次邏輯 —— 改規則的時候只改 run() 的話，dryrun 會繼續驗一條
+    已經不存在的管線，而且一片綠。
+
+    emit(sig, now, batch_total) 真的去發（過閘、記錄、推播），發出去回 True；
+    blocked(sig, reason) 記下被擋掉的；say(text) 推播。
+    """
+
+    def __init__(self, emit, blocked, say, watched: int, sent: int = 0,
+                 now: datetime | None = None):
+        cfg = config.SIGNAL
+        self.batch = SignalBatch(_t(cfg["signal_batch_at"]),
+                                 config.RISK["max_signals_per_day"])
+        self.window_end = _t(cfg["entry_window_end"])
+        self.emit, self.blocked, self.say = emit, blocked, say
+        self.watched = watched
+        self.sent = sent
+        now = now or datetime.now()
+        # 窗口結束之後才啟動（盤中重開）：warn_if_too_late 已經講過了，
+        # 不要再補一則 🔒 —— 那一則的訊號數會是 0，跟早上實際發的對不起來。
+        self.closed = now.time() >= self.window_end
+        # 行情回呼跑在多條執行緒上。兩條同時看到「09:05 到了」就會把同一批
+        # 各發一次 —— 判斷要在鎖裡做完。發送（含網路推播）放在鎖外，
+        # 不要讓一則卡住的推播擋住其他檔的行情。
+        self._lock = threading.Lock()
+
+    def offer(self, sig: dict, now: datetime | None = None) -> None:
+        """evaluate() 算出一個合格的突破。09:05 前收集，之後直接發。"""
+        now = now or datetime.now()
+        with self._lock:
+            if self.closed or now.time() >= self.window_end:
+                return
+            if not self.batch.flushed:
+                self.batch.add(sig)
+                return
+        self._send([sig], now, None)
+
+    def tick(self, now: datetime | None = None) -> None:
+        """到點就送批次；過了窗口就收尾。行情回呼與主迴圈都會呼叫，重複呼叫無害。"""
+        now = now or datetime.now()
+        chosen = rest = None
+        closing = False
+        with self._lock:
+            if self.batch.due(now):
+                chosen, rest = self.batch.take()
+            if not self.closed and now.time() >= self.window_end:
+                self.closed = closing = True
+        if chosen is not None:
+            for sig in rest:
+                self.blocked(sig, BLOCK_BATCH_RANK)
+            self._send(chosen, now, len(chosen))
+        if closing:
+            self.say(format_window_closed(self.sent, self.watched))
+
+    def _send(self, sigs: list[dict], now: datetime, batch_total: int | None) -> None:
+        for sig in sigs:
+            if self.emit(sig, now, batch_total):
+                with self._lock:
+                    self.sent += 1
+
+
 def format_too_late(now: datetime) -> str:
     """啟動太晚 —— 今天不會有訊號，而且畫面上看不出來。
 
@@ -685,10 +770,10 @@ def format_too_late(now: datetime) -> str:
     return "\n".join([
         f"\u26a0\ufe0f {now.strftime('%H:%M:%S')} 盤中監看啟動太晚",
         "────────────────",
-        f"發訊號的窗口是 {cfg['or_end']}–{cfg['signal_batch_at']}，現在已經過了。",
+        f"發訊號的窗口是 {cfg['or_end']}–{cfg['entry_window_end']}，現在已經過了。",
         "**今天不會有任何買進訊號** —— 這不是今天沒行情，是程式沒趕上。",
         "────────────────",
-        f"手上如果有部位，停損照舊有效，{cfg['exit_signal_at']} 的提醒也還會發。",
+        "手上如果有部位（含昨日留倉），停損與目標照舊有人盯。",
         f"明天請確認 monitor.bat 在 {cfg['or_end']} 之前就跑起來。",
     ])
 
@@ -701,7 +786,7 @@ def warn_if_too_late(now: datetime | None = None) -> bool:
     一路在修的毛病：規則看起來在那裡，實際上沒有作用。
     """
     now = now or datetime.now()
-    if now.time() < _t(config.SIGNAL["signal_batch_at"]):
+    if now.time() < _t(config.SIGNAL["entry_window_end"]):
         return False
     notify(format_too_late(now))
     return True
@@ -1303,38 +1388,27 @@ def run():
 
     tracker = LiveTracker(on_resolved=_remember, on_fill=_remember_fill,
                           on_time_exit=_remember_time_exit)
-    batch = SignalBatch(_t(config.SIGNAL["signal_batch_at"]),
-                        config.RISK["max_signals_per_day"])
+    def _emit(sig: dict, now: datetime, batch_total: int | None) -> bool:
+        """過閘 → 記錄 → 開始追蹤 → 推播。被擋掉的進 candidates.csv。
 
-    def flush_batch(now: datetime | None = None) -> None:
-        """09:05:00 到了就把收集到的突破排序、取前 N 檔發出去。
-
-        落選的照樣寫進 candidates.csv：被規則擋掉的樣本如果不留，20 天後
+        落選與被擋的照樣要留：被規則擋掉的樣本如果不留，20 天後
         「只發三個夠不夠」「第四名是不是本來會賺」就只能回答「再測一次」。
         """
-        now = now or datetime.now()
-        if not batch.due(now):
-            return
-        chosen, rest = batch.take()
-        for sig in rest:
-            record_candidate(sig, BLOCK_BATCH_RANK)
-        sent = 0
-        for sig in chosen:
-            st = states.get(str(sig["code"]))
-            if st is None:
-                continue
-            msg, blocked = try_emit(st, gate, signal_lock, sig, now,
-                                    batch_total=len(chosen))
-            if blocked:
-                record_candidate(sig, blocked)
-                continue
-            if msg:
-                tracker.track(sig)
-                notify(msg)
-                sent += 1
-        # 無論發了幾檔（含 0 檔）都要收尾。這一則是「今天不會再有買入訊號」
-        # 的唯一出口，少了它，安靜的一天就無法跟當掉區分。
-        notify(format_window_closed(sent, len(states)))
+        st = states.get(str(sig["code"]))
+        if st is None:
+            return False
+        msg, blocked = try_emit(st, gate, signal_lock, sig, now, batch_total=batch_total)
+        if blocked:
+            record_candidate(sig, blocked)
+            return False
+        if not msg:
+            return False
+        tracker.track(sig)
+        notify(msg)
+        return True
+
+    desk = EntryDesk(emit=_emit, blocked=record_candidate, say=notify,
+                     watched=len(states), sent=len(gate.state.get("signals", [])))
     # 盤中重開時，今天已經發過的訊號也要繼續盯 —— 否則它們的結局只剩收盤後才知道。
     # 代價是已經結束的那幾筆會被重新追蹤，價格再次碰到時會重複推播一次。
     for past in gate.state.get("signals", []):
@@ -1367,10 +1441,10 @@ def run():
         # 否則「被洗掉後能不能重新進場」這一題永遠沒有資料可以回答。
         sig = evaluate(st, ignore_symbol_cap=True)
         if sig:
-            batch.add(sig)          # 先收集，不發 —— 09:05 排序完才一次送出
+            desk.offer(sig)         # 09:05 前收集；之後一出現就發
         # 到點就送。從回呼觸發是因為 09:05 的報價很密，幾乎必然在一秒內進來；
         # 下面的主迴圈是備援，萬一整批都沒報價也不會卡著不發。
-        flush_batch()
+        desk.tick()
 
     carried_codes = {str(c["code"]) for c in carried} - set(states)
     import shioaji as sj  # 只有真的要訂閱行情時才需要
@@ -1397,7 +1471,9 @@ def run():
     warn_if_too_late()
 
     close_at = _t(config.SIGNAL["market_close"])
-    exit_at = _t(config.SIGNAL["exit_signal_at"])
+    # None = 不發「時間到」提醒（v7 起）。
+    exit_at = (_t(config.SIGNAL["exit_signal_at"])
+               if config.SIGNAL.get("exit_signal_at") else None)
     poll_every = config.RISK["poll_interval_sec"]
     last_poll = time.monotonic()
     flattened = False
@@ -1405,12 +1481,12 @@ def run():
         while datetime.now().time() < close_at:
             time.sleep(30)
             broker.ensure_session()
-            # 批次發訊號的備援。正常情況回呼早就送出去了，這裡是為了
-            # 「整批都沒有報價進來」那種日子 —— 不然訊號會卡在記憶體裡。
-            flush_batch()
-            # 09:30「時間到」。這裡**不平倉**，只提醒並記下價位，
-            # 部位繼續追到 13:25（exit_day），走不走由使用者決定。
-            if datetime.now().time() >= exit_at:
+            # 批次發訊號與 🔒 收窗的備援。正常情況回呼早就做了，這裡是為了
+            # 「那一刻剛好沒有報價進來」的日子 —— 不然訊號會卡在記憶體裡，
+            # 09:30 的 🔒 也不會發。
+            desk.tick()
+            # 「時間到」提醒（有設才發）。這裡**不平倉**，只提醒並記下價位。
+            if exit_at is not None and datetime.now().time() >= exit_at:
                 for msg in tracker.time_exit():
                     notify(msg)
             # 13:25 還沒走完停損或目標的，一律平倉並告知結果。

@@ -565,7 +565,10 @@ class TestEvaluate(unittest.TestCase):
 
     def test_blocked_after_entry_window(self):
         st = ready_state()
-        self.assertIsNone(evaluate(st, now=dtime(9, 5)))
+        end = signals._t(config.SIGNAL["entry_window_end"])
+        self.assertIsNone(evaluate(st, now=end))
+        # 窗口結束前一分鐘還是有效的（v7 起窗口到 09:30）
+        self.assertIsNotNone(evaluate(st, now=dtime(end.hour, end.minute - 1)))
 
     def test_one_signal_per_symbol(self):
         st = ready_state()
@@ -603,7 +606,7 @@ class TestRiskGate(unittest.TestCase):
         sig = evaluate(ready_state(), now=dtime(9, 3))
         ordinal = gate.record(sig)
         self.assertEqual(ordinal, 1)
-        self.assertIn("今日第 1/1 個訊號", format_signal(sig, ordinal, 1))
+        self.assertIn("今日第 1 個訊號", format_signal(sig, ordinal, 1))
         self.assertEqual(gate.record(sig), 2)
 
     def test_closes_on_daily_signal_limit(self):
@@ -821,7 +824,7 @@ class TestConcurrentEmit(unittest.TestCase):
         gate = RiskGate(FakeBroker(pnl_rows=[]))
         states = [ready_state(str(2330 + i)) for i in range(4)]
         sent = self._hammer(states, gate, threads=16)
-        ordinals = sorted(int(m.split("今日第 ")[1].split("/")[0]) for m in sent)
+        ordinals = sorted(int(m.split("今日第 ")[1].split(" ")[0]) for m in sent)
         self.assertEqual(ordinals, list(range(1, len(sent) + 1)))
 
     def test_closed_gate_emits_nothing(self):
@@ -4778,10 +4781,10 @@ class TestStartingTooLateIsNotAQuietDay(unittest.TestCase):
     """
 
     def test_it_says_there_will_be_no_signals_at_all_today(self):
-        text = signals.format_too_late(datetime(2026, 10, 5, 9, 6, 30))
-        self.assertIn("09:06:30", text)
+        text = signals.format_too_late(datetime(2026, 10, 5, 9, 31, 30))
+        self.assertIn("09:31:30", text)
         self.assertIn("不會有任何買進訊號", text)
-        self.assertIn(config.SIGNAL["signal_batch_at"], text)
+        self.assertIn(config.SIGNAL["entry_window_end"], text)
 
     def test_it_does_not_let_you_blame_the_market(self):
         text = signals.format_too_late(datetime(2026, 10, 5, 9, 6))
@@ -4789,8 +4792,8 @@ class TestStartingTooLateIsNotAQuietDay(unittest.TestCase):
 
     def test_it_still_tells_you_the_stop_is_live(self):
         """手上有部位的人最需要知道的是這件事。"""
-        text = signals.format_too_late(datetime(2026, 10, 5, 9, 6))
-        self.assertIn("停損照舊有效", text)
+        text = signals.format_too_late(datetime(2026, 10, 5, 9, 31))
+        self.assertIn("停損與目標照舊有人盯", text)
 
 
 class TestBothExitsAreKept(unittest.TestCase):
@@ -4878,17 +4881,19 @@ class TestTheLateStartWarningIsActuallyWired(unittest.TestCase):
     def test_it_pushes_when_the_batch_window_has_passed(self):
         sent = []
         with unittest.mock.patch.object(signals, "notify", sent.append):
-            fired = signals.warn_if_too_late(datetime(2026, 10, 5, 9, 6))
+            fired = signals.warn_if_too_late(datetime(2026, 10, 5, 9, 31))
         self.assertTrue(fired)
         self.assertEqual(len(sent), 1)
         self.assertIn("不會有任何買進訊號", sent[0])
 
     def test_it_stays_quiet_before_the_window_closes(self):
-        """09:04 啟動還來得及，推一則「今天不會有訊號」是假警報。"""
+        """窗口結束前啟動還來得及，推一則「今天不會有訊號」是假警報。
+        v7 起 09:05 過了也還來得及（09:05 之後的突破即時發）。"""
         sent = []
         with unittest.mock.patch.object(signals, "notify", sent.append):
-            fired = signals.warn_if_too_late(datetime(2026, 10, 5, 9, 4, 59))
-        self.assertFalse(fired)
+            for t in (datetime(2026, 10, 5, 9, 4, 59), datetime(2026, 10, 5, 9, 10),
+                      datetime(2026, 10, 5, 9, 29, 59)):
+                self.assertFalse(signals.warn_if_too_late(t))
         self.assertEqual(sent, [])
 
     def test_run_actually_calls_it(self):
@@ -5245,9 +5250,12 @@ class TestTheMessageDoesNotPromiseSignalsThatCannotCome(unittest.TestCase):
                 "extension_pct": 2.11, "stop_rule": "結構線（區間高下方）"}
 
     def test_the_denominator_is_todays_total_not_the_cap(self):
+        """v7：不再印「1/3」這種分數 —— 分母寫上限像在承諾，寫批次大小又會
+        被誤讀成今日總數（09:05 之後還可能有）。改成講實話的兩行。"""
         text = signals.format_signal(self._sig(), 1, 1)
-        self.assertIn("今日第 1/1 個訊號", text)
-        self.assertNotIn("今日第 1/3 個訊號", text)
+        self.assertIn("今日第 1 個訊號", text)
+        self.assertNotIn("1/3", text)
+        self.assertIn("這一批共 1 個", text)
 
     def test_the_cap_is_still_visible_just_not_as_the_denominator(self):
         text = signals.format_signal(self._sig(), 1, 1)
@@ -5255,7 +5263,18 @@ class TestTheMessageDoesNotPromiseSignalsThatCannotCome(unittest.TestCase):
 
     def test_three_signals_still_read_one_of_three(self):
         text = signals.format_signal(self._sig(), 2, 3)
-        self.assertIn("今日第 2/3 個訊號", text)
+        self.assertIn("今日第 2 個訊號", text)
+        self.assertIn("這一批共 3 個", text)
+
+    def test_it_only_promises_more_when_more_can_come(self):
+        """額度沒用完、窗口沒關 → 真的還可能有，要講；額度用完 → 講用完了。"""
+        cap = config.RISK["max_signals_per_day"]
+        before = signals.format_signal(self._sig(), cap - 1, None)
+        last = signals.format_signal(self._sig(), cap, None)
+        self.assertIn(f"{config.SIGNAL['entry_window_end'][:5]} 前還可能有新的訊號", before)
+        self.assertIn("額度用完了", last)
+        self.assertNotIn("還可能有", last)
+        self.assertNotIn("這一批", last)          # 即時發的那一個不屬於任何批次
 
     def test_batch_total_has_no_default(self):
         """不給預設值，是為了逼每個呼叫端想一次「今天總共幾個」。
@@ -5293,30 +5312,28 @@ class TestAQuietDayIsNotSilence(unittest.TestCase):
                               signals.format_window_closed(sent, 20))
 
     def test_it_names_the_window_and_the_time_exit(self):
+        """收窗那一則寫的是**窗口結束**的時間（v7 起 09:30），不是 09:05 批次。
+        「時間到」提醒有設才提，沒設（v7 起）就不可以出現。"""
         text = signals.format_window_closed(1, 20)
-        self.assertIn(config.SIGNAL["signal_batch_at"][:5], text)
-        self.assertIn(config.SIGNAL["exit_signal_at"][:5], text)
+        self.assertIn(config.SIGNAL["entry_window_end"][:5], text)
+        self.assertNotIn("時間到", text)
+        with unittest.mock.patch.dict(config.SIGNAL, {"exit_signal_at": "10:00:00"}):
+            self.assertIn("10:00 時間到", signals.format_window_closed(1, 20))
 
-    def test_flush_batch_always_sends_it(self):
-        """接線測試：用 AST 確認 flush_batch 真的呼叫了它，而且不在 if 裡面。
-
-        先前那個版本的毛病就是「空的時候什麼都不做」——
-        把呼叫寫進 `for sig in chosen:` 或 `if sent:` 底下，等於沒修。
-        """
-        import ast, inspect, textwrap
-        src = textwrap.dedent(inspect.getsource(signals.run))
-        tree = ast.parse(src)
-        flush = next(n for n in ast.walk(tree)
-                     if isinstance(n, ast.FunctionDef) and n.name == "flush_batch")
-        calls = [n for n in flush.body
-                 if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)
-                 and any(getattr(a, "id", "") == "format_window_closed"
-                         or getattr(getattr(a, "func", None), "id", "")
-                         == "format_window_closed"
-                         for a in ast.walk(n.value))]
-        self.assertTrue(calls,
-                        "format_window_closed 必須在 flush_batch 的最外層呼叫，"
-                        "不可以藏在迴圈或 if 裡面")
+    def test_a_day_with_nothing_still_gets_the_closing_message(self):
+        """先前那個版本的毛病就是「空的時候什麼都不做」。v7 起收尾在 EntryDesk，
+        直接驅動它走過一個什麼都沒有的早上，看 09:30 那一則有沒有出來。"""
+        said = []
+        day = datetime(2026, 10, 7)
+        desk = signals.EntryDesk(emit=lambda *a: True, blocked=lambda *a: None,
+                                 say=said.append, watched=20, now=day.replace(hour=8, minute=50))
+        for minute in (5, 10, 29):
+            desk.tick(day.replace(hour=9, minute=minute))
+        self.assertEqual(said, [])                    # 09:05 不再收窗
+        desk.tick(day.replace(hour=9, minute=30))
+        desk.tick(day.replace(hour=9, minute=31))
+        self.assertEqual(len(said), 1)
+        self.assertIn("今日訊號：0 個", said[0])
 
 
 
@@ -5568,12 +5585,14 @@ class TestWhyNotRebuildsTheFourGates(unittest.TestCase):
         self.assertEqual(d["or_high"], 101.0, "09:00 那根是盤前，不可以算進區間")
 
     def test_a_breakout_after_the_window_does_not_count(self):
-        """09:05 之後才突破的，就是沒突破 —— 那正是 v4 的代價。"""
+        """窗口結束之後才突破的，就是沒突破（v4 是 09:05，v7 起 09:30）。"""
         import whynot
         day = datetime(2026, 10, 5)
+        end = signals._t(config.SIGNAL["entry_window_end"])
+        late = day.replace(hour=end.hour, minute=end.minute) + timedelta(minutes=2)
         bars = [(day.replace(hour=9, minute=1), 100.0, 99.0, 100.0, 100.0),
                 (day.replace(hour=9, minute=2), 100.0, 99.0, 100.0, 100.0),
-                (day.replace(hour=9, minute=7), 120.0, 100.0, 120.0, 900.0)]
+                (late, 120.0, 100.0, 120.0, 900.0)]
         d = whynot.diagnose(bars)
         self.assertEqual(d["verdict"], whynot.BLOCK_NO_BREAKOUT)
 
@@ -5981,8 +6000,11 @@ class TestV6TheSignal(unittest.TestCase):
                                (fee + config.COST["tax_rate_overnight"]) * 100)
         self.assertGreater(config.round_trip_cost_pct(True), config.round_trip_cost_pct())
 
-    def test_the_shipped_config_is_v6(self):
-        self.assertEqual(config.RULESET, "v6")
+    def test_the_shipped_config_keeps_the_v6_rules(self):
+        """v7 只動進場窗口；v6 的停損、目標、抱兩天要原封不動。"""
+        s = config.SIGNAL
+        self.assertEqual((s["stop_loss_pct"], s["target_pct"], s["max_hold_days"]),
+                         (3.0, 8.0, 2))
         self.assertEqual(config.validate(), [])
 
 
@@ -6345,6 +6367,163 @@ class TestRunOnAfterTarget(unittest.TestCase):
         self.assertIn("續抱分析", text)
         self.assertIn("天花板", text)
         self.assertIn("+20% 以上", text)
+
+
+# ══════════════════════════════════════════════════════
+# v7：進場窗口延到 09:30，09:05 先發一批、之後即時發；取消時間到提醒
+# ══════════════════════════════════════════════════════
+class TestV7TheEntryDesk(unittest.TestCase):
+    DAY = datetime(2026, 10, 7)
+
+    def _at(self, h, m, sec=0):
+        return self.DAY.replace(hour=h, minute=m, second=sec)
+
+    def _desk(self, cap_ok=True):
+        self.sent, self.blocked, self.said = [], [], []
+
+        def emit(sig, now, batch_total):
+            if not cap_ok:
+                return False
+            self.sent.append((sig["code"], now.strftime("%H:%M"), batch_total))
+            return True
+        return signals.EntryDesk(emit=emit,
+                                 blocked=lambda sig, why: self.blocked.append((sig["code"], why)),
+                                 say=self.said.append, watched=20, now=self._at(8, 50))
+
+    @staticmethod
+    def _sig(code, surge):
+        return {"code": code, "volume_surge": surge, "rank": 1}
+
+    def test_before_0905_breakouts_wait_for_the_batch(self):
+        desk = self._desk()
+        desk.offer(self._sig("A", 2.0), self._at(9, 3))
+        desk.offer(self._sig("B", 3.0), self._at(9, 4))
+        self.assertEqual(self.sent, [])
+        desk.tick(self._at(9, 5))
+        # 量能高的先發，帶著批次大小
+        self.assertEqual(self.sent, [("B", "09:05", 2), ("A", "09:05", 2)])
+
+    def test_the_batch_still_keeps_only_the_top_n(self):
+        desk = self._desk()
+        cap = config.RISK["max_signals_per_day"]
+        for i in range(cap + 2):
+            desk.offer(self._sig(f"S{i}", 2.0 + i), self._at(9, 4))
+        desk.tick(self._at(9, 5))
+        self.assertEqual(len(self.sent), cap)
+        self.assertEqual(len(self.blocked), 2)
+        self.assertTrue(all(why == signals.BLOCK_BATCH_RANK for _, why in self.blocked))
+
+    def test_after_0905_a_breakout_goes_out_at_once(self):
+        """使用者：「改掉 9:02-9:05 的限制，改為 9:30 前發訊號」。"""
+        desk = self._desk()
+        desk.tick(self._at(9, 5))                      # 09:05 那一批是空的
+        desk.offer(self._sig("C", 2.0), self._at(9, 17))
+        self.assertEqual(self.sent, [("C", "09:17", None)])   # 不屬於任何批次
+
+    def test_nothing_goes_out_after_the_window(self):
+        desk = self._desk()
+        desk.tick(self._at(9, 5))
+        desk.offer(self._sig("D", 2.0), self._at(9, 30))
+        desk.offer(self._sig("E", 2.0), self._at(9, 45))
+        self.assertEqual(self.sent, [])
+
+    def test_the_lock_message_comes_at_0930_and_counts_both_paths(self):
+        desk = self._desk()
+        desk.offer(self._sig("A", 2.0), self._at(9, 3))
+        desk.tick(self._at(9, 5))
+        desk.offer(self._sig("C", 2.0), self._at(9, 20))
+        self.assertEqual(self.said, [])
+        desk.tick(self._at(9, 30))
+        self.assertEqual(len(self.said), 1)
+        self.assertIn("今日訊號：2 個", self.said[0])
+        self.assertIn("09:30", self.said[0])
+
+    def test_a_blocked_emit_is_not_counted(self):
+        desk = self._desk(cap_ok=False)
+        desk.tick(self._at(9, 5))
+        desk.offer(self._sig("C", 2.0), self._at(9, 20))
+        desk.tick(self._at(9, 30))
+        self.assertIn("今日訊號：0 個", self.said[0])
+
+    def test_a_restart_after_the_window_does_not_send_a_second_lock(self):
+        """盤中重開在 09:30 之後：早上那則 🔒 已經發過，再補一則 0 個是假話。"""
+        said = []
+        desk = signals.EntryDesk(emit=lambda *a: True, blocked=lambda *a: None,
+                                 say=said.append, watched=20, now=self._at(10, 15))
+        desk.tick(self._at(10, 16))
+        self.assertEqual(said, [])
+
+    def test_a_restart_mid_window_keeps_the_morning_count(self):
+        said = []
+        desk = signals.EntryDesk(emit=lambda *a: True, blocked=lambda *a: None,
+                                 say=said.append, watched=20, sent=2, now=self._at(9, 12))
+        desk.tick(self._at(9, 12))
+        desk.offer(self._sig("C", 2.0), self._at(9, 13))
+        desk.tick(self._at(9, 30))
+        self.assertIn("今日訊號：3 個", said[0])
+
+    def test_many_threads_at_0905_send_the_batch_once(self):
+        """行情回呼是多執行緒的。兩條同時看到「09:05 到了」不可以各發一次。"""
+        sent = []
+        lock = threading.Lock()
+
+        def emit(sig, now, total):
+            time.sleep(0.002)
+            with lock:
+                sent.append(sig["code"])
+            return True
+        desk = signals.EntryDesk(emit=emit, blocked=lambda *a: None, say=lambda t: None,
+                                 watched=20, now=self._at(8, 50))
+        for i in range(3):
+            desk.offer(self._sig(f"S{i}", 2.0 + i), self._at(9, 4))
+        threads = [threading.Thread(target=desk.tick, args=(self._at(9, 5),))
+                   for _ in range(16)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(sorted(sent), ["S0", "S1", "S2"])
+
+
+class TestV7TheRulesAreWired(unittest.TestCase):
+    def test_the_shipped_config_is_v7(self):
+        self.assertEqual(config.RULESET, "v7")
+        self.assertEqual(config.SIGNAL["entry_window_end"], "09:30:00")
+        self.assertEqual(config.SIGNAL["signal_batch_at"], "09:05:00")
+        self.assertIsNone(config.SIGNAL["exit_signal_at"])
+        self.assertEqual(config.validate(), [])
+
+    def test_a_time_exit_inside_the_window_is_rejected(self):
+        """要恢復「時間到」就得晚於窗口 —— 09:29 發的訊號 09:20 叫你走沒有意義。"""
+        with unittest.mock.patch.dict(config.SIGNAL, {"exit_signal_at": "09:20:00"}):
+            self.assertIn("exit_signal_at", " / ".join(config.validate()))
+        with unittest.mock.patch.dict(config.SIGNAL, {"exit_signal_at": "10:00:00"}):
+            self.assertEqual(config.validate(), [])
+
+    def test_run_routes_every_breakout_through_the_desk(self):
+        tree = ast.parse(textwrap.dedent(inspect.getsource(signals.run)))
+        on_tick = next(n for n in ast.walk(tree)
+                       if isinstance(n, ast.FunctionDef) and n.name == "on_tick")
+        attrs = {(getattr(n.func.value, "id", ""), n.func.attr) for n in ast.walk(on_tick)
+                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+        self.assertIn(("desk", "offer"), attrs)
+        self.assertIn(("desk", "tick"), attrs)
+        # 主迴圈也要 tick：09:30 那一刻沒有報價進來，🔒 也得發
+        loop = next(n for n in ast.walk(tree) if isinstance(n, ast.While))
+        self.assertIn(("desk", "tick"),
+                      {(getattr(n.func.value, "id", ""), n.func.attr) for n in ast.walk(loop)
+                       if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)})
+
+    def test_no_time_exit_reminder_when_it_is_switched_off(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("exit_at is not None", src)
+
+    def test_dryrun_uses_the_same_desk(self):
+        """dryrun 以前自己抄了一份批次邏輯 —— 改規則時它會繼續驗一條不存在的管線。"""
+        import dryrun
+        src = inspect.getsource(dryrun.main)
+        self.assertIn("signals.EntryDesk(", src)
+        self.assertNotIn("SignalBatch(", src)
 
 
 if __name__ == "__main__":
