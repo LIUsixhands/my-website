@@ -202,6 +202,16 @@ class RiskGate:
         """
         return list(self.state.get("signals", [])) + list(self.state.get("carried", []))
 
+    def record_close_snapshot(self, code: str, time_str: str, snap: dict) -> bool:
+        """把 13:25 還沒結束的那一筆當時的三個數字寫回 state.json（見 close_snapshot）。"""
+        for sig in self._all_signals():
+            if str(sig.get("code")) == str(code) and str(sig.get("time")) == str(time_str):
+                sig.update(snap)
+                self.save()
+                return True
+        log.warning("13:25 紀錄找不到對應訊號（%s %s），沒寫回 state.json", code, time_str)
+        return False
+
     def record_time_exit(self, code: str, time_str: str, price: float,
                          at: str) -> bool:
         """把 09:30「時間到」那一刻的價位寫回 state.json。
@@ -267,6 +277,11 @@ class SymbolState:
     # 這一檔近 5 日平均日振幅 %（screener.py 算好放在 watchlist.json）。v8 的停利
     # 目標用它。None = 不知道（舊名單、測試），那時退回固定 % 目標。
     amplitude_pct: float | None = None
+    # 13:25 還沒結束的那幾筆要記「當時的樣子」（使用者 10-07 同意只記錄、不改規則）：
+    # 當日高低（tick 的 high/low 是當日累計）與平常一天的量（screener 算好的）。
+    day_high: float = 0.0
+    day_low: float = 0.0
+    avg_volume_lots: float | None = None
     aggressive_buy: int = 0                   # 外盤成交張數
     aggressive_sell: int = 0                  # 內盤成交張數
     unclassified: int = 0                     # 判不出方向的張數 —— 要知道有多少沒算到
@@ -304,6 +319,10 @@ class SymbolState:
         self.last_price = float(tick.close)
         self.vwap = float(getattr(tick, "avg_price", 0) or self.vwap)
         self.total_volume = int(getattr(tick, "total_volume", 0) or 0)
+        hi = float(getattr(tick, "high", 0) or tick.close)
+        lo = float(getattr(tick, "low", 0) or tick.close)
+        self.day_high = max(self.day_high, hi)
+        self.day_low = min(self.day_low, lo) if self.day_low else lo
         # 內外盤只在開盤區間內累計 —— 訊號要用的是「發訊號之前買盤有多強」，
         # 把整天的成交混進來，那一欄在 09:05 當下根本還不存在。
         if not self.or_locked:
@@ -996,6 +1015,31 @@ def format_resolution(o: OpenSignal, price: float, verdict: str) -> str:
     return "\n".join(lines)
 
 
+def close_snapshot(st: "SymbolState | None", price: float | None) -> dict:
+    """13:25 還沒結束的那一筆，當下的三個數字（第四個「大盤」收盤後由 outcome.py 補）。
+
+    使用者 10-07 問「要不要留倉，能算出幾成把握嗎」——現在算不出來，一筆資料都
+    沒有。所以先**只記錄**：累積 15～20 筆後拿隔天的結果對，看哪個分得出好壞，
+    分得出來的才變成訊息上的一句事實。訊號、訊息、規則都不因為這個改變。
+
+      close_pos_pct  收在今天最低～最高之間的哪裡（0 = 最低，100 = 最高）
+      vs_vwap_pct    現價比今天均價線高（+）或低（−）幾 %
+      volume_x       今天的量是平常一天的幾倍
+
+    算不出來的留 None（例如沒收到報價、名單裡沒有平常量）—— 空白不是 0。
+    """
+    out = {"close_pos_pct": None, "vs_vwap_pct": None, "volume_x": None}
+    if st is None or not price:
+        return out
+    if st.day_high > st.day_low > 0:
+        out["close_pos_pct"] = round((price - st.day_low) / (st.day_high - st.day_low) * 100, 1)
+    if st.vwap:
+        out["vs_vwap_pct"] = round((price - st.vwap) / st.vwap * 100, 2)
+    if st.avg_volume_lots:
+        out["volume_x"] = round(st.total_volume / float(st.avg_volume_lots), 2)
+    return out
+
+
 def format_carry(o: OpenSignal, price: float | None) -> str:
     """第一天 13:25 還沒結束。只講事實，**留不留倉由使用者決定**。
 
@@ -1034,7 +1078,7 @@ class LiveTracker:
     必須在鎖內一次做完，否則同一筆會推播好幾次。推播本身留在鎖外，不卡行情。
     """
 
-    def __init__(self, on_resolved=None, on_fill=None, on_time_exit=None):
+    def __init__(self, on_resolved=None, on_fill=None, on_time_exit=None, on_carry=None):
         self.open: list[OpenSignal] = []
         self.fills: list[FillProbe] = []
         self.last_price: dict[str, float] = {}
@@ -1046,6 +1090,8 @@ class LiveTracker:
         self.on_resolved = on_resolved
         # 成交窗口收完要交給誰記下來。同理：不寫回去就只活在記憶體裡。
         self.on_fill = on_fill
+        # 13:25 還沒結束（可能留倉）的那一筆，當下的樣子交給誰記下來。
+        self.on_carry = on_carry
 
     def _handed_off(self, o: "OpenSignal", price: float, verdict: str) -> None:
         if not self.on_resolved:
@@ -1164,6 +1210,11 @@ class LiveTracker:
         for o in rest:
             price = self.last_price.get(o.code)
             if o.hold_days >= 2 and not o.carried:
+                if self.on_carry:
+                    try:
+                        self.on_carry(o, price)
+                    except Exception as e:      # 記錄失敗不可以讓通知跟著沒了
+                        log.warning("13:25 紀錄寫回失敗（%s）：%s", o.code, e)
                 msgs.append(format_carry(o, price))
                 continue
             if price is None:
@@ -1397,6 +1448,7 @@ def run():
         st.rank = n
         # 近 5 日平均振幅；算不出來（量比沒查到的那幾檔）就用昨天一天的振幅。
         st.amplitude_pct = i.get("avg_amplitude_pct") or i.get("amplitude_pct")
+        st.avg_volume_lots = i.get("avg_volume_lots")
         st.category = str(i.get("category", "") or "")
         states[i["code"]] = st
     restore_signaled(states, gate)
@@ -1424,8 +1476,13 @@ def run():
         with signal_lock:
             gate.record_time_exit(o.code, o.time, price, at)
 
+    def _remember_close(o, price):
+        snap = close_snapshot(states.get(o.code), price)
+        with signal_lock:
+            gate.record_close_snapshot(o.code, o.time, snap)
+
     tracker = LiveTracker(on_resolved=_remember, on_fill=_remember_fill,
-                          on_time_exit=_remember_time_exit)
+                          on_time_exit=_remember_time_exit, on_carry=_remember_close)
     def _emit(sig: dict, now: datetime, batch_total: int | None) -> bool:
         """過閘 → 記錄 → 開始追蹤 → 推播。被擋掉的進 candidates.csv。
 

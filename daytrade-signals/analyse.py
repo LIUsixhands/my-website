@@ -198,6 +198,46 @@ def after_target(rows: list, levels=RUN_ON_LEVELS) -> dict:
     return out
 
 
+def unfinished_at_1325(rows: list) -> list:
+    """13:25 還沒結束、系統追到隔天的那幾筆（有 13:25 紀錄的）。"""
+    return [o for o in rows
+            if any(v is not None for v in (o.close_pos_pct, o.vs_vwap_pct, o.volume_x))]
+
+
+def by_close_position(rows: list) -> dict:
+    def key(o):
+        p = o.close_pos_pct
+        if p is None:
+            return None
+        return "收在高點附近（≥70%）" if p >= 70 else ("中間（30～70%）" if p >= 30
+                                                      else "收在低點附近（<30%）")
+    return _bucket(rows, key, ["收在高點附近（≥70%）", "中間（30～70%）", "收在低點附近（<30%）"])
+
+
+def by_vwap_at_close(rows: list) -> dict:
+    def key(o):
+        if o.vs_vwap_pct is None:
+            return None
+        return "在均價線之上" if o.vs_vwap_pct >= 0 else "在均價線之下"
+    return _bucket(rows, key, ["在均價線之上", "在均價線之下"])
+
+
+def by_volume_today(rows: list) -> dict:
+    def key(o):
+        if o.volume_x is None:
+            return None
+        return "量 ≥ 平常 2 倍" if o.volume_x >= 2 else "量 < 平常 2 倍"
+    return _bucket(rows, key, ["量 ≥ 平常 2 倍", "量 < 平常 2 倍"])
+
+
+def by_market_close(rows: list) -> dict:
+    def key(o):
+        if o.mkt_day_pct is None:
+            return None
+        return "大盤當天收紅" if o.mkt_day_pct >= 0 else "大盤當天收黑"
+    return _bucket(rows, key, ["大盤當天收紅", "大盤當天收黑"])
+
+
 def group_stats(rows: list) -> dict:
     wins = sum(1 for o in rows if o.is_win)
     rate, lo, hi = win_rate_ci(wins, len(rows))
@@ -330,6 +370,18 @@ def report(rows: list) -> list[str]:
                      "**不到那個程度就不要動它** —— 停損是這套系統的地基。")
 
     lines += render_after_target(after_target(rows))
+
+    held = unfinished_at_1325(rows)
+    lines += ["", "## 八、13:25 還沒結束的那幾筆：當時的樣子 vs 隔天的結果", "",
+              "_使用者問「要不要留倉，能算出幾成把握嗎」。這一節就是在累積那個答案："
+              "13:25 還沒結束的每一筆，系統記下當時四個數字，再看隔天的結局。"
+              "下面四組裡，**區間不重疊的那一組**才是真的分得出好壞的數字。_", "",
+              f"- 目前樣本：**{len(held)} 筆**（15～20 筆之後才開始有意義）"]
+    for title, groups in (("八之一、收在今天的哪裡", by_close_position(held)),
+                          ("八之二、跟均價線比", by_vwap_at_close(held)),
+                          ("八之三、今天的量", by_volume_today(held)),
+                          ("八之四、大盤當天", by_market_close(held))):
+        lines += render_group(title, groups, "勝 = 兩天結算扣成本後為正。")
 
     lines += ["", "---", "",
               "*本分析只描述已發生的樣本，不預測未來，不構成投資建議。*"]

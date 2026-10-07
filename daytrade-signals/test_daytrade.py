@@ -6700,5 +6700,100 @@ class TestTheSystemDoesNotTellYouToHold(unittest.TestCase):
         self.assertIn("接著追蹤", start)
 
 
+# ══════════════════════════════════════════════════════
+# 13:25 還沒結束的那幾筆：只記錄當時的樣子，規則與訊息不變
+# ══════════════════════════════════════════════════════
+class TestTheCloseSnapshotIsRecorded(unittest.TestCase):
+    """使用者 10-07：「要不要留倉，你有辦法算出幾成把握嗎」→「好，加上」（只記錄）。"""
+
+    def _st(self):
+        st = SymbolState("2330", 100.0)
+        st.day_high, st.day_low, st.vwap = 110.0, 100.0, 104.0
+        st.total_volume, st.avg_volume_lots = 30000, 10000
+        return st
+
+    def test_the_day_range_comes_from_the_ticks(self):
+        st = SymbolState("2330", 100.0)
+        st.update(tick(101.0, high=103.0, low=99.5, at="09:10:00"), now=1.0)
+        st.update(tick(102.0, high=104.5, low=99.5, at="10:00:00"), now=2.0)
+        # 沒帶 high/low 的 tick（只有成交價）不可以把當日高點蓋掉
+        st.update(tick(101.0, at="11:00:00"), now=3.0)
+        self.assertEqual((st.day_high, st.day_low), (104.5, 99.5))
+
+    def test_the_three_numbers(self):
+        snap = signals.close_snapshot(self._st(), 108.0)
+        self.assertEqual(snap, {"close_pos_pct": 80.0, "vs_vwap_pct": round(4 / 104 * 100, 2),
+                                "volume_x": 3.0})
+
+    def test_unknown_stays_blank_not_zero(self):
+        st = SymbolState("2330", 100.0)          # 沒有高低、沒有均價、沒有平常量
+        self.assertEqual(signals.close_snapshot(st, 101.0),
+                         {"close_pos_pct": None, "vs_vwap_pct": None, "volume_x": None})
+        self.assertEqual(signals.close_snapshot(None, 101.0)["close_pos_pct"], None)
+        self.assertEqual(signals.close_snapshot(self._st(), None)["volume_x"], None)
+
+    def test_only_the_unfinished_two_day_positions_are_recorded(self):
+        seen = []
+        t = signals.LiveTracker(on_carry=lambda o, price: seen.append((o.code, price)))
+        t.track(dict(V6_SIG, code="A"))
+        t.track(dict(V6_SIG, code="B", max_hold_days=1))      # 當沖：不記
+        t.track(dict(V6_SIG, code="C"), carried=True)          # 昨天留的：今天結算，不記
+        for c in "ABC":
+            t.on_price(c, 103.0)
+        t.flatten()
+        self.assertEqual(seen, [("A", 103.0)])
+
+    def test_a_broken_recorder_does_not_swallow_the_message(self):
+        t = signals.LiveTracker(on_carry=lambda *a: 1 / 0)
+        t.track(dict(V6_SIG))
+        t.on_price("2330", 103.0)
+        self.assertEqual(len(t.flatten()), 1)
+
+    def test_it_is_written_back_to_state(self):
+        with tempfile.TemporaryDirectory() as d:
+            with unittest.mock.patch.object(config, "STATE_FILE", Path(d) / "s.json"):
+                gate = RiskGate(FakeBroker())
+                gate.state["signals"] = [dict(V6_SIG)]
+                self.assertTrue(gate.record_close_snapshot(
+                    "2330", "09:05:00", {"close_pos_pct": 80.0, "volume_x": 3.0}))
+                self.assertEqual(gate.state["signals"][0]["close_pos_pct"], 80.0)
+
+    def test_run_and_screener_are_wired(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("on_carry=_remember_close", src)
+        self.assertIn("close_snapshot(states.get(o.code), price)", src)
+        self.assertIn('st.avg_volume_lots = i.get("avg_volume_lots")', src)
+        self.assertIn('r["avg_volume_lots"] = round(base)', inspect.getsource(screener.screen))
+
+    def test_it_reaches_outcomes_csv_and_back(self):
+        sig = dict(V6_SIG, close_pos_pct=80.0, vs_vwap_pct=1.5, volume_x=3.0)
+        days = {DAY1: QUIET_DAY1, DAY2: [("09:01", 109, 110, 108, 109)]}
+        o = oc.resolve(_DaysBroker(days), sig, DAY1, through=DAY2)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "o.csv"
+            oc.append_csv([o], path)
+            back = oc.load_csv(path)[0]
+        self.assertEqual((back.close_pos_pct, back.vs_vwap_pct, back.volume_x), (80.0, 1.5, 3.0))
+
+    def test_the_report_groups_them(self):
+        mk = lambda pos, net: oc.Outcome(
+            date=DAY1, code="2330", time="09:05:00", entry=100, stop=97, target=105, lots=1,
+            result=oc.TARGET if net > 0 else oc.STOP, exit_price=100, r_multiple=1, gross_pct=net,
+            net_pct=net, bars=1, close_pos_pct=pos, vs_vwap_pct=1.0, volume_x=2.5,
+            mkt_day_pct=0.3, exit_date=DAY2)
+        same_day = oc.Outcome(date=DAY1, code="9999", time="09:05:00", entry=100, stop=97,
+                              target=105, lots=1, result=oc.STOP, exit_price=97, r_multiple=-1,
+                              gross_pct=-3, net_pct=-3, bars=1)
+        rows = [mk(85, 5.0), mk(70, 4.0), mk(50, 1.0), mk(20, -3.0), same_day]
+        self.assertEqual(len(analyse.unfinished_at_1325(rows)), 4)     # 當天結束的不算
+        groups = analyse.by_close_position(analyse.unfinished_at_1325(rows))
+        self.assertEqual(len(groups["收在高點附近（≥70%）"]), 2)       # 70 本身算高點附近
+        self.assertEqual(len(groups["中間（30～70%）"]), 1)
+        self.assertEqual(len(groups["收在低點附近（<30%）"]), 1)
+        text = "\n".join(analyse.report(rows))
+        self.assertIn("八、13:25 還沒結束的那幾筆", text)
+        self.assertIn("目前樣本：**4 筆**", text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

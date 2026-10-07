@@ -56,7 +56,7 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
           "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
           "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio",
-          "mkt_signal_pct", "exit_date")
+          "mkt_signal_pct", "exit_date", "close_pos_pct", "vs_vwap_pct", "volume_x")
 
 
 @dataclass
@@ -133,6 +133,11 @@ class Outcome:
     # v6 起可以抱到隔天。出場那天的日期；空白 = 當天就出場（當沖）。
     # 有值時 exit_at 是**那一天**的時間，成本用留倉稅率算。
     exit_date: str = ""
+    # 13:25 還沒結束（可能留倉）那一刻的樣子，signals.close_snapshot() 記的。
+    # 只有那幾筆有值；當天就結束的留空 —— 空白不是 0。大盤用上面的 mkt_day_pct。
+    close_pos_pct: float | None = None    # 收在當日最低～最高之間的哪裡（0～100）
+    vs_vwap_pct: float | None = None      # 現價比均價線高幾 %
+    volume_x: float | None = None         # 今天量是平常一天的幾倍
 
     @property
     def overnight(self) -> bool:
@@ -406,6 +411,9 @@ def resolve(broker, sig: dict, date: str | None = None,
         r_0930=(round((mark_0930 - entry) / risk, 2)
                 if mark_0930 is not None and risk > 0 else None),
         exit_date=exit_date,
+        close_pos_pct=_num(sig.get("close_pos_pct")),
+        vs_vwap_pct=_num(sig.get("vs_vwap_pct")),
+        volume_x=_num(sig.get("volume_x")),
     )
 
 
@@ -534,7 +542,8 @@ _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "vwap_gap_pct", "mae_pct", "mfe_pct", "low_5m_pct",
                     "fill_low_pct", "mkt_open_pct", "mkt_day_pct",
-                    "exit_0930", "r_0930", "bid_ask_ratio", "mkt_signal_pct")
+                    "exit_0930", "r_0930", "bid_ask_ratio", "mkt_signal_pct",
+                    "close_pos_pct", "vs_vwap_pct", "volume_x")
 
 
 def _bool(value) -> bool | None:

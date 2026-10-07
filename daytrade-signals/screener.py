@@ -227,6 +227,9 @@ def screen(broker: Broker) -> list[dict]:
             base = volume_baseline(getattr(kb, "ts", []), getattr(kb, "Volume", []),
                                    cfg["lookback_days"])
             r["volume_ratio"] = round(r["prev_volume"] / base, 2) if base > 0 else 1.0
+            # 平常一天的量（張）。13:25 記「今天量是平常幾倍」要用它。
+            if base > 0:
+                r["avg_volume_lots"] = round(base)
             # 同一份 K 棒順手算平均振幅（v8 的停利目標用它）—— 不多打任何 API。
             r["avg_amplitude_pct"] = average_amplitude(
                 getattr(kb, "ts", []), getattr(kb, "High", []), getattr(kb, "Low", []),
