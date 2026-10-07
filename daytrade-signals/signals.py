@@ -587,14 +587,15 @@ def format_signal(sig: dict, ordinal: int, batch_total: int | None) -> str:
         f"建議張數：{sig['lots']} 張（單筆風險 {r['per_trade_risk']:,} 元）",
         f"量能倍數：{sig['volume_surge']:.2f}x",
     ]
+    # 下面兩行只講事實，不替使用者做「要不要留倉」的決定 —— 使用者 10-07：
+    # 「沒碰停損自己決定要不要留倉，因為你沒把握明天留倉會漲」。
     if sig.get("beyond_today_limit") and sig.get("limit_up"):
+        room = (sig["limit_up"] - sig["entry"]) / sig["entry"] * 100
         lines.append(
-            f"ℹ️ 今天漲停是 {sig['limit_up']:.2f}，目標今天到不了 —— 要留到明天。")
+            f"ℹ️ 今天漲停是 {sig['limit_up']:.2f}（進場後最多 +{room:.1f}%），目標今天到不了。")
     if holds_overnight():
         lines.append(
-            f"⏳ 今天沒碰停損就留倉，最晚明天 {outcome.FLATTEN_AT:%H:%M} 平倉。"
-            f"留倉有跳空風險：明天一開盤就穿過停損，實際賠的會比停損多"
-            f"（證交稅也從 0.15% 變 0.3%）。")
+            f"⏳ {outcome.FLATTEN_AT:%H:%M} 還沒碰停損也沒到目標的話，要不要留倉由你決定。")
     if sig.get("stop_rule", "").startswith("結構"):
         # 停損比平常寬的時候要講原因，否則看起來像算錯了。
         lines.append(
@@ -637,7 +638,7 @@ def format_window_closed(sent: int, watched: int) -> str:
             f"接下來只剩 {after}。",
         ]
         if holds_overnight():
-            lines.append(f"{outcome.FLATTEN_AT:%H:%M} 還沒結束的 📦 留倉到明天，不平倉。")
+            lines.append(f"{outcome.FLATTEN_AT:%H:%M} 還沒結束的會再通知你，要不要留倉由你決定。")
     else:
         lines += [
             f"今日訊號：0 個",
@@ -985,8 +986,7 @@ def format_resolution(o: OpenSignal, price: float, verdict: str) -> str:
         # 使用者原話：「有的選對股，甚至再留達 20% 都有可能，交由自己下單者決定」。
         # 系統不替人決定續不續抱；紀錄照規則記在目標價，續抱走多遠由
         # outcomes.csv 的 mfe_pct 回答（analyse.py「續抱分析」那一節）。
-        lines.append("🎯 目標到了。**續抱與否由你決定** —— 要續抱的話，停損建議"
-                     "自己上移（例如移到進場價保本）。系統的紀錄照規則記在目標價，"
+        lines.append("🎯 目標到了。**續抱與否由你決定。** 系統的紀錄照規則記在目標價，"
                      "達標後還走了多遠另外記，20 天後看「續抱分析」。")
     lines += [
         f"訊號發出於 {o.time}",
@@ -997,13 +997,14 @@ def format_resolution(o: OpenSignal, price: float, verdict: str) -> str:
 
 
 def format_carry(o: OpenSignal, price: float | None) -> str:
-    """第一天 13:25 還沒結束 —— 照 v6 規則留倉到明天。
+    """第一天 13:25 還沒結束。只講事實，**留不留倉由使用者決定**。
 
-    這一則取代當沖時代的「⏹ 收盤平倉」。不發的話，使用者會以為系統忘了這一筆，
-    或照舊習慣在尾盤把它賣掉。
+    使用者 10-07 把這一則原本的勸說全刪了：「沒碰停損自己決定要不要留倉，
+    因為你沒把握明天留倉會漲」。系統仍然追蹤到隔天 13:25 —— 那是為了 20 天後
+    回答得了「留倉到底划不划算」，不是建議你留。
     """
     label = f"{o.code} {o.name}".strip()
-    lines = [f"📦 {label} 留倉過夜｜{datetime.now().strftime('%H:%M:%S')}",
+    lines = [f"📦 {label} 13:25 還沒結束｜{datetime.now().strftime('%H:%M:%S')}",
              "────────────────"]
     if price is not None:
         gross = (price - o.entry) / o.entry * 100
@@ -1014,10 +1015,10 @@ def format_carry(o: OpenSignal, price: float | None) -> str:
         lines.append(f"進場 {o.entry:.2f}（今天沒收到報價，現價不明）")
     lines += [
         f"今天沒碰停損 {o.stop:.2f}、也沒到目標 {o.target:.2f}。",
-        f"照 v6 規則留到明天：停損、目標不變，明天 {outcome.FLATTEN_AT:%H:%M} 還沒結束就平倉。",
+        "要不要留倉由你決定。",
         "────────────────",
-        "⚠️ 明天一開盤就跳空穿過停損的話，實際賣到的是開盤價，會比停損賠更多。",
-        f"明天記得照常在 {config.SIGNAL['or_start'][:5]} 前開好監看，系統才會接著盯這一筆。",
+        f"系統會繼續追蹤到明天 {outcome.FLATTEN_AT:%H:%M}，結果另外記"
+        f"（明天照常在 {config.SIGNAL['or_start'][:5]} 前開監看才接得到）。",
     ]
     return "\n".join(lines)
 
@@ -1288,7 +1289,7 @@ def carry_over(prev: dict, broker, today: str) -> tuple[list[dict], list[str]]:
 
 def format_carry_start(carried: list[dict], notes: list[str]) -> str:
     """開盤前告訴使用者：昨天留下來的，今天繼續盯。"""
-    lines = [f"📦 昨日留倉 {len(carried)} 檔，今天接著盯", "────────────────"]
+    lines = [f"📦 昨日 13:25 還沒結束的 {len(carried)} 檔，今天接著追蹤", "────────────────"]
     for c in carried:
         label = f"{c['code']} {c.get('name') or ''}".strip()
         mark = (f"，昨收 {float(c['day1_close']):.2f}"
@@ -1296,7 +1297,7 @@ def format_carry_start(carried: list[dict], notes: list[str]) -> str:
         lines.append(f"{label}：進場 {float(c['entry']):.2f}{mark}")
         lines.append(f"　停損 {float(c['stop']):.2f}／目標 {float(c['target']):.2f}")
     lines += ["────────────────",
-              f"今天 {outcome.FLATTEN_AT:%H:%M} 還沒碰停損或目標就平倉，不會再留。",
+              f"今天碰到停損或目標會通知你；{outcome.FLATTEN_AT:%H:%M} 還沒碰到就以那時的價格結算。",
               "這幾檔今天不會再發新的買入訊號（不加碼）。"]
     lines += [f"ℹ️ {n}" for n in notes]
     return "\n".join(lines)

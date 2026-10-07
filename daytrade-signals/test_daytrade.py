@@ -6022,12 +6022,11 @@ class TestV6TheSignal(unittest.TestCase):
         self.assertTrue(sig["target_capped"])
         self.assertFalse(sig["beyond_today_limit"])
 
-    def test_the_message_says_eight_percent_and_warns_about_the_gap(self):
+    def test_the_message_says_eight_percent_and_leaves_holding_to_you(self):
         sig = evaluate(ready_state(or_high=100.0, last=101.0, vwap=100.5), now=self.IN_WINDOW)
         text = format_signal(sig, 1, 1)
         self.assertIn("+8%", text)
-        self.assertIn("留倉", text)
-        self.assertIn("跳空", text)
+        self.assertIn("要不要留倉由你決定", text)
         with unittest.mock.patch.dict(config.SIGNAL, {"max_hold_days": 1}):
             self.assertNotIn("留倉", format_signal(sig, 1, 1))
 
@@ -6185,7 +6184,8 @@ class TestV6TheTracker(unittest.TestCase):
         t.on_price("2330", 103.0)
         msgs = t.flatten()
         self.assertEqual(len(msgs), 1)
-        self.assertIn("留倉過夜", msgs[0])
+        self.assertIn("13:25 還沒結束", msgs[0])
+        self.assertIn("要不要留倉由你決定", msgs[0])
         self.assertEqual(seen, [])        # 沒結束，不寫任何判定回 state.json
 
     def test_at_1325_on_day_two_it_is_flattened(self):
@@ -6653,6 +6653,51 @@ class TestV8PerStockTarget(unittest.TestCase):
         self.assertEqual((config.SIGNAL["target_min_pct"], config.SIGNAL["target_max_pct"]),
                          (3.0, 10.0))
         self.assertEqual(config.validate(), [])
+
+
+class TestTheSystemDoesNotTellYouToHold(unittest.TestCase):
+    """使用者 10-07：「沒碰停損自己決定要不要留倉，因為你沒把握明天留倉會漲」
+    ——「要留到明天」「不平倉」「停損建議自己上移」「照 v6 規則留到明天」
+    「跳空穿過停損會賠更多」這些勸說全部拿掉，訊息只講事實。"""
+
+    ADVICE = ("要留到明天", "不平倉", "建議自己上移", "移到進場價保本", "照 v6",
+              "留到明天", "跳空穿過停損")
+
+    def _no_advice(self, text):
+        for phrase in self.ADVICE:
+            self.assertNotIn(phrase, text)
+
+    @unittest.mock.patch.dict(config.SIGNAL, {"stop_loss_pct": 3.0, "max_hold_days": 2,
+                                              "target_from_amplitude": True})
+    def test_the_signal(self):
+        st = ready_state(or_high=105.5, last=106.0, vwap=105.0)
+        st.prev_close, st.amplitude_pct = 100.0, 8.0
+        text = format_signal(evaluate(st, now=dtime(9, 3)), 1, 1)
+        self._no_advice(text)
+        self.assertIn("目標今天到不了", text)            # 事實照講
+        self.assertIn("進場後最多 +3.8%", text)          # 110 / 106
+        self.assertIn("由你決定", text)
+
+    @unittest.mock.patch.dict(config.SIGNAL, {"max_hold_days": 2})
+    def test_the_lock_message(self):
+        text = signals.format_window_closed(2, 20)
+        self._no_advice(text)
+        self.assertIn("由你決定", text)
+
+    def test_reaching_the_target(self):
+        o = signals.OpenSignal("2330", "測試", "09:05:00", 100.0, 97.0, 105.0, hold_days=2)
+        text = signals.format_resolution(o, 105.0, oc.TARGET)
+        self._no_advice(text)
+        self.assertIn("續抱與否由你決定", text)
+
+    def test_1325_and_the_next_morning(self):
+        o = signals.OpenSignal("2330", "測試", "09:05:00", 100.0, 97.0, 105.0, hold_days=2)
+        self._no_advice(signals.format_carry(o, 102.0))
+        start = signals.format_carry_start(
+            [{"code": "2330", "entry": 100.0, "stop": 97.0, "target": 105.0,
+              "day1_close": 102.0}], [])
+        self._no_advice(start)
+        self.assertIn("接著追蹤", start)
 
 
 if __name__ == "__main__":
