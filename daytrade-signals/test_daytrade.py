@@ -1313,7 +1313,10 @@ class TestDailyPush(unittest.TestCase):
         self.assertIn("沒有回推", text)
 
     def test_cumulative_section_uses_the_whole_history(self):
+        """目前這一版的**整段**歷史，不是只有今天。"""
         history = self._today() + [self._oc("8150", oc.TARGET, 1.67, 2.087)]
+        for o in history:
+            o.ruleset = config.RULESET
         text = review.format_push(self.SIGNALS, self._today(), history)
         self.assertIn("3 筆", text)
         self.assertIn("66.7%", text)
@@ -1362,8 +1365,40 @@ class TestDailyPush(unittest.TestCase):
 
     def test_cumulative_amount_is_shown(self):
         history = self._today() * 2
+        for o in history:
+            o.ruleset = config.RULESET
         text = review.format_push(self.SIGNALS, self._today(), history)
-        self.assertIn("累計損益", text)
+        self.assertIn(f"{config.RULESET} 累計損益", text)
+
+    def _versioned(self, version, code, net, date="2026-10-08"):
+        o = self._oc(code, oc.TARGET if net > 0 else oc.STOP, 1.0 if net > 0 else -1.0, net)
+        o.ruleset, o.date = version, date
+        return o
+
+    def test_cumulative_only_counts_the_current_rules(self):
+        """使用者 10-07：v1–v7 混在一起的累計回答不了「v7 好不好」。"""
+        now = config.RULESET
+        history = ([self._versioned("v2", "1", -1.0, "2026-09-30")] * 5
+                   + [self._versioned(now, "2", 2.0), self._versioned(now, "3", -1.0)])
+        lines = review.cumulative_lines(history)
+        text = "\n".join(lines)
+        self.assertIn(f"{now} 累計 1 個有訊號的交易日／2 筆（2026-10-08 起）", text)
+        self.assertIn("勝率 50.0%", text)
+        mine = sum(round(o.net_amount) for o in history if o.ruleset == now)
+        self.assertIn(f"{now} 累計損益 {mine:+,.0f} 元", text)
+        # 全部版本還在，但只是一行參考，而且講明是混算
+        self.assertIn("全部版本合計 7 筆", text)
+        self.assertIn("混算", text)
+
+    def test_a_new_version_with_no_trades_says_so(self):
+        text = "\n".join(review.cumulative_lines([self._versioned("v5", "1", 1.0)]))
+        self.assertIn(f"{config.RULESET} 還沒有結束的交易", text)
+        self.assertNotIn("勝率", text)
+        self.assertIn("全部版本合計 1 筆", text)
+
+    def test_no_mixed_line_when_everything_is_current(self):
+        text = "\n".join(review.cumulative_lines([self._versioned(config.RULESET, "1", 1.0)]))
+        self.assertNotIn("全部版本", text)
 
     def test_says_the_amount_is_an_estimate(self):
         text = review.format_push(self.SIGNALS, self._today(), [])
@@ -3834,6 +3869,8 @@ class TestFillStats(unittest.TestCase):
               "target": 67.7, "lots": 3, "volume_surge": 5.21}], rows))
         self.assertIn("掛進場價買得到", journal)
         self.assertIn("1/2", journal)
+        for o in rows:
+            o.ruleset = config.RULESET
         push = review.format_push([], rows, rows)
         self.assertIn("掛進場價買得到", push)
 

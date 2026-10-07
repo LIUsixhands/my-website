@@ -434,17 +434,7 @@ def format_push(signals: list[dict], outcomes, history: list,
             lines.append(f"　{o.r_multiple:+.2f}R　{round(o.net_amount):+,.0f} 元")
 
     if history:
-        days = len({o.date for o in history})
-        total = oc.summarise(history)
-        lines += [
-            "────────────────",
-            f"累計 {days} 個有訊號的交易日／{total['n']} 筆",
-            f"勝率 {total['win_rate']}%　平均 {total['avg_r']:+.2f}R",
-            f"掛進場價買得到 {_fill_text(oc.fill_stats(history))}",
-            f"平均賺 {total['avg_win_pct']:+.2f}%　"
-            f"平均賠 {total['avg_loss_pct']:+.2f}%",
-            f"累計損益 {sum(round(o.net_amount) for o in history):+,.0f} 元",
-        ]
+        lines += cumulative_lines(history)
 
     lines += [
         "────────────────",
@@ -453,6 +443,39 @@ def format_push(signals: list[dict], outcomes, history: list,
         "驗證期未下單，這不是你的實際損益。",
     ]
     return "\n".join(lines)
+
+
+def cumulative_lines(history: list) -> list[str]:
+    """日報最下面的累計：**只算目前這一版規則**，全部版本只留一行參考。
+
+    以前是 9/24 起每一筆全部相加 —— 停損 1.5% 跟 3%、單筆風險 2,000／3,000／
+    4,000 元、當沖跟抱兩天全混在一起。那個數字回答不了「現在這套規則好不好」，
+    而手機上每天看到的就是它。使用者 10-07 看到之後決定改成分版本。
+    """
+    import outcome as oc
+    version = config.RULESET
+    current = [o for o in history if o.ruleset == version]
+    lines = ["────────────────"]
+    if current:
+        days = len({o.date for o in current})
+        total = oc.summarise(current)
+        lines += [
+            f"{version} 累計 {days} 個有訊號的交易日／{total['n']} 筆"
+            f"（{min(o.date for o in current)} 起）",
+            f"勝率 {total['win_rate']}%　平均 {total['avg_r']:+.2f}R",
+            f"掛進場價買得到 {_fill_text(oc.fill_stats(current))}",
+            f"平均賺 {total['avg_win_pct']:+.2f}%　"
+            f"平均賠 {total['avg_loss_pct']:+.2f}%",
+            f"{version} 累計損益 {sum(round(o.net_amount) for o in current):+,.0f} 元",
+        ]
+    else:
+        lines.append(f"{version} 還沒有結束的交易 —— 累計從第一筆結束的交易開始算。")
+    older = len(history) - len(current)
+    if older:
+        lines.append(f"（全部版本合計 {len(history)} 筆　"
+                     f"{sum(round(o.net_amount) for o in history):+,.0f} 元 —— "
+                     "不同規則混算，只供參考）")
+    return lines
 
 
 def push_summary(signals: list[dict], outcomes, carried: list | None = None) -> None:
