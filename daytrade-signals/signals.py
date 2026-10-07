@@ -264,6 +264,9 @@ class SymbolState:
     # 內外盤：成交是打在賣價（買方主動 = 外盤）還是打在買價（賣方主動 = 內盤）。
     # 量能倍數只數「量有多大」，分不出方向 —— 量放大但內盤居多，是有人在出貨給你。
     # tick_type：1 = 外盤、2 = 內盤、0 或缺 = 判不出來（不可以當成任何一邊）。
+    # 這一檔近 5 日平均日振幅 %（screener.py 算好放在 watchlist.json）。v8 的停利
+    # 目標用它。None = 不知道（舊名單、測試），那時退回固定 % 目標。
+    amplitude_pct: float | None = None
     aggressive_buy: int = 0                   # 外盤成交張數
     aggressive_sell: int = 0                  # 內盤成交張數
     unclassified: int = 0                     # 判不出方向的張數 —— 要知道有多少沒算到
@@ -365,15 +368,31 @@ def holds_overnight() -> bool:
     return config.SIGNAL.get("max_hold_days", 1) >= 2
 
 
-def target_price(entry: float, stop: float) -> float:
-    """目標價：有設 target_pct 就是進場價往上固定 %，否則是 reward_risk 個 R。
+def target_plan(amplitude_pct: float | None) -> tuple[float | None, str]:
+    """這一檔的停利目標要往上幾 %，以及依據。回傳 (%, 依據)；% 是 None 表示用 R 倍數。
 
-    兩條路都往上進位到合法檔位 —— 真的到價時，報酬不會低於設定值。
+    依據：AMPLITUDE（v8，依個股平均振幅，夾在上下限之間）／FIXED（固定 %）／R。
     """
     cfg = config.SIGNAL
+    if cfg.get("target_from_amplitude") and amplitude_pct and amplitude_pct > 0:
+        lo, hi = cfg["target_min_pct"], cfg["target_max_pct"]
+        return min(max(float(amplitude_pct), lo), hi), TARGET_BY_AMPLITUDE
     if cfg.get("target_pct") is not None:
-        return config.round_to_tick(entry * (1 + cfg["target_pct"] / 100), "up")
-    return config.round_to_tick(entry + (entry - stop) * cfg["reward_risk"], "up")
+        return float(cfg["target_pct"]), TARGET_FIXED
+    return None, TARGET_BY_R
+
+
+TARGET_BY_AMPLITUDE = "振幅"
+TARGET_FIXED = "固定"
+TARGET_BY_R = "R"
+
+
+def target_price(entry: float, stop: float, amplitude_pct: float | None = None) -> float:
+    """目標價。往上進位到合法檔位 —— 真的到價時，報酬不會低於設定值。"""
+    pct, _ = target_plan(amplitude_pct)
+    if pct is not None:
+        return config.round_to_tick(entry * (1 + pct / 100), "up")
+    return config.round_to_tick(entry + (entry - stop) * config.SIGNAL["reward_risk"], "up")
 
 
 def evaluate(st: SymbolState, now: dtime | None = None, *,
@@ -444,7 +463,8 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         log.warning("%s 停損進位後等於進場價（%.2f），不發訊號", st.code, entry)
         return None
     # 目標同樣往上進位：真的到價時，報酬不會低於設定值。
-    target = target_price(entry, stop)
+    target_pct, target_basis = target_plan(st.amplitude_pct)
+    target = target_price(entry, stop, st.amplitude_pct)
     # 但目標不可以超過漲停價。2026-09-24 的嘉晶就是這樣：昨收 145.5、漲停 160.0，
     # 而我們發了一個 161.00 的目標 —— 那一筆被判成「收盤平倉」，不是因為它沒走到，
     # 是因為那個價位當天不存在。貼齊漲停，並在訊號上講明賺賠比因此縮水。
@@ -481,6 +501,10 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         # 目標高過今天的漲停 —— 今天物理上到不了。只在抱兩天時會是 True 而
         # 目標沒被貼齊；記下漲停價，訊息上才講得出「今天最多到哪」。
         "beyond_today_limit": beyond_today and not target_capped,
+        # v8：目標往上幾 %、依據什麼。訊息要講得出「為什麼是這個數字」。
+        "target_pct": target_pct,
+        "target_basis": target_basis,
+        "amplitude_pct": st.amplitude_pct,
         "limit_up": cap,
         "or_high": st.or_high,
         # 進場價比突破點高出幾 % —— 追高的程度。以前只進 outcomes.csv，
@@ -518,7 +542,18 @@ def _target_line(sig: dict) -> str:
     r_mult = (sig["target"] - sig["entry"]) / risk if risk > 0 else 0.0
     if sig.get("target_capped"):
         return f"目標：{sig['target']:.2f}（貼齊漲停，實際 {r_mult:.2f}R）"
-    pct = config.SIGNAL.get("target_pct")
+    pct = sig.get("target_pct")
+    basis = sig.get("target_basis")
+    if basis is None and pct is None:      # v8 以前的訊號沒有這兩欄
+        pct = config.SIGNAL.get("target_pct")
+        basis = TARGET_FIXED if pct is not None else TARGET_BY_R
+    if basis == TARGET_BY_AMPLITUDE and sig.get("amplitude_pct"):
+        amp = float(sig["amplitude_pct"])
+        why = f"這檔近 5 日平均一天振幅 {amp:.1f}%"
+        if abs(amp - pct) > 0.05:          # 被上下限夾住，要講出來，不然數字對不起來
+            edge = "下限" if pct > amp else "上限"
+            why += f"，取{edge} {pct:g}%"
+        return f"目標：{sig['target']:.2f}（+{pct:.1f}%，{why}）"
     if pct is not None:
         return f"目標：{sig['target']:.2f}（+{pct:g}%，約 {r_mult:.2f}R）"
     return f"目標：{sig['target']:.2f}（{config.SIGNAL['reward_risk']}R）"
@@ -1359,6 +1394,8 @@ def run():
     for n, i in enumerate(wl["items"], 1):
         st = SymbolState(i["code"], i["prev_close"], i.get("name", ""))
         st.rank = n
+        # 近 5 日平均振幅；算不出來（量比沒查到的那幾檔）就用昨天一天的振幅。
+        st.amplitude_pct = i.get("avg_amplitude_pct") or i.get("amplitude_pct")
         st.category = str(i.get("category", "") or "")
         states[i["code"]] = st
     restore_signaled(states, gate)

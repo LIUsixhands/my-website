@@ -143,6 +143,8 @@ def main():
     states, streams = {}, []
     for idx, (code, prev_close) in enumerate(codes):
         states[code] = SymbolState(code, prev_close)
+        # v8：每檔給不同的平均振幅（含一檔低於下限、一檔高於上限），目標才會各不相同
+        states[code].amplitude_pct = (2.0, 4.5, 6.0, 7.5, 12.0, 5.0)[idx % 6]
         ticks = synth_day(code, prev_close, breakout=idx < args.breakouts, rng=rng,
                           # 第一檔突破後橫盤到收 —— 專門用來走 13:25 留倉那條路
                           flat_after=(idx == 0),

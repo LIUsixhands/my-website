@@ -203,7 +203,12 @@ SCREEN = {
 #                 —— 瓶頸是窗口太短，不是名單或濾網。
 #                 代價：09:05 之後的訊號是先到先發，而且越晚發的越可能已經追高；
 #                 訊號上的「已追高 +x%」就是看這個的。
-RULESET = "v7"
+# v8  2026-10-07  **只動停利目標，其餘照 v7。** 使用者問：「訊號出來，你沒辦法依個股
+#                 判斷停利目標嗎？」—— 每檔都 +8% 沒有意義：平常一天動 2% 的股票要
+#                 8% 很難，平常動 7% 的 8% 可能還不夠。改成**這一檔近 5 日平均日振幅**，
+#                 夾在 3%～10% 之間（3% = 停損距離，再低賺賠比就小於 1；10% = 一天的
+#                 漲跌幅上限）。前三檔排序與篩選照舊不動 —— 使用者選「資料夠了再加」。
+RULESET = "v8"
 
 SIGNAL = {
     "or_start": "09:00:00",         # 開盤區間起
@@ -256,7 +261,14 @@ SIGNAL = {
     # 自動加大風險、減少張數 —— 系統自己踩煞車，不需要一條武斷的「不准追」。
     "stop_below_or_high_pct": 0.2,  # 區間高點往下這麼多 %（結構線）
     "reward_risk": 1.5,             # 目標 = 1.5R（v4 從 2.5R 調回）；target_pct 有設時不用
-    # v6：目標改成「進場價往上固定 %」。設成 None 就退回上面的 reward_risk。
+    # v8：目標 = 進場價往上「這一檔近 5 日平均日振幅」%，夾在下面這兩個數字之間。
+    # 振幅由 screener.py 算好寫進 watchlist.json（avg_amplitude_pct；算不出來
+    # 就用昨天一天的 amplitude_pct）。設成 False 就退回固定的 target_pct。
+    "target_from_amplitude": True,
+    "target_min_pct": 3.0,          # 下限：等於停損距離，再低賺得比賠得少
+    "target_max_pct": 10.0,         # 上限：一天的漲跌幅上限
+    # 固定 % 目標（v6/v7 是 8%）。target_from_amplitude 關掉、或這一檔完全沒有
+    # 振幅資料時用它；設成 None 就再退回上面的 reward_risk。
     #
     # 只抱一天（max_hold_days=1）時目標會貼齊當天漲停 —— 超過漲停的價位當天
     # 不存在。抱兩天時**不貼齊**：今天到不了，明天的漲停線是從今天收盤重算的。
@@ -392,6 +404,10 @@ def validate() -> list[str]:
             errs.append("SIGNAL.reward_risk 必須 > 0")
     elif s["target_pct"] <= 0:
         errs.append("SIGNAL.target_pct 必須 > 0（不要用目標就設成 None，退回 reward_risk）")
+    if s.get("target_from_amplitude"):
+        lo, hi = s.get("target_min_pct", 0), s.get("target_max_pct", 0)
+        if not 0 < lo <= hi:
+            errs.append("SIGNAL.target_min_pct / target_max_pct 必須 0 < 下限 <= 上限")
     if s.get("max_hold_days", 1) not in (1, 2):
         errs.append("SIGNAL.max_hold_days 只能是 1（當沖）或 2（最多抱到隔天）—— "
                     "三天以上的追蹤沒有實作")

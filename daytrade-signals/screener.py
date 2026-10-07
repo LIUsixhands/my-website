@@ -94,6 +94,37 @@ def volume_baseline(ts_list, volume_list, lookback_days: int) -> float:
     return sum(per_day[d] for d in days) / len(days)
 
 
+def average_amplitude(ts_list, highs, lows, closes, lookback_days: int) -> float | None:
+    """最近 N 個完整交易日的平均日振幅 %（含昨天）。算不出來回 None。
+
+    每天的振幅 = (當日最高 − 當日最低) ÷ **前一日收盤**。用前一日收盤當分母，
+    跟漲跌停、跟「從昨收算漲幾 %」是同一把尺。所以第一天只當作「前一日」，
+    不計入平均 —— 要 N 天振幅就要 N+1 天的 K 棒。
+
+    v8 拿它定停利目標：這檔股票平常一天就動這麼多，目標設在「它本來就動得到」
+    的地方，而不是每檔都一樣的 8%。
+    """
+    per_day: dict = {}
+    for ts, h, l, c in zip(ts_list, highs, lows, closes):
+        dt = _bar_time(ts)
+        if dt is None:
+            continue
+        d = dt.date()
+        hi, lo, _ = per_day.get(d, (float("-inf"), float("inf"), 0.0))
+        per_day[d] = (max(hi, float(h)), min(lo, float(l)), float(c))   # 收盤 = 最後一根
+    days = sorted(per_day)
+    ranges = []
+    for prev, d in zip(days, days[1:]):
+        prev_close = per_day[prev][2]
+        hi, lo, _ = per_day[d]
+        if prev_close > 0 and hi >= lo:
+            ranges.append((hi - lo) / prev_close * 100)
+    ranges = ranges[-lookback_days:]
+    if not ranges:
+        return None
+    return round(sum(ranges) / len(ranges), 2)
+
+
 # 量比迴圈每幾檔報一次進度。太密會把 log 洗掉，太疏就失去「它還活著」的作用。
 PROGRESS_EVERY = 10
 
@@ -196,6 +227,10 @@ def screen(broker: Broker) -> list[dict]:
             base = volume_baseline(getattr(kb, "ts", []), getattr(kb, "Volume", []),
                                    cfg["lookback_days"])
             r["volume_ratio"] = round(r["prev_volume"] / base, 2) if base > 0 else 1.0
+            # 同一份 K 棒順手算平均振幅（v8 的停利目標用它）—— 不多打任何 API。
+            r["avg_amplitude_pct"] = average_amplitude(
+                getattr(kb, "ts", []), getattr(kb, "High", []), getattr(kb, "Low", []),
+                getattr(kb, "Close", []), cfg["lookback_days"])
         except Exception as e:
             log.debug("%s 量比計算失敗，以 1.0 計：%s", r["code"], e)
             r["volume_ratio"] = 1.0

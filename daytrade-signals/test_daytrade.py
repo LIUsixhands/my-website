@@ -6523,8 +6523,8 @@ class TestV7TheEntryDesk(unittest.TestCase):
 
 
 class TestV7TheRulesAreWired(unittest.TestCase):
-    def test_the_shipped_config_is_v7(self):
-        self.assertEqual(config.RULESET, "v7")
+    def test_the_shipped_config_keeps_the_v7_window(self):
+        """v8 只動停利目標；v7 的進場窗口與取消時間到要原封不動。"""
         self.assertEqual(config.SIGNAL["entry_window_end"], "09:30:00")
         self.assertEqual(config.SIGNAL["signal_batch_at"], "09:05:00")
         self.assertIsNone(config.SIGNAL["exit_signal_at"])
@@ -6561,6 +6561,98 @@ class TestV7TheRulesAreWired(unittest.TestCase):
         src = inspect.getsource(dryrun.main)
         self.assertIn("signals.EntryDesk(", src)
         self.assertNotIn("SignalBatch(", src)
+
+
+# ══════════════════════════════════════════════════════
+# v8：停利目標依個股近 5 日平均振幅（3%～10%）
+# ══════════════════════════════════════════════════════
+def _kb_ohlc(rows):
+    """(YYYY-MM-DD, HH:MM, 高, 低, 收) → shioaji 形狀的假 kbars。"""
+    ts, h, l, c = [], [], [], []
+    for day, hhmm, hi, lo, cl in rows:
+        t = datetime(int(day[:4]), int(day[5:7]), int(day[8:10]),
+                     int(hhmm[:2]), int(hhmm[3:]), tzinfo=dt_timezone.utc)
+        ts.append(int(t.timestamp() * 1e9)); h.append(hi); l.append(lo); c.append(cl)
+    return ts, h, l, c
+
+
+class TestV8AverageAmplitude(unittest.TestCase):
+    def test_each_day_is_measured_against_the_previous_close(self):
+        rows = [("2026-10-01", "13:30", 101, 99, 100.0),     # 只當「前一日」
+                ("2026-10-02", "09:01", 104, 100, 102),
+                ("2026-10-02", "13:30", 103, 98, 102.0),      # 當日 104/98 → 6/100 = 6%
+                ("2026-10-05", "09:01", 103, 101, 102),
+                ("2026-10-05", "13:30", 104, 102, 103.0)]     # 104/101 → 3/102 = 2.94%
+        amp = screener.average_amplitude(*_kb_ohlc(rows), lookback_days=5)
+        self.assertAlmostEqual(amp, round((6.0 + 3 / 102 * 100) / 2, 2))
+
+    def test_only_the_last_n_days_count(self):
+        rows = [("2026-10-01", "13:30", 100, 100, 100.0),
+                ("2026-10-02", "13:30", 120, 100, 100.0),     # 20%：太舊，不該算進來
+                ("2026-10-05", "13:30", 102, 100, 100.0)]     # 2%
+        self.assertEqual(screener.average_amplitude(*_kb_ohlc(rows), lookback_days=1), 2.0)
+
+    def test_one_day_is_not_enough(self):
+        rows = [("2026-10-05", "09:01", 102, 98, 100.0)]
+        self.assertIsNone(screener.average_amplitude(*_kb_ohlc(rows), lookback_days=5))
+
+    def test_the_screener_stores_it_from_the_bars_it_already_fetched(self):
+        """不多打 API：用量比那一份 K 棒算。"""
+        src = inspect.getsource(screener.screen)
+        self.assertIn('r["avg_amplitude_pct"] = average_amplitude(', src)
+
+
+class TestV8PerStockTarget(unittest.TestCase):
+    IN_WINDOW = dtime(9, 3)
+
+    def _sig(self, amp):
+        st = ready_state(or_high=100.0, last=101.0, vwap=100.5)
+        st.amplitude_pct = amp
+        return evaluate(st, now=self.IN_WINDOW)
+
+    def test_the_target_follows_the_stocks_own_range(self):
+        """使用者：「訊號出來，你沒辦法依個股判斷停利目標嗎？」"""
+        sig = self._sig(5.4)
+        self.assertEqual(sig["target"], config.round_to_tick(101.0 * 1.054, "up"))
+        self.assertEqual((sig["target_pct"], sig["target_basis"]), (5.4, signals.TARGET_BY_AMPLITUDE))
+        self.assertNotEqual(self._sig(7.0)["target"], sig["target"])
+
+    def test_a_quiet_stock_gets_the_floor_and_a_wild_one_the_ceiling(self):
+        lo, hi = config.SIGNAL["target_min_pct"], config.SIGNAL["target_max_pct"]
+        self.assertEqual(self._sig(lo - 1.5)["target_pct"], lo)
+        self.assertEqual(self._sig(hi + 4.0)["target_pct"], hi)
+
+    def test_no_range_data_falls_back_to_the_fixed_target(self):
+        sig = self._sig(None)
+        self.assertEqual((sig["target_pct"], sig["target_basis"]),
+                         (config.SIGNAL["target_pct"], signals.TARGET_FIXED))
+
+    def test_switching_it_off_goes_back_to_the_fixed_target(self):
+        with unittest.mock.patch.dict(config.SIGNAL, {"target_from_amplitude": False}):
+            self.assertEqual(self._sig(5.4)["target_basis"], signals.TARGET_FIXED)
+
+    def test_the_message_says_why_this_number(self):
+        text = format_signal(self._sig(5.4), 1, 1)
+        self.assertIn("+5.4%", text)
+        self.assertIn("近 5 日平均一天振幅 5.4%", text)
+        self.assertNotIn("取下限", text)
+        low = format_signal(self._sig(1.9), 1, 1)
+        self.assertIn("平均一天振幅 1.9%，取下限 3%", low)
+
+    def test_the_watchlist_feeds_each_stock_its_own_range(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn('st.amplitude_pct = i.get("avg_amplitude_pct") or i.get("amplitude_pct")', src)
+
+    def test_bad_limits_are_rejected(self):
+        with unittest.mock.patch.dict(config.SIGNAL, {"target_min_pct": 12.0}):
+            self.assertIn("target_min_pct", " / ".join(config.validate()))
+
+    def test_the_shipped_config_is_v8(self):
+        self.assertEqual(config.RULESET, "v8")
+        self.assertTrue(config.SIGNAL["target_from_amplitude"])
+        self.assertEqual((config.SIGNAL["target_min_pct"], config.SIGNAL["target_max_pct"]),
+                         (3.0, 10.0))
+        self.assertEqual(config.validate(), [])
 
 
 if __name__ == "__main__":
