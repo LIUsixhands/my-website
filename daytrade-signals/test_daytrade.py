@@ -7076,5 +7076,137 @@ class TestTheMorningListIsQuietUnlessSomethingIsWrong(unittest.TestCase):
         self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
 
 
+class TestTheBatchIsRepricedWhenItGoesOut(unittest.TestCase):
+    """盲點一：09:02:10 突破的那一檔要等到 09:05 才發，訊號上的進場價是 3 分鐘前
+    的價格。發出前用當下價格重算進場、停損、目標、張數；突破已經失敗的不發。"""
+
+    AT = datetime(2026, 10, 9, 9, 5)
+
+    def _state(self, last):
+        st = ready_state(or_high=100.0, last=100.2, vwap=99.8)
+        st.amplitude_pct = 5.0
+        sig = evaluate(st, now=dtime(9, 3))
+        sig["time"] = "09:02:10"
+        st.last_price = last
+        return st, sig
+
+    def test_the_price_is_the_one_at_send_time(self):
+        st, sig = self._state(last=101.5)
+        fresh, why = signals.reprice_at_send(sig, st, self.AT)
+        self.assertIsNone(why)
+        same = signals._price_plan(st, 101.5)
+        for k in ("entry", "stop", "target", "lots", "extension_pct"):
+            self.assertEqual(fresh[k], same[k], k)
+        self.assertEqual((fresh["breakout_at"], fresh["breakout_price"]), ("09:02:10", 100.2))
+        self.assertEqual(fresh["time"], "09:05:00")
+        self.assertEqual(sig["entry"], 100.2)                     # 原訊號不被改掉
+
+    def test_the_message_says_what_happened(self):
+        st, sig = self._state(last=101.5)
+        text = format_signal(signals.reprice_at_send(sig, st, self.AT)[0], 1, 1)
+        self.assertIn("進場：101.50", text)
+        self.assertIn("09:02 突破時是 100.20", text)
+        self.assertIn("09:05 發出當下的價格（+1.3%）", text)
+        self.assertNotIn("突破時是", format_signal(sig, 1, None))   # 即時發的沒有這一行
+
+    def test_a_failed_breakout_is_not_sent(self):
+        st, sig = self._state(last=100.05)                        # 掉回區間高 100.10 以下
+        self.assertEqual(signals.reprice_at_send(sig, st, self.AT),
+                         (None, signals.BLOCK_FELL_BACK))
+
+    def test_below_the_average_price_is_not_sent(self):
+        st, sig = self._state(last=100.5)
+        st.vwap = 100.8
+        self.assertEqual(signals.reprice_at_send(sig, st, self.AT)[1], signals.BLOCK_BELOW_VWAP)
+
+    def test_locked_limit_up_is_not_sent(self):
+        st, sig = self._state(last=100.5)
+        st.last_price = config.limit_up(st.prev_close)
+        self.assertEqual(signals.reprice_at_send(sig, st, self.AT)[1], signals.BLOCK_LOCKED)
+
+    def test_no_new_information_changes_nothing(self):
+        _, sig = self._state(last=101.5)
+        self.assertEqual(signals.reprice_at_send(sig, None, self.AT), (sig, None))
+        st = SymbolState("2330", 99.0)
+        self.assertEqual(signals.reprice_at_send(sig, st, self.AT), (sig, None))
+
+    def test_the_desk_reprices_the_batch_only(self):
+        sent, blocked = [], []
+        seen = []
+
+        def reprice(sig, now):
+            seen.append(sig["code"])
+            return (None, "X") if sig["code"] == "B" else (dict(sig, entry=9.9), None)
+        desk = signals.EntryDesk(emit=lambda sig, now, n: sent.append((sig["code"], sig.get("entry"), n)) or True,
+                                 blocked=lambda sig, why: blocked.append((sig["code"], why)),
+                                 say=lambda t: None, watched=20,
+                                 now=datetime(2026, 10, 9, 8, 50), reprice=reprice)
+        desk.offer({"code": "A", "volume_surge": 3.0, "entry": 1.0}, datetime(2026, 10, 9, 9, 3))
+        desk.offer({"code": "B", "volume_surge": 2.0, "entry": 1.0}, datetime(2026, 10, 9, 9, 4))
+        desk.tick(self.AT)
+        self.assertEqual(sent, [("A", 9.9, 1)])                  # 批次大小算的是真的發出去的
+        self.assertEqual(blocked, [("B", "X")])
+        desk.offer({"code": "C", "volume_surge": 2.0, "entry": 5.0}, datetime(2026, 10, 9, 9, 10))
+        self.assertEqual(sent[-1], ("C", 5.0, None))             # 即時發的不重算
+        self.assertEqual(seen, ["A", "B"])
+        self.assertEqual(desk.sent, 2)
+
+    def test_it_is_wired_into_the_live_loop_and_the_dryrun(self):
+        self.assertIn("reprice_at_send(", inspect.getsource(signals.run))
+        import dryrun
+        self.assertIn("signals.reprice_at_send(", inspect.getsource(dryrun))
+
+
+class TestBreakoutsAfterTheWindowAreRecorded(unittest.TestCase):
+    """盲點五：09:30 是硬截止。之後才突破的不發，但要記下來，20 天後才回答得了
+    「截止是不是太早」—— 不記的話這一題永遠只能用猜的。"""
+
+    def _st(self):
+        st = ready_state(or_high=100.0, last=100.5, vwap=100.0)
+        return st
+
+    def _run(self, st, h, m):
+        rows = []
+        ok = signals.record_late_breakout(st, datetime(2026, 10, 9, h, m),
+                                          record=lambda sig, why: rows.append((sig, why)))
+        return ok, rows
+
+    def test_a_breakout_at_0940_is_recorded_once_and_not_sent(self):
+        st = self._st()
+        ok, rows = self._run(st, 9, 40)
+        self.assertTrue(ok)
+        self.assertEqual(rows[0][1], signals.BLOCK_AFTER_WINDOW)
+        self.assertEqual(rows[0][0]["time"], "09:40:00")
+        self.assertEqual(st.signaled, 0)                         # 沒有發
+        self.assertEqual(self._run(st, 9, 50), (False, []))      # 一檔一天只記一次
+
+    def test_only_between_0930_and_1030(self):
+        self.assertFalse(self._run(self._st(), 9, 29)[0])
+        self.assertTrue(self._run(self._st(), 9, 30)[0])
+        self.assertFalse(self._run(self._st(), 10, 30)[0])
+
+    def test_a_stock_that_already_signalled_is_not_recorded_again(self):
+        st = self._st()
+        st.signaled = 1
+        self.assertFalse(self._run(st, 9, 40)[0])
+
+    def test_no_breakout_means_nothing_and_it_can_still_record_later(self):
+        st = self._st()
+        st.last_price = 99.0
+        self.assertFalse(self._run(st, 9, 40)[0])
+        self.assertFalse(st.late_recorded)
+        st.last_price = 100.5
+        self.assertTrue(self._run(st, 9, 45)[0])
+
+    def test_evaluate_still_refuses_after_the_window_unless_asked(self):
+        st = self._st()
+        self.assertIsNone(evaluate(st, now=dtime(9, 40)))
+        self.assertIsNotNone(evaluate(st, now=dtime(9, 40), ignore_window=True))
+
+    def test_it_is_wired_into_the_live_loop(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("record_late_breakout(st, datetime.now())", src)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

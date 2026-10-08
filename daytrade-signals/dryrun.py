@@ -182,7 +182,9 @@ def main():
     # 收尾訊息也要走一遍：它存在的理由就是「0 檔的日子不能是靜音的」。
     desk = signals.EntryDesk(emit=emit, blocked=lambda sig, why: blocked.append(sig),
                              say=lambda text: print(text + "\n"), watched=len(states),
-                             now=datetime.combine(today, dtime(8, 50)))
+                             now=datetime.combine(today, dtime(8, 50)),
+                             reprice=lambda sig, now: signals.reprice_at_send(
+                                 sig, states.get(str(sig["code"])), now))
 
     for t, n, code, price, total_volume, avg, hi, lo in streams:
         st = states[code]

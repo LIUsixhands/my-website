@@ -284,6 +284,7 @@ class SymbolState:
     # v9：當日開盤價。0 = 不知道（tick 沒帶 open，而且程式是開盤區間之後才開的）。
     day_open: float = 0.0
     gap_logged: bool = False                  # 「離昨收太遠」一天只記一次 log
+    late_recorded: bool = False               # 09:30 之後的突破已經記過一筆了
     avg_volume_lots: float | None = None
     aggressive_buy: int = 0                   # 外盤成交張數
     aggressive_sell: int = 0                  # 內盤成交張數
@@ -425,55 +426,15 @@ def target_price(entry: float, stop: float, amplitude_pct: float | None = None) 
     return config.round_to_tick(entry + (entry - stop) * config.SIGNAL["reward_risk"], "up")
 
 
-def evaluate(st: SymbolState, now: dtime | None = None, *,
-             ignore_symbol_cap: bool = False) -> dict | None:
-    """ignore_symbol_cap=True 時照樣算出訊號內容，不管「一檔一天只發一次」。
+def _price_plan(st: SymbolState, entry: float) -> dict | None:
+    """以 entry 為進場價，算出停損、目標、張數。進場價不可執行（已漲停、停損
+    進位後等於進場價）就回 None。
 
-    這是給候選紀錄用的：被上限擋掉的那些訊號本身是合格的，只是不推播。
-    不把它們算出來，20 天後就回答不了「上限該不該放寬」。
+    從 evaluate() 拆出來，是因為 09:05 那一批要用**發出當下**的價格重算一次
+    （reprice_at_send）—— 兩邊必須是同一套算法，不然重算出來的停損目標會跟
+    即時發的那些對不起來。
     """
     cfg = config.SIGNAL
-    now = now or datetime.now().time()
-
-    if not st.or_locked:
-        return None
-    if not ignore_symbol_cap and st.signaled >= cfg["max_signals_per_symbol"]:
-        return None
-    if now >= _t(cfg["entry_window_end"]):
-        return None
-
-    trigger = st.or_high * (1 + cfg["breakout_buffer_pct"] / 100)
-    if st.last_price < trigger:
-        return None
-    if cfg["require_above_vwap"]:
-        # 均價線拿不到時直接不發。原本寫成 `cfg[...] and st.vwap and ...`，
-        # vwap 為 0 會讓整個條件短路成 False —— 規則你以為開著，其實整天沒作用。
-        if not st.vwap:
-            if not st.vwap_warned:
-                log.warning("%s 沒有均價線（avg_price=0），require_above_vwap 無從判斷，"
-                            "本檔今日不發訊號", st.code)
-                st.vwap_warned = True
-            return None
-        if st.last_price < st.vwap:
-            return None
-    surge = st.volume_surge()
-    if surge < cfg["volume_surge_ratio"]:
-        return None
-    # v9：開盤或回落低點要在昨收附近。放在突破／均價線／量能之後判，是為了
-    # 只有「其他都過了、只差這一關」的那一刻才留 log —— 每個 tick 都記會淹掉檔案。
-    band = cfg.get("near_prev_close_pct")
-    near_basis = None
-    if band is not None:
-        near_basis = config.near_prev_close(st.prev_close, st.day_open, st.day_low, band)
-        if near_basis is None:
-            if not st.gap_logged:
-                log.info("%s 突破、均價線、量能都過了，但開盤 %s／最低 %s 都不在昨收 %s ±%g%% "
-                         "以內，不發訊號", st.code, st.day_open or "?", st.day_low or "?",
-                         st.prev_close or "?", band)
-                st.gap_logged = True
-            return None
-
-    entry = st.last_price
     # 已經漲停鎖死就不要發了 —— 那個價位你買不到，就算買到也沒有上檔空間。
     cap = config.limit_up(st.prev_close)
     if cap and entry >= cap:
@@ -529,11 +490,8 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
     oversized = lots < 1
     lots = max(1, lots)
 
+
     return {
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "code": st.code,
-        "name": st.name,
-        "direction": "做多",
         "entry": entry,
         "stop": stop,
         "target": target,
@@ -547,14 +505,77 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         # v8：目標往上幾 %、依據什麼。訊息要講得出「為什麼是這個數字」。
         "target_pct": target_pct,
         "target_basis": target_basis,
-        "amplitude_pct": st.amplitude_pct,
         "limit_up": cap,
-        "or_high": st.or_high,
         # 進場價比突破點高出幾 % —— 追高的程度。以前只進 outcomes.csv，
         # 但看訊號的那一刻才是需要它的時候。
         "extension_pct": (round((entry - st.or_high) / st.or_high * 100, 2)
                           if st.or_high else None),
         "stop_rule": stop_rule,
+    }
+
+
+def evaluate(st: SymbolState, now: dtime | None = None, *,
+             ignore_symbol_cap: bool = False,
+             ignore_window: bool = False) -> dict | None:
+    """ignore_symbol_cap=True 時照樣算出訊號內容，不管「一檔一天只發一次」。
+
+    這是給候選紀錄用的：被上限擋掉的那些訊號本身是合格的，只是不推播。
+    不把它們算出來，20 天後就回答不了「上限該不該放寬」。
+
+    ignore_window=True 同理，給「09:30 之後才突破」的那些用 —— 只記錄、不發。
+    """
+    cfg = config.SIGNAL
+    now = now or datetime.now().time()
+
+    if not st.or_locked:
+        return None
+    if not ignore_symbol_cap and st.signaled >= cfg["max_signals_per_symbol"]:
+        return None
+    if not ignore_window and now >= _t(cfg["entry_window_end"]):
+        return None
+
+    trigger = st.or_high * (1 + cfg["breakout_buffer_pct"] / 100)
+    if st.last_price < trigger:
+        return None
+    if cfg["require_above_vwap"]:
+        # 均價線拿不到時直接不發。原本寫成 `cfg[...] and st.vwap and ...`，
+        # vwap 為 0 會讓整個條件短路成 False —— 規則你以為開著，其實整天沒作用。
+        if not st.vwap:
+            if not st.vwap_warned:
+                log.warning("%s 沒有均價線（avg_price=0），require_above_vwap 無從判斷，"
+                            "本檔今日不發訊號", st.code)
+                st.vwap_warned = True
+            return None
+        if st.last_price < st.vwap:
+            return None
+    surge = st.volume_surge()
+    if surge < cfg["volume_surge_ratio"]:
+        return None
+    # v9：開盤或回落低點要在昨收附近。放在突破／均價線／量能之後判，是為了
+    # 只有「其他都過了、只差這一關」的那一刻才留 log —— 每個 tick 都記會淹掉檔案。
+    band = cfg.get("near_prev_close_pct")
+    near_basis = None
+    if band is not None:
+        near_basis = config.near_prev_close(st.prev_close, st.day_open, st.day_low, band)
+        if near_basis is None:
+            if not st.gap_logged:
+                log.info("%s 突破、均價線、量能都過了，但開盤 %s／最低 %s 都不在昨收 %s ±%g%% "
+                         "以內，不發訊號", st.code, st.day_open or "?", st.day_low or "?",
+                         st.prev_close or "?", band)
+                st.gap_logged = True
+            return None
+
+    plan = _price_plan(st, st.last_price)
+    if plan is None:
+        return None
+    return {
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "code": st.code,
+        "name": st.name,
+        "direction": "做多",
+        **plan,
+        "amplitude_pct": st.amplitude_pct,
+        "or_high": st.or_high,
         "vwap": round(st.vwap, 2),
         "volume_surge": round(surge, 2),
         # 內外盤比：量能倍數說「量有多大」，這一欄說「那些量是誰主動的」。
@@ -662,6 +683,12 @@ def format_signal(sig: dict, ordinal: int, batch_total: int | None) -> str:
         f"建議張數：{sig['lots']} 張（單筆風險 {r['per_trade_risk']:,} 元）",
         f"量能倍數：{sig['volume_surge']:.2f}x",
     ]
+    if sig.get("breakout_at") and sig.get("breakout_price"):
+        # 09:05 那一批：進場價已經換成發出當下的價格，講清楚突破時是多少。
+        moved = (sig["entry"] - sig["breakout_price"]) / sig["breakout_price"] * 100
+        lines.append(f"ℹ️ {sig['breakout_at'][:5]} 突破時是 {sig['breakout_price']:.2f}，"
+                     f"上面的進場價是 {sig['time'][:5]} 發出當下的價格（{moved:+.1f}%），"
+                     f"停損、目標、張數都照這個價重算過。")
     near = _near_line(sig)
     if near:
         lines.append(near)
@@ -765,6 +792,65 @@ def record_candidate(sig: dict, reason: str, path=None) -> None:
 
 
 BLOCK_BATCH_RANK = "批次排序未入選"
+BLOCK_FELL_BACK = "發出時已跌回區間"      # 09:05 批次：突破後又掉回區間高以下
+BLOCK_BELOW_VWAP = "發出時已跌破均價線"
+BLOCK_LOCKED = "發出時已漲停"            # 買不到
+BLOCK_AFTER_WINDOW = "09:30 之後才突破"   # 只記錄，不發
+
+
+def reprice_at_send(sig: dict, st: "SymbolState | None",
+                    now: datetime) -> tuple[dict | None, str | None]:
+    """09:05 那一批發出前，用**當下**的價格重算進場、停損、目標、張數。
+
+    09:02:10 突破的那一檔要等到 09:05 才發，原本訊號上的進場價是 3 分鐘前
+    的價格 —— 那時你已經買不到了，停損距離與賺賠比也都不是訊息上寫的那樣。
+    這一步把它換成你收到訊息那一刻真的能買的價格。
+
+    已經跌回區間（突破失敗）、跌破均價線、或漲停鎖死買不到的，不發，
+    回傳 (None, 原因) 讓呼叫端記進 candidates.csv。
+    st 不知道或還沒有報價時原樣放行 —— 沒有新資訊就不要亂改。
+    """
+    if st is None or not st.last_price:
+        return sig, None
+    cfg = config.SIGNAL
+    price = st.last_price
+    if price < st.or_high * (1 + cfg["breakout_buffer_pct"] / 100):
+        return None, BLOCK_FELL_BACK
+    if cfg["require_above_vwap"] and st.vwap and price < st.vwap:
+        return None, BLOCK_BELOW_VWAP
+    plan = _price_plan(st, price)
+    if plan is None:
+        return None, BLOCK_LOCKED
+    fresh = dict(sig, **plan)
+    fresh.update(
+        time=now.strftime("%H:%M:%S"),
+        vwap=round(st.vwap, 2),
+        breakout_at=sig.get("time"),
+        breakout_price=sig.get("entry"),
+    )
+    return fresh, None
+
+
+# 09:30 之後的突破記到幾點。只是為了回答「09:30 截止是不是太早」，
+# 不必記一整天 —— 10:30 之後的突破跟開盤動能已經是兩回事。
+LATE_RECORD_UNTIL = dtime(10, 30)
+
+
+def record_late_breakout(st: "SymbolState", now: datetime, record=None) -> bool:
+    """09:30 之後才突破、今天又還沒發過訊號的那一檔：算出訊號內容、記一筆候選，
+    **不發**。一檔一天只記一次。回傳有沒有記。"""
+    if st.late_recorded or st.signaled:
+        return False
+    t = now.time()
+    if not (_t(config.SIGNAL["entry_window_end"]) <= t < LATE_RECORD_UNTIL):
+        return False
+    sig = evaluate(st, t, ignore_window=True)
+    if not sig:
+        return False
+    sig["time"] = now.strftime("%H:%M:%S")
+    st.late_recorded = True
+    (record or record_candidate)(sig, BLOCK_AFTER_WINDOW)
+    return True
 
 
 class SignalBatch:
@@ -820,8 +906,11 @@ class EntryDesk:
     """
 
     def __init__(self, emit, blocked, say, watched: int, sent: int = 0,
-                 now: datetime | None = None):
+                 now: datetime | None = None, reprice=None):
         cfg = config.SIGNAL
+        # reprice(sig, now) -> (sig | None, 原因)：09:05 那一批發出前用當下價格重算。
+        # None = 不重算（測試、舊呼叫端）。
+        self.reprice = reprice
         self.batch = SignalBatch(_t(cfg["signal_batch_at"]),
                                  config.RISK["max_signals_per_day"])
         self.window_end = _t(cfg["entry_window_end"])
@@ -861,6 +950,15 @@ class EntryDesk:
         if chosen is not None:
             for sig in rest:
                 self.blocked(sig, BLOCK_BATCH_RANK)
+            if self.reprice:
+                fresh = []
+                for sig in chosen:
+                    new, why = self.reprice(sig, now)
+                    if new is None:
+                        self.blocked(sig, why)
+                    else:
+                        fresh.append(new)
+                chosen = fresh
             self._send(chosen, now, len(chosen))
         if closing:
             self.say(format_window_closed(self.sent, self.watched))
@@ -1562,7 +1660,9 @@ def run():
         return True
 
     desk = EntryDesk(emit=_emit, blocked=record_candidate, say=notify,
-                     watched=len(states), sent=len(gate.state.get("signals", [])))
+                     watched=len(states), sent=len(gate.state.get("signals", [])),
+                     reprice=lambda sig, now: reprice_at_send(
+                         sig, states.get(str(sig["code"])), now))
     # 盤中重開時，今天已經發過的訊號也要繼續盯 —— 否則它們的結局只剩收盤後才知道。
     # 代價是已經結束的那幾筆會被重新追蹤，價格再次碰到時會重複推播一次。
     for past in gate.state.get("signals", []):
@@ -1596,6 +1696,9 @@ def run():
         sig = evaluate(st, ignore_symbol_cap=True)
         if sig:
             desk.offer(sig)         # 09:05 前收集；之後一出現就發
+        elif desk.closed:
+            # 09:30 之後的突破只記錄、不發 —— 20 天後回答「截止是不是太早」。
+            record_late_breakout(st, datetime.now())
         # 到點就送。從回呼觸發是因為 09:05 的報價很密，幾乎必然在一秒內進來；
         # 下面的主迴圈是備援，萬一整批都沒報價也不會卡著不發。
         desk.tick()
