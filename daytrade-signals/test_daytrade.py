@@ -7557,6 +7557,13 @@ class TestV10TheLiveTracker(unittest.TestCase):
         tr.on_price("2330", 100.5, _at(20), total_volume=1290)
         self.assertEqual(self.resolved[-1][0], exits.VOLUME_DRY)
 
+    def test_a_minute_close_exit_says_so_instead_of_slippage(self):
+        tr = self._tracker()
+        tr.on_price("2330", 99.3, _at(1, 50))
+        msg = tr.on_price("2330", 99.6, _at(2, 1))[0]
+        self.assertIn("上一分鐘收在 99.30，在線下；現在的報價 99.60", msg)
+        self.assertNotIn("穿過去", msg)
+
     def test_flatten_after_half_reports_both_legs(self):
         tr = self._tracker()
         tr.on_price("2330", 103.0, _at(1))

@@ -1124,6 +1124,9 @@ def try_emit(st: SymbolState, gate: RiskGate, lock, sig: dict,
 # ══════════════════════════════════════════════════════
 # 訊號發出之後 —— 盯到結局為止
 # ══════════════════════════════════════════════════════
+# v10 一分鐘收盤確認的出場原因
+MINUTE_CLOSE_EXITS = (exits.BELOW_OPEN, exits.BACK_IN_RANGE, exits.BELOW_VWAP)
+
 RESOLUTION_MARK = {
     outcome.TARGET: "\u2705",        # ✅
     outcome.STOP: "\U0001f6d1",      # 🛑
@@ -1235,7 +1238,11 @@ def format_resolution(o: OpenSignal, price: float, verdict: str,
         f"進場 {o.entry:.2f} → 出場 {exit_price:.2f}",
         f"{gross:+.2f}%（扣掉來回成本 {net:+.2f}%）　{r:+.2f}R",
     ]
-    if abs(price - exit_price) >= 0.01:
+    if verdict in MINUTE_CLOSE_EXITS:
+        # 一分鐘收盤確認的那幾條：出場價是上一分鐘的收盤，現在的報價是下一分鐘的
+        # 第一筆 —— 不是「穿過去」，寫成穿價會讓人以為算錯了。
+        lines.append(f"上一分鐘收在 {exit_price:.2f}，在線下；現在的報價 {price:.2f}")
+    elif abs(price - exit_price) >= 0.01:
         lines.append(f"觸發時報價 {price:.2f}（穿過去的部分不計入上面的報酬率）")
     if o.carried:
         lines.append("（昨天留倉過來的，成本以留倉稅率 0.3% 計）")
@@ -1271,7 +1278,9 @@ def _format_two_legs(o: OpenSignal, price: float, verdict: str,
         f"{rest}：{o.entry:.2f} → {exit_price:.2f}（{leg(exit_price):+.2f}%）",
         f"合計 {pct:+.2f}%（扣掉來回成本 {net:+.2f}%）　{r:+.2f}R",
     ]
-    if abs(price - exit_price) >= 0.01:
+    if verdict in MINUTE_CLOSE_EXITS:
+        lines.append(f"上一分鐘收在 {exit_price:.2f}，在線下；現在的報價 {price:.2f}")
+    elif abs(price - exit_price) >= 0.01:
         lines.append(f"觸發時報價 {price:.2f}（穿過去的部分不計入上面的報酬率）")
     lines += [
         f"訊號發出於 {o.time}",
