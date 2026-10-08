@@ -7708,11 +7708,11 @@ class TestV10TheRulesAreWired(unittest.TestCase):
                 self.assertTrue(config.validate(), k)
 
 
-class TestOnlyTheTopThreeAreWatched(unittest.TestCase):
-    """使用者 10-08：「盤前選出三檔，就盯這三檔，按規則走」。"""
+class TestOnlyTheTopNAreWatched(unittest.TestCase):
+    """使用者 10-08：先「盤前選出三檔，就盯這三檔」，同晚改成盯 10 檔。"""
 
     ROWS = [{"code": str(1000 + i), "name": f"股{i}", "prev_close": 50.0, "amplitude_pct": 5.0,
-             "prev_volume": 9000, "volume_ratio": 10.0 - i} for i in range(6)]
+             "prev_volume": 9000, "volume_ratio": 20.0 - i} for i in range(13)]
 
     def _run(self, argv):
         with tempfile.TemporaryDirectory() as d, \
@@ -7725,10 +7725,10 @@ class TestOnlyTheTopThreeAreWatched(unittest.TestCase):
             screener.main(argv)
             return json.loads((Path(d) / "w.json").read_text(encoding="utf-8"))
 
-    def test_the_top_three_by_volume_ratio_are_watched(self):
+    def test_the_top_ten_by_volume_ratio_are_watched(self):
         out = self._run(["--push", "--alert-only"])
-        self.assertEqual([r["code"] for r in out["items"]], ["1000", "1001", "1002"])
-        self.assertEqual([r["code"] for r in out["not_watched"]], ["1003", "1004", "1005"])
+        self.assertEqual([r["code"] for r in out["items"]], [str(1000 + i) for i in range(10)])
+        self.assertEqual([r["code"] for r in out["not_watched"]], ["1010", "1011", "1012"])
 
     def test_the_command_line_can_still_override(self):
         self.assertEqual(len(self._run(["--top", "5"])["items"]), 5)
@@ -7736,10 +7736,11 @@ class TestOnlyTheTopThreeAreWatched(unittest.TestCase):
     def test_none_watches_the_whole_pool(self):
         with unittest.mock.patch.dict(config.SCREEN, {"watch_top": None}):
             out = self._run([])
-        self.assertEqual((len(out["items"]), out["not_watched"]), (6, []))
+        self.assertEqual((len(out["items"]), out["not_watched"]), (13, []))
 
-    def test_the_shipped_number_is_three_and_validated(self):
-        self.assertEqual(config.SCREEN["watch_top"], 3)
+    def test_the_shipped_number_is_ten_and_validated(self):
+        self.assertEqual(config.SCREEN["watch_top"], 10)
+        self.assertEqual(config.RISK["max_signals_per_day"], 3)          # 盯得多，做的不多
         for bad in (0, -1, 2.5):
             with unittest.mock.patch.dict(config.SCREEN, {"watch_top": bad}):
                 self.assertIn("watch_top", " / ".join(config.validate()))

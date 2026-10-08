@@ -10,10 +10,9 @@ screener.py — 盤前選股。每天 08:30 跑一次。
   --top      砍掉的是**監看範圍**（寫進 watchlist.json，signals.py 真的會去盯的）
   --push-top 砍掉的只是**推播上顯示幾檔**（給人看的，不影響程式監看誰）
 
-v10 起預設只盯量比前 3 檔（config.SCREEN["watch_top"]，使用者 10-08：「盤前選出
-三檔，就盯這三檔，按規則走」）。代價要記著：監看 20 檔時「有機會觸發」的標的多
-好幾倍；只盯 3 檔，多數日子會是 0 訊號，20 天的樣本數會少很多。沒被選上的那幾檔
-照樣存進當日存檔（not_watched），事後查得到。
+v10 起預設只盯量比前 10 檔（config.SCREEN["watch_top"]）。使用者 10-08 先選 3 檔，
+知道 3 檔多數日子會是 0 訊號後改成 10 檔；一天最多 3 個訊號的上限不變。沒被選上
+的那幾檔照樣存進當日存檔（not_watched），事後查得到。
 
 輸出 watchlist.json：10~20 檔候選 + 每檔的關鍵水位（昨高、昨低、昨均價、量能基準）。
 這一層只做「收斂」，不做預測。把 1800 檔縮到你眼睛顧得住的數量，就是它全部的工作。
@@ -386,7 +385,7 @@ def run(args) -> None:
     broker = Broker()
     watchlist = screen(broker)
     dropped = []
-    # 盯幾檔：命令列 --top 優先，沒給就照 config（v10 起是 3 檔）
+    # 盯幾檔：命令列 --top 優先，沒給就照 config（v10 起是 10 檔）
     top = args.top if args.top is not None else config.SCREEN.get("watch_top")
     if top is not None and len(watchlist) > top:
         # rows 已在 screen() 裡依 (量比, 振幅) 由高到低排好，直接取前 N 檔
@@ -398,7 +397,7 @@ def run(args) -> None:
         "round_trip_cost_pct": round(config.round_trip_cost_pct(), 4),
         "items": watchlist,
         # 沒被選上的那幾檔也存著（signals.py 不看這一欄）。不存的話，
-        # 「只盯 3 檔是不是漏掉了好的」這一題永遠沒有資料可以回答。
+        # 「只盯前幾檔是不是漏掉了好的」這一題永遠沒有資料可以回答。
         "not_watched": dropped,
     }
     config.WATCHLIST_FILE.write_text(
