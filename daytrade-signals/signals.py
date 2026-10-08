@@ -297,6 +297,7 @@ class SymbolState:
     day_open: float = 0.0
     gap_logged: bool = False                  # 「離昨收太遠」一天只記一次 log
     late_recorded: bool = False               # 09:30 之後的突破已經記過一筆了
+    weak_recorded: bool = False               # 「量不夠」的突破已經記過一筆了
     avg_volume_lots: float | None = None
     aggressive_buy: int = 0                   # 外盤成交張數
     aggressive_sell: int = 0                  # 內盤成交張數
@@ -574,13 +575,17 @@ def _price_plan(st: SymbolState, entry: float, now: dtime | None = None) -> dict
 
 def evaluate(st: SymbolState, now: dtime | None = None, *,
              ignore_symbol_cap: bool = False,
-             ignore_window: bool = False) -> dict | None:
+             ignore_window: bool = False,
+             min_surge: float | None = None) -> dict | None:
     """ignore_symbol_cap=True 時照樣算出訊號內容，不管「一檔一天只發一次」。
 
     這是給候選紀錄用的：被上限擋掉的那些訊號本身是合格的，只是不推播。
     不把它們算出來，20 天後就回答不了「上限該不該放寬」。
 
     ignore_window=True 同理，給「09:30 之後才突破」的那些用 —— 只記錄、不發。
+
+    min_surge：量能門檻換成這個數字（給「量不夠」的紀錄用，見 record_weak_volume）。
+    沒給就是 config 的 volume_surge_ratio。量能算不出來（0）的一律不算。
     """
     cfg = config.SIGNAL
     now = now or datetime.now().time()
@@ -607,7 +612,8 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         if st.last_price < st.vwap:
             return None
     surge = st.volume_surge()
-    if surge < cfg["volume_surge_ratio"]:
+    need = cfg["volume_surge_ratio"] if min_surge is None else min_surge
+    if surge <= 0 or surge < need:
         return None
     # v9：開盤或回落低點要在昨收附近。放在突破／均價線／量能之後判，是為了
     # 只有「其他都過了、只差這一關」的那一刻才留 log —— 每個 tick 都記會淹掉檔案。
@@ -905,7 +911,14 @@ _push_warned = False
 CANDIDATE_FILE = config.BASE_DIR / "candidates.csv"
 CANDIDATE_FIELDS = ("date", "code", "name", "time", "entry", "stop", "target",
                     "lots", "reason", "or_high", "vwap", "volume_surge", "rank",
-                    "sim_from", "sim_move_pct", "sim_ups", "sim_downs")
+                    "sim_from", "sim_move_pct", "sim_ups", "sim_downs",
+                    # 收盤回推要照**跟訊號一樣**的出場規則走，計畫就得跟著寫下來。
+                    # 10-08 晚以前少了這幾欄：v10 的候選會被當成舊的「停損／目標」
+                    # 回推，跟真的訊號用的是兩把尺（v10 還沒上線，沒有資料受影響）。
+                    "ruleset", "max_hold_days", "exit_rules", "key_level", "half_at",
+                    "trail_pct", "reason_buffer_pct", "vol_window_min", "vol_ratio",
+                    "flat_pct", "confirm", "vol_base", "entry_cum_volume",
+                    "category", "bid_ask_ratio", "open_gap_pct", "low_gap_pct")
 # 同一檔的候選之間至少隔這麼久。不設的話突破後每個 tick 都會記一筆，
 # 記到的是同一次突破的雜訊，不是「另一次進場機會」。
 CANDIDATE_COOLDOWN = timedelta(minutes=5)
@@ -958,6 +971,7 @@ BLOCK_FELL_BACK = "發出時已跌回區間"      # 09:05 批次：突破後又�
 BLOCK_BELOW_VWAP = "發出時已跌破均價線"
 BLOCK_LOCKED = "發出時已漲停"            # 買不到
 BLOCK_AFTER_WINDOW = "09:30 之後才突破"   # 只記錄，不發
+BLOCK_WEAK_VOLUME = "量能未達門檻"        # 其他都過了、只差量能（只記錄，不發）
 
 
 def reprice_at_send(sig: dict, st: "SymbolState | None",
@@ -1012,6 +1026,31 @@ def record_late_breakout(st: "SymbolState", now: datetime, record=None) -> bool:
     sig["time"] = now.strftime("%H:%M:%S")
     st.late_recorded = True
     (record or record_candidate)(sig, BLOCK_AFTER_WINDOW)
+    return True
+
+
+def record_weak_volume(st: "SymbolState", now: datetime, record=None) -> bool:
+    """進場窗口內，突破、均價線都過了、只差量能不到門檻的那一檔：照樣算出訊號
+    內容（量能倍數照實記）、記一筆候選，**不發**。一檔一天只記第一次。
+
+    使用者 10-08 問「為什麼定 1.8 倍」—— 那是第一版的經驗值，從沒驗證過，而
+    v4 把量能的比法改了之後它的意思也變了。只看發出去的訊號回答不了「門檻放寬
+    到 1.5 會多哪些、結果如何」，因為量不夠的根本沒有紀錄。這就是那份紀錄。
+
+    已經發過訊號的那一檔不記（它的量後來夠了，答案在 outcomes.csv）。之後才
+    發訊號的也照樣留著這一筆 —— 「門檻低一點，會早幾分鐘進場」也是答案的一部分。
+    """
+    if st.weak_recorded or st.signaled:
+        return False
+    t = now.time()
+    if t >= _t(config.SIGNAL["entry_window_end"]):
+        return False
+    sig = evaluate(st, t, min_surge=0.0)
+    if not sig or sig["volume_surge"] >= config.SIGNAL["volume_surge_ratio"]:
+        return False
+    sig["time"] = now.strftime("%H:%M:%S")
+    st.weak_recorded = True
+    (record or record_candidate)(sig, BLOCK_WEAK_VOLUME)
     return True
 
 
@@ -2003,6 +2042,9 @@ def run():
         elif desk.closed:
             # 09:30 之後的突破只記錄、不發 —— 20 天後回答「截止是不是太早」。
             record_late_breakout(st, datetime.now())
+        else:
+            # 只差量能的突破只記錄、不發 —— 20 天後回答「1.8 倍是不是太嚴」。
+            record_weak_volume(st, datetime.now())
         # 到點就送。從回呼觸發是因為 09:05 的報價很密，幾乎必然在一秒內進來；
         # 下面的主迴圈是備援，萬一整批都沒報價也不會卡著不發。
         desk.tick()

@@ -8003,5 +8003,106 @@ class TestTrialMatchDirectionIsRecorded(unittest.TestCase):
         self.assertIn("## 九、開盤前試撮往哪走", "\n".join(analyse.report([row])))
 
 
+# ══════════════════════════════════════════════════════
+# 量不夠的突破也記下來（使用者 10-08：「為什麼定 1.8 倍」→ 記錄）
+# ══════════════════════════════════════════════════════
+class TestWeakVolumeBreakoutsAreRecorded(unittest.TestCase):
+    AT = datetime(2026, 10, 12, 9, 3, 10)
+
+    def _rec(self, st, at=None):
+        got = []
+        done = signals.record_weak_volume(st, at or self.AT,
+                                          record=lambda sig, why: got.append((sig, why)))
+        return done, got
+
+    def test_a_breakout_short_only_on_volume_is_recorded_not_sent(self):
+        st = ready_state(surge_ratio=1.4)
+        self.assertIsNone(evaluate(st, now=dtime(9, 3)), "1.4 倍不可以發")
+        done, got = self._rec(st)
+        self.assertTrue(done)
+        sig, why = got[0]
+        self.assertEqual(why, signals.BLOCK_WEAK_VOLUME)
+        self.assertAlmostEqual(sig["volume_surge"], 1.4, places=1)
+        self.assertEqual(sig["time"], "09:03:10")
+        self.assertEqual(st.signaled, 0, "只記錄，不算發過")
+
+    def test_once_per_symbol_per_day(self):
+        st = ready_state(surge_ratio=1.4)
+        self.assertTrue(self._rec(st)[0])
+        self.assertFalse(self._rec(st, self.AT + timedelta(minutes=3))[0])
+
+    def test_a_full_signal_is_not_a_weak_one(self):
+        self.assertFalse(self._rec(ready_state(surge_ratio=3.0))[0])
+
+    def test_a_symbol_that_already_fired_is_skipped(self):
+        st = ready_state(surge_ratio=1.4)
+        st.signaled = 1
+        self.assertFalse(self._rec(st)[0])
+
+    def test_only_inside_the_entry_window(self):
+        late = datetime(2026, 10, 12, 9, 30, 0)
+        self.assertFalse(self._rec(ready_state(surge_ratio=1.4), late)[0])
+
+    def test_the_other_gates_still_apply(self):
+        below_vwap = ready_state(last=100.2, vwap=100.5, surge_ratio=1.4)
+        no_break = ready_state(last=100.05, surge_ratio=1.4)
+        self.assertFalse(self._rec(below_vwap)[0])
+        self.assertFalse(self._rec(no_break)[0])
+
+    def test_unknown_volume_is_not_weak_volume(self):
+        st = ready_state(surge_ratio=1.4)
+        st.vol_marks = st.vol_marks[-2:]               # 樣本不夠，量能算不出來 = 0
+        self.assertEqual(st.volume_surge(), 0.0)
+        self.assertFalse(self._rec(st)[0])
+
+    def test_the_shipped_threshold_is_unchanged(self):
+        self.assertEqual(config.SIGNAL["volume_surge_ratio"], 1.8)
+        self.assertIsNone(evaluate(ready_state(surge_ratio=1.79), now=dtime(9, 3)))
+        self.assertIsNotNone(evaluate(ready_state(surge_ratio=1.81), now=dtime(9, 3)))
+
+    def test_on_tick_records_it_only_while_the_desk_is_open(self):
+        src = textwrap.dedent(inspect.getsource(signals.run))
+        tree = ast.parse(src)
+        on_tick = next(n for n in ast.walk(tree)
+                       if isinstance(n, ast.FunctionDef) and n.name == "on_tick")
+        branch = next(n for n in ast.walk(on_tick)
+                      if isinstance(n, ast.If) and ast.unparse(n.test) == "sig")
+        late = branch.orelse[0]
+        self.assertEqual(ast.unparse(late.test), "desk.closed")
+        self.assertIn("record_weak_volume(st", ast.unparse(late.orelse[0]))
+
+    def test_the_candidate_row_replays_with_the_v10_exits(self):
+        """候選照**跟訊號一樣**的出場規則回推。以前少了計畫欄位，v10 的候選會被當成
+        舊的「停損／目標」—— 兩把尺。"""
+        st = ready_state(surge_ratio=3.0)
+        st.total_volume = 3000
+        sig = evaluate(st, now=dtime(9, 3))
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "candidates.csv"
+            signals.record_candidate(dict(sig, time="09:03:00"), "daily_cap", path)
+            with open(path, newline="", encoding="utf-8-sig") as f:
+                row = next(csv.DictReader(f))
+        for k in ("exit_rules", "half_at", "key_level", "trail_pct", "max_hold_days",
+                  "ruleset", "entry_cum_volume"):
+            self.assertNotEqual(row[k], "", k)
+        self.assertTrue(exits.uses_v10(row))
+        pos = exits.Position.from_signal(row, datetime(2026, 10, 12, 9, 3))
+        self.assertEqual((pos.half_at, pos.key_level, pos.trail_pct),
+                         (float(sig["half_at"]), float(sig["key_level"]),
+                          float(sig["trail_pct"])))
+        seen = []
+        with unittest.mock.patch.object(oc, "_resolve_v10",
+                                        lambda *a, **k: seen.append(a) or None):
+            oc.resolve(FakeKbarBroker(_kb([])), row, "2026-10-12")
+        self.assertEqual(len(seen), 1, "候選要走 v10 的回推")
+
+    def test_analyse_splits_around_the_threshold(self):
+        rows = [SimpleNamespace(volume_surge=v) for v in (1.0, 1.3, 1.6, 1.79, 1.8, 2.5, 3.0, None)]
+        groups = analyse.by_surge_threshold(rows)
+        self.assertEqual([len(g) for g in groups.values()], [1, 1, 2, 2, 1])
+        self.assertEqual(list(groups), ["量能 <1.2x", "量能 1.2-1.5x", "量能 1.5-1.8x",
+                                        "量能 1.8-3x", "量能 3x+"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

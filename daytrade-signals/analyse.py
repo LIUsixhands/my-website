@@ -142,6 +142,28 @@ def by_volume_surge(rows: list) -> dict:
     return _bucket(rows, key, ["量能 <3x", "量能 3-5x", "量能 5x+"])
 
 
+SURGE_STEPS = (1.2, 1.5, 1.8, 3.0)
+
+
+def by_surge_threshold(rows: list) -> dict:
+    """量能倍數切細一點，看門檻附近（使用者 10-08 問「為什麼定 1.8 倍」）。
+
+    outcomes.csv 裡只有 ≥1.8 的（量不夠的不會發）。要看 1.8 以下，讀候選：
+        python analyse.py --file candidates_outcomes.csv
+    裡面 reason = 「量能未達門檻」的那些，就是門檻放寬才會多出來的訊號。
+    """
+    labels = ["量能 <1.2x", "量能 1.2-1.5x", "量能 1.5-1.8x", "量能 1.8-3x", "量能 3x+"]
+
+    def key(o):
+        if o.volume_surge is None:
+            return None
+        for step, label in zip(SURGE_STEPS, labels):
+            if o.volume_surge < step:
+                return label
+        return labels[-1]
+    return _bucket(rows, key, labels)
+
+
 def by_sim_direction(rows: list) -> dict:
     """開盤前試撮價往哪走（使用者 10-08 選「只記錄、不當條件」）。
 
@@ -403,6 +425,13 @@ def report(rows: list) -> list[str]:
         "九、開盤前試撮往哪走", by_sim_direction(rows),
         "使用者 10-08 只要記錄、不當條件。試撮往上的那一組區間要是明顯高過"
         "往下的那一組、而且不重疊，才有理由把它變成條件（那時才算改規則）。")
+
+    lines += render_group(
+        "十、量能門檻附近", by_surge_threshold(rows),
+        "1.8 倍是第一版的經驗值，沒驗證過。這份檔案若是 outcomes.csv，只會有 1.8 以上；"
+        "1.8 以下的在 candidates_outcomes.csv（python analyse.py --file "
+        "candidates_outcomes.csv）。1.5-1.8 那一組要是跟 1.8-3 那一組分不出來，"
+        "放寬門檻就多出訊號而不變差 —— 那時才算改規則。")
 
     lines += ["", "---", "",
               "*本分析只描述已發生的樣本，不預測未來，不構成投資建議。*"]
