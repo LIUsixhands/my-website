@@ -348,13 +348,18 @@ def resolve(broker, sig: dict, date: str | None = None,
                 _, day2 = next_session_bars(broker, code, date, through)
     elif bars:
         result, exit_price, used = FLAT, bars[-1][3], len(bars)
-        for i, (_, high, low, _close) in enumerate(bars, 1):
+        for i, (t, high, low, close) in enumerate(bars, 1):
             hit_stop, hit_target = low <= stop, high >= target
+            # 13:25 之後是尾盤集合競價：只有一個成交價，沒有「剛好在停損價成交」
+            # 這回事。2026-10-08 界霖 13:25 還在 97.50（停損 97），收盤集合競價
+            # 一次撮合在 94.40 —— 照停損價 97 記，等於把那 2.6 元的跳空抹掉。
+            # 跟隔天跳空開在停損之下一樣，用那一下真的成交得到的價格。
+            auction = t.time() > FLATTEN_AT
             if hit_stop:                  # 同時觸及也判停損：分鐘 K 看不出先後
-                result, exit_price, used = STOP, stop, i
+                result, exit_price, used = STOP, (min(stop, close) if auction else stop), i
                 break
             if hit_target:
-                result, exit_price, used = TARGET, target, i
+                result, exit_price, used = TARGET, (max(target, close) if auction else target), i
                 break
         if result == FLAT:
             if hold >= 2:

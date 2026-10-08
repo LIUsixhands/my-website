@@ -1701,7 +1701,8 @@ def carry_over(prev: dict, broker, today: str) -> tuple[list[dict], list[str]]:
             log.warning("%s 留倉確認失敗：%s", code, e)
             o = None
         if o is not None and o.result != outcome.CARRY:
-            notes.append(f"{code} 在 {day1} 當天就{o.result}了（盤中沒收到那一筆），不接")
+            when = f" {o.exit_at[:5]}" if o.exit_at else ""
+            notes.append(f"{code} {day1}{when} 就{o.result}了，今天不接")
             continue
         missed, _ = outcome.next_session_bars(broker, code, day1, yesterday)
         if missed:
@@ -1719,7 +1720,15 @@ def carry_over(prev: dict, broker, today: str) -> tuple[list[dict], list[str]]:
 
 
 def format_carry_start(carried: list[dict], notes: list[str]) -> str:
-    """開盤前告訴使用者：昨天留下來的，今天繼續盯。"""
+    """開盤前告訴使用者：昨天留下來的，今天繼續盯。
+
+    一檔都沒接（只有說明）時不要印「還沒結束的 0 檔，今天接著追蹤」跟停損／目標
+    的說明 —— 10-08 界霖 13:25 推了「還沒結束」，收盤集合競價就碰停損了，隔個
+    交易日早上只該講「那一筆已經結束、不接」。
+    """
+    if not carried:
+        return "\n".join(["📦 昨日 13:25 還沒結束的部位：今天沒有要接的", "────────────────"]
+                         + [f"ℹ️ {n}" for n in notes])
     lines = [f"📦 昨日 13:25 還沒結束的 {len(carried)} 檔，今天接著追蹤", "────────────────"]
     for c in carried:
         label = f"{c['code']} {c.get('name') or ''}".strip()

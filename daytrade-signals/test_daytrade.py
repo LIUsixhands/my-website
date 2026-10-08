@@ -6078,6 +6078,37 @@ class TestV6TwoDayOutcome(unittest.TestCase):
         self.assertEqual(o.result, oc.STOP)
         self.assertEqual(o.exit_at, "13:30:00")
 
+    def test_the_closing_auction_fills_at_the_auction_price_not_the_stop(self):
+        """2026-10-08 界霖：13:25 還在 97.50（停損 97），收盤集合競價一次撮合在
+        94.40。日報照停損價記成 -1.00R / -3,207 元 —— 集合競價只有一個價，
+        賣得到的是 94.40。跟隔天跳空開在停損之下同一個道理。"""
+        day1 = QUIET_DAY1[:-1] + [("13:30", 94.4, 94.4, 94.4, 94.4)]
+        o = oc.resolve(_DaysBroker({DAY1: day1}), V6_SIG, DAY1)
+        self.assertEqual((o.result, o.exit_price), (oc.STOP, 94.4))
+        self.assertAlmostEqual(o.r_multiple, -5.6 / 3.0, places=2)
+
+    def test_the_closing_auction_above_the_target_fills_at_the_auction_price(self):
+        day1 = QUIET_DAY1[:-1] + [("13:30", 109.0, 109.0, 109.0, 109.0)]
+        o = oc.resolve(_DaysBroker({DAY1: day1}), V6_SIG, DAY1)
+        self.assertEqual((o.result, o.exit_price), (oc.TARGET, 109.0))
+
+    def test_an_auction_bar_never_fills_better_than_the_line(self):
+        """那一根若混到 13:25 前的成交（低點碰到、收在線上），出場價不會比停損好、
+        也不會比目標差 —— 停損就是停損價，目標就是目標價。"""
+        day1 = QUIET_DAY1[:-1] + [("13:30", 97.5, 97.5, 96.8, 97.5)]
+        o = oc.resolve(_DaysBroker({DAY1: day1}), V6_SIG, DAY1)
+        self.assertEqual((o.result, o.exit_price), (oc.STOP, 97.0))
+        day1 = QUIET_DAY1[:-1] + [("13:30", 107.0, 108.5, 107.0, 107.5)]
+        o = oc.resolve(_DaysBroker({DAY1: day1}), V6_SIG, DAY1)
+        self.assertEqual((o.result, o.exit_price), (oc.TARGET, 108.0))
+
+    def test_continuous_trading_still_fills_at_the_stop(self):
+        """13:25 以前是連續撮合，碰到停損就是停損價 —— 只有集合競價那一根照實價。"""
+        day1 = QUIET_DAY1[:2] + [("13:25", 98.0, 98.0, 96.0, 96.5),
+                                 ("13:30", 96.0, 96.0, 96.0, 96.0)]
+        o = oc.resolve(_DaysBroker({DAY1: day1}), V6_SIG, DAY1)
+        self.assertEqual((o.result, o.exit_price, o.exit_at), (oc.STOP, 97.0, "13:25:00"))
+
     def test_a_gap_down_through_the_stop_exits_at_the_open_not_the_stop(self):
         days = {DAY1: QUIET_DAY1, DAY2: [("09:01", 94.0, 95.0, 93.5, 94.5),
                                          ("09:02", 94.5, 99.0, 94.0, 98.0)]}
@@ -6321,6 +6352,21 @@ class TestV6CarryOver(unittest.TestCase):
         text = signals.format_carry_start([dict(V6_SIG, day1_close=103.0)], ["x 照樣接著盯"])
         for part in ("2330", "97.00", "108.00", "103.00", "照樣接著盯"):
             self.assertIn(part, text)
+
+    def test_nothing_carried_says_so_without_the_rules(self):
+        """10-08 界霖：13:25 推了「還沒結束」，收盤集合競價就碰停損。隔天只講「不接」。"""
+        text = signals.format_carry_start([], ["5285 2026-10-08 13:30 就停損了，今天不接"])
+        self.assertIn("今天沒有要接的", text)
+        self.assertIn("5285 2026-10-08 13:30 就停損了，今天不接", text)
+        self.assertNotIn("0 檔", text)
+        self.assertNotIn("目標會通知你", text)
+
+    def test_a_position_closed_by_the_auction_is_not_carried(self):
+        prev = {"date": DAY1, "signals": [dict(V6_SIG)], "carried": []}
+        day1 = QUIET_DAY1[:-1] + [("13:30", 94.4, 94.4, 94.4, 94.4)]
+        out, notes = signals.carry_over(prev, _DaysBroker({DAY1: day1}), DAY2)
+        self.assertEqual(out, [])
+        self.assertEqual(notes, [f"2330 {DAY1} 13:30 就停損了，今天不接"])
 
     def test_run_reads_yesterday_before_the_gate_overwrites_it(self):
         """RiskGate 一存檔，昨天的 state.json 就沒了。順序反過來，留倉永遠接不回來。"""
