@@ -612,7 +612,7 @@ class TestRiskGate(unittest.TestCase):
         sig = evaluate(ready_state(), now=dtime(9, 3))
         ordinal = gate.record(sig)
         self.assertEqual(ordinal, 1)
-        self.assertIn("今日第 1 個訊號", format_signal(sig, ordinal, 1))
+        self.assertIn("今日第 1 個", format_signal(sig, ordinal, 1))
         self.assertEqual(gate.record(sig), 2)
 
     def test_closes_on_daily_signal_limit(self):
@@ -2914,7 +2914,7 @@ class TestBlockedCandidatesAreRecorded(unittest.TestCase):
         sig = evaluate(st, now=dtime(9, 3))
         msg, blocked = signals.try_emit(st, gate, threading.Lock(), sig)
         self.assertIsNone(blocked)
-        self.assertIn("決策錨點", msg)
+        self.assertIn("📌 2330", msg)
         self.assertEqual(st.signaled, 1)
         self.assertEqual(st.candidates, 0)
 
@@ -6641,6 +6641,7 @@ class TestV8PerStockTarget(unittest.TestCase):
         with unittest.mock.patch.dict(config.SIGNAL, {"target_from_amplitude": False}):
             self.assertEqual(self._sig(5.4)["target_basis"], signals.TARGET_FIXED)
 
+    @unittest.mock.patch.dict(config.SIGNAL, {"exit_rules": False})   # v8 的訊息才有目標那一行
     def test_the_message_says_why_this_number(self):
         text = format_signal(self._sig(5.4), 1, 1)
         self.assertIn("+5.4%", text)
@@ -6678,7 +6679,8 @@ class TestTheSystemDoesNotTellYouToHold(unittest.TestCase):
             self.assertNotIn(phrase, text)
 
     @unittest.mock.patch.dict(config.SIGNAL, {"stop_loss_pct": 3.0, "max_hold_days": 2,
-                                              "target_from_amplitude": True})
+                                              "target_from_amplitude": True,
+                                              "exit_rules": False})    # v6–v9 的訊息
     def test_the_signal(self):
         st = ready_state(or_high=105.5, last=106.0, vwap=105.0)
         st.prev_close, st.amplitude_pct = 100.0, 8.0
@@ -7035,8 +7037,8 @@ class TestV9TheRulesAreWired(unittest.TestCase):
         self.assertIsNotNone(sig)
         self.assertIsNone(sig["near_basis"])
         text = format_signal(sig, 1, 1)
-        self.assertIn("位置：昨收 100.00｜開盤 103.00（+3.0%）｜最低 103.00（+3.0%）", text)
-        self.assertNotIn("→", text.split("位置：")[1].split("\n")[1])   # 不當成依據
+        self.assertIn("位置：昨收 100.00｜開盤 103.00（+3.0%）\n", text)
+        self.assertNotIn("→", text)                                       # 不當成依據
         self.assertIn("・跌破開盤價 103.00", text)                         # 第 4 條接手
 
     def test_bad_bands_are_rejected(self):
@@ -7487,18 +7489,34 @@ class TestV10TheSignalCarriesThePlan(unittest.TestCase):
 
     def test_the_message_lists_every_exit_before_entry(self):
         text = format_signal(self._sig(), 1, 1)
-        for part in ("出場（哪一條先到就出）", "・停損", "・跌破開盤價 99.00",
-                     "・跌回區間：低於 99.80", "・跌破均價線（下方 0.2%）", "先出一半",
-                     "從最高點回落 1.5% 出（不低於成本）",
-                     "以下三條：那一分鐘「收盤」在線下才出，盤中擦過去不算",
-                     "・量縮：進場 20 分鐘後，最近 10 分鐘的量不到進場後前 10 分鐘的一半",
-                     "・13:25 全部平倉"):
+        for part in ("出場（哪一條先到就出）", "・停損 97.40（最多賠約 3,000 元）",
+                     "・漲到 103.50 先出一半，剩下從最高點回落 1.5% 出",
+                     "以下三條：那一分鐘收盤在線下才出", "・跌破開盤價 99.00",
+                     "・跌回區間 99.80", "・跌破均價線", "・量縮（進場 20 分鐘後才判）",
+                     "・13:25 全部平倉", "進場：100.40（追高 +0.40%）", "張數：1 張　量能：3.00x"):
             self.assertIn(part, text)
         self.assertNotIn("留倉", text)
 
+    def test_the_compact_message_drops_what_v10_does_not_use(self):
+        """使用者 10-08：「後面的括號說明需要嗎？」→ 精簡。目標價 v10 不會賣，不印。"""
+        text = format_signal(self._sig(), 1, 1)
+        for gone in ("目標：", "決策錨點", "均價 ", "單筆風險", "（不低於成本）",
+                     "區間高 100.00 下方", "規則觸發，不是預測"):
+            self.assertNotIn(gone, text, gone)
+        self.assertLessEqual(len(text.splitlines()), 20)
+        last = format_signal(self._sig(), config.RISK["max_signals_per_day"], None)
+        self.assertIn("今日第 3 個（上限 3）｜今天的額度用完了", last)
+
+    def test_the_compact_message_still_warns(self):
+        sig = dict(self._sig(), oversized=True, risk_per_lot=4500,
+                   breakout_at="09:02:10", breakout_price=100.0)
+        text = format_signal(sig, 1, 1)
+        self.assertIn("⚠️ 一張的停損風險 4,500 元，超過上限 4,000 元", text)
+        self.assertIn("ℹ️ 09:02 突破時是 100.00，進場價已換成", text)
+
     def test_an_unknown_open_says_so(self):
         sig = dict(self._sig(), key_level=None)
-        self.assertIn("今天的開盤價不知道，這一條不判", format_signal(sig, 1, 1))
+        self.assertIn("・跌破開盤價（今天開盤價不知道，不判）", format_signal(sig, 1, 1))
 
     def test_switching_it_off_drops_the_plan(self):
         with unittest.mock.patch.dict(config.SIGNAL, {"exit_rules": False}):

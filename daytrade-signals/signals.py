@@ -653,34 +653,65 @@ def _near_line(sig: dict) -> str | None:
     return "位置：" + "｜".join(parts) + f"\n　→ {why}（±{band:g}% 以內）"
 
 
+def _format_signal_v10(sig: dict, ordinal: int) -> str:
+    """v10 的買入訊號，精簡版（使用者 10-08：「後面的括號說明需要嗎？」→ 選精簡）。
+
+    只留會影響下單決定的兩個數字：追高了多少、這筆最多賠多少。解釋規則的括號拿掉
+    —— 規則使用者已經知道了，每次都寫只會讓訊息變長。「目標」那一行也拿掉：v10
+    不會在目標價賣（到一半先出一半，剩下移動停利），留著會讓人以為要等它到。
+    """
+    r = config.RISK
+    name = f" {sig['name']}" if sig.get("name") else ""
+    chase = (f"（追高 +{sig['extension_pct']:.2f}%）"
+             if sig.get("extension_pct") is not None else "")
+    lines = [
+        f"📌 {sig['code']}{name}｜{sig['time']}",
+        f"{sig['direction']}（開盤區間突破）",
+        f"進場：{sig['entry']:.2f}{chase}",
+        f"張數：{sig['lots']} 張　量能：{sig['volume_surge']:.2f}x",
+    ]
+    if sig.get("near_basis"):
+        lines.append(_near_line(sig))          # v9 的昨收條件開著時，依據要講
+    elif sig.get("prev_close") and sig.get("day_open"):
+        lines.append(f"位置：昨收 {sig['prev_close']:.2f}｜開盤 {sig['day_open']:.2f}"
+                     f"（{sig['open_gap_pct']:+.1f}%）")
+    if sig.get("breakout_at") and sig.get("breakout_price"):
+        moved = (sig["entry"] - sig["breakout_price"]) / sig["breakout_price"] * 100
+        lines.append(f"ℹ️ {sig['breakout_at'][:5]} 突破時是 {sig['breakout_price']:.2f}，"
+                     f"進場價已換成 {sig['time'][:5]} 發出當下的價格（{moved:+.1f}%）")
+    if sig.get("oversized"):
+        lines.append(f"⚠️ 一張的停損風險 {sig['risk_per_lot']:,} 元，"
+                     f"超過上限 {r['per_trade_risk']:,} 元")
+    lines.append("────────────────")
+    lines += _exit_plan_lines(sig)
+    cap = r["max_signals_per_day"]
+    tail = ("今天的額度用完了" if ordinal >= cap
+            else f"{config.SIGNAL['entry_window_end'][:5]} 前還可能有新的")
+    lines += ["────────────────", f"今日第 {ordinal} 個（上限 {cap}）｜{tail}"]
+    return "\n".join(lines)
+
+
 def _exit_plan_lines(sig: dict) -> list[str]:
     """v10：進場前就把六條出場條件的價位寫在訊號上 —— 「進場前先畫好，不是進場後才找」。"""
     if not exits.uses_v10(sig):
         return []
     buf = float(sig.get("reason_buffer_pct") or 0)
-    lines = ["出場（哪一條先到就出）："]
-    lines.append(f"・停損 {sig['stop']:.2f}（這筆最多賠約 "
-                 f"{round((sig['entry'] - sig['stop']) * 1000 * max(1, int(sig.get('lots') or 1))):,} 元）")
-    minute = sig.get("confirm") == "minute_close"
-    lines.append(f"・漲到 {float(sig['half_at']):.2f} 先出一半，剩下的從最高點回落 "
-                 f"{float(sig['trail_pct']):g}% 出（不低於成本）")
-    if minute:
-        lines.append("以下三條：那一分鐘「收盤」在線下才出，盤中擦過去不算")
-    if sig.get("key_level"):
-        lines.append(f"・跌破開盤價 {float(sig['key_level']):.2f}")
-    else:
-        lines.append("・跌破開盤價（今天的開盤價不知道，這一條不判）")
+    lots = max(1, int(sig.get("lots") or 1))
+    worst = round((sig["entry"] - sig["stop"]) * 1000 * lots)
+    lines = ["出場（哪一條先到就出）：",
+             f"・停損 {sig['stop']:.2f}（最多賠約 {worst:,} 元）",
+             f"・漲到 {float(sig['half_at']):.2f} 先出一半，剩下從最高點回落 "
+             f"{float(sig['trail_pct']):g}% 出"]
+    if sig.get("confirm") == "minute_close":
+        lines.append("以下三條：那一分鐘收盤在線下才出")
+    lines.append(f"・跌破開盤價 {float(sig['key_level']):.2f}" if sig.get("key_level")
+                 else "・跌破開盤價（今天開盤價不知道，不判）")
     if sig.get("or_high"):
-        lines.append(f"・跌回區間：低於 {float(sig['or_high']) * (1 - buf / 100):.2f}"
-                     f"（區間高 {float(sig['or_high']):.2f} 下方 {buf:g}%）")
-    lines.append(f"・跌破均價線（下方 {buf:g}%）")
-    win = float(sig['vol_window_min'])
-    if sig.get("vol_base") == "after_entry":
-        lines.append(f"・量縮：進場 {2 * win:g} 分鐘後，最近 {win:g} 分鐘的量不到進場後前 "
-                     f"{win:g} 分鐘的一半，而且價格上下不到 {float(sig['flat_pct']):g}%")
-    else:
-        lines.append(f"・量縮：進場 {win:g} 分鐘後，量不到一半、"
-                     f"價格上下不到 {float(sig['flat_pct']):g}%")
+        lines.append(f"・跌回區間 {float(sig['or_high']) * (1 - buf / 100):.2f}")
+    lines.append("・跌破均價線")
+    win = float(sig["vol_window_min"])
+    wait = 2 * win if sig.get("vol_base") == "after_entry" else win
+    lines.append(f"・量縮（進場 {wait:g} 分鐘後才判）")
     lines.append(f"・{outcome.FLATTEN_AT:%H:%M} 全部平倉")
     return lines
 
@@ -728,6 +759,8 @@ def format_signal(sig: dict, ordinal: int, batch_total: int | None) -> str:
     v7 起進場窗口到 09:30，額度沒用完的話**真的**還可能有。所以這一行要講的是
     實話：額度用完了就說用完了，沒用完就說「窗口結束前還可能有」。
     """
+    if exits.uses_v10(sig):
+        return _format_signal_v10(sig, ordinal)
     r = config.RISK
     lines = [
         f"📌 {sig['code']}{(' ' + sig['name']) if sig.get('name') else ''}"
