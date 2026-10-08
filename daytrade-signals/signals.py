@@ -1464,14 +1464,20 @@ def carry_over(prev: dict, broker, today: str) -> tuple[list[dict], list[str]]:
     notes: list[str] = []
     if not prev or str(prev.get("date", "")) >= today:
         return [], notes
-    day1 = str(prev["date"])
     yesterday = (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    # 要看的有兩種：
+    #   - 前一份 state 那天發的訊號（day1 = 那一天）
+    #   - 前一份 state 裡**接手中、還沒結束**的留倉（day1 = 它真正發訊號那天）
+    # 第二種是平日休市造成的：10-09（國慶補假）電腦照排程開了監看，state.json
+    # 變成 10-09、10-08 的留倉搬進了 10-09 的 carried，但那天根本沒開盤。只看
+    # signals 的話，週一就找不到它 —— 那一筆會無聲消失，結局永遠不進 outcomes.csv。
+    pending = [(sig, str(prev["date"])) for sig in prev.get("signals", [])
+               if int(sig.get("max_hold_days") or 1) >= 2
+               and sig.get("live_result") not in (outcome.STOP, outcome.TARGET)]
+    pending += [(c, str(c["carry_from"])) for c in prev.get("carried", [])
+                if c.get("carry_from") and not c.get("live_result")]
     out = []
-    for sig in prev.get("signals", []):
-        if int(sig.get("max_hold_days") or 1) < 2:
-            continue
-        if sig.get("live_result") in (outcome.STOP, outcome.TARGET):
-            continue
+    for sig, day1 in pending:
         code = str(sig.get("code"))
         try:
             o = outcome.resolve(broker, sig, day1)
@@ -1490,7 +1496,8 @@ def carry_over(prev: dict, broker, today: str) -> tuple[list[dict], list[str]]:
             notes.append(f"{code} 拿不到 {day1} 的分鐘 K 確認，照樣接著盯")
         c = {k: v for k, v in sig.items() if k not in _LIVE_KEYS}
         c["carry_from"] = day1
-        c["day1_close"] = o.exit_price if o is not None else None
+        c["day1_close"] = (o.exit_price if o is not None
+                           else sig.get("day1_close"))
         out.append(c)
     return out, notes
 

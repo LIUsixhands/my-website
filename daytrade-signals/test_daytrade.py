@@ -7208,5 +7208,52 @@ class TestBreakoutsAfterTheWindowAreRecorded(unittest.TestCase):
         self.assertIn("record_late_breakout(st, datetime.now())", src)
 
 
+class TestAWeekdayHolidayDoesNotLoseACarriedPosition(unittest.TestCase):
+    """10-09（國慶補假）是平日、但不開盤。電腦照排程開監看：state.json 變成
+    休市那天、留倉搬進那天的 carried。下一個交易日只看前一份 state 的 signals
+    的話，那一筆會無聲消失 —— 週一不盯、結局也永遠不進 outcomes.csv。"""
+
+    HOLIDAY, NEXT = "2026-10-08", "2026-10-09"     # 沿用 DAY1=10-07 的假資料
+
+    def _holiday_state(self, **kw):
+        carried = dict(V6_SIG, carry_from=DAY1, day1_close=103.0, **kw)
+        return {"date": self.HOLIDAY, "signals": [], "carried": [carried]}
+
+    def test_it_is_carried_again_after_the_holiday(self):
+        carried, notes = signals.carry_over(self._holiday_state(),
+                                            _DaysBroker({DAY1: QUIET_DAY1}), self.NEXT)
+        self.assertEqual(len(carried), 1)
+        self.assertEqual((carried[0]["carry_from"], carried[0]["day1_close"]), (DAY1, 103.0))
+        self.assertEqual(notes, [])
+
+    def test_unless_it_already_ended(self):
+        for result in (oc.STOP, oc.TARGET, oc.FLAT):
+            carried, _ = signals.carry_over(self._holiday_state(live_result=result),
+                                            _DaysBroker({DAY1: QUIET_DAY1}), self.NEXT)
+            self.assertEqual(carried, [], result)
+
+    def test_unless_a_real_session_went_by(self):
+        """「休市」那天其實有開盤（只是那天沒收到報價）—— 抱兩天已經結束了。"""
+        b = _DaysBroker({DAY1: QUIET_DAY1, self.HOLIDAY: [("09:01", 103, 104, 102, 103)]})
+        carried, notes = signals.carry_over(self._holiday_state(), b, self.NEXT)
+        self.assertEqual(carried, [])
+        self.assertIn(self.HOLIDAY, notes[0])
+
+    def test_no_bars_keeps_the_day1_close_it_already_had(self):
+        carried, _ = signals.carry_over(self._holiday_state(), _DaysBroker({}), self.NEXT)
+        self.assertEqual(carried[0]["day1_close"], 103.0)
+
+    def test_the_close_report_finds_it_too_when_the_monitor_did_not_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "state.json"
+            # 日期要比「今天」早 —— 測試哪天跑都一樣（state 是今天的會走另一條路）
+            old = dict(self._holiday_state(), date="2000-01-04")
+            old["carried"][0]["carry_from"] = "2000-01-03"
+            path.write_text(json.dumps(old), encoding="utf-8")
+            with unittest.mock.patch.object(config, "STATE_FILE", path):
+                got = review.load_carried()
+        self.assertEqual([(c["code"], c["carry_from"]) for c in got], [("2330", "2000-01-03")])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

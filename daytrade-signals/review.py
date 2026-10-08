@@ -60,6 +60,9 @@ def load_carried() -> list[dict]:
         if sig.get("live_result") in ("停損", "目標"):
             continue
         out.append(dict(sig, carry_from=date))
+    # 平日休市那天電腦照樣開了監看：留倉被搬進那天的 carried，但那天沒開盤。
+    out += [dict(c) for c in s.get("carried", [])
+            if c.get("carry_from") and not c.get("live_result")]
     if out:
         log.warning("今天沒開監看；從 %s 的 state.json 補回留倉 %d 筆", date, len(out))
     return out
