@@ -281,6 +281,9 @@ class SymbolState:
     # 當日高低（tick 的 high/low 是當日累計）與平常一天的量（screener 算好的）。
     day_high: float = 0.0
     day_low: float = 0.0
+    # v9：當日開盤價。0 = 不知道（tick 沒帶 open，而且程式是開盤區間之後才開的）。
+    day_open: float = 0.0
+    gap_logged: bool = False                  # 「離昨收太遠」一天只記一次 log
     avg_volume_lots: float | None = None
     aggressive_buy: int = 0                   # 外盤成交張數
     aggressive_sell: int = 0                  # 內盤成交張數
@@ -323,6 +326,15 @@ class SymbolState:
         lo = float(getattr(tick, "low", 0) or tick.close)
         self.day_high = max(self.day_high, hi)
         self.day_low = min(self.day_low, lo) if self.day_low else lo
+        ts = tick.datetime.time() if hasattr(tick.datetime, "time") else datetime.now().time()
+        # 開盤價：shioaji 的 tick 帶 open（當日開盤價）。沒帶的話，只有在開盤區間
+        # 結束前收到的第一筆才拿來當開盤價 —— 更晚才開程式時，第一筆早就不是開盤了，
+        # 寧可留 0（不知道），讓 v9 只用回落那一條判。
+        op = float(getattr(tick, "open", 0) or 0)
+        if op > 0:
+            self.day_open = op
+        elif not self.day_open and _t(config.SIGNAL["or_start"]) <= ts < _t(config.SIGNAL["or_end"]):
+            self.day_open = float(tick.close)
         # 內外盤只在開盤區間內累計 —— 訊號要用的是「發訊號之前買盤有多強」，
         # 把整天的成交混進來，那一欄在 09:05 當下根本還不存在。
         if not self.or_locked:
@@ -340,7 +352,6 @@ class SymbolState:
         self.vol_marks = [(t, v) for t, v in self.vol_marks
                           if now - t <= VOL_MARK_KEEP_SEC]
 
-        ts = tick.datetime.time() if hasattr(tick.datetime, "time") else datetime.now().time()
         if self.or_locked:
             return
         if _t(config.SIGNAL["or_start"]) <= ts < _t(config.SIGNAL["or_end"]):
@@ -448,6 +459,19 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
     surge = st.volume_surge()
     if surge < cfg["volume_surge_ratio"]:
         return None
+    # v9：開盤或回落低點要在昨收附近。放在突破／均價線／量能之後判，是為了
+    # 只有「其他都過了、只差這一關」的那一刻才留 log —— 每個 tick 都記會淹掉檔案。
+    band = cfg.get("near_prev_close_pct")
+    near_basis = None
+    if band is not None:
+        near_basis = config.near_prev_close(st.prev_close, st.day_open, st.day_low, band)
+        if near_basis is None:
+            if not st.gap_logged:
+                log.info("%s 突破、均價線、量能都過了，但開盤 %s／最低 %s 都不在昨收 %s ±%g%% "
+                         "以內，不發訊號", st.code, st.day_open or "?", st.day_low or "?",
+                         st.prev_close or "?", band)
+                st.gap_logged = True
+            return None
 
     entry = st.last_price
     # 已經漲停鎖死就不要發了 —— 那個價位你買不到，就算買到也沒有上檔空間。
@@ -543,7 +567,39 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         # 這一筆照規則可以抱幾天。記在訊號上，不是收盤時再去看 config ——
         # 隔天程式重開、或拿新版程式回推舊訊號，都要照**當時**的規則走。
         "max_hold_days": config.SIGNAL.get("max_hold_days", 1),
+        # v9：開盤、進場前最低點離昨收幾 %，以及是哪一個讓這一筆過關。
+        # v8 以前的訊號也照記（near_basis 是 None）—— 20 天後要比「近昨收」
+        # 跟「跳空」兩組，舊資料也能分得出來。
+        "prev_close": st.prev_close or None,
+        "day_open": st.day_open or None,
+        "low_before": st.day_low or None,       # 發訊號這一刻為止的當日最低
+        "open_gap_pct": _pct_from(st.day_open, st.prev_close),
+        "low_gap_pct": _pct_from(st.day_low, st.prev_close),
+        "near_basis": near_basis,
     }
+
+
+def _pct_from(price: float | None, base: float | None) -> float | None:
+    """price 比 base 高幾 %；任一個不知道就是 None（不是 0）。"""
+    if not price or not base:
+        return None
+    return round((price - base) / base * 100, 2)
+
+
+def _near_line(sig: dict) -> str | None:
+    """v9 訊號上講清楚「為什麼這一檔算在昨收附近」。v8 以前的訊號沒有這一行。"""
+    basis = sig.get("near_basis")
+    if not basis or not sig.get("prev_close"):
+        return None
+    band = config.SIGNAL.get("near_prev_close_pct")
+    parts = [f"昨收 {sig['prev_close']:.2f}"]
+    if sig.get("day_open"):
+        parts.append(f"開盤 {sig['day_open']:.2f}（{sig['open_gap_pct']:+.1f}%）")
+    if sig.get("low_before") and sig.get("low_gap_pct") is not None:
+        parts.append(f"最低 {sig['low_before']:.2f}（{sig['low_gap_pct']:+.1f}%）")
+    why = ("開盤就在昨收附近" if basis == config.NEAR_BY_OPEN
+           else "開高後回到昨收附近再往上")
+    return "位置：" + "｜".join(parts) + f"\n　→ {why}（±{band:g}% 以內）"
 
 
 def _ordinal_line(ordinal: int, batch_total: int | None) -> str:
@@ -606,6 +662,9 @@ def format_signal(sig: dict, ordinal: int, batch_total: int | None) -> str:
         f"建議張數：{sig['lots']} 張（單筆風險 {r['per_trade_risk']:,} 元）",
         f"量能倍數：{sig['volume_surge']:.2f}x",
     ]
+    near = _near_line(sig)
+    if near:
+        lines.append(near)
     # 下面兩行只講事實，不替使用者做「要不要留倉」的決定 —— 使用者 10-07：
     # 「沒碰停損自己決定要不要留倉，因為你沒把握明天留倉會漲」。
     if sig.get("beyond_today_limit") and sig.get("limit_up"):

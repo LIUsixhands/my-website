@@ -45,6 +45,7 @@ log = logging.getLogger("whynot")
 BLOCK_NO_BREAKOUT = "沒突破"
 BLOCK_VWAP = "均價線"
 BLOCK_VOLUME = "量能"
+BLOCK_GAP = "離昨收太遠"          # v9：開盤和回落低點都不在昨收附近
 BLOCK_LIMIT_UP = "漲停"
 PASS = "通過"
 
@@ -106,8 +107,12 @@ def volume_ratio(bars, hit_time, or_start: dtime) -> float | None:
     return (hit / avg) if avg else None
 
 
-def diagnose(bars, prev_close: float | None = None) -> dict:
-    """重建那四道閘，回傳卡在哪一關。bars = [(dt, high, low, close, volume), ...]"""
+def diagnose(bars, prev_close: float | None = None,
+             day_open: float | None = None) -> dict:
+    """重建那幾道閘，回傳卡在哪一關。bars = [(dt, high, low, close, volume), ...]
+
+    day_open = 當日開盤價（分鐘 K 的第一根 Open）；不知道就只用回落低點判 v9 那一關。
+    """
     cfg = config.SIGNAL
     or_start, or_end = _t(cfg["or_start"]), _t(cfg["or_end"])
     win_end = _t(cfg["entry_window_end"])
@@ -137,18 +142,24 @@ def diagnose(bars, prev_close: float | None = None) -> dict:
     # 09:04:38 以 1.94x 發出了訊號。所以：窗口裡每一根越過的都要判，
     # 任何一根全過就算通過；都沒過，報「走得最遠」的那一次卡在哪。
     cap = config.limit_up(prev_close) if prev_close else None
+    band = cfg.get("near_prev_close_pct")
     best, best_key = None, None
     for b in crossings:
         vw = vwap_upto(bars, b[0]) if cfg["require_above_vwap"] else None
         vr = volume_ratio(bars, b[0], or_start)
+        # 盤中的 day_low 是「到這一刻為止」的當日最低，包含當下這一根。
+        low = min((x[2] for x in bars if or_start < x[0].time() <= b[0].time()),
+                  default=None)
         if cfg["require_above_vwap"] and (vw is None or b[1] < vw):
             verdict, rank = BLOCK_VWAP, 0
         elif vr is None or vr < cfg["volume_surge_ratio"]:
             verdict, rank = BLOCK_VOLUME, 1
+        elif band is not None and not config.near_prev_close(prev_close, day_open, low, band):
+            verdict, rank = BLOCK_GAP, 2
         elif cap and b[1] >= cap:
-            verdict, rank = BLOCK_LIMIT_UP, 2
+            verdict, rank = BLOCK_LIMIT_UP, 3
         else:
-            verdict, rank = PASS, 3
+            verdict, rank = PASS, 4
         # 走得越遠越好；同樣卡在量能的，量能比較高的那次比較接近過關
         key = (rank, vr or 0.0)
         if best_key is None or key > best_key:
@@ -211,7 +222,9 @@ def render(date: str, rows: list, actual: set | None = None,
         f"規則：開盤區間 {cfg['or_start'][:5]}–{cfg['or_end'][:5]}，"
         f"突破緩衝 +{cfg['breakout_buffer_pct']}%，"
         f"進場窗口到 {cfg['entry_window_end'][:5]}，"
-        f"量能門檻 {cfg['volume_surge_ratio']}x",
+        f"量能門檻 {cfg['volume_surge_ratio']}x"
+        + (f"，開盤或回落低點在昨收 ±{cfg['near_prev_close_pct']:g}% 以內"
+           if cfg.get("near_prev_close_pct") is not None else ""),
         "",
         "| 代號 | 名稱 | 區間高 | 觸發價 | 窗口內最高 | 判定那根 | 均價線 | 量能近似 | 卡在哪一關 |",
         "|---|---|---|---|---|---|---|---|---|",
@@ -230,36 +243,53 @@ def render(date: str, rows: list, actual: set | None = None,
     for _, _, d in rows:
         tally[d["verdict"]] = tally.get(d["verdict"], 0) + 1
     out += ["", "## 卡在哪一關的分佈", ""]
-    for k in (BLOCK_NO_BREAKOUT, BLOCK_VWAP, BLOCK_VOLUME, BLOCK_LIMIT_UP,
+    for k in (BLOCK_NO_BREAKOUT, BLOCK_VWAP, BLOCK_VOLUME, BLOCK_GAP, BLOCK_LIMIT_UP,
               PASS, "無區間"):
         if k in tally:
             out.append(f"- **{k}**：{tally[k]} 檔")
     out += ["", "怎麼讀："]
     out += ["- 多數卡在「沒突破」→ 瓶頸是窗口／區間長度，不是濾網",
             "- 多數卡在「量能」→ 濾網可能在齊漲日失效（全場都爆量，比值反而接近 1）",
+            "- 多數卡在「離昨收太遠」→ 那天的名單大多跳空開高、沒有回到昨收附近（v9 的條件）",
             "- 散在各關 → 沒有單一瓶頸，是機率問題"]
     return out
 
 
 def day_bars(broker, code: str, date: str):
     """(datetime, high, low, close, volume)，照時間排序。"""
+    return day_bars_and_open(broker, code, date)[0]
+
+
+def day_bars_and_open(broker, code: str, date: str):
+    """同一次 kbars 查詢拿兩樣東西：分鐘 K，和當日開盤價（第一根的 Open）。
+
+    開盤價是 v9 那一關要的。分開查等於每檔多打一次 API —— 20 檔就是 20 次，
+    券商有流量上限。拿不到 Open（舊版 kbars、欄位長度不對）就回 None，
+    v9 那一關改用回落低點判。
+    """
     from broker import _bar_time
     try:
         kb = broker.kbars(code, date, date)
     except Exception as e:
         log.warning("%s %s 分鐘 K 取得失敗：%s", date, code, e)
-        return []
+        return [], None
     cols = [list(getattr(kb, n, []) or [])
             for n in ("ts", "High", "Low", "Close", "Volume")]
     if not cols[0] or len({len(c) for c in cols}) != 1:
         log.warning("%s %s 分鐘 K 欄位長度不一致，跳過", date, code)
-        return []
+        return [], None
     rows = []
     for t, hi, lo, cl, vo in zip(*cols):
         bt = _bar_time(t)
         if bt is not None:
             rows.append((bt, float(hi), float(lo), float(cl), float(vo)))
-    return sorted(rows, key=lambda b: b[0])
+    opens = list(getattr(kb, "Open", []) or [])
+    opened = None
+    if len(opens) == len(cols[0]):
+        firsts = [(_bar_time(t), o) for t, o in zip(cols[0], opens)]
+        firsts = sorted((t, float(o)) for t, o in firsts if t is not None and o)
+        opened = firsts[0][1] if firsts else None
+    return sorted(rows, key=lambda b: b[0]), opened
 
 
 def main(argv=None):
@@ -287,11 +317,11 @@ def main(argv=None):
     rows = []
     for it in items:
         code = str(it["code"])
-        bars = day_bars(broker, code, args.date)
+        bars, opened = day_bars_and_open(broker, code, args.date)
         if not bars:
             continue
         rows.append((code, it.get("name", ""),
-                     diagnose(bars, it.get("prev_close"))))
+                     diagnose(bars, it.get("prev_close"), day_open=opened)))
 
     actual = None
     try:

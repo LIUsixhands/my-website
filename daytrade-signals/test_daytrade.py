@@ -97,7 +97,9 @@ def snap(code="2330", close=100.0, high=104.0, low=100.0, volume=9000, avg=101.0
 # 數字是照 v5 的參數算的（停損 1.5%、1.5R、當沖）。v6 把停損改成 3%、目標改成
 # +8%、可以抱到隔天 —— 機制沒變，只是參數變了。把這幾組釘在 v5 參數上，
 # 測試才繼續證明那些機制是對的；v6 的數字另外有自己的測試（TestV6...）。
-V5_SIGNAL = {"stop_loss_pct": 1.5, "target_pct": None, "max_hold_days": 1}
+# v9 加的「開盤／回落要在昨收附近」也是 v5 沒有的，一起關掉。
+V5_SIGNAL = {"stop_loss_pct": 1.5, "target_pct": None, "max_hold_days": 1,
+             "near_prev_close_pct": None}
 
 
 def under_v5_rules(cls):
@@ -109,6 +111,8 @@ def ready_state(code="2330", or_high=100.0, last=101.0, vwap=100.5, surge_ratio=
     """造一個「萬事俱備」的個股狀態：區間已鎖、價格突破、站上均價、量能達標。"""
     # 昨收跟著標的價位走，否則高價股的測試會誤觸漲停夾擠
     st = SymbolState(code, prev_close=round(or_high * 0.99, 2))
+    # v9：開盤就在昨收 —— 「萬事俱備」也包括開盤沒有大跳空。
+    st.day_open = st.prev_close
     st.lock_opening_range(or_high, or_high - 2)
     st.last_price = last
     st.vwap = vwap
@@ -4436,6 +4440,7 @@ class TestRulesetStamping(unittest.TestCase):
 
     def _state(self, price=26.75):
         st = SymbolState("2020", 26.20, "美亞")
+        st.day_open = 26.20
         st.lock_opening_range(26.70, 25.10)
         st.last_price = price
         st.vwap = 26.40
@@ -5575,7 +5580,8 @@ class TestWhyNotRebuildsTheFourGates(unittest.TestCase):
 
     def test_a_clean_breakout_passes(self):
         import whynot
-        d = whynot.diagnose(self._bars(window=[(105.0, 400.0)]))
+        # 昨收 99.5：區間低 99 在 ±1% 以內，v9 那一關也過
+        d = whynot.diagnose(self._bars(window=[(105.0, 400.0)]), prev_close=99.5)
         self.assertEqual(d["verdict"], whynot.PASS)
         self.assertEqual(d["hit_at"].strftime("%H:%M"), "09:03")
 
@@ -5683,7 +5689,7 @@ class TestWhyNotRechecksEveryBarLikeTheLiveLoop(unittest.TestCase):
                 (t(2), 47.40, 47.00, 47.30, 1000.0),
                 (t(3), 47.50, 47.20, 47.45, 300.0),    # 第一次越過，量不夠
                 (t(4), 48.40, 47.40, 48.30, 2500.0)]   # 量衝上來
-        d = whynot.diagnose(bars)
+        d = whynot.diagnose(bars, prev_close=47.0)     # 開盤低點 46.80 在昨收附近
         self.assertEqual(d["verdict"], whynot.PASS,
                          "盤中每個 tick 都重判 —— 第一根被擋，後面過了就算過")
         self.assertEqual(d["hit_at"].strftime("%H:%M"), "09:04")
@@ -5945,7 +5951,8 @@ class TestDecisionTimeMarketIsRecorded(unittest.TestCase):
 # ══════════════════════════════════════════════════════
 # v6：停損 3%、目標 +8%、最多抱到隔天
 # ══════════════════════════════════════════════════════
-V6_SIGNAL = {"stop_loss_pct": 3.0, "target_pct": 8.0, "max_hold_days": 2}
+V6_SIGNAL = {"stop_loss_pct": 3.0, "target_pct": 8.0, "max_hold_days": 2,
+             "near_prev_close_pct": None}     # v9 才有的進場條件，v6 沒有
 
 
 class _DaysBroker:
@@ -6647,8 +6654,8 @@ class TestV8PerStockTarget(unittest.TestCase):
         with unittest.mock.patch.dict(config.SIGNAL, {"target_min_pct": 12.0}):
             self.assertIn("target_min_pct", " / ".join(config.validate()))
 
-    def test_the_shipped_config_is_v8(self):
-        self.assertEqual(config.RULESET, "v8")
+    def test_v9_keeps_the_v8_target(self):
+        """v9 只加了一道進場條件，v8 的停利目標原封不動。"""
         self.assertTrue(config.SIGNAL["target_from_amplitude"])
         self.assertEqual((config.SIGNAL["target_min_pct"], config.SIGNAL["target_max_pct"]),
                          (3.0, 10.0))
@@ -6672,6 +6679,7 @@ class TestTheSystemDoesNotTellYouToHold(unittest.TestCase):
     def test_the_signal(self):
         st = ready_state(or_high=105.5, last=106.0, vwap=105.0)
         st.prev_close, st.amplitude_pct = 100.0, 8.0
+        st.day_open = 100.5                 # 平開之後一路拉上來
         text = format_signal(evaluate(st, now=dtime(9, 3)), 1, 1)
         self._no_advice(text)
         self.assertIn("目標今天到不了", text)            # 事實照講
@@ -6793,6 +6801,229 @@ class TestTheCloseSnapshotIsRecorded(unittest.TestCase):
         text = "\n".join(analyse.report(rows))
         self.assertIn("八、13:25 還沒結束的那幾筆", text)
         self.assertIn("目前樣本：**4 筆**", text)
+
+
+class TestV9NearPreviousClose(unittest.TestCase):
+    """使用者 10-08：「開盤回落前日收盤價或開盤近前日收盤價有往上的判斷，再出訊號」，
+    ± 範圍選 1%。開盤價、或進場前的當日最低點，有一個在昨收 ±1% 以內才發。"""
+
+    near = staticmethod(config.near_prev_close)
+
+    def test_opening_near_the_close_counts(self):
+        self.assertEqual(self.near(100.0, 100.5, 102.0, 1.0), config.NEAR_BY_OPEN)
+        self.assertEqual(self.near(100.0, 99.2, 99.0, 1.0), config.NEAR_BY_OPEN)
+
+    def test_gapping_up_then_coming_back_counts(self):
+        self.assertEqual(self.near(100.0, 104.0, 100.8, 1.0), config.NEAR_BY_PULLBACK)
+
+    def test_gapping_up_and_never_coming_back_does_not(self):
+        self.assertIsNone(self.near(100.0, 104.0, 102.5, 1.0))
+
+    def test_a_crash_through_the_close_is_not_near_either(self):
+        """「回落到昨收附近」不包括直接摜破：開盤 -3%、最低 -4% 兩個都不算。"""
+        self.assertIsNone(self.near(100.0, 97.0, 96.0, 1.0))
+
+    def test_exactly_one_percent_is_inside_and_one_tick_more_is_not(self):
+        self.assertEqual(self.near(100.0, 101.0, 101.0, 1.0), config.NEAR_BY_OPEN)
+        self.assertEqual(self.near(100.0, 99.0, 99.0, 1.0), config.NEAR_BY_OPEN)
+        self.assertIsNone(self.near(100.0, 101.5, 101.5, 1.0))
+        self.assertIsNone(self.near(100.0, 98.9, 98.9, 1.0))
+        # 浮點邊界：46.53 × 1.01 = 46.9953，46.99 在裡面
+        self.assertEqual(self.near(46.53, 46.99, 47.5, 1.0), config.NEAR_BY_OPEN)
+
+    def test_the_band_is_the_configured_one(self):
+        self.assertIsNone(self.near(100.0, 101.5, 101.5, 1.0))
+        self.assertEqual(self.near(100.0, 101.5, 101.5, 2.0), config.NEAR_BY_OPEN)
+
+    def test_open_is_named_first_when_both_hold(self):
+        self.assertEqual(self.near(100.0, 100.2, 99.8, 1.0), config.NEAR_BY_OPEN)
+
+    def test_unknown_prices_never_count(self):
+        """0 / None 是「不知道」，不可以被當成「剛好在昨收」放行。"""
+        self.assertIsNone(self.near(0, 100.0, 100.0, 1.0))
+        self.assertIsNone(self.near(0, 1.0, 1.0, 1.0))      # 昨收不知道，不是「昨收 = 1」
+        self.assertIsNone(self.near(None, 100.0, 100.0, 1.0))
+        self.assertIsNone(self.near(100.0, 0, None, 1.0))
+        self.assertEqual(self.near(100.0, 0, 100.3, 1.0), config.NEAR_BY_PULLBACK)
+
+
+class TestV9TheSignalGate(unittest.TestCase):
+    IN_WINDOW = dtime(9, 3)
+
+    def _gapped(self, low=103.0):
+        """跳空 +3% 開、區間 104、現價 105 突破 —— 其他每一關都過。"""
+        st = ready_state(or_high=104.0, last=105.0, vwap=104.5)
+        st.prev_close, st.day_open, st.day_low = 100.0, 103.0, low
+        return st
+
+    def test_a_gap_up_that_never_came_back_gets_no_signal(self):
+        self.assertIsNone(evaluate(self._gapped(), now=self.IN_WINDOW))
+
+    def test_a_gap_up_that_came_back_to_the_close_does(self):
+        sig = evaluate(self._gapped(low=100.6), now=self.IN_WINDOW)
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig["near_basis"], config.NEAR_BY_PULLBACK)
+        self.assertEqual((sig["open_gap_pct"], sig["low_gap_pct"]), (3.0, 0.6))
+        self.assertEqual((sig["prev_close"], sig["low_before"]), (100.0, 100.6))
+
+    def test_a_flat_open_does(self):
+        st = self._gapped()
+        st.day_open = 100.4
+        sig = evaluate(st, now=self.IN_WINDOW)
+        self.assertEqual(sig["near_basis"], config.NEAR_BY_OPEN)
+        self.assertEqual(sig["open_gap_pct"], 0.4)
+
+    def test_no_previous_close_means_no_signal(self):
+        st = self._gapped(low=100.0)
+        st.prev_close = 0
+        self.assertIsNone(evaluate(st, now=self.IN_WINDOW))
+
+    def test_switching_it_off_lets_the_gap_through(self):
+        with unittest.mock.patch.dict(config.SIGNAL, {"near_prev_close_pct": None}):
+            sig = evaluate(self._gapped(), now=self.IN_WINDOW)
+        self.assertIsNotNone(sig)
+        self.assertIsNone(sig["near_basis"])
+        self.assertEqual(sig["open_gap_pct"], 3.0)      # 照記，20 天後才分得出兩組
+
+    def test_the_block_is_logged_once_not_every_tick(self):
+        st = self._gapped()
+        with self.assertLogs("signals", level="INFO") as cm:
+            evaluate(st, now=self.IN_WINDOW)
+            evaluate(st, now=self.IN_WINDOW)
+        self.assertEqual(sum("昨收" in m for m in cm.output), 1)
+
+    def test_it_is_checked_after_the_other_gates(self):
+        """只有「其他都過了」才 log，否則每個沒突破的 tick 都會記一筆。"""
+        st = self._gapped()
+        st.last_price = 103.5                            # 沒突破
+        evaluate(st, now=self.IN_WINDOW)
+        self.assertFalse(st.gap_logged)
+
+
+class TestV9TheOpeningPrice(unittest.TestCase):
+    def _tick(self, close, at, **kw):
+        t = tick(close, at=at)
+        for k, v in kw.items():
+            setattr(t, k, v)
+        return t
+
+    def test_the_brokers_open_wins(self):
+        st = SymbolState("2330", 100.0)
+        st.update(self._tick(102.0, "09:10:00", open=100.5), now=1.0)
+        self.assertEqual(st.day_open, 100.5)
+
+    def test_without_it_the_first_tick_in_the_range_is_the_open(self):
+        st = SymbolState("2330", 100.0)
+        st.update(self._tick(100.3, "09:00:05"), now=1.0)
+        st.update(self._tick(101.0, "09:01:00"), now=2.0)
+        self.assertEqual(st.day_open, 100.3)
+
+    def test_the_brokers_open_corrects_an_earlier_guess(self):
+        st = SymbolState("2330", 100.0)
+        st.update(self._tick(100.3, "09:00:05"), now=1.0)          # 猜的
+        st.update(self._tick(101.0, "09:00:30", open=100.0), now=2.0)
+        self.assertEqual(st.day_open, 100.0)
+
+    def test_starting_late_without_it_leaves_the_open_unknown(self):
+        """09:10 才開程式，第一筆早就不是開盤 —— 寧可不知道，也不要猜錯。"""
+        st = SymbolState("2330", 100.0)
+        st.update(self._tick(104.0, "09:10:00"), now=1.0)
+        self.assertEqual(st.day_open, 0.0)
+
+
+class TestV9TheMessageAndTheRecord(unittest.TestCase):
+    def _sig(self, **kw):
+        st = ready_state(or_high=104.0, last=105.0, vwap=104.5)
+        st.prev_close, st.day_open, st.day_low = 100.0, 103.0, 100.6
+        for k, v in kw.items():
+            setattr(st, k, v)
+        return evaluate(st, now=dtime(9, 3))
+
+    def test_the_message_says_why_it_counts(self):
+        text = format_signal(self._sig(), 1, 1)
+        self.assertIn("昨收 100.00｜開盤 103.00（+3.0%）｜最低 100.60（+0.6%）", text)
+        self.assertIn("開高後回到昨收附近再往上（±1% 以內）", text)
+        flat = format_signal(self._sig(day_open=100.2), 1, 1)
+        self.assertIn("開盤就在昨收附近（±1% 以內）", flat)
+
+    def test_an_unknown_open_is_left_out_not_printed_as_zero(self):
+        text = format_signal(self._sig(day_open=0.0), 1, 1)
+        self.assertNotIn("開盤 0", text)
+        self.assertIn("最低 100.60", text)
+
+    def test_old_signals_have_no_such_line(self):
+        sig = self._sig()
+        for k in ("near_basis", "prev_close", "day_open", "open_gap_pct", "low_gap_pct"):
+            sig.pop(k)
+        self.assertNotIn("位置：", format_signal(sig, 1, 1))
+
+    def test_both_numbers_reach_outcomes_csv_and_back(self):
+        sig = dict(V6_SIG, open_gap_pct=3.0, low_gap_pct=0.6)
+        days = {DAY1: QUIET_DAY1, DAY2: [("09:01", 109, 110, 108, 109)]}
+        o = oc.resolve(_DaysBroker(days), sig, DAY1, through=DAY2)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "o.csv"
+            oc.append_csv([o], path)
+            back = oc.load_csv(path)[0]
+        self.assertEqual((back.open_gap_pct, back.low_gap_pct), (3.0, 0.6))
+
+
+class TestV9WhyNot(unittest.TestCase):
+    """事後重建的那張表也要有這一關，否則「為什麼今天沒訊號」會指錯地方。"""
+
+    def _bars(self, low):
+        day = datetime(2026, 10, 9)
+        at = lambda m: day.replace(hour=9, minute=m)
+        return [(at(1), 104.0, low, 104.0, 100.0), (at(2), 104.0, 103.5, 104.0, 100.0),
+                (at(3), 106.0, 104.5, 106.0, 400.0)]
+
+    def test_a_gap_up_is_named(self):
+        import whynot
+        d = whynot.diagnose(self._bars(low=103.0), prev_close=100.0, day_open=103.0)
+        self.assertEqual(d["verdict"], whynot.BLOCK_GAP)
+
+    def test_a_pullback_or_a_flat_open_passes(self):
+        import whynot
+        self.assertEqual(whynot.diagnose(self._bars(low=100.5), prev_close=100.0,
+                                         day_open=103.0)["verdict"], whynot.PASS)
+        self.assertEqual(whynot.diagnose(self._bars(low=103.0), prev_close=100.0,
+                                         day_open=100.8)["verdict"], whynot.PASS)
+
+    def test_the_breakout_bars_own_low_counts(self):
+        """盤中的 day_low 包含當下這個 tick，所以突破那一根自己的低點也算。
+        （同一根 K 棒裡先跌後漲還是先漲後跌，分鐘 K 看不出來 —— 這是重建的近似。）"""
+        import whynot
+        bars = self._bars(low=103.0)
+        bars[-1] = (bars[-1][0], 106.0, 100.5, 106.0, 400.0)
+        self.assertEqual(whynot.diagnose(bars, prev_close=100.0, day_open=103.0)["verdict"],
+                         whynot.PASS)
+
+    def test_one_kbars_query_gives_both_bars_and_the_open(self):
+        import whynot
+        ns = lambda hhmm: int(datetime(2026, 10, 9, int(hhmm[:2]), int(hhmm[3:]),
+                                       tzinfo=dt_timezone.utc).timestamp() * 1e9)
+        kb = SimpleNamespace(ts=[ns("09:02"), ns("09:01")], High=[2, 1], Low=[2, 1],
+                             Close=[2, 1], Volume=[1, 1], Open=[51.0, 50.0])
+        calls = []
+        fake = SimpleNamespace(kbars=lambda *a: calls.append(a) or kb)
+        bars, opened = whynot.day_bars_and_open(fake, "2330", "2026-10-09")
+        self.assertEqual((len(bars), opened, len(calls)), (2, 50.0, 1))
+        kb.Open = []                                       # 舊版沒有 Open
+        self.assertIsNone(whynot.day_bars_and_open(fake, "2330", "2026-10-09")[1])
+
+
+class TestV9TheRulesAreWired(unittest.TestCase):
+    def test_the_shipped_config_is_v9(self):
+        self.assertEqual(config.RULESET, "v9")
+        self.assertEqual(config.SIGNAL["near_prev_close_pct"], 1.0)
+        self.assertEqual(config.validate(), [])
+
+    def test_bad_bands_are_rejected(self):
+        for bad in (0, -1.0, 10.0):
+            with unittest.mock.patch.dict(config.SIGNAL, {"near_prev_close_pct": bad}):
+                self.assertIn("near_prev_close_pct", " / ".join(config.validate()))
+        with unittest.mock.patch.dict(config.SIGNAL, {"near_prev_close_pct": None}):
+            self.assertEqual(config.validate(), [])
 
 
 if __name__ == "__main__":

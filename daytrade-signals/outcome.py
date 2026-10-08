@@ -56,7 +56,8 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "mae_pct", "mfe_pct", "target_after_stop", "low_5m_pct",
           "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
           "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio",
-          "mkt_signal_pct", "exit_date", "close_pos_pct", "vs_vwap_pct", "volume_x")
+          "mkt_signal_pct", "exit_date", "close_pos_pct", "vs_vwap_pct", "volume_x",
+          "open_gap_pct", "low_gap_pct")
 
 
 @dataclass
@@ -138,6 +139,9 @@ class Outcome:
     close_pos_pct: float | None = None    # 收在當日最低～最高之間的哪裡（0～100）
     vs_vwap_pct: float | None = None      # 現價比均價線高幾 %
     volume_x: float | None = None         # 今天量是平常一天的幾倍
+    # v9 的進場條件看的兩個數字（signals.evaluate() 記在訊號上）。v8 以前沒有。
+    open_gap_pct: float | None = None     # 開盤價比昨收高幾 %
+    low_gap_pct: float | None = None      # 發訊號前的當日最低比昨收高幾 %
 
     @property
     def overnight(self) -> bool:
@@ -414,6 +418,8 @@ def resolve(broker, sig: dict, date: str | None = None,
         close_pos_pct=_num(sig.get("close_pos_pct")),
         vs_vwap_pct=_num(sig.get("vs_vwap_pct")),
         volume_x=_num(sig.get("volume_x")),
+        open_gap_pct=_num(sig.get("open_gap_pct")),
+        low_gap_pct=_num(sig.get("low_gap_pct")),
     )
 
 
@@ -543,7 +549,8 @@ _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "vwap_gap_pct", "mae_pct", "mfe_pct", "low_5m_pct",
                     "fill_low_pct", "mkt_open_pct", "mkt_day_pct",
                     "exit_0930", "r_0930", "bid_ask_ratio", "mkt_signal_pct",
-                    "close_pos_pct", "vs_vwap_pct", "volume_x")
+                    "close_pos_pct", "vs_vwap_pct", "volume_x",
+                    "open_gap_pct", "low_gap_pct")
 
 
 def _bool(value) -> bool | None:

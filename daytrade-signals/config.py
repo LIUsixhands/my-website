@@ -208,7 +208,16 @@ SCREEN = {
 #                 8% 很難，平常動 7% 的 8% 可能還不夠。改成**這一檔近 5 日平均日振幅**，
 #                 夾在 3%～10% 之間（3% = 停損距離，再低賺賠比就小於 1；10% = 一天的
 #                 漲跌幅上限）。前三檔排序與篩選照舊不動 —— 使用者選「資料夠了再加」。
-RULESET = "v8"
+# v9  2026-10-08  **只加一道進場條件，其餘照 v8。** 使用者：「開盤回落前日收盤價
+#                 或開盤近前日收盤價有往上的判斷，再出訊號」。條件是下面兩個
+#                 有一個成立就算（± 範圍使用者選 1%）：
+#                 1. 開盤價在昨收 ±1% 以內 —— 沒有大跳空
+#                 2. 進場前的當日最低點在昨收 ±1% 以內 —— 開高之後曾回到昨收附近
+#                 「往上」不另外判：開盤區間突破本身就是往上。
+#                 代價要記著：v6 的註解寫過，進場價通常已經比昨收高 3–6%，
+#                 這道條件會把跳空開高、一路往上的那種擋掉，訊號會變少。
+#                 v8 只跑了 10-08 一天就換掉；v9 從 10-09 起重新算 20 天。
+RULESET = "v9"
 
 SIGNAL = {
     "or_start": "09:00:00",         # 開盤區間起
@@ -242,6 +251,10 @@ SIGNAL = {
     "volume_min_recent_span_sec": 30,   # 近期樣本至少橫跨多久才算得出速率
     "volume_min_base_span_sec": 60,     # 基準樣本至少橫跨多久，否則基準不可信
     "require_above_vwap": True,     # 多單需站上均價線；空單需跌破
+    # v9：開盤價、或進場前的當日最低點，至少有一個要在昨收 ± 這麼多 % 以內。
+    # None = 不判（v8 以前）。昨收不知道的那一檔判不出來，就不發 —— 跟均價線
+    # 拿不到時一樣，不可以讓一條「以為開著」的規則無聲放行。
+    "near_prev_close_pct": 1.0,
     "max_signals_per_symbol": 1,    # 同一檔一天只發一次，杜絕凹單
     "stop_loss_pct": 3.0,           # 進場價往下這麼多 %（兩條停損的其中一條；v6 起 3%）
     # 停損另外有一條結構線：區間高點下方這麼多 %。
@@ -343,6 +356,31 @@ def limit_up(prev_close: float) -> float | None:
     return round_to_tick(prev_close * (1 + PRICE_LIMIT_PCT / 100), "down")
 
 
+def near_prev_close(prev_close: float, day_open: float | None, low_so_far: float | None,
+                    band_pct: float) -> str | None:
+    """v9 的進場條件：開盤價或目前為止的當日最低點，有沒有一個落在昨收 ± band_pct %。
+
+    回傳依據 —— NEAR_BY_OPEN（開盤就在附近）／NEAR_BY_PULLBACK（開高後回到附近）；
+    都不成立、或昨收不知道就回 None。開盤價優先：兩個都成立時講開盤那一個。
+    0 或 None 代表那個價位不知道，不算成立。
+    """
+    if not prev_close or prev_close <= 0:
+        return None
+    lo, hi = prev_close * (1 - band_pct / 100), prev_close * (1 + band_pct / 100)
+    # 檔位價跟乘出來的邊界比，差一點浮點誤差就會把剛好在邊上的那一檔擋掉。
+    eps = 1e-9 * prev_close
+    near = lambda p: bool(p) and lo - eps <= p <= hi + eps
+    if near(day_open):
+        return NEAR_BY_OPEN
+    if near(low_so_far):
+        return NEAR_BY_PULLBACK
+    return None
+
+
+NEAR_BY_OPEN = "開盤"
+NEAR_BY_PULLBACK = "回落"
+
+
 def limit_down(prev_close: float) -> float | None:
     """當日跌停價。往**上**取合法檔位。"""
     if not prev_close or prev_close <= 0:
@@ -413,6 +451,8 @@ def validate() -> list[str]:
                     "三天以上的追蹤沒有實作")
     if COST.get("tax_rate_overnight", 0) < COST["tax_rate"]:
         errs.append("COST.tax_rate_overnight 不可以低於當沖稅率 tax_rate")
+    if s.get("near_prev_close_pct") is not None and not 0 < s["near_prev_close_pct"] < PRICE_LIMIT_PCT:
+        errs.append("SIGNAL.near_prev_close_pct 必須介於 0 和漲跌幅上限之間（不要這條就設成 None）")
     if s["breakout_buffer_pct"] < 0:
         errs.append("SIGNAL.breakout_buffer_pct 不可為負")
     if s["volume_surge_ratio"] < 1:
