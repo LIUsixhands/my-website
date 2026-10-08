@@ -7837,5 +7837,171 @@ class TestOnlyTheTopNAreWatched(unittest.TestCase):
                 self.assertIn("watch_top", " / ".join(config.validate()))
 
 
+# ══════════════════════════════════════════════════════
+# 開盤前試撮方向：只記錄（使用者 10-08）
+# ══════════════════════════════════════════════════════
+class TestTrialMatchDirectionIsRecorded(unittest.TestCase):
+    """使用者 10-08 貼了一篇「試撮價持續上移 = 買方開盤前就傾斜」，選「只記錄
+    試撮方向」。不當條件、不上訊號 —— 20 天後在 analyse.py 第九節看數字。"""
+
+    SIM_KEYS = ("sim_from", "sim_move_pct", "sim_ups", "sim_downs")
+
+    def _sim(self, close, at):
+        return SimpleNamespace(close=close, high=close, low=close, simtrade=1,
+                               datetime=datetime.strptime(f"2026-10-12 {at}",
+                                                          "%Y-%m-%d %H:%M:%S"))
+
+    def _walk(self, prices, start=51):
+        st = SymbolState("2330", 99.0)
+        for i, p in enumerate(prices):
+            st.record_simtrade(self._sim(p, f"08:{start + i:02d}:00"))
+        return st
+
+    def test_first_last_and_every_step(self):
+        st = self._walk([100.0, 100.5, 100.5, 101.0, 100.5])
+        self.assertEqual((st.sim_first, st.sim_last), (100.0, 100.5))
+        self.assertEqual((st.sim_ups, st.sim_downs), (2, 1))       # 持平那一步不算
+        self.assertEqual(st.sim_move_pct(), 0.5)
+        self.assertEqual(st.sim_from, "08:51:00")
+
+    def test_going_down(self):
+        st = self._walk([100.0, 99.5, 99.0])
+        self.assertEqual((st.sim_ups, st.sim_downs, st.sim_move_pct()), (0, 2, -1.0))
+
+    def test_no_trial_match_is_unknown_not_flat(self):
+        st = SymbolState("2330", 99.0)
+        self.assertIsNone(st.sim_move_pct())
+        sig = evaluate(ready_state(), now=dtime(9, 3))
+        self.assertEqual([sig[k] for k in self.SIM_KEYS], ["", None, None, None])
+
+    def test_only_before_the_open(self):
+        """09:00 以後的試撮是收盤集合競價（13:25～13:30），跟開盤前的方向無關。"""
+        st = self._walk([100.0])
+        self.assertFalse(st.record_simtrade(self._sim(105.0, "09:00:00")))
+        self.assertFalse(st.record_simtrade(self._sim(90.0, "13:28:00")))
+        self.assertEqual((st.sim_last, st.sim_ups, st.sim_downs), (100.0, 0, 0))
+
+    def test_a_zero_price_is_skipped(self):
+        st = self._walk([100.0])
+        self.assertFalse(st.record_simtrade(self._sim(0, "08:55:00")))
+        self.assertEqual((st.sim_last, st.sim_downs), (100.0, 0))
+
+    def test_it_does_not_touch_anything_the_entry_uses(self):
+        st = self._walk([100.0, 103.0, 104.0])
+        self.assertEqual((st.or_high, st.or_low, st.vwap, st.total_volume, st.day_open,
+                          st.day_high, st.day_low, st.last_price),
+                         (0.0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0))
+        self.assertEqual(st.vol_marks, [])
+
+    def test_the_signal_carries_it_and_it_never_blocks(self):
+        st = ready_state()
+        for i, p in enumerate([101.0, 100.0, 99.0]):           # 試撮一路往下
+            st.record_simtrade(self._sim(p, f"08:5{i}:00"))
+        sig = evaluate(st, now=dtime(9, 3))
+        self.assertIsNotNone(sig, "試撮方向只記錄，不可以擋掉任何訊號")
+        self.assertEqual((sig["sim_from"], sig["sim_move_pct"], sig["sim_ups"],
+                          sig["sim_downs"]), ("08:50:00", -1.98, 0, 2))
+        self.assertEqual((sig["sim_first"], sig["sim_last"]), (101.0, 99.0))
+
+    def test_it_is_not_on_the_message(self):
+        """訊號上不加讓使用者自己判斷的指標。"""
+        st = ready_state()
+        st.record_simtrade(self._sim(99.0, "08:51:00"))
+        st.record_simtrade(self._sim(100.0, "08:52:00"))
+        text = format_signal(evaluate(st, now=dtime(9, 3)), 1, 1)
+        self.assertNotIn("試撮", text)
+
+    def test_on_tick_records_it_and_stops_there(self):
+        tree = ast.parse(textwrap.dedent(inspect.getsource(signals.run)))
+        on_tick = next(n for n in ast.walk(tree)
+                       if isinstance(n, ast.FunctionDef) and n.name == "on_tick")
+        guard = on_tick.body[0]
+        self.assertIn("simtrade", ast.unparse(guard.test))
+        body = ast.unparse(guard)
+        self.assertIn("record_simtrade(tick)", body)
+        self.assertIsInstance(guard.body[-1], ast.Return)      # 不往下走到 update／出場
+        self.assertNotIn(".update(", body)
+        self.assertNotIn("on_price", body)
+
+    def test_it_reaches_the_outcome_row_and_survives_the_csv(self):
+        sig = {"code": "2330", "time": "09:03:30", "entry": 100.0, "stop": 99.0,
+               "target": 101.5, "lots": 1, "sim_from": "08:51:04",
+               "sim_move_pct": 0.8, "sim_ups": 5, "sim_downs": 1}
+        o = oc.resolve(FakeKbarBroker(_kb([("09:41", 101.0, 100.0, 100.5)])), sig,
+                       "2026-09-24")
+        self.assertEqual((o.sim_from, o.sim_move_pct, o.sim_ups, o.sim_downs),
+                         ("08:51:04", 0.8, 5, 1))
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            oc.append_csv([o], path)
+            back = oc.load_csv(path)[0]
+        self.assertEqual((back.sim_from, back.sim_move_pct, back.sim_ups, back.sim_downs),
+                         ("08:51:04", 0.8, 5.0, 1.0))
+
+    def test_old_outcome_rows_still_load(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            old = [f for f in oc.FIELDS if not f.startswith("sim_")]
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.DictWriter(f, fieldnames=old)
+                w.writeheader()
+                w.writerow({**{k: "" for k in old},
+                            "date": "2026-10-08", "code": "5285", "time": "09:04:00",
+                            "entry": "100", "stop": "97", "target": "107", "lots": "1",
+                            "result": oc.STOP, "exit_price": "97", "r_multiple": "-1",
+                            "gross_pct": "-3", "net_pct": "-3.2", "bars": "5"})
+            rows = oc.load_csv(path)
+        self.assertEqual(len(rows), 1, "舊列必須讀得回來")
+        self.assertEqual((rows[0].sim_from, rows[0].sim_move_pct), ("", None))
+
+    def test_an_old_candidates_file_gets_the_new_header_first(self):
+        """直接附加的話，新欄位會寫進舊表頭沒有的位置 —— 讀回來整列錯位、不報錯。"""
+        old = signals.CANDIDATE_FIELDS[:-4]
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "candidates.csv"
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.DictWriter(f, fieldnames=old)
+                w.writeheader()
+                w.writerow({k: "" for k in old} | {"date": "2026-10-08", "code": "6174",
+                                                   "reason": "daily_cap", "rank": "3"})
+            sig = {"code": "2330", "time": "09:05:00", "entry": 100.0, "stop": 99.0,
+                   "target": 101.5, "rank": 1, "sim_from": "08:51:00",
+                   "sim_move_pct": -0.5, "sim_ups": 1, "sim_downs": 3}
+            signals.record_candidate(sig, "daily_cap", path)
+            signals.record_candidate(sig, "daily_cap", path)      # 第二次不再重寫
+            with open(path, newline="", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+                header = tuple(reader.fieldnames)
+        self.assertEqual(header, signals.CANDIDATE_FIELDS)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual((rows[0]["code"], rows[0]["rank"], rows[0]["sim_move_pct"]),
+                         ("6174", "3", ""))
+        self.assertEqual((rows[1]["code"], rows[1]["rank"], rows[1]["sim_move_pct"],
+                          rows[1]["sim_downs"]), ("2330", "1", "-0.5", "3"))
+
+    def test_a_current_candidates_file_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "candidates.csv"
+            signals.record_candidate({"code": "2330"}, "daily_cap", path)
+            before = path.read_bytes()
+            signals._upgrade_header(path, signals.CANDIDATE_FIELDS)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_analyse_splits_by_direction(self):
+        def o(move):
+            return SimpleNamespace(sim_move_pct=move)
+        groups = analyse.by_sim_direction([o(0.5), o(-0.2), o(0.0), o(None), o(1.0)])
+        self.assertEqual({k: len(v) for k, v in groups.items()},
+                         {"試撮往上": 2, "試撮沒動": 1, "試撮往下": 1})
+
+    def test_analyse_report_has_the_section(self):
+        sig = {"code": "2330", "time": "09:03:30", "entry": 100.0, "stop": 99.0,
+               "target": 101.5, "lots": 1, "sim_move_pct": 0.8}
+        row = oc.resolve(FakeKbarBroker(_kb([("09:41", 101.0, 100.0, 100.5)])), sig,
+                         "2026-09-24")
+        self.assertIn("## 九、開盤前試撮往哪走", "\n".join(analyse.report([row])))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

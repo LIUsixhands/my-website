@@ -142,6 +142,22 @@ def by_volume_surge(rows: list) -> dict:
     return _bucket(rows, key, ["量能 <3x", "量能 3-5x", "量能 5x+"])
 
 
+def by_sim_direction(rows: list) -> dict:
+    """開盤前試撮價往哪走（使用者 10-08 選「只記錄、不當條件」）。
+
+    文章說「試撮價持續上移 = 買方在開盤前就傾斜」。這一組回答的是：照我們的規則
+    發出去的訊號裡，試撮往上的那幾筆，勝率有沒有比較好。沒收到試撮的（程式晚開、
+    舊紀錄）不算進任何一組 —— 「不知道」不是「沒動」。
+    """
+    def key(o):
+        if o.sim_move_pct is None:
+            return None
+        if o.sim_move_pct > 0:
+            return "試撮往上"
+        return "試撮往下" if o.sim_move_pct < 0 else "試撮沒動"
+    return _bucket(rows, key, ["試撮往上", "試撮沒動", "試撮往下"])
+
+
 def by_fill(rows: list) -> dict:
     """掛進場價買不買得到。買不到的那些不會進你的帳戶 —— 它們的勝率再高也沒用。"""
     def key(o):
@@ -382,6 +398,11 @@ def report(rows: list) -> list[str]:
                           ("八之三、今天的量", by_volume_today(held)),
                           ("八之四、大盤當天", by_market_close(held))):
         lines += render_group(title, groups, "勝 = 兩天結算扣成本後為正。")
+
+    lines += render_group(
+        "九、開盤前試撮往哪走", by_sim_direction(rows),
+        "使用者 10-08 只要記錄、不當條件。試撮往上的那一組區間要是明顯高過"
+        "往下的那一組、而且不重疊，才有理由把它變成條件（那時才算改規則）。")
 
     lines += ["", "---", "",
               "*本分析只描述已發生的樣本，不預測未來，不構成投資建議。*"]

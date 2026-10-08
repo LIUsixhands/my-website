@@ -301,6 +301,39 @@ class SymbolState:
     aggressive_buy: int = 0                   # 外盤成交張數
     aggressive_sell: int = 0                  # 內盤成交張數
     unclassified: int = 0                     # 判不出方向的張數 —— 要知道有多少沒算到
+    # 開盤前的試撮（模擬撮合）價格往哪裡走。使用者 10-08 貼了一篇「試撮價持續
+    # 上移代表買方力道在開盤前就傾斜」，選「只記錄、不當條件」—— 20 天後拿數字
+    # 看試撮往上的那幾筆是不是真的比較好。程式 08:50 才開，看到的是最後那十分鐘
+    # （文章說的「最後幾秒抽單」也在裡面）。
+    sim_first: float = 0.0                    # 收到的第一筆試撮價
+    sim_last: float = 0.0                     # 最後一筆（09:00 前）
+    sim_ups: int = 0                          # 試撮價往上跳了幾次
+    sim_downs: int = 0                        # 往下跳了幾次
+    sim_from: str = ""                        # 第一筆試撮的時間（從幾點開始看得到）
+
+    def record_simtrade(self, tick) -> bool:
+        """記一筆試撮報價。只收 09:00 以前的 —— 13:25 之後的收盤集合競價也是
+        試撮，那跟開盤前的方向無關。**不碰任何進場用的欄位**（區間、均價、量）。"""
+        ts = tick.datetime.time() if hasattr(tick.datetime, "time") else datetime.now().time()
+        if ts >= _t(config.SIGNAL["or_start"]):
+            return False
+        price = float(getattr(tick, "close", 0) or 0)
+        if price <= 0:
+            return False
+        if not self.sim_first:
+            self.sim_first, self.sim_from = price, ts.strftime("%H:%M:%S")
+        elif price > self.sim_last:
+            self.sim_ups += 1
+        elif price < self.sim_last:
+            self.sim_downs += 1
+        self.sim_last = price
+        return True
+
+    def sim_move_pct(self) -> float | None:
+        """試撮從第一筆到最後一筆走了幾 %。沒收到試撮 = None（不知道，不是 0）。"""
+        if not self.sim_first:
+            return None
+        return round((self.sim_last - self.sim_first) / self.sim_first * 100, 2)
 
     def bid_ask_ratio(self) -> float | None:
         """外盤 ÷ 內盤。判不出方向的那些**不計入任何一邊**。
@@ -607,6 +640,13 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         # 先記不排序 —— 它還沒有任何資料支持，20 天後用算的決定要不要變成條件。
         "bid_ask_ratio": st.bid_ask_ratio(),
         "unclassified_lots": st.unclassified,
+        # 試撮方向：只記錄（使用者 10-08），不影響發不發。
+        "sim_from": st.sim_from,
+        "sim_first": st.sim_first or None,
+        "sim_last": st.sim_last or None,
+        "sim_move_pct": st.sim_move_pct(),
+        "sim_ups": st.sim_ups if st.sim_first else None,
+        "sim_downs": st.sim_downs if st.sim_first else None,
         "rank": st.rank,
         "category": st.category,
         "ruleset": config.RULESET,
@@ -864,7 +904,8 @@ _push_warned = False
 # 這裡只寫檔，不推播、不計入風控、不進 outcomes.csv，策略行為完全沒變。
 CANDIDATE_FILE = config.BASE_DIR / "candidates.csv"
 CANDIDATE_FIELDS = ("date", "code", "name", "time", "entry", "stop", "target",
-                    "lots", "reason", "or_high", "vwap", "volume_surge", "rank")
+                    "lots", "reason", "or_high", "vwap", "volume_surge", "rank",
+                    "sim_from", "sim_move_pct", "sim_ups", "sim_downs")
 # 同一檔的候選之間至少隔這麼久。不設的話突破後每個 tick 都會記一筆，
 # 記到的是同一次突破的雜訊，不是「另一次進場機會」。
 CANDIDATE_COOLDOWN = timedelta(minutes=5)
@@ -874,6 +915,26 @@ BLOCK_DAILY_CAP = "daily_cap"        # 今日訊號額度用完
 BLOCK_SYMBOL_CAP = "symbol_cap"      # 這檔今天已經發過了
 
 
+def _upgrade_header(path, fields) -> None:
+    """舊檔的表頭少了新欄位時，先照新表頭整份重寫一次，再往後附加。
+
+    直接附加的話，新的那幾欄會寫在舊表頭沒有的位置 —— 讀回來整列錯位，
+    而且不會報錯。舊列的新欄位留空（那時候還沒記）。
+    """
+    if not path.exists():
+        return
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        if tuple(reader.fieldnames or ()) == tuple(fields):
+            return
+        rows = list(reader)
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: r.get(k) or "" for k in fields})
+
+
 def record_candidate(sig: dict, reason: str, path=None) -> None:
     """把被擋掉的候選附加到 candidates.csv。寫檔失敗不可以影響盤中監看。"""
     path = pathlib.Path(path) if path else CANDIDATE_FILE
@@ -881,6 +942,7 @@ def record_candidate(sig: dict, reason: str, path=None) -> None:
     row["date"] = datetime.now().strftime("%Y-%m-%d")
     row["reason"] = reason
     try:
+        _upgrade_header(path, CANDIDATE_FIELDS)
         new_file = not path.exists()
         with open(path, "a", newline="", encoding="utf-8-sig") as f:
             w = csv.DictWriter(f, fieldnames=CANDIDATE_FIELDS)
@@ -1916,6 +1978,10 @@ def run():
     @broker.api.on_tick_stk_v1()
     def on_tick(exchange, tick):
         if getattr(tick, "simtrade", 0):
+            # 試撮不是成交：只記方向，不進區間、均價、量能，也不判出場。
+            st = states.get(tick.code)
+            if st:
+                st.record_simtrade(tick)
             return
         st = states.get(tick.code)
         if not st:

@@ -58,7 +58,8 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
           "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio",
           "mkt_signal_pct", "exit_date", "close_pos_pct", "vs_vwap_pct", "volume_x",
-          "open_gap_pct", "low_gap_pct", "half_exit")
+          "open_gap_pct", "low_gap_pct", "half_exit",
+          "sim_from", "sim_move_pct", "sim_ups", "sim_downs")
 
 
 @dataclass
@@ -146,6 +147,12 @@ class Outcome:
     # v10「先出一半」的價位。有值表示分兩段出場，報酬與 R 是兩段合起來的；
     # result / exit_price 是剩下那一段的出場原因與價位。
     half_exit: float | None = None
+    # 開盤前試撮價往哪走（使用者 10-08：只記錄、不當條件）。程式 08:50 才開，
+    # sim_from 是第一筆試撮的時間。沒收到試撮的留空 —— 空白是「不知道」，不是持平。
+    sim_from: str = ""
+    sim_move_pct: float | None = None     # 第一筆到最後一筆試撮價走了幾 %
+    sim_ups: float | None = None          # 試撮價往上跳了幾次
+    sim_downs: float | None = None        # 往下跳了幾次
 
     @property
     def overnight(self) -> bool:
@@ -518,6 +525,10 @@ def _build(sig: dict, date: str, code: str, entry: float, stop: float, target: f
         volume_x=_num(sig.get("volume_x")),
         open_gap_pct=_num(sig.get("open_gap_pct")),
         low_gap_pct=_num(sig.get("low_gap_pct")),
+        sim_from=str(sig.get("sim_from") or ""),
+        sim_move_pct=_num(sig.get("sim_move_pct")),
+        sim_ups=_num(sig.get("sim_ups")),
+        sim_downs=_num(sig.get("sim_downs")),
         half_exit=round(half_exit, 2) if half_exit is not None else None,
     )
 
@@ -641,7 +652,7 @@ def append_candidates_csv(pairs: list[tuple], path=None) -> None:
 
 
 _STR_FIELDS = ("date", "code", "time", "result", "category", "exit_at", "ruleset",
-               "exit_date")
+               "exit_date", "sim_from")
 _BOOL_FIELDS = ("target_after_stop",)
 _INT_FIELDS = ("lots", "bars")
 _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
@@ -649,7 +660,8 @@ _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "fill_low_pct", "mkt_open_pct", "mkt_day_pct",
                     "exit_0930", "r_0930", "bid_ask_ratio", "mkt_signal_pct",
                     "close_pos_pct", "vs_vwap_pct", "volume_x",
-                    "open_gap_pct", "low_gap_pct", "half_exit")
+                    "open_gap_pct", "low_gap_pct", "half_exit",
+                    "sim_move_pct", "sim_ups", "sim_downs")
 
 
 def _bool(value) -> bool | None:
