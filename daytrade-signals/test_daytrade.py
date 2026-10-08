@@ -6806,6 +6806,10 @@ class TestTheCloseSnapshotIsRecorded(unittest.TestCase):
         self.assertIn("目前樣本：**4 筆**", text)
 
 
+# v9 的「開盤／回落在昨收 ±1%」10-08 晚取消（v10）。機制測試釘在 v9 的設定上。
+V9_GATE = {"near_prev_close_pct": 1.0}
+
+
 class TestV9NearPreviousClose(unittest.TestCase):
     """使用者 10-08：「開盤回落前日收盤價或開盤近前日收盤價有往上的判斷，再出訊號」，
     ± 範圍選 1%。開盤價、或進場前的當日最低點，有一個在昨收 ±1% 以內才發。"""
@@ -6850,6 +6854,7 @@ class TestV9NearPreviousClose(unittest.TestCase):
         self.assertEqual(self.near(100.0, 0, 100.3, 1.0), config.NEAR_BY_PULLBACK)
 
 
+@unittest.mock.patch.dict(config.SIGNAL, V9_GATE)
 class TestV9TheSignalGate(unittest.TestCase):
     IN_WINDOW = dtime(9, 3)
 
@@ -6934,6 +6939,7 @@ class TestV9TheOpeningPrice(unittest.TestCase):
         self.assertEqual(st.day_open, 0.0)
 
 
+@unittest.mock.patch.dict(config.SIGNAL, V9_GATE)
 class TestV9TheMessageAndTheRecord(unittest.TestCase):
     def _sig(self, **kw):
         st = ready_state(or_high=104.0, last=105.0, vwap=104.5)
@@ -6971,6 +6977,7 @@ class TestV9TheMessageAndTheRecord(unittest.TestCase):
         self.assertEqual((back.open_gap_pct, back.low_gap_pct), (3.0, 0.6))
 
 
+@unittest.mock.patch.dict(config.SIGNAL, V9_GATE)
 class TestV9WhyNot(unittest.TestCase):
     """事後重建的那張表也要有這一關，否則「為什麼今天沒訊號」會指錯地方。"""
 
@@ -7016,9 +7023,21 @@ class TestV9WhyNot(unittest.TestCase):
 
 
 class TestV9TheRulesAreWired(unittest.TestCase):
-    def test_v10_keeps_the_v9_entry_gate(self):
-        self.assertEqual(config.SIGNAL["near_prev_close_pct"], 1.0)
+    def test_v10_dropped_the_v9_entry_gate(self):
+        """使用者 10-08 晚：「這條件開盤要在昨收 ±1% 取消呢？」→ 取消。"""
+        self.assertIsNone(config.SIGNAL["near_prev_close_pct"])
         self.assertEqual(config.validate(), [])
+
+    def test_a_gap_up_now_signals_and_still_shows_where_it_opened(self):
+        st = ready_state(or_high=104.0, last=105.0, vwap=104.5)
+        st.prev_close, st.day_open, st.day_low = 100.0, 103.0, 103.0
+        sig = evaluate(st, now=dtime(9, 3))
+        self.assertIsNotNone(sig)
+        self.assertIsNone(sig["near_basis"])
+        text = format_signal(sig, 1, 1)
+        self.assertIn("位置：昨收 100.00｜開盤 103.00（+3.0%）｜最低 103.00（+3.0%）", text)
+        self.assertNotIn("→", text.split("位置：")[1].split("\n")[1])   # 不當成依據
+        self.assertIn("・跌破開盤價 103.00", text)                         # 第 4 條接手
 
     def test_bad_bands_are_rejected(self):
         for bad in (0, -1.0, 10.0):

@@ -635,14 +635,19 @@ def _pct_from(price: float | None, base: float | None) -> float | None:
 def _near_line(sig: dict) -> str | None:
     """v9 訊號上講清楚「為什麼這一檔算在昨收附近」。v8 以前的訊號沒有這一行。"""
     basis = sig.get("near_basis")
-    if not basis or not sig.get("prev_close"):
+    if not sig.get("prev_close"):
         return None
     band = config.SIGNAL.get("near_prev_close_pct")
+    if not basis and band is not None:
+        return None      # 條件開著卻沒有依據 —— 不會發生（沒過就不會有訊號），不印
     parts = [f"昨收 {sig['prev_close']:.2f}"]
     if sig.get("day_open"):
         parts.append(f"開盤 {sig['day_open']:.2f}（{sig['open_gap_pct']:+.1f}%）")
     if sig.get("low_before") and sig.get("low_gap_pct") is not None:
         parts.append(f"最低 {sig['low_before']:.2f}（{sig['low_gap_pct']:+.1f}%）")
+    if not basis:
+        # 條件關掉了（v10 晚起）：只講事實，不當成進場依據
+        return "位置：" + "｜".join(parts)
     why = ("開盤就在昨收附近" if basis == config.NEAR_BY_OPEN
            else "開高後回到昨收附近再往上")
     return "位置：" + "｜".join(parts) + f"\n　→ {why}（±{band:g}% 以內）"
