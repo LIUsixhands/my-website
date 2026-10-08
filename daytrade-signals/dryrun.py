@@ -192,9 +192,10 @@ def main():
         # 不注入模擬時鐘的話所有 tick 都落在同一瞬間，速率永遠算不出來。
         st.update(as_tick(code, t, price, total_volume, avg, hi, lo),
                   now=1_000_000.0 + (t.hour * 3600 + t.minute * 60 + t.second))
-        for msg in tracker.on_price(code, price):
-            print(msg + "\n")
         now = datetime.combine(today, t)
+        for msg in tracker.on_price(code, price, now, vwap=st.vwap,
+                                    total_volume=st.total_volume):
+            print(msg + "\n")
         sig = evaluate(st, now=t, ignore_symbol_cap=True)
         if sig:
             sig["time"] = t.strftime("%H:%M:%S")

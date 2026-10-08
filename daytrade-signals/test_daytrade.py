@@ -39,6 +39,7 @@ import outcome as oc
 import screener
 import analyse
 import signals
+import exits
 from signals import RiskGate, SymbolState, evaluate, format_signal
 
 # 風控在真錢模式查不到帳務時會重試幾次才關閘，每次之間會等。
@@ -98,8 +99,9 @@ def snap(code="2330", close=100.0, high=104.0, low=100.0, volume=9000, avg=101.0
 # +8%、可以抱到隔天 —— 機制沒變，只是參數變了。把這幾組釘在 v5 參數上，
 # 測試才繼續證明那些機制是對的；v6 的數字另外有自己的測試（TestV6...）。
 # v9 加的「開盤／回落要在昨收附近」也是 v5 沒有的，一起關掉。
+# v10 的六條出場也是 v5 沒有的。
 V5_SIGNAL = {"stop_loss_pct": 1.5, "target_pct": None, "max_hold_days": 1,
-             "near_prev_close_pct": None}
+             "near_prev_close_pct": None, "exit_rules": False}
 
 
 def under_v5_rules(cls):
@@ -5952,7 +5954,8 @@ class TestDecisionTimeMarketIsRecorded(unittest.TestCase):
 # v6：停損 3%、目標 +8%、最多抱到隔天
 # ══════════════════════════════════════════════════════
 V6_SIGNAL = {"stop_loss_pct": 3.0, "target_pct": 8.0, "max_hold_days": 2,
-             "near_prev_close_pct": None}     # v9 才有的進場條件，v6 沒有
+             "near_prev_close_pct": None,     # v9 才有的進場條件，v6 沒有
+             "exit_rules": False}             # v10 的六條出場，v6 也沒有
 
 
 class _DaysBroker:
@@ -7013,8 +7016,7 @@ class TestV9WhyNot(unittest.TestCase):
 
 
 class TestV9TheRulesAreWired(unittest.TestCase):
-    def test_the_shipped_config_is_v9(self):
-        self.assertEqual(config.RULESET, "v9")
+    def test_v10_keeps_the_v9_entry_gate(self):
         self.assertEqual(config.SIGNAL["near_prev_close_pct"], 1.0)
         self.assertEqual(config.validate(), [])
 
@@ -7253,6 +7255,354 @@ class TestAWeekdayHolidayDoesNotLoseACarriedPosition(unittest.TestCase):
             with unittest.mock.patch.object(config, "STATE_FILE", path):
                 got = review.load_carried()
         self.assertEqual([(c["code"], c["carry_from"]) for c in got], [("2330", "2000-01-03")])
+
+
+# ══ v10：六條出場 ══════════════════════════════════════
+V10_SIG = {"code": "2330", "name": "測試", "time": "09:10:00", "entry": 100.0, "stop": 97.0,
+           "target": 106.0, "lots": 4, "or_high": 99.8, "max_hold_days": 1, "ruleset": "v10",
+           "exit_rules": 10, "key_level": 99.5, "half_at": 103.0, "trail_pct": 1.5,
+           "reason_buffer_pct": 0.2, "vol_window_min": 10, "vol_ratio": 0.5, "flat_pct": 1.0,
+           "base_per_min": 10.0, "entry_cum_volume": 1000}
+T0 = datetime(2026, 10, 12, 9, 10)
+
+
+def _at(minutes, seconds=0):
+    return T0 + timedelta(minutes=minutes, seconds=seconds)
+
+
+class TestV10TheSixExits(unittest.TestCase):
+    """使用者 10-08 貼的六條出場，四個數字也是使用者選的。"""
+
+    def _pos(self, **kw):
+        return exits.Position.from_signal(dict(V10_SIG, **kw), T0)
+
+    def _tick(self, pos, price, minute=1, vwap=None, vol=None):
+        return pos.step(_at(minute), price, price, price, vwap, vol)
+
+    def test_2_the_hard_stop(self):
+        self.assertEqual(self._tick(self._pos(), 96.9), [("exit", exits.STOP, 97.0)])
+
+    def test_4_below_the_open(self):
+        # 跌破 99.5 → 第一個成交得到的價位 99.4（100 以下一檔 0.1）
+        self.assertEqual(self._tick(self._pos(), 99.4), [("exit", exits.BELOW_OPEN, 99.4)])
+        self.assertEqual(self._tick(self._pos(or_high=None), 99.5), [])   # 碰到不算跌破
+
+    def test_1_back_inside_the_range(self):
+        # 區間高 99.8 下方 0.2% = 99.60；開盤價 99.5 在它下面，所以 99.55 是「跌回區間」
+        self.assertEqual(self._tick(self._pos(), 99.55), [("exit", exits.BACK_IN_RANGE, 99.6)])
+        self.assertEqual(self._tick(self._pos(), 99.61), [])        # 緩衝內不算
+
+    def test_1_below_the_average_price(self):
+        # 均價 100.5 下方 0.2% = 100.299；100 以上一檔 0.5 → 第一個成交得到的是 100.0
+        self.assertEqual(self._tick(self._pos(), 100.2, vwap=100.5),
+                         [("exit", exits.BELOW_VWAP, 100.0)])
+        self.assertEqual(self._tick(self._pos(), 100.31, vwap=100.5), [])
+        self.assertEqual(self._tick(self._pos(), 100.2), [])         # 沒有均價線就不判
+
+    def test_the_order_is_worst_first(self):
+        """同時碰到好幾條 —— 停損 > 開盤價 > 區間 > 均價線。"""
+        pos = self._pos(key_level=99.0)
+        self.assertEqual(self._tick(pos, 98.9, vwap=101)[0][1], exits.BELOW_OPEN)
+        self.assertEqual(self._tick(self._pos(key_level=None), 99.0, vwap=101)[0][1],
+                         exits.BACK_IN_RANGE)
+        bar = self._pos().step(_at(1), 103.5, 96.0, 100.0)            # 同一根碰到一半和停損
+        self.assertEqual(bar, [("exit", exits.STOP, 97.0)])
+
+    def test_3_half_then_trail_from_the_peak(self):
+        pos = self._pos()
+        self.assertEqual(self._tick(pos, 103.0), [("half", 103.0)])
+        self.assertEqual(self._tick(pos, 104.0, 2), [])
+        self.assertEqual(pos.trail_line(), 102.0)     # 104 × 0.985 = 102.44 → 往下取 102.0（一檔 0.5）
+        self.assertEqual(self._tick(pos, 102.5, 3), [])
+        self.assertEqual(self._tick(pos, 102.0, 4), [("exit", exits.TRAIL, 102.0)])
+
+    def test_3_the_trail_never_goes_below_cost(self):
+        pos = self._pos(trail_pct=5.0)
+        self._tick(pos, 103.0)
+        self.assertEqual(pos.trail_line(), 100.0)
+        self.assertEqual(self._tick(pos, 100.0, 2), [("exit", exits.TRAIL, 100.0)])
+
+    def test_3_no_trail_before_the_half(self):
+        pos = self._pos()
+        self.assertEqual(self._tick(pos, 102.0), [])
+        self.assertEqual(self._tick(pos, 100.1, 2), [])
+
+    def test_3_a_bar_that_halves_is_not_also_judged_for_the_trail(self):
+        pos = self._pos()
+        self.assertEqual(pos.step(_at(1), 103.5, 100.5, 101.0), [("half", 103.0)])
+        self.assertEqual(pos.step(_at(2), 101.0, 100.5, 100.8), [("exit", exits.TRAIL, 101.0)])
+
+    def test_5_volume_dries_up_and_price_sticks(self):
+        pos = self._pos()
+        self.assertEqual(self._tick(pos, 100.5, 5, vol=1020), [])
+        self.assertEqual(self._tick(pos, 100.6, 9, vol=1030), [])    # 還不到 10 分鐘
+        # 10 分鐘量 40 < 0.5 × 10 × 10 = 50，價格上下 0.1% → 出
+        self.assertEqual(self._tick(pos, 100.6, 10, vol=1040), [("exit", exits.VOLUME_DRY, 100.6)])
+
+    def test_5_enough_volume_or_a_moving_price_stays(self):
+        pos = self._pos()
+        self._tick(pos, 100.5, 5, vol=1030)
+        self.assertEqual(self._tick(pos, 100.6, 10, vol=1060), [])   # 量 60 ≥ 50
+        pos = self._pos()
+        self._tick(pos, 100.0, 5, vol=1010)
+        self.assertEqual(self._tick(pos, 101.5, 10, vol=1020), [])   # 價格動了 1.5%
+
+    def test_5_the_window_slides(self):
+        pos = self._pos()
+        for m in range(1, 13):
+            self._tick(pos, 100.5, m, vol=1000 + 10 * m)               # 每分鐘 10 張，沒縮
+        self.assertFalse(pos.done)
+        self.assertEqual(self._tick(pos, 100.5, 21, vol=1125)[0][1], exits.VOLUME_DRY)
+
+    def test_5_no_baseline_no_judgement(self):
+        pos = self._pos(base_per_min=None)
+        self._tick(pos, 100.5, 5, vol=1000)
+        self.assertEqual(self._tick(pos, 100.5, 15, vol=1000), [])
+
+    def test_6_flatten_and_nothing_after_an_exit(self):
+        pos = self._pos()
+        self.assertEqual(pos.flatten(101.2), [("exit", exits.FLAT, 101.2)])
+        self.assertEqual(self._tick(pos, 90.0), [])
+        self.assertEqual(pos.flatten(90.0), [])
+
+    def test_how_many_lots_go_first(self):
+        self.assertEqual(self._pos(lots=5).half_lots, 2)
+        self.assertEqual(self._pos(lots=4).half_lots, 2)
+        self.assertEqual(self._pos(lots=1).half_lots, 0)
+
+    def test_two_legs_add_up_by_lots(self):
+        pct, r = exits.blended(100, 97, 4, 103, 101.5)
+        self.assertAlmostEqual(pct, 2.25)
+        self.assertAlmostEqual(r, 0.75)
+        pct, r = exits.blended(100, 97, 5, 103, 100.0)                # 2 張 103、3 張 100
+        self.assertAlmostEqual(pct, 1.2)
+        self.assertEqual(exits.blended(100, 97, 1, 103, 101.5), exits.blended(100, 97, 1, None, 101.5))
+        self.assertAlmostEqual(exits.blended(100, 97, 0, 103, 101)[0], 2.0)
+        self.assertAlmostEqual(exits.blended(100, 97, 4, None, 97)[1], -1.0)
+
+
+class TestV10TheSignalCarriesThePlan(unittest.TestCase):
+    def _sig(self):
+        st = ready_state(or_high=100.0, last=100.4, vwap=100.0)
+        st.amplitude_pct = 6.0
+        st.total_volume = 3000
+        return evaluate(st, now=dtime(9, 12))
+
+    def test_the_plan_is_on_the_signal(self):
+        sig = self._sig()
+        self.assertEqual(sig["exit_rules"], exits.V10)
+        self.assertEqual(sig["key_level"], 99.0)                        # 開盤價
+        self.assertEqual(sig["half_at"], config.round_to_tick(
+            sig["entry"] + (sig["target"] - sig["entry"]) / 2, "up"))
+        self.assertEqual(sig["base_per_min"], 250.0)                    # 3000 張 / 12 分鐘
+        self.assertEqual(sig["entry_cum_volume"], 3000)
+        self.assertEqual(sig["max_hold_days"], 1)                       # 回到當沖
+
+    def test_the_message_lists_every_exit_before_entry(self):
+        text = format_signal(self._sig(), 1, 1)
+        for part in ("出場（哪一條先到就出）", "・停損", "・跌破開盤價 99.00",
+                     "・跌回區間：低於 99.80", "・跌破均價線（下方 0.2%）", "先出一半",
+                     "從最高點回落 1.5% 出（不低於成本）", "・量縮：進場 10 分鐘後",
+                     "・13:25 全部平倉"):
+            self.assertIn(part, text)
+        self.assertNotIn("留倉", text)
+
+    def test_an_unknown_open_says_so(self):
+        sig = dict(self._sig(), key_level=None)
+        self.assertIn("今天的開盤價不知道，這一條不判", format_signal(sig, 1, 1))
+
+    def test_switching_it_off_drops_the_plan(self):
+        with unittest.mock.patch.dict(config.SIGNAL, {"exit_rules": False}):
+            sig = self._sig()
+        self.assertNotIn("half_at", sig)
+        self.assertNotIn("出場（", format_signal(sig, 1, 1))
+
+    def test_the_lock_message_names_the_new_exits(self):
+        self.assertIn("先出一半", signals.format_window_closed(1, 20))
+        self.assertNotIn("留倉", signals.format_window_closed(1, 20))
+
+
+class TestV10TheLiveTracker(unittest.TestCase):
+    def _tracker(self):
+        self.resolved, self.halved = [], []
+        tr = signals.LiveTracker(on_resolved=lambda o, p, v: self.resolved.append((v, p)),
+                                 on_half=lambda o, p: self.halved.append(p))
+        tr.track(dict(V10_SIG), now=T0)
+        return tr
+
+    def test_half_then_trail_two_messages(self):
+        tr = self._tracker()
+        msgs = tr.on_price("2330", 103.2, _at(1))
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("先出一半", msgs[0])
+        self.assertIn("先賣 2 張（共 4 張），剩下 2 張改成移動停利", msgs[0])
+        self.assertEqual(self.halved, [103.0])
+        tr.on_price("2330", 105.0, _at(2))
+        msgs = tr.on_price("2330", 103.5, _at(3))                    # 105 × 0.985 = 103.43 → 103.0
+        self.assertEqual(msgs, [])
+        msgs = tr.on_price("2330", 103.0, _at(4))
+        self.assertEqual(self.resolved, [(exits.TRAIL, 103.0)])
+        self.assertIn("先出 2 張：100.00 → 103.00（+3.00%）", msgs[0])
+        self.assertIn("剩下 2 張：100.00 → 103.00（+3.00%）", msgs[0])
+        self.assertIn("+1.00R", msgs[0])
+        self.assertEqual(tr.open, [])
+
+    def test_one_lot_cannot_be_split(self):
+        tr = signals.LiveTracker()
+        tr.track(dict(V10_SIG, lots=1), now=T0)
+        msg = tr.on_price("2330", 103.0, _at(1))[0]
+        self.assertIn("只有 1 張分不了", msg)
+        out = tr.on_price("2330", 101.0, _at(2))[0]                   # 103 × 0.985 → 101.0
+        self.assertNotIn("先出", out)                                 # 單一段
+        self.assertIn("出場 101.00", out)
+
+    def test_volume_and_average_price_reach_the_rules(self):
+        tr = self._tracker()
+        tr.on_price("2330", 100.2, _at(1), vwap=100.5)
+        self.assertEqual(self.resolved, [(exits.BELOW_VWAP, 100.0)])
+        tr = self._tracker()
+        tr.on_price("2330", 100.5, _at(5), total_volume=1020)
+        tr.on_price("2330", 100.5, _at(10), total_volume=1040)
+        self.assertEqual(self.resolved[-1][0], exits.VOLUME_DRY)
+
+    def test_flatten_after_half_reports_both_legs(self):
+        tr = self._tracker()
+        tr.on_price("2330", 103.0, _at(1))
+        msg = tr.flatten()[0]
+        self.assertIn("收盤平倉，全部出場", msg)
+        self.assertEqual(self.resolved, [(oc.FLAT, 103.0)])
+
+    def test_a_restart_does_not_halve_twice(self):
+        tr = signals.LiveTracker(on_half=lambda o, p: self.fail("不該再出一半"))
+        tr.track(dict(V10_SIG, live_half=103.0), now=T0)
+        self.assertEqual(tr.on_price("2330", 103.5, _at(1)), [])
+
+    def test_old_signals_keep_stop_and_target(self):
+        tr = signals.LiveTracker()
+        tr.track(dict(V6_SIG, max_hold_days=1), now=T0)
+        self.assertEqual(tr.open[0].pos, None)
+        self.assertIn("目標", tr.on_price("2330", 108.0, _at(1))[0])
+
+    def test_the_half_is_written_back_to_state(self):
+        b = FakeBroker()
+        with tempfile.TemporaryDirectory() as d, \
+             unittest.mock.patch.object(config, "STATE_FILE", Path(d) / "s.json"):
+            gate = RiskGate(b)
+            gate.record(dict(V10_SIG))
+            self.assertTrue(gate.record_live_half("2330", "09:10:00", 103.0))
+            self.assertEqual(gate.state["signals"][0]["live_half"], 103.0)
+            self.assertFalse(gate.record_live_half("9999", "09:10:00", 1.0))
+
+    def test_it_is_wired_into_the_live_loop(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("on_half=_remember_half", src)
+        self.assertIn("vwap=st.vwap", src)
+        self.assertIn("total_volume=st.total_volume", src)
+
+
+class _VolBroker:
+    """一天的假 kbars：rows = [(HH:MM, 開, 高, 低, 收, 量), ...]。"""
+
+    def __init__(self, rows, day="2026-10-12"):
+        self.rows, self.day = rows, day
+
+    def kbars(self, code, start, end):
+        ts, o, h, l, c, v = [], [], [], [], [], []
+        for hhmm, op, hi, lo, cl, vo in self.rows:
+            t = datetime(int(self.day[:4]), int(self.day[5:7]), int(self.day[8:10]),
+                         int(hhmm[:2]), int(hhmm[3:]), tzinfo=dt_timezone.utc)
+            ts.append(int(t.timestamp() * 1e9))
+            o.append(op); h.append(hi); l.append(lo); c.append(cl); v.append(vo)
+        return SimpleNamespace(ts=ts, Open=o, High=h, Low=l, Close=c, Volume=v)
+
+
+class TestV10TheCloseReplay(unittest.TestCase):
+    """收盤後用分鐘 K 照同一套六條回推（盤中沒收到的那幾筆靠這個）。"""
+
+    DAY = "2026-10-12"
+    BEFORE = [("09:%02d" % m, 100, 100.2, 99.9, 100, 100) for m in range(1, 11)]   # 每分鐘 100 張
+
+    def _resolve(self, after, **kw):
+        sig = dict(V10_SIG, base_per_min=None, entry_cum_volume=None, **kw)
+        return oc.resolve(_VolBroker(self.BEFORE + after), sig, self.DAY)
+
+    def test_half_then_trail(self):
+        o = self._resolve([("09:12", 100.5, 103.2, 100.4, 103, 300),
+                           ("09:13", 103, 105.0, 103.6, 104.8, 300),
+                           ("09:14", 104.8, 104.9, 103.0, 103.2, 300)])
+        self.assertEqual((o.result, o.half_exit, o.exit_price), (exits.TRAIL, 103.0, 103.0))
+        self.assertAlmostEqual(o.r_multiple, 1.0, places=2)
+        self.assertEqual(o.exit_at, "09:14:00")
+        back = None
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "o.csv"
+            oc.append_csv([o], path)
+            back = oc.load_csv(path)[0]
+        self.assertEqual(back.half_exit, 103.0)
+
+    def test_volume_dries_up_on_the_bars(self):
+        # 進場前每分鐘 100 張；之後每分鐘 2 張、價格不動 → 10 分鐘後出
+        after = [("09:%02d" % m, 100.4, 100.5, 100.3, 100.4, 2) for m in range(12, 25)]
+        o = self._resolve(after)
+        self.assertEqual(o.result, exits.VOLUME_DRY)
+        self.assertEqual(o.exit_at, "09:20:00")                        # 進場 09:10 + 10 分鐘
+
+    def test_the_average_price_is_built_from_the_bars(self):
+        # 進場前都在 100 附近成交；之後量大的那根跌到 100.0 以下的均價線緩衝
+        o = self._resolve([("09:12", 100.3, 100.4, 99.75, 99.9, 50)], key_level=None,
+                          or_high=95.0)
+        self.assertEqual(o.result, exits.BELOW_VWAP)
+
+    def test_nothing_happens_then_1325(self):
+        after = [("09:12", 100.5, 101.0, 100.4, 100.9, 100), ("13:25", 100.9, 101.2, 100.8, 101, 100),
+                 ("13:30", 101, 101, 101, 101, 100)]
+        o = self._resolve(after, vol_ratio=0.01)                       # 量縮門檻壓到不會觸發
+        self.assertEqual((o.result, o.exit_price), (exits.FLAT, 101.0))
+
+    def test_the_live_result_wins(self):
+        o = self._resolve([("09:12", 100.5, 100.6, 96.0, 97, 300)],
+                          live_result=exits.TRAIL, live_exit=104.0, live_half=103.0,
+                          live_at="10:00:00")
+        self.assertEqual((o.result, o.exit_price, o.half_exit, o.bars), (exits.TRAIL, 104.0, 103.0, 0))
+        self.assertAlmostEqual(o.r_multiple, 1.17, places=2)
+
+    def test_the_bar_that_contains_the_signal_is_not_used(self):
+        """訊號 09:10:00。label 09:10 那根涵蓋 09:09–09:10，是訊號**之前**的成交 ——
+        那根掃到 96 不是這一筆的停損（跟 v9 以前同一個約定）。"""
+        rows = self.BEFORE[:-1] + [("09:10", 100, 100.5, 96.0, 100.4, 100),
+                                   ("09:12", 100.4, 100.6, 100.3, 100.5, 100)]
+        sig = dict(V10_SIG, base_per_min=None, entry_cum_volume=None, vol_ratio=0.01)
+        o = oc.resolve(_VolBroker(rows), sig, self.DAY)
+        self.assertNotEqual(o.result, exits.STOP)
+
+    def test_no_bars_no_guess(self):
+        self.assertIsNone(oc.resolve(_VolBroker([]), dict(V10_SIG), self.DAY))
+
+    def test_the_report_shows_the_half(self):
+        o = self._resolve([("09:12", 100.5, 103.2, 100.4, 103, 300),
+                           ("09:13", 103, 105.0, 103.6, 104.8, 300),
+                           ("09:14", 104.8, 104.9, 103.0, 103.2, 300)])
+        text = review.format_push([dict(V10_SIG)], [o], [o])
+        self.assertIn("移動停利（先出一半 103.00）", text)
+
+
+class TestV10TheRulesAreWired(unittest.TestCase):
+    def test_the_shipped_config_is_v10(self):
+        self.assertEqual(config.RULESET, "v10")
+        cfg = config.SIGNAL
+        self.assertTrue(cfg["exit_rules"])
+        self.assertEqual(cfg["max_hold_days"], 1)
+        self.assertEqual((cfg["exit_half_fraction"], cfg["exit_trail_pct"], cfg["exit_vol_window_min"],
+                          cfg["exit_vol_ratio"], cfg["exit_flat_pct"]), (0.5, 1.5, 10, 0.5, 1.0))
+        self.assertEqual(config.RISK["per_trade_risk"], 4000)
+        self.assertEqual(config.validate(), [])
+
+    def test_bad_numbers_are_rejected(self):
+        for k, bad in (("exit_half_fraction", 1.0), ("exit_trail_pct", 0), ("exit_vol_ratio", 1.0),
+                       ("exit_flat_pct", 0), ("exit_reason_buffer_pct", -0.1),
+                       ("exit_vol_window_min", 0), ("max_hold_days", 2)):
+            with unittest.mock.patch.dict(config.SIGNAL, {k: bad}):
+                self.assertTrue(config.validate(), k)
 
 
 if __name__ == "__main__":

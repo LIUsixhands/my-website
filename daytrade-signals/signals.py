@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, time as dtime, timedelta
 
 import config
+import exits
 import outcome
 from broker import Broker
 
@@ -192,6 +193,17 @@ class RiskGate:
                 self.save()
                 return True
         log.warning("即時判定找不到對應訊號（%s %s），沒寫回 state.json", code, time_str)
+        return False
+
+    def record_live_half(self, code: str, time_str: str, price: float) -> bool:
+        """v10「先出一半」那一刻寫回 state.json。收盤回推要靠它算兩段合起來的報酬。"""
+        for sig in self._all_signals():
+            if str(sig.get("code")) == str(code) and str(sig.get("time")) == str(time_str):
+                sig["live_half"] = round(float(price), 2)
+                sig["live_half_at"] = datetime.now().strftime("%H:%M:%S")
+                self.save()
+                return True
+        log.warning("先出一半找不到對應訊號（%s %s），沒寫回 state.json", code, time_str)
         return False
 
     def _all_signals(self) -> list[dict]:
@@ -426,7 +438,15 @@ def target_price(entry: float, stop: float, amplitude_pct: float | None = None) 
     return config.round_to_tick(entry + (entry - stop) * config.SIGNAL["reward_risk"], "up")
 
 
-def _price_plan(st: SymbolState, entry: float) -> dict | None:
+def _minutes_since_open(now: dtime | None) -> float | None:
+    if now is None:
+        return None
+    start = datetime.combine(datetime(2000, 1, 1), _t(config.SIGNAL["or_start"]))
+    mins = (datetime.combine(datetime(2000, 1, 1), now) - start).total_seconds() / 60
+    return mins if mins > 0 else None
+
+
+def _price_plan(st: SymbolState, entry: float, now: dtime | None = None) -> dict | None:
     """以 entry 為進場價，算出停損、目標、張數。進場價不可執行（已漲停、停損
     進位後等於進場價）就回 None。
 
@@ -511,6 +531,11 @@ def _price_plan(st: SymbolState, entry: float) -> dict | None:
         "extension_pct": (round((entry - st.or_high) / st.or_high * 100, 2)
                           if st.or_high else None),
         "stop_rule": stop_rule,
+        # v10：六條出場的計畫（關鍵價、先出一半的價位、移動停利、量縮的基準）。
+        **(exits.plan_fields(entry, stop, target, day_open=st.day_open,
+                             total_volume=st.total_volume,
+                             minutes_since_open=_minutes_since_open(now))
+           if cfg.get("exit_rules") else {}),
     }
 
 
@@ -565,7 +590,7 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
                 st.gap_logged = True
             return None
 
-    plan = _price_plan(st, st.last_price)
+    plan = _price_plan(st, st.last_price, now)
     if plan is None:
         return None
     return {
@@ -621,6 +646,30 @@ def _near_line(sig: dict) -> str | None:
     why = ("開盤就在昨收附近" if basis == config.NEAR_BY_OPEN
            else "開高後回到昨收附近再往上")
     return "位置：" + "｜".join(parts) + f"\n　→ {why}（±{band:g}% 以內）"
+
+
+def _exit_plan_lines(sig: dict) -> list[str]:
+    """v10：進場前就把六條出場條件的價位寫在訊號上 —— 「進場前先畫好，不是進場後才找」。"""
+    if not exits.uses_v10(sig):
+        return []
+    buf = float(sig.get("reason_buffer_pct") or 0)
+    lines = ["出場（哪一條先到就出）："]
+    lines.append(f"・停損 {sig['stop']:.2f}（這筆最多賠約 "
+                 f"{round((sig['entry'] - sig['stop']) * 1000 * max(1, int(sig.get('lots') or 1))):,} 元）")
+    if sig.get("key_level"):
+        lines.append(f"・跌破開盤價 {float(sig['key_level']):.2f}")
+    else:
+        lines.append("・跌破開盤價（今天的開盤價不知道，這一條不判）")
+    if sig.get("or_high"):
+        lines.append(f"・跌回區間：低於 {float(sig['or_high']) * (1 - buf / 100):.2f}"
+                     f"（區間高 {float(sig['or_high']):.2f} 下方 {buf:g}%）")
+    lines.append(f"・跌破均價線（下方 {buf:g}%）")
+    lines.append(f"・漲到 {float(sig['half_at']):.2f} 先出一半，剩下的從最高點回落 "
+                 f"{float(sig['trail_pct']):g}% 出（不低於成本）")
+    lines.append(f"・量縮：進場 {float(sig['vol_window_min']):g} 分鐘後，量不到一半、"
+                 f"價格上下不到 {float(sig['flat_pct']):g}%")
+    lines.append(f"・{outcome.FLATTEN_AT:%H:%M} 全部平倉")
+    return lines
 
 
 def _ordinal_line(ordinal: int, batch_total: int | None) -> str:
@@ -692,6 +741,7 @@ def format_signal(sig: dict, ordinal: int, batch_total: int | None) -> str:
     near = _near_line(sig)
     if near:
         lines.append(near)
+    lines += _exit_plan_lines(sig)
     # 下面兩行只講事實，不替使用者做「要不要留倉」的決定 —— 使用者 10-07：
     # 「沒碰停損自己決定要不要留倉，因為你沒把握明天留倉會漲」。
     if sig.get("beyond_today_limit") and sig.get("limit_up"):
@@ -734,7 +784,9 @@ def format_window_closed(sent: int, watched: int) -> str:
     at = cfg["entry_window_end"][:5]
     lines = [f"🔒 {at} 進場窗口已關閉", "────────────────"]
     if sent:
-        after = "🛑 停損 ／ ✅ 目標"
+        after = ("出場通知（🛑 停損 ／ 🚪 理由消失 ／ 🟡 先出一半 ／ 💰 移動停利 ／ 💤 量縮"
+                 f" ／ ⏹ {outcome.FLATTEN_AT:%H:%M} 全部平倉）"
+                 if cfg.get("exit_rules") else "🛑 停損 ／ ✅ 目標")
         if cfg.get("exit_signal_at"):
             after += f" ／ ⏰ {cfg['exit_signal_at'][:5]} 時間到"
         lines += [
@@ -748,7 +800,9 @@ def format_window_closed(sent: int, watched: int) -> str:
         lines += [
             f"今日訊號：0 個",
             f"監看的 {watched} 檔，沒有一檔在 {cfg['or_end'][:5]}–{at} 之間"
-            "同時通過突破、均價線、量能三道閘。",
+            "同時通過突破、均價線、量能"
+            + ("、開盤在昨收附近" if cfg.get("near_prev_close_pct") is not None else "")
+            + "這幾道閘。",
             "",
             "不會再有新的買入訊號。",
             "⚠️ 這不是當掉。程式還在跑，會執行到 13:30 —— 只是今天不出手。",
@@ -818,7 +872,7 @@ def reprice_at_send(sig: dict, st: "SymbolState | None",
         return None, BLOCK_FELL_BACK
     if cfg["require_above_vwap"] and st.vwap and price < st.vwap:
         return None, BLOCK_BELOW_VWAP
-    plan = _price_plan(st, price)
+    plan = _price_plan(st, price, now.time())
     if plan is None:
         return None, BLOCK_LOCKED
     fresh = dict(sig, **plan)
@@ -1061,6 +1115,12 @@ RESOLUTION_MARK = {
     outcome.TARGET: "\u2705",        # ✅
     outcome.STOP: "\U0001f6d1",      # 🛑
     outcome.FLAT: "\u23f9",          # ⏹
+    # v10 的出場原因
+    exits.BELOW_OPEN: "\U0001f6aa",     # 🚪
+    exits.BACK_IN_RANGE: "\U0001f6aa",
+    exits.BELOW_VWAP: "\U0001f6aa",
+    exits.VOLUME_DRY: "\U0001f4a4",     # 💤
+    exits.TRAIL: "\U0001f4b0",          # 💰
 }
 
 
@@ -1119,6 +1179,9 @@ class OpenSignal:
     hold_days: int = 1
     # 昨天留倉過來的。今天 13:25 一律平倉，不會再留；成本用留倉稅率。
     carried: bool = False
+    lots: int = 0
+    # v10：六條出場的狀態（exits.Position）。None = 舊規則（停損／目標／13:25）。
+    pos: "exits.Position | None" = None
 
     def verdict(self, price: float) -> str:
         """這個價位讓這筆結束了嗎。停損先判：往壞處算。"""
@@ -1129,13 +1192,18 @@ class OpenSignal:
         return ""
 
 
-def format_resolution(o: OpenSignal, price: float, verdict: str) -> str:
+def format_resolution(o: OpenSignal, price: float, verdict: str,
+                      exit_price: float | None = None) -> str:
     """出場價一律取停損／目標那個價位，不取觸發當下的報價。
 
     理由是要和 outcome.py 的收盤回推對得起來 —— 兩邊算出不同的數字，就沒辦法
     拿其中一邊去驗另一邊。跳空穿過去的部分另外寫在訊息裡，不混進報酬率。
     """
-    exit_price = {outcome.TARGET: o.target, outcome.STOP: o.stop}.get(verdict, price)
+    if exit_price is None:
+        exit_price = {outcome.TARGET: o.target, outcome.STOP: o.stop}.get(verdict, price)
+    half = o.pos.half_price if o.pos is not None and o.lots != 1 else None
+    if half is not None:
+        return _format_two_legs(o, price, verdict, half, exit_price)
     # 留倉過夜的那一筆，隔天一開盤就跳過停損 —— 你賣到的是那個價，不是停損價。
     # 當沖時那一點穿價是滑價，可以另外寫；跳空可以是好幾 %，不計入就是假帳。
     if o.carried and verdict == outcome.STOP:
@@ -1169,6 +1237,60 @@ def format_resolution(o: OpenSignal, price: float, verdict: str) -> str:
         "────────────────",
         "驗證期不下單。這是照規則做會有的結果，不是你的實際損益。",
     ]
+    return "\n".join(lines)
+
+
+def _format_two_legs(o: OpenSignal, price: float, verdict: str,
+                     half: float, exit_price: float) -> str:
+    """v10：先出過一半的那一筆，剩下的也出場了。兩段分開寫，再寫合起來的。"""
+    half_lots = o.pos.half_lots if o.pos is not None else 0
+    pct, r = exits.blended(o.entry, o.stop, o.lots, half, exit_price, half_lots or None)
+    net = pct - config.round_trip_cost_pct()
+    leg = lambda p: (p - o.entry) / o.entry * 100
+    label = f"{o.code} {o.name}".strip()
+    first = f"先出 {half_lots} 張" if half_lots else "先出一半"
+    rest = f"剩下 {o.lots - half_lots} 張" if half_lots else "剩下一半"
+    lines = [
+        f"{RESOLUTION_MARK.get(verdict, '')} {label} {verdict}，全部出場"
+        f"｜{datetime.now().strftime('%H:%M:%S')}",
+        "────────────────",
+        f"{first}：{o.entry:.2f} → {half:.2f}（{leg(half):+.2f}%）",
+        f"{rest}：{o.entry:.2f} → {exit_price:.2f}（{leg(exit_price):+.2f}%）",
+        f"合計 {pct:+.2f}%（扣掉來回成本 {net:+.2f}%）　{r:+.2f}R",
+    ]
+    if abs(price - exit_price) >= 0.01:
+        lines.append(f"觸發時報價 {price:.2f}（穿過去的部分不計入上面的報酬率）")
+    lines += [
+        f"訊號發出於 {o.time}",
+        "────────────────",
+        "驗證期不下單。這是照規則做會有的結果，不是你的實際損益。",
+    ]
+    return "\n".join(lines)
+
+
+def format_half(o: OpenSignal, price: float, half: float) -> str:
+    """v10 條件三：漲到目標的一半，先出一半。剩下的改移動停利。"""
+    label = f"{o.code} {o.name}".strip()
+    trail = o.pos.trail_pct if o.pos is not None else config.SIGNAL["exit_trail_pct"]
+    gain = (half - o.entry) / o.entry * 100
+    lines = [f"🟡 {label} 先出一半｜{datetime.now().strftime('%H:%M:%S')}",
+             "────────────────",
+             f"進場 {o.entry:.2f} → {half:.2f}（{gain:+.2f}%，目標 {o.target:.2f} 的一半）"]
+    if o.lots == 1:
+        lines.append("只有 1 張分不了 —— 整張改成移動停利：")
+    elif o.lots >= 2:
+        n = o.lots // 2
+        lines.append(f"先賣 {n} 張（共 {o.lots} 張），剩下 {o.lots - n} 張改成移動停利：")
+    else:
+        lines.append("先賣一半，剩下的改成移動停利：")
+    lines += [
+        f"從最高點回落 {trail:g}% 就出，最低不低於成本 {o.entry:.2f}。",
+        "其他出場條件照舊（停損、跌破開盤價、跌回區間、跌破均價線、量縮、13:25）。",
+    ]
+    if abs(price - half) >= 0.01:
+        lines.append(f"觸發時報價 {price:.2f}")
+    lines += ["────────────────",
+              "驗證期不下單。這是照規則做會有的結果，不是你的實際損益。"]
     return "\n".join(lines)
 
 
@@ -1235,7 +1357,8 @@ class LiveTracker:
     必須在鎖內一次做完，否則同一筆會推播好幾次。推播本身留在鎖外，不卡行情。
     """
 
-    def __init__(self, on_resolved=None, on_fill=None, on_time_exit=None, on_carry=None):
+    def __init__(self, on_resolved=None, on_fill=None, on_time_exit=None, on_carry=None,
+                 on_half=None):
         self.open: list[OpenSignal] = []
         self.fills: list[FillProbe] = []
         self.last_price: dict[str, float] = {}
@@ -1249,6 +1372,8 @@ class LiveTracker:
         self.on_fill = on_fill
         # 13:25 還沒結束（可能留倉）的那一筆，當下的樣子交給誰記下來。
         self.on_carry = on_carry
+        # v10「先出一半」那一刻交給誰記下來。
+        self.on_half = on_half
 
     def _handed_off(self, o: "OpenSignal", price: float, verdict: str) -> None:
         if not self.on_resolved:
@@ -1277,28 +1402,55 @@ class LiveTracker:
         if not carried and fired is not None and now - fired < FILL_WINDOW:
             probe = FillProbe(code=str(sig["code"]), time=str(sig.get("time", "")),
                               entry=float(sig["entry"]), fired=fired)
+        pos = None
+        if exits.uses_v10(sig) and not carried and sig.get("half_at"):
+            pos = exits.Position.from_signal(sig, fired or now)
+            # 盤中重開：已經先出過一半的，照記錄還原（不然會再推一次「先出一半」）
+            if sig.get("live_half") is not None:
+                pos.half_done, pos.half_price = True, float(sig["live_half"])
+                pos.peak = max(pos.peak, pos.half_price)
         with self._lock:
             self.open.append(OpenSignal(
                 code=str(sig["code"]), name=str(sig.get("name", "")),
                 time=str(sig.get("time", "")), entry=float(sig["entry"]),
                 stop=float(sig["stop"]), target=float(sig["target"]),
-                hold_days=int(sig.get("max_hold_days") or 1), carried=carried))
+                hold_days=int(sig.get("max_hold_days") or 1), carried=carried,
+                lots=int(sig.get("lots") or 0), pos=pos))
             if probe is not None:
                 self.fills.append(probe)
 
-    def on_price(self, code: str, price: float, now: datetime | None = None) -> list[str]:
-        """回傳這個報價造成的推播訊息。絕大多數時候是空的。"""
+    def on_price(self, code: str, price: float, now: datetime | None = None,
+                 vwap: float | None = None, total_volume: float | None = None) -> list[str]:
+        """回傳這個報價造成的推播訊息。絕大多數時候是空的。
+
+        vwap / total_volume 是 v10 出場要的（跌破均價線、量縮）；沒給就不判那兩條。
+        """
         if not price:
             return []
         now = now or datetime.now()
-        done = []
+        done, halves = [], []
         with self._lock:
             self.last_price[code] = price
             still_open = []
             for o in self.open:
-                verdict = o.verdict(price) if o.code == code else ""
+                if o.code != code:
+                    still_open.append(o)
+                    continue
+                if o.pos is not None:
+                    ended = None
+                    for ev in o.pos.step(now, price, price, price, vwap, total_volume):
+                        if ev[0] == "half":
+                            halves.append((o, ev[1]))
+                        else:
+                            ended = (o, ev[1], ev[2])
+                    if ended:
+                        done.append(ended)
+                    else:
+                        still_open.append(o)
+                    continue
+                verdict = o.verdict(price)
                 if verdict:
-                    done.append((o, verdict))
+                    done.append((o, verdict, None))
                 else:
                     still_open.append(o)
             self.open = still_open
@@ -1311,11 +1463,20 @@ class LiveTracker:
                     p.saw(price)
                 (closed if p.closed(now) else waiting).append(p)
             self.fills = waiting
-        for o, v in done:
-            self._handed_off(o, price, v)
+        msgs = []
+        for o, half in halves:
+            if self.on_half:
+                try:
+                    self.on_half(o, half)
+                except Exception as e:      # 記錄失敗不可以讓推播跟著沒了
+                    log.warning("先出一半寫回失敗（%s）：%s", o.code, e)
+            msgs.append(format_half(o, price, half))
+        for o, v, exit_price in done:
+            self._handed_off(o, price if exit_price is None else exit_price, v)
+            msgs.append(format_resolution(o, price, v, exit_price))
         for p in closed:
             self._fill_handed_off(p)
-        return [format_resolution(o, price, v) for o, v in done]
+        return msgs
 
     def time_exit(self, now: datetime | None = None) -> list[str]:
         """09:30 的「時間到」訊號：報價、記下來，但**不結束追蹤**。
@@ -1645,8 +1806,13 @@ def run():
         with signal_lock:
             gate.record_close_snapshot(o.code, o.time, snap)
 
+    def _remember_half(o, price):
+        with signal_lock:
+            gate.record_live_half(o.code, o.time, price)
+
     tracker = LiveTracker(on_resolved=_remember, on_fill=_remember_fill,
-                          on_time_exit=_remember_time_exit, on_carry=_remember_close)
+                          on_time_exit=_remember_time_exit, on_carry=_remember_close,
+                          on_half=_remember_half)
     def _emit(sig: dict, now: datetime, batch_total: int | None) -> bool:
         """過閘 → 記錄 → 開始追蹤 → 推播。被擋掉的進 candidates.csv。
 
@@ -1696,7 +1862,8 @@ def run():
             return
         st.update(tick)
         # 先看已發出的訊號有沒有走完，再看要不要發新的
-        for done in tracker.on_price(st.code, st.last_price):
+        for done in tracker.on_price(st.code, st.last_price, vwap=st.vwap,
+                                     total_volume=st.total_volume):
             notify(done)
         # ignore_symbol_cap：連「這檔今天發過了」的那種也要算出來並記錄，
         # 否則「被洗掉後能不能重新進場」這一題永遠沒有資料可以回答。

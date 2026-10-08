@@ -23,6 +23,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, time as dtime, timedelta
 
 import config
+import exits
 
 log = logging.getLogger("outcome")
 
@@ -57,7 +58,7 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "fill_low_pct", "rank", "category", "mkt_open_pct", "mkt_day_pct",
           "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio",
           "mkt_signal_pct", "exit_date", "close_pos_pct", "vs_vwap_pct", "volume_x",
-          "open_gap_pct", "low_gap_pct")
+          "open_gap_pct", "low_gap_pct", "half_exit")
 
 
 @dataclass
@@ -142,6 +143,9 @@ class Outcome:
     # v9 的進場條件看的兩個數字（signals.evaluate() 記在訊號上）。v8 以前沒有。
     open_gap_pct: float | None = None     # 開盤價比昨收高幾 %
     low_gap_pct: float | None = None      # 發訊號前的當日最低比昨收高幾 %
+    # v10「先出一半」的價位。有值表示分兩段出場，報酬與 R 是兩段合起來的；
+    # result / exit_price 是剩下那一段的出場原因與價位。
+    half_exit: float | None = None
 
     @property
     def overnight(self) -> bool:
@@ -318,6 +322,8 @@ def resolve(broker, sig: dict, date: str | None = None,
     # 這一筆可以抱幾天，看**發訊號當時**的規則，不看現在的 config ——
     # v5 的舊訊號拿 v6 的程式重跑，還是當沖。舊紀錄沒有這一欄 = 當沖。
     hold = int(_num(sig.get("max_hold_days")) or 1)
+    if exits.uses_v10(sig) and hold < 2 and sig.get("half_at"):
+        return _resolve_v10(broker, sig, date, code, fired, entry, stop, target)
     # 會留倉的那一筆，第一天要看到收盤那一根：你沒在 13:25 走。
     bars = bars_after(broker, code, date, fired,
                       until=SESSION_CLOSE if hold >= 2 else FLATTEN_AT)
@@ -369,9 +375,101 @@ def resolve(broker, sig: dict, date: str | None = None,
             exit_at = (FLATTEN_AT.strftime("%H:%M:%S") if result == FLAT
                        else day2[n2 - 1][0].strftime("%H:%M:%S"))
 
-    # 留倉中的那一筆，成本先照「隔天賣」算 —— 它沒有當沖這個選項了。
     overnight = bool(exit_date) or result == CARRY
-    gross = (exit_price - entry) / entry * 100
+    return _build(sig, date, code, entry, stop, target, result, exit_price, used,
+                  exit_at, exit_date, bars, day2, overnight)
+
+
+def day_bars_ohlcv(broker, code: str, date: str) -> list[tuple]:
+    """當天**全部**分鐘 K：(時間, 開, 高, 低, 收, 量)。v10 要算均價線與量縮，
+    所以訊號之前的 K 棒也要（均價線與「進場前平均量」是從 09:00 累計的）。"""
+    from broker import _bar_time
+    try:
+        kb = broker.kbars(code, date, date)
+    except Exception as e:
+        log.warning("%s 分鐘 K 取得失敗：%s", code, e)
+        return []
+    cols = [list(getattr(kb, k, []) or []) for k in ("ts", "Open", "High", "Low", "Close", "Volume")]
+    if not cols[0] or len({len(c) for c in cols}) != 1:
+        log.warning("%s 分鐘 K 欄位不齊（v10 需要開高低收量），跳過", code)
+        return []
+    rows = []
+    for raw, o, h, l, c, v in zip(*cols):
+        t = _bar_time(raw)
+        if t is not None:
+            rows.append((t, float(o), float(h), float(l), float(c), float(v)))
+    return sorted(rows, key=lambda r: r[0])
+
+
+def walk_v10(full: list[tuple], sig: dict, fired: datetime):
+    """用分鐘 K 照 v10 的六條走一遍。回傳 (結果, 出場價, 用了幾根, 出場時間, 先出一半的價位)；
+    訊號之後一根 K 都沒有就回 None。
+
+    均價線用 (高+低+收)/3 × 量 從 09:00 累計（kbars 沒有成交金額，跟 whynot 同一個近似）。
+    盤中 tick 看到的才是真的；兩邊衝突時以 tick 為準（resolve 會先用 live_result）。
+    """
+    pos = exits.Position.from_signal(sig, fired)
+    cum = pv = 0.0
+    if pos.base_per_min is None:
+        before = [b for b in full if b[0] <= fired]
+        mins = (fired - fired.replace(hour=9, minute=0, second=0)).total_seconds() / 60
+        if before and mins > 0:
+            pos.base_per_min = sum(b[5] for b in before) / mins
+    after, last = 0, None
+    for t, _o, h, l, c, v in full:
+        cum += v
+        pv += (h + l + c) / 3 * v
+        if t < fired + BAR_SPAN:
+            continue
+        if t.time() > FLATTEN_AT:
+            break
+        if after == 0:
+            # 量縮從進場那一刻開始算。起點用 K 棒的累計量（訊號上記的是 tick 的，
+            # 兩邊的口徑不一定一樣，這裡全部用 K 棒才比得起來）。
+            pos.samples = [(fired, cum - v, pos.entry, pos.entry)]
+        after += 1
+        last = c
+        for ev in pos.step(t, h, l, c, pv / cum if cum else None, cum):
+            if ev[0] == "exit":
+                return ev[1], ev[2], after, t.strftime("%H:%M:%S"), pos.half_price
+    if not after:
+        return None
+    return FLAT, last, after, FLATTEN_AT.strftime("%H:%M:%S"), pos.half_price
+
+
+def _resolve_v10(broker, sig: dict, date: str, code: str, fired: datetime,
+                 entry: float, stop: float, target: float) -> "Outcome | None":
+    full = day_bars_ohlcv(broker, code, date)
+    bars = [(b[0], b[2], b[3], b[4]) for b in full
+            if b[0] >= fired + BAR_SPAN and b[0].time() <= FLATTEN_AT]
+    live_result = str(sig.get("live_result") or "")
+    live_exit = _num(sig.get("live_exit"))
+    if live_result and live_exit is not None:
+        # 盤中 tick 判定過的以它為準（見 resolve 的說明）
+        return _build(sig, date, code, entry, stop, target, live_result, live_exit, 0,
+                      str(sig.get("live_at") or ""), "", bars, [], False,
+                      half_exit=_num(sig.get("live_half")))
+    walked = walk_v10(full, sig, fired) if full else None
+    if walked is None:
+        return None                        # 沒有 tick 判定也沒有 K 棒 —— 不要猜
+    result, exit_price, used, exit_at, half = walked
+    return _build(sig, date, code, entry, stop, target, result, exit_price, used,
+                  exit_at, "", bars, [], False, half_exit=half)
+
+
+def _build(sig: dict, date: str, code: str, entry: float, stop: float, target: float,
+           result: str, exit_price: float, used: int, exit_at: str, exit_date: str,
+           bars: list, day2: list, overnight: bool,
+           half_exit: float | None = None) -> "Outcome":
+    """resolve() 走完之後，把結果與發訊號當下的現場條件組成一列 Outcome。
+    v10 先出過一半的，報酬與 R 用兩段合起來算（exits.blended）。"""
+    risk = entry - stop
+    if half_exit is None:
+        gross = (exit_price - entry) / entry * 100
+        r_mult = (exit_price - entry) / risk
+    else:
+        gross, r_mult = exits.blended(entry, stop, int(sig.get("lots", 0) or 0),
+                                      half_exit, exit_price)
     or_high, vwap = _num(sig.get("or_high")), _num(sig.get("vwap"))
     # 整段持有期的極端值：算的是**全部** K 棒，不是只算到出場那一根。
     # 問題是「如果我沒出場會怎樣」，只看到出場為止就答不出來。抱到隔天的，
@@ -392,7 +490,7 @@ def resolve(broker, sig: dict, date: str | None = None,
         date=date, code=code, time=str(sig.get("time", "")),
         entry=entry, stop=stop, target=target, lots=int(sig.get("lots", 0) or 0),
         result=result, exit_price=round(exit_price, 2),
-        r_multiple=round((exit_price - entry) / risk, 2),
+        r_multiple=round(r_mult, 2),
         gross_pct=round(gross, 3),
         net_pct=round(gross - config.round_trip_cost_pct(overnight=overnight), 3),
         bars=used,
@@ -420,6 +518,7 @@ def resolve(broker, sig: dict, date: str | None = None,
         volume_x=_num(sig.get("volume_x")),
         open_gap_pct=_num(sig.get("open_gap_pct")),
         low_gap_pct=_num(sig.get("low_gap_pct")),
+        half_exit=round(half_exit, 2) if half_exit is not None else None,
     )
 
 
@@ -550,7 +649,7 @@ _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "fill_low_pct", "mkt_open_pct", "mkt_day_pct",
                     "exit_0930", "r_0930", "bid_ask_ratio", "mkt_signal_pct",
                     "close_pos_pct", "vs_vwap_pct", "volume_x",
-                    "open_gap_pct", "low_gap_pct")
+                    "open_gap_pct", "low_gap_pct", "half_exit")
 
 
 def _bool(value) -> bool | None:

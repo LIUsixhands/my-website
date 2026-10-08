@@ -220,7 +220,16 @@ SCREEN = {
 #                 同一天又加一條（使用者「請修改這些盲點」）：09:05 那一批發出前用
 #                 **當下價格**重算進場／停損／目標／張數（signals.reprice_at_send），
 #                 三分鐘裡已經跌回區間、跌破均價線或漲停的不發。v9 還沒有資料，併在 v9。
-RULESET = "v9"
+# v10 2026-10-08  **出場改成六條，回到當沖。** 使用者貼了一篇當沖出場的六個條件，
+#                 選「直接改成新規則（v10）」，四個數字也是使用者選的（exits.py）：
+#                 1. 進場理由消失：跌回區間高點、或跌破均價線（各留 0.2% 緩衝）
+#                 2. 虧損到設定金額：硬停損，單筆 4,000 元（張數照這個反推，沒變）
+#                 3. 漲到目標的一半先出一半；剩下從最高點回落 1.5% 出、不低於成本
+#                 4. 跌破當日開盤價
+#                 5. 量縮：進場 10 分鐘後，10 分鐘量不到進場前平均的一半、價格上下 < 1%
+#                 6. 13:25 全部平倉 —— max_hold_days 回到 1，v6 的「抱兩天」取消
+#                 進場規則照 v9。v9 一筆資料都還沒有（10-09 休市），v10 從 10-12 算 20 天。
+RULESET = "v10"
 
 SIGNAL = {
     "or_start": "09:00:00",         # 開盤區間起
@@ -291,7 +300,15 @@ SIGNAL = {
     "target_pct": 8.0,
     # 最多抱幾個交易日。1 = 當沖（13:25 平倉）；2 = 當天沒結束就留倉，
     # 隔天 13:25 還沒碰停損或目標就平倉。
-    "max_hold_days": 2,
+    "max_hold_days": 1,             # v10 回到當沖（13:25 全部平倉）
+    # ── v10 的出場（exits.py）。exit_rules 關掉就退回「停損／目標／13:25」三選一。
+    "exit_rules": True,
+    "exit_half_fraction": 0.5,      # 漲到目標距離的這麼多先出一半
+    "exit_trail_pct": 1.5,          # 剩下的：從最高點回落這麼多 % 出（不低於成本）
+    "exit_reason_buffer_pct": 0.2,  # 跌回區間高／跌破均價線的緩衝，單一筆擦過去不算
+    "exit_vol_window_min": 10,      # 量縮：看最近幾分鐘
+    "exit_vol_ratio": 0.5,          # 量縮：這段的量 < 進場前平均的這個比例
+    "exit_flat_pct": 1.0,           # 量縮：而且這段價格上下不到這麼多 %
     "allow_short": False,           # 先賣後買 v1 未實作（券源、軋空風險）
     "backfill_opening_range": True, # 09:15 後才啟動時，用分鐘 K 補算開盤區間
     "market_close": "13:30:00",     # 收工時間
@@ -449,6 +466,19 @@ def validate() -> list[str]:
         lo, hi = s.get("target_min_pct", 0), s.get("target_max_pct", 0)
         if not 0 < lo <= hi:
             errs.append("SIGNAL.target_min_pct / target_max_pct 必須 0 < 下限 <= 上限")
+    if s.get("exit_rules"):
+        if not 0 < s.get("exit_half_fraction", 0) < 1:
+            errs.append("SIGNAL.exit_half_fraction 必須介於 0 和 1 之間")
+        if s.get("exit_trail_pct", 0) <= 0:
+            errs.append("SIGNAL.exit_trail_pct 必須 > 0")
+        if s.get("exit_reason_buffer_pct", -1) < 0:
+            errs.append("SIGNAL.exit_reason_buffer_pct 不可為負")
+        if s.get("exit_vol_window_min", 0) <= 0 or not 0 < s.get("exit_vol_ratio", 0) < 1:
+            errs.append("SIGNAL.exit_vol_window_min 必須 > 0，exit_vol_ratio 介於 0 和 1 之間")
+        if s.get("exit_flat_pct", 0) <= 0:
+            errs.append("SIGNAL.exit_flat_pct 必須 > 0")
+        if s.get("max_hold_days", 1) != 1:
+            errs.append("SIGNAL.exit_rules（v10 六條出場）是當沖規則，max_hold_days 必須是 1")
     if s.get("max_hold_days", 1) not in (1, 2):
         errs.append("SIGNAL.max_hold_days 只能是 1（當沖）或 2（最多抱到隔天）—— "
                     "三天以上的追蹤沒有實作")

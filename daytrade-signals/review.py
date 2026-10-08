@@ -418,7 +418,9 @@ def format_push(signals: list[dict], outcomes, history: list,
         lines.append("")
         for o in outcomes:
             label = f"{o.code} {names.get(o.code, '')}".strip()
-            lines.append(f"{RESOLUTION_MARK.get(o.result, '')} {label}　{o.result}")
+            half = (f"（先出一半 {o.half_exit:.2f}）"
+                    if getattr(o, "half_exit", None) is not None else "")
+            lines.append(f"{RESOLUTION_MARK.get(o.result, '')} {label}　{o.result}{half}")
             lines.append(f"　{o.r_multiple:+.2f}R　{round(o.net_amount):+,.0f} 元")
         for o in holding:
             label = f"{o.code} {names.get(o.code, '')}".strip()
