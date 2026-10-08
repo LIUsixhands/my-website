@@ -4,18 +4,26 @@
 
 使用者 10-08 貼的六條，選「直接改成新規則（v10）」，四個數字也是使用者選的：
 
-  1. 進場理由消失就出：跌回開盤區間高點以下、或跌破均價線（各留 0.2% 緩衝，
-     單一筆 tick 擦過去不算 —— 不然幾乎每一筆都會在幾秒內被洗掉）
+  1. 進場理由消失就出：跌回開盤區間高點以下、或跌破均價線（各留 0.2% 緩衝）。
+     **那一分鐘收在線下才算**（10-08 晚，使用者選「現在就改」）：開盤後半小時
+     上下震盪，單一筆擦過去就出的話，跳空開高的股票幾乎每一筆都會在幾分鐘內
+     被洗掉。出場價 = 那一分鐘的收盤價
   2. 虧損達到設定金額就出：硬停損。張數本來就是用單筆 4,000 元反推的
   3. 漲到目標的一半先出一半；剩下的從最高點回落 1.5% 出，不低於成本
      （只有 1 張分不了：整張改移動停利）
-  4. 跌破當日開盤價就出（進場前就定好，寫在訊號上）
-  5. 量能萎縮就出：進場 10 分鐘後，最近 10 分鐘的量不到進場前平均的一半，
-     而且這 10 分鐘價格上下不到 1%
+  4. 跌破當日開盤價就出（進場前就定好，寫在訊號上）—— 同樣「那一分鐘收在下面才算」
+  5. 量能萎縮就出：拿**進場後的前 10 分鐘**當基準（10-08 晚改；原本拿進場前的
+     平均量，裡面有開盤爆量，基準偏高、太容易「不到一半」）。進場 20 分鐘後開始判：
+     最近 10 分鐘的量不到基準的一半，而且這 10 分鐘價格上下不到 1%
   6. 13:25 全部平倉，不留倉
 
-同一刻碰到好幾條時的順序：停損 → 開盤價 → 跌回區間 → 均價線 → 先出一半 →
-移動停利 → 量縮。前四條是「出錯了」，先判；往壞處算。
+碰到就出的：停損、先出一半、移動停利（tick 一到就判）。
+收盤才算的：開盤價、跌回區間、均價線（每一分鐘結束時用那一分鐘的收盤判）。
+同一分鐘裡好幾條都成立：停損 → 先出一半 → 移動停利 → 開盤價 → 跌回區間 →
+均價線 → 量縮。
+
+盤中 tick 與收盤分鐘 K 的「一分鐘」要對得起來：訊號那一刻所在的那一分鐘不判
+（分鐘 K 那一根裡有訊號前的成交），從下一個完整的一分鐘開始。
 
 分鐘 K 一根裡看不出先後，所以同一根先碰到「先出一半」的，那一根不再拿來判
 移動停利 —— 不知道低點是在高點之前還是之後，兩邊都不假設。
@@ -44,9 +52,6 @@ def plan_fields(entry: float, stop: float, target: float, *, day_open: float | N
     隔天拿新版程式回推舊訊號，也要照**當時**的規則走。"""
     cfg = config.SIGNAL
     half_at = config.round_to_tick(entry + (target - entry) * cfg["exit_half_fraction"], "up")
-    base = None
-    if total_volume and minutes_since_open and minutes_since_open > 0:
-        base = round(total_volume / minutes_since_open, 2)     # 進場前平均每分鐘的量（張）
     return {
         "exit_rules": V10,
         "key_level": day_open or None,
@@ -56,7 +61,8 @@ def plan_fields(entry: float, stop: float, target: float, *, day_open: float | N
         "vol_window_min": cfg["exit_vol_window_min"],
         "vol_ratio": cfg["exit_vol_ratio"],
         "flat_pct": cfg["exit_flat_pct"],
-        "base_per_min": base,
+        "confirm": "minute_close",                # 理由消失那幾條：一分鐘收盤確認
+        "vol_base": "after_entry",                # 量縮基準：進場後前 N 分鐘
         "entry_cum_volume": total_volume or None,  # 量縮從進場那一刻開始算
     }
 
@@ -98,7 +104,8 @@ class Position:
     vol_window_min: float = 10
     vol_ratio: float = 0.5
     flat_pct: float = 1.0
-    base_per_min: float | None = None
+    base_per_min: float | None = None    # 進場後前 N 分鐘的每分鐘量；到時間才算得出來
+    entry_cum: float | None = None       # 進場那一刻的累計量
     # 走的過程
     half_done: bool = False
     half_price: float | None = None
@@ -106,6 +113,8 @@ class Position:
     peak: float = 0.0
     done: bool = False
     samples: list = field(default_factory=list)    # (時間, 累計量, 高, 低)
+    # 正在走的那一分鐘：(那一分鐘的起點, 最後一筆價, 當時的均價線)
+    bucket: tuple | None = None
 
     @classmethod
     def from_signal(cls, sig: dict, entered: datetime) -> "Position":
@@ -120,10 +129,8 @@ class Position:
             vol_window_min=float(sig.get("vol_window_min") or 10),
             vol_ratio=float(sig.get("vol_ratio") or 0.5),
             flat_pct=float(sig.get("flat_pct") or 1.0),
-            base_per_min=_num(sig.get("base_per_min")),
-            peak=entry,
-            samples=([(entered, float(sig["entry_cum_volume"]), entry, entry)]
-                     if _num(sig.get("entry_cum_volume")) is not None else []))
+            entry_cum=_num(sig.get("entry_cum_volume")),
+            peak=entry)
 
     # ── 可以分批嗎 ────────────────────────────────
     @property
@@ -152,9 +159,26 @@ class Position:
         return vwap * (1 - self.reason_buffer_pct / 100)
 
     # ── 一步 ──────────────────────────────────────
+    def _reason_gone(self, close: float, vwap: float | None):
+        """一分鐘收盤時，進場理由還在嗎。不在 → (原因, 出場價 = 那一分鐘的收盤)。"""
+        if self.key_level and close < self.key_level:
+            return BELOW_OPEN, close
+        line = self.range_line()
+        if line is not None and close < line:
+            return BACK_IN_RANGE, close
+        line = self.vwap_line(vwap)
+        if line is not None and close < line:
+            return BELOW_VWAP, close
+        return None
+
     def step(self, now: datetime, high: float, low: float, last: float,
-             vwap: float | None = None, cum_volume: float | None = None) -> list[tuple]:
-        """往前走一步（一筆 tick：high = low = last；一根分鐘 K：那一根的高低收）。
+             vwap: float | None = None, cum_volume: float | None = None,
+             bar: bool = False) -> list[tuple]:
+        """往前走一步。
+
+        bar=False：一筆 tick（high = low = last）。理由消失那幾條要等這一分鐘結束 ——
+        下一分鐘的第一筆 tick 進來時，拿上一分鐘的最後一筆價（＝收盤）判。
+        bar=True ：一根已經收完的分鐘 K（高低收），那一根的收盤直接判。
 
         回傳事件清單：("half", 價格) 與／或 ("exit", 原因, 價格)。出場之後不再有事件。
         """
@@ -167,19 +191,21 @@ class Position:
             events.append(("exit", reason, round(price, 2)))
             return events
 
-        # 1–4：出錯了，先判
+        # 上一分鐘收完了嗎（tick 模式）。訊號那一分鐘（起點早於進場）不判。
+        if not bar:
+            minute = now.replace(second=0, microsecond=0)
+            if self.bucket and minute > self.bucket[0]:
+                start, close, v = self.bucket
+                self.bucket = None
+                if start >= self.entered:
+                    gone = self._reason_gone(close, v)
+                    if gone:
+                        return out(*gone)
+            self.bucket = (minute, last, vwap if vwap else (self.bucket[2] if self.bucket else None))
+
+        # 碰到就出
         if low <= self.stop:
             return out(STOP, self.stop)
-        if self.key_level and low < self.key_level:
-            return out(BELOW_OPEN, below(self.key_level))
-        line = self.range_line()
-        if line is not None and low < line:
-            return out(BACK_IN_RANGE, below(line))
-        line = self.vwap_line(vwap)
-        if line is not None and low < line:
-            return out(BELOW_VWAP, below(line))
-
-        # 5–6：先出一半、移動停利
         just_halved = False
         if not self.half_done and high >= self.half_at:
             self.half_done, self.half_price, self.half_time = True, self.half_at, now
@@ -193,19 +219,31 @@ class Position:
         if self.trailing and not just_halved:
             self.peak = max(self.peak, high)
 
-        # 7：量縮（要有量的資料才判）
+        # 分鐘 K 模式：這一根的收盤
+        if bar:
+            gone = self._reason_gone(last, vwap)
+            if gone:
+                return out(*gone)
+
+        # 量縮（要有量的資料才判）
         if cum_volume is not None:
-            self.samples.append((now, float(cum_volume), high, low))
+            if self.entry_cum is None:
+                self.entry_cum = float(cum_volume)
             window = timedelta(minutes=self.vol_window_min)
+            if self.base_per_min is None and now - self.entered >= window:
+                self.base_per_min = max(0.0, (float(cum_volume) - self.entry_cum)
+                                        / self.vol_window_min)
+            self.samples.append((now, float(cum_volume), high, low))
             cutoff = now - window
             # 只留窗口內的，加上窗口起點之前的最後一筆（當作起點的累計量）
-            older = [s for s in self.samples if s[0] <= cutoff]
-            recent = [s for s in self.samples if s[0] > cutoff]
+            older = [x for x in self.samples if x[0] <= cutoff]
+            recent = [x for x in self.samples if x[0] > cutoff]
             self.samples = older[-1:] + recent
-            if (self.base_per_min and older and now - self.entered >= window):
+            if self.base_per_min and older and now - self.entered >= 2 * window:
                 volume = self.samples[-1][1] - older[-1][1]
-                hi = max(s[2] for s in recent)
-                lo = min(s[3] for s in recent)
+                # 價格範圍含窗口起點那一筆：報價稀疏時，起點的價格就是「10 分鐘前在哪」
+                hi = max(x[2] for x in self.samples)
+                lo = min(x[3] for x in self.samples)
                 flat = (hi - lo) / self.entry * 100 <= self.flat_pct
                 if volume < self.vol_ratio * self.base_per_min * self.vol_window_min and flat:
                     return out(VOLUME_DRY, last)

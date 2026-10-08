@@ -7290,42 +7290,75 @@ def _at(minutes, seconds=0):
 
 
 class TestV10TheSixExits(unittest.TestCase):
-    """使用者 10-08 貼的六條出場，四個數字也是使用者選的。"""
+    """使用者 10-08 貼的六條出場，四個數字也是使用者選的。
+    10-08 晚再改兩件事：理由消失那幾條要「那一分鐘收在線下」才算；量縮的基準改成
+    進場後的前 10 分鐘。"""
 
     def _pos(self, **kw):
         return exits.Position.from_signal(dict(V10_SIG, **kw), T0)
 
-    def _tick(self, pos, price, minute=1, vwap=None, vol=None):
-        return pos.step(_at(minute), price, price, price, vwap, vol)
+    def _tick(self, pos, price, minute=1, vwap=None, vol=None, second=0):
+        return pos.step(_at(minute, second), price, price, price, vwap, vol)
 
-    def test_2_the_hard_stop(self):
+    def _bar(self, pos, minute, high, low, close, vwap=None, vol=None):
+        return pos.step(_at(minute), high, low, close, vwap, vol, bar=True)
+
+    def test_2_the_hard_stop_is_hit_at_once(self):
         self.assertEqual(self._tick(self._pos(), 96.9), [("exit", exits.STOP, 97.0)])
 
-    def test_4_below_the_open(self):
-        # 跌破 99.5 → 第一個成交得到的價位 99.4（100 以下一檔 0.1）
-        self.assertEqual(self._tick(self._pos(), 99.4), [("exit", exits.BELOW_OPEN, 99.4)])
-        self.assertEqual(self._tick(self._pos(or_high=None), 99.5), [])   # 碰到不算跌破
+    def test_4_below_the_open_needs_the_minute_to_close_below(self):
+        pos = self._pos(or_high=None)
+        self.assertEqual(self._tick(pos, 99.4, 1, second=10), [])         # 擦過去，還沒收
+        self.assertEqual(self._tick(pos, 99.8, 1, second=50), [])         # 這一分鐘收回來了
+        self.assertEqual(self._tick(pos, 99.7, 2, second=5), [])          # 上一分鐘收 99.8 → 不出
+        self.assertEqual(self._tick(pos, 99.3, 2, second=55), [])
+        # 09:12 收 99.3 < 開盤價 99.5 → 下一分鐘第一筆進來時出，出場價 = 那一分鐘的收盤
+        self.assertEqual(self._tick(pos, 99.6, 3, second=1), [("exit", exits.BELOW_OPEN, 99.3)])
 
     def test_1_back_inside_the_range(self):
-        # 區間高 99.8 下方 0.2% = 99.60；開盤價 99.5 在它下面，所以 99.55 是「跌回區間」
-        self.assertEqual(self._tick(self._pos(), 99.55), [("exit", exits.BACK_IN_RANGE, 99.6)])
-        self.assertEqual(self._tick(self._pos(), 99.61), [])        # 緩衝內不算
+        # 區間高 99.8 下方 0.2% = 99.60；開盤價拿掉，只看區間
+        pos = self._pos(key_level=None)
+        self._tick(pos, 99.55, 1)
+        self.assertEqual(self._tick(pos, 99.9, 2), [("exit", exits.BACK_IN_RANGE, 99.55)])
+        pos = self._pos(key_level=None)
+        self._tick(pos, 99.61, 1)
+        self.assertEqual(self._tick(pos, 99.9, 2), [])                   # 緩衝內不算
 
     def test_1_below_the_average_price(self):
-        # 均價 100.5 下方 0.2% = 100.299；100 以上一檔 0.5 → 第一個成交得到的是 100.0
-        self.assertEqual(self._tick(self._pos(), 100.2, vwap=100.5),
-                         [("exit", exits.BELOW_VWAP, 100.0)])
-        self.assertEqual(self._tick(self._pos(), 100.31, vwap=100.5), [])
-        self.assertEqual(self._tick(self._pos(), 100.2), [])         # 沒有均價線就不判
+        pos = self._pos()
+        self._tick(pos, 100.0, 1, vwap=100.5)                              # 100.5 × 0.998 = 100.30
+        self.assertEqual(self._tick(pos, 100.5, 2, vwap=100.5), [("exit", exits.BELOW_VWAP, 100.0)])
+        pos = self._pos()
+        self._tick(pos, 100.5, 1, vwap=100.5)
+        self.assertEqual(self._tick(pos, 100.5, 2, vwap=100.5), [])
+        pos = self._pos()
+        self._tick(pos, 100.0, 1)                                          # 沒有均價線就不判
+        self.assertEqual(self._tick(pos, 100.5, 2), [])
 
-    def test_the_order_is_worst_first(self):
-        """同時碰到好幾條 —— 停損 > 開盤價 > 區間 > 均價線。"""
+    def test_the_signal_minute_itself_is_not_judged(self):
+        """訊號 09:10:20 —— 09:10 那一分鐘裡有訊號前的成交，跟分鐘 K 一樣不判。"""
+        pos = exits.Position.from_signal(dict(V10_SIG), _at(0, 20))
+        self._tick(pos, 99.0, 0, second=40)
+        self.assertEqual(self._tick(pos, 100.5, 1, second=1), [])
+        self._tick(pos, 99.0, 1, second=59)
+        self.assertEqual(self._tick(pos, 100.5, 2, second=1)[0][1], exits.BELOW_OPEN)
+
+    def test_bars_judge_their_own_close(self):
+        pos = self._pos()
+        self.assertEqual(self._bar(pos, 1, 100.5, 99.0, 99.9), [])        # 低點擦過，收回來
+        self.assertEqual(self._bar(pos, 2, 100.0, 99.0, 99.4)[0][:2], ("exit", exits.BELOW_OPEN))
+
+    def test_the_order_within_a_minute(self):
+        """碰到就出的先判；一分鐘收盤的那幾條，在同一根 K 裡排在後面。"""
+        pos = self._pos()
+        self.assertEqual(self._bar(pos, 1, 103.5, 96.0, 100.0), [("exit", exits.STOP, 97.0)])
+        pos = self._pos()
+        self.assertEqual(self._bar(pos, 1, 103.5, 99.0, 99.4),
+                         [("half", 103.0), ("exit", exits.BELOW_OPEN, 99.4)])
         pos = self._pos(key_level=99.0)
-        self.assertEqual(self._tick(pos, 98.9, vwap=101)[0][1], exits.BELOW_OPEN)
-        self.assertEqual(self._tick(self._pos(key_level=None), 99.0, vwap=101)[0][1],
-                         exits.BACK_IN_RANGE)
-        bar = self._pos().step(_at(1), 103.5, 96.0, 100.0)            # 同一根碰到一半和停損
-        self.assertEqual(bar, [("exit", exits.STOP, 97.0)])
+        self.assertEqual(self._bar(pos, 1, 100, 98.5, 98.9, vwap=101)[0][1], exits.BELOW_OPEN)
+        pos = self._pos(key_level=None)
+        self.assertEqual(self._bar(pos, 1, 100, 98.5, 99.0, vwap=101)[0][1], exits.BACK_IN_RANGE)
 
     def test_3_half_then_trail_from_the_peak(self):
         pos = self._pos()
@@ -7348,35 +7381,69 @@ class TestV10TheSixExits(unittest.TestCase):
 
     def test_3_a_bar_that_halves_is_not_also_judged_for_the_trail(self):
         pos = self._pos()
-        self.assertEqual(pos.step(_at(1), 103.5, 100.5, 101.0), [("half", 103.0)])
-        self.assertEqual(pos.step(_at(2), 101.0, 100.5, 100.8), [("exit", exits.TRAIL, 101.0)])
+        self.assertEqual(self._bar(pos, 1, 103.5, 100.5, 101.0), [("half", 103.0)])
+        self.assertEqual(self._bar(pos, 2, 101.0, 100.5, 100.8), [("exit", exits.TRAIL, 101.0)])
+
+    def test_5_the_baseline_is_the_first_ten_minutes_after_entry(self):
+        pos = self._pos(entry_cum_volume=1000)
+        self._tick(pos, 100.5, 5, vol=1100)
+        self.assertIsNone(pos.base_per_min)                               # 還不到 10 分鐘
+        self._tick(pos, 100.5, 10, vol=1200)
+        self.assertEqual(pos.base_per_min, 20.0)                          # 200 張 / 10 分鐘
 
     def test_5_volume_dries_up_and_price_sticks(self):
-        pos = self._pos()
-        self.assertEqual(self._tick(pos, 100.5, 5, vol=1020), [])
-        self.assertEqual(self._tick(pos, 100.6, 9, vol=1030), [])    # 還不到 10 分鐘
-        # 10 分鐘量 40 < 0.5 × 10 × 10 = 50，價格上下 0.1% → 出
-        self.assertEqual(self._tick(pos, 100.6, 10, vol=1040), [("exit", exits.VOLUME_DRY, 100.6)])
+        pos = self._pos(entry_cum_volume=1000)
+        self._tick(pos, 100.5, 10, vol=1200)                              # 基準：每分鐘 20 張
+        self.assertEqual(self._tick(pos, 100.6, 19, vol=1250), [])        # 還不到 20 分鐘
+        # 09:20–09:30 量 90 < 0.5 × 20 × 10 = 100，價格上下 0.1% → 出
+        self.assertEqual(self._tick(pos, 100.6, 20, vol=1290), [("exit", exits.VOLUME_DRY, 100.6)])
 
     def test_5_enough_volume_or_a_moving_price_stays(self):
-        pos = self._pos()
-        self._tick(pos, 100.5, 5, vol=1030)
-        self.assertEqual(self._tick(pos, 100.6, 10, vol=1060), [])   # 量 60 ≥ 50
-        pos = self._pos()
-        self._tick(pos, 100.0, 5, vol=1010)
-        self.assertEqual(self._tick(pos, 101.5, 10, vol=1020), [])   # 價格動了 1.5%
+        pos = self._pos(entry_cum_volume=1000)
+        self._tick(pos, 100.5, 10, vol=1200)
+        self.assertEqual(self._tick(pos, 100.6, 20, vol=1310), [])        # 量 110 ≥ 100
+        pos = self._pos(entry_cum_volume=1000)
+        self._tick(pos, 100.0, 10, vol=1200)
+        self.assertEqual(self._tick(pos, 101.5, 20, vol=1210), [])        # 價格動了 1.5%
 
     def test_5_the_window_slides(self):
-        pos = self._pos()
-        for m in range(1, 13):
-            self._tick(pos, 100.5, m, vol=1000 + 10 * m)               # 每分鐘 10 張，沒縮
+        pos = self._pos(entry_cum_volume=1000)
+        for m in range(1, 23):
+            self._tick(pos, 100.5, m, vol=1000 + 20 * m)                    # 每分鐘 20 張，沒縮
         self.assertFalse(pos.done)
-        self.assertEqual(self._tick(pos, 100.5, 21, vol=1125)[0][1], exits.VOLUME_DRY)
+        self.assertEqual(self._tick(pos, 100.5, 32, vol=1440 + 50)[0][1], exits.VOLUME_DRY)
 
-    def test_5_no_baseline_no_judgement(self):
-        pos = self._pos(base_per_min=None)
-        self._tick(pos, 100.5, 5, vol=1000)
-        self.assertEqual(self._tick(pos, 100.5, 15, vol=1000), [])
+    def test_4_closing_exactly_on_the_open_is_not_below(self):
+        pos = self._pos(or_high=None)
+        self._tick(pos, 99.5, 1)
+        self.assertEqual(self._tick(pos, 99.6, 2), [])
+
+    def test_1_the_exit_price_is_the_close_not_the_line(self):
+        pos = self._pos()
+        self._tick(pos, 100.0, 1, vwap=101.0)                              # 101 × 0.998 = 100.80
+        self.assertEqual(self._tick(pos, 100.5, 2, vwap=101.0), [("exit", exits.BELOW_VWAP, 100.0)])
+
+    def test_5_without_a_recorded_start_the_first_tick_is_the_start(self):
+        pos = self._pos(entry_cum_volume=None)
+        self._tick(pos, 100.5, 1, vol=5000)
+        self._tick(pos, 100.5, 10, vol=5200)
+        self.assertEqual(pos.base_per_min, 20.0)                          # (5200 − 5000) / 10
+
+    def test_5_the_price_range_counts_from_the_start_of_the_window(self):
+        """報價很稀時，窗口起點那一筆就是「10 分鐘前在哪」—— 從 100 漲到 101.5
+        不是「黏住」。只看窗口裡的那一筆，會誤判成沒動。"""
+        pos = self._pos(entry_cum_volume=1000)
+        self._tick(pos, 100.0, 10, vol=1200)
+        self.assertEqual(self._tick(pos, 101.5, 20, vol=1210), [])
+        pos = self._pos(entry_cum_volume=1000)                             # 往下走也一樣
+        self._tick(pos, 101.5, 10, vol=1200)
+        self.assertEqual(self._tick(pos, 100.0, 20, vol=1210), [])
+
+    def test_5_a_dead_first_ten_minutes_never_judges(self):
+        pos = self._pos(entry_cum_volume=1000)
+        self._tick(pos, 100.5, 10, vol=1000)
+        self.assertEqual(pos.base_per_min, 0.0)
+        self.assertEqual(self._tick(pos, 100.5, 25, vol=1000), [])
 
     def test_6_flatten_and_nothing_after_an_exit(self):
         pos = self._pos()
@@ -7413,15 +7480,18 @@ class TestV10TheSignalCarriesThePlan(unittest.TestCase):
         self.assertEqual(sig["key_level"], 99.0)                        # 開盤價
         self.assertEqual(sig["half_at"], config.round_to_tick(
             sig["entry"] + (sig["target"] - sig["entry"]) / 2, "up"))
-        self.assertEqual(sig["base_per_min"], 250.0)                    # 3000 張 / 12 分鐘
         self.assertEqual(sig["entry_cum_volume"], 3000)
+        self.assertEqual((sig["confirm"], sig["vol_base"]), ("minute_close", "after_entry"))
+        self.assertNotIn("base_per_min", sig)                           # 進場後才算得出來
         self.assertEqual(sig["max_hold_days"], 1)                       # 回到當沖
 
     def test_the_message_lists_every_exit_before_entry(self):
         text = format_signal(self._sig(), 1, 1)
         for part in ("出場（哪一條先到就出）", "・停損", "・跌破開盤價 99.00",
                      "・跌回區間：低於 99.80", "・跌破均價線（下方 0.2%）", "先出一半",
-                     "從最高點回落 1.5% 出（不低於成本）", "・量縮：進場 10 分鐘後",
+                     "從最高點回落 1.5% 出（不低於成本）",
+                     "以下三條：那一分鐘「收盤」在線下才出，盤中擦過去不算",
+                     "・量縮：進場 20 分鐘後，最近 10 分鐘的量不到進場後前 10 分鐘的一半",
                      "・13:25 全部平倉"):
             self.assertIn(part, text)
         self.assertNotIn("留倉", text)
@@ -7477,11 +7547,14 @@ class TestV10TheLiveTracker(unittest.TestCase):
 
     def test_volume_and_average_price_reach_the_rules(self):
         tr = self._tracker()
-        tr.on_price("2330", 100.2, _at(1), vwap=100.5)
+        tr.on_price("2330", 100.0, _at(1), vwap=100.5)
+        self.assertEqual(self.resolved, [])                             # 這一分鐘還沒收
+        msgs = tr.on_price("2330", 100.5, _at(2), vwap=100.5)
         self.assertEqual(self.resolved, [(exits.BELOW_VWAP, 100.0)])
+        self.assertIn("跌破均價線", msgs[0])
         tr = self._tracker()
-        tr.on_price("2330", 100.5, _at(5), total_volume=1020)
-        tr.on_price("2330", 100.5, _at(10), total_volume=1040)
+        tr.on_price("2330", 100.5, _at(10), total_volume=1200)
+        tr.on_price("2330", 100.5, _at(20), total_volume=1290)
         self.assertEqual(self.resolved[-1][0], exits.VOLUME_DRY)
 
     def test_flatten_after_half_reports_both_legs(self):
@@ -7559,18 +7632,29 @@ class TestV10TheCloseReplay(unittest.TestCase):
             back = oc.load_csv(path)[0]
         self.assertEqual(back.half_exit, 103.0)
 
+    def test_the_bars_start_counting_volume_at_entry(self):
+        """量縮的起點是進場那一刻的累計量。拿第一根之後的累計量當起點，前 10 分鐘
+        的基準會少算一根，偏低 —— 偏低的基準等於量縮更難成立。"""
+        after = ([("09:11", 100.4, 100.5, 100.3, 100.4, 200)]
+                 + [("09:%02d" % m, 100.4, 100.5, 100.3, 100.4, 20) for m in range(12, 21)]
+                 + [("09:%02d" % m, 100.4, 100.5, 100.3, 100.4, 15) for m in range(21, 40)])
+        # 基準 (200 + 9×20)/10 = 38 張/分；之後每分鐘 15 → 150 < 190 → 出。
+        # 少算第一根的話基準 = 18、門檻 90，150 不算量縮。
+        self.assertEqual(self._resolve(after).result, exits.VOLUME_DRY)
+
     def test_volume_dries_up_on_the_bars(self):
-        # 進場前每分鐘 100 張；之後每分鐘 2 張、價格不動 → 10 分鐘後出
-        after = [("09:%02d" % m, 100.4, 100.5, 100.3, 100.4, 2) for m in range(12, 25)]
+        # 進場後前 10 分鐘每分鐘 40 張；之後每分鐘 2 張、價格不動 → 進場 20 分鐘後出
+        after = ([("09:%02d" % m, 100.4, 100.5, 100.3, 100.4, 40) for m in range(11, 21)]
+                 + [("09:%02d" % m, 100.4, 100.5, 100.3, 100.4, 2) for m in range(21, 40)])
         o = self._resolve(after)
         self.assertEqual(o.result, exits.VOLUME_DRY)
-        self.assertEqual(o.exit_at, "09:20:00")                        # 進場 09:10 + 10 分鐘
+        self.assertEqual(o.exit_at, "09:30:00")
 
     def test_the_average_price_is_built_from_the_bars(self):
         # 進場前都在 100 附近成交；之後量大的那根跌到 100.0 以下的均價線緩衝
-        o = self._resolve([("09:12", 100.3, 100.4, 99.75, 99.9, 50)], key_level=None,
+        o = self._resolve([("09:12", 100.3, 100.4, 99.75, 99.8, 50)], key_level=None,
                           or_high=95.0)
-        self.assertEqual(o.result, exits.BELOW_VWAP)
+        self.assertEqual((o.result, o.exit_price), (exits.BELOW_VWAP, 99.8))   # 那一根的收盤
 
     def test_nothing_happens_then_1325(self):
         after = [("09:12", 100.5, 101.0, 100.4, 100.9, 100), ("13:25", 100.9, 101.2, 100.8, 101, 100),

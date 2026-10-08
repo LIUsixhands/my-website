@@ -661,6 +661,11 @@ def _exit_plan_lines(sig: dict) -> list[str]:
     lines = ["出場（哪一條先到就出）："]
     lines.append(f"・停損 {sig['stop']:.2f}（這筆最多賠約 "
                  f"{round((sig['entry'] - sig['stop']) * 1000 * max(1, int(sig.get('lots') or 1))):,} 元）")
+    minute = sig.get("confirm") == "minute_close"
+    lines.append(f"・漲到 {float(sig['half_at']):.2f} 先出一半，剩下的從最高點回落 "
+                 f"{float(sig['trail_pct']):g}% 出（不低於成本）")
+    if minute:
+        lines.append("以下三條：那一分鐘「收盤」在線下才出，盤中擦過去不算")
     if sig.get("key_level"):
         lines.append(f"・跌破開盤價 {float(sig['key_level']):.2f}")
     else:
@@ -669,10 +674,13 @@ def _exit_plan_lines(sig: dict) -> list[str]:
         lines.append(f"・跌回區間：低於 {float(sig['or_high']) * (1 - buf / 100):.2f}"
                      f"（區間高 {float(sig['or_high']):.2f} 下方 {buf:g}%）")
     lines.append(f"・跌破均價線（下方 {buf:g}%）")
-    lines.append(f"・漲到 {float(sig['half_at']):.2f} 先出一半，剩下的從最高點回落 "
-                 f"{float(sig['trail_pct']):g}% 出（不低於成本）")
-    lines.append(f"・量縮：進場 {float(sig['vol_window_min']):g} 分鐘後，量不到一半、"
-                 f"價格上下不到 {float(sig['flat_pct']):g}%")
+    win = float(sig['vol_window_min'])
+    if sig.get("vol_base") == "after_entry":
+        lines.append(f"・量縮：進場 {2 * win:g} 分鐘後，最近 {win:g} 分鐘的量不到進場後前 "
+                     f"{win:g} 分鐘的一半，而且價格上下不到 {float(sig['flat_pct']):g}%")
+    else:
+        lines.append(f"・量縮：進場 {win:g} 分鐘後，量不到一半、"
+                     f"價格上下不到 {float(sig['flat_pct']):g}%")
     lines.append(f"・{outcome.FLATTEN_AT:%H:%M} 全部平倉")
     return lines
 

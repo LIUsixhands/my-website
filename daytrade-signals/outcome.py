@@ -409,12 +409,9 @@ def walk_v10(full: list[tuple], sig: dict, fired: datetime):
     盤中 tick 看到的才是真的；兩邊衝突時以 tick 為準（resolve 會先用 live_result）。
     """
     pos = exits.Position.from_signal(sig, fired)
+    # 量縮的起點用 K 棒的累計量（訊號上記的是 tick 的，口徑不一定一樣）
+    pos.entry_cum = None
     cum = pv = 0.0
-    if pos.base_per_min is None:
-        before = [b for b in full if b[0] <= fired]
-        mins = (fired - fired.replace(hour=9, minute=0, second=0)).total_seconds() / 60
-        if before and mins > 0:
-            pos.base_per_min = sum(b[5] for b in before) / mins
     after, last = 0, None
     for t, _o, h, l, c, v in full:
         cum += v
@@ -424,12 +421,10 @@ def walk_v10(full: list[tuple], sig: dict, fired: datetime):
         if t.time() > FLATTEN_AT:
             break
         if after == 0:
-            # 量縮從進場那一刻開始算。起點用 K 棒的累計量（訊號上記的是 tick 的，
-            # 兩邊的口徑不一定一樣，這裡全部用 K 棒才比得起來）。
-            pos.samples = [(fired, cum - v, pos.entry, pos.entry)]
+            pos.entry_cum = cum - v
         after += 1
         last = c
-        for ev in pos.step(t, h, l, c, pv / cum if cum else None, cum):
+        for ev in pos.step(t, h, l, c, pv / cum if cum else None, cum, bar=True):
             if ev[0] == "exit":
                 return ev[1], ev[2], after, t.strftime("%H:%M:%S"), pos.half_price
     if not after:
