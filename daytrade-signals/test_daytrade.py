@@ -7037,7 +7037,7 @@ class TestV9TheRulesAreWired(unittest.TestCase):
         self.assertIsNotNone(sig)
         self.assertIsNone(sig["near_basis"])
         text = format_signal(sig, 1, 1)
-        self.assertIn("位置：昨收 100.00｜開盤 103.00（+3.0%）\n", text)
+        self.assertIn("位置：昨收 100.00｜開盤 103.00\n", text)
         self.assertNotIn("→", text)                                       # 不當成依據
         self.assertIn("・跌破開盤價 103.00", text)                         # 第 4 條接手
 
@@ -7129,7 +7129,7 @@ class TestTheBatchIsRepricedWhenItGoesOut(unittest.TestCase):
         text = format_signal(signals.reprice_at_send(sig, st, self.AT)[0], 1, 1)
         self.assertIn("進場：101.50", text)
         self.assertIn("09:02 突破時是 100.20", text)
-        self.assertIn("09:05 發出當下的價格（+1.3%）", text)
+        self.assertIn("進場價已換成 09:05 發出當下的價格\n", text)
         self.assertNotIn("突破時是", format_signal(sig, 1, None))   # 即時發的沒有這一行
 
     def test_a_failed_breakout_is_not_sent(self):
@@ -7489,19 +7489,31 @@ class TestV10TheSignalCarriesThePlan(unittest.TestCase):
 
     def test_the_message_lists_every_exit_before_entry(self):
         text = format_signal(self._sig(), 1, 1)
-        for part in ("出場（哪一條先到就出）", "・停損 97.40（最多賠約 3,000 元）",
+        for part in ("出場（哪一條先到就出）", "・停損 97.40\n",
                      "・漲到 103.50 先出一半，剩下從最高點回落 1.5% 出",
-                     "以下三條：那一分鐘收盤在線下才出", "・跌破開盤價 99.00",
+                     "那一分鐘收盤在線下才出：", "・跌破開盤價 99.00",
                      "・跌回區間 99.80", "・跌破均價線", "・量縮（進場 20 分鐘後才判）",
-                     "・13:25 全部平倉", "進場：100.40（追高 +0.40%）", "張數：1 張　量能：3.00x"):
+                     "・13:25 全部平倉", "進場：100.40\n", "張數：1 張　量能：3.00x"):
             self.assertIn(part, text)
         self.assertNotIn("留倉", text)
+
+    def test_only_the_three_close_exits_sit_under_the_close_heading(self):
+        """10-08 晚：「以下三條」底下原本接了五行。小標題之後到分隔線，剛好那三條。"""
+        lines = format_signal(self._sig(), 1, 1).splitlines()
+        head = lines.index("那一分鐘收盤在線下才出：")
+        under = lines[head + 1:lines.index("────────────────", head)]
+        self.assertEqual(under, ["・跌破開盤價 99.00", "・跌回區間 99.80", "・跌破均價線"])
+        above = lines[lines.index("出場（哪一條先到就出）："):head]
+        self.assertIn("・量縮（進場 20 分鐘後才判）", above)
+        self.assertIn("・13:25 全部平倉", above)
 
     def test_the_compact_message_drops_what_v10_does_not_use(self):
         """使用者 10-08：「後面的括號說明需要嗎？」→ 精簡。目標價 v10 不會賣，不印。"""
         text = format_signal(self._sig(), 1, 1)
         for gone in ("目標：", "決策錨點", "均價 ", "單筆風險", "（不低於成本）",
-                     "區間高 100.00 下方", "規則觸發，不是預測"):
+                     "區間高 100.00 下方", "規則觸發，不是預測",
+                     # 10-08 晚：「這些不用」—— 追高 %、開盤離昨收 %、最多賠多少
+                     "追高", "最多賠", "以下三條"):
             self.assertNotIn(gone, text, gone)
         self.assertLessEqual(len(text.splitlines()), 20)
         last = format_signal(self._sig(), config.RISK["max_signals_per_day"], None)
@@ -7513,6 +7525,14 @@ class TestV10TheSignalCarriesThePlan(unittest.TestCase):
         text = format_signal(sig, 1, 1)
         self.assertIn("⚠️ 一張的停損風險 4,500 元，超過上限 4,000 元", text)
         self.assertIn("ℹ️ 09:02 突破時是 100.00，進場價已換成", text)
+        self.assertNotIn("%）", text.split("ℹ️")[1].splitlines()[0])
+
+    def test_the_position_line_has_no_percent(self):
+        sig = dict(self._sig(), prev_close=98.0, day_open=99.0, open_gap_pct=1.02,
+                   near_basis=None)
+        text = format_signal(sig, 1, 1)
+        self.assertIn("位置：昨收 98.00｜開盤 99.00\n", text)
+        self.assertNotIn("+1.0%", text)
 
     def test_an_unknown_open_says_so(self):
         sig = dict(self._sig(), key_level=None)
