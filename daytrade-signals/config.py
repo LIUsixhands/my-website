@@ -134,7 +134,12 @@ SCREEN = {
     "min_price": 20.0,              # 太便宜跳動級距佔比高，成本吃掉利潤
     "max_price": 300.0,             # 太貴單筆風險過大
     "min_amplitude_pct": 3.0,       # 前一日振幅下限（高-低)/收盤
-    "max_universe": 20,             # 最多留幾檔進盤中監看
+    "max_universe": 20,             # 候選池最多幾檔（排好序之後再取 watch_top）
+    # 盤中真的盯幾檔。使用者 10-08（v10）：「盤前選出三檔，就盯這三檔，按規則走」。
+    # 取量比排序的前 N 檔；None = 整個候選池都盯（v9 以前的做法）。
+    # screener.py --top N 可以臨時覆蓋。沒被選上的照樣存進當日存檔（not_watched），
+    # 事後還查得到。
+    "watch_top": 3,
     "require_day_trade": True,      # 只留可現股當沖（Shioaji contract.day_trade）
     # 處置股剔除。**這不是偏好，是 v4 之下的可執行性問題。**
     #
@@ -229,6 +234,8 @@ SCREEN = {
 #                 5. 量縮：進場 10 分鐘後，10 分鐘量不到進場前平均的一半、價格上下 < 1%
 #                 6. 13:25 全部平倉 —— max_hold_days 回到 1，v6 的「抱兩天」取消
 #                 進場規則照 v9。v9 一筆資料都還沒有（10-09 休市），v10 從 10-12 算 20 天。
+#                 同一天再加一條（還沒開始算，併在 v10）：盤前只選量比前 3 檔，
+#                 盤中只盯這 3 檔（SCREEN["watch_top"]）。
 RULESET = "v10"
 
 SIGNAL = {
@@ -484,6 +491,9 @@ def validate() -> list[str]:
                     "三天以上的追蹤沒有實作")
     if COST.get("tax_rate_overnight", 0) < COST["tax_rate"]:
         errs.append("COST.tax_rate_overnight 不可以低於當沖稅率 tax_rate")
+    w = SCREEN.get("watch_top")
+    if w is not None and (not isinstance(w, int) or w < 1):
+        errs.append("SCREEN.watch_top 必須是 >= 1 的整數（全部都盯就設成 None）")
     if s.get("near_prev_close_pct") is not None and not 0 < s["near_prev_close_pct"] < PRICE_LIMIT_PCT:
         errs.append("SIGNAL.near_prev_close_pct 必須介於 0 和漲跌幅上限之間（不要這條就設成 None）")
     if s["breakout_buffer_pct"] < 0:

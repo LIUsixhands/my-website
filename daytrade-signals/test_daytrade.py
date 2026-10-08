@@ -7605,5 +7605,42 @@ class TestV10TheRulesAreWired(unittest.TestCase):
                 self.assertTrue(config.validate(), k)
 
 
+class TestOnlyTheTopThreeAreWatched(unittest.TestCase):
+    """使用者 10-08：「盤前選出三檔，就盯這三檔，按規則走」。"""
+
+    ROWS = [{"code": str(1000 + i), "name": f"股{i}", "prev_close": 50.0, "amplitude_pct": 5.0,
+             "prev_volume": 9000, "volume_ratio": 10.0 - i} for i in range(6)]
+
+    def _run(self, argv):
+        with tempfile.TemporaryDirectory() as d, \
+             unittest.mock.patch.object(config, "WATCHLIST_FILE", Path(d) / "w.json"), \
+             unittest.mock.patch.object(screener, "Broker", lambda: None), \
+             unittest.mock.patch.object(screener, "screen", lambda b: [dict(r) for r in self.ROWS]), \
+             unittest.mock.patch.object(screener, "archive_watchlist", lambda p: None), \
+             unittest.mock.patch.object(signals, "notify", lambda t: None), \
+             contextlib.redirect_stdout(io.StringIO()):
+            screener.main(argv)
+            return json.loads((Path(d) / "w.json").read_text(encoding="utf-8"))
+
+    def test_the_top_three_by_volume_ratio_are_watched(self):
+        out = self._run(["--push", "--alert-only"])
+        self.assertEqual([r["code"] for r in out["items"]], ["1000", "1001", "1002"])
+        self.assertEqual([r["code"] for r in out["not_watched"]], ["1003", "1004", "1005"])
+
+    def test_the_command_line_can_still_override(self):
+        self.assertEqual(len(self._run(["--top", "5"])["items"]), 5)
+
+    def test_none_watches_the_whole_pool(self):
+        with unittest.mock.patch.dict(config.SCREEN, {"watch_top": None}):
+            out = self._run([])
+        self.assertEqual((len(out["items"]), out["not_watched"]), (6, []))
+
+    def test_the_shipped_number_is_three_and_validated(self):
+        self.assertEqual(config.SCREEN["watch_top"], 3)
+        for bad in (0, -1, 2.5):
+            with unittest.mock.patch.dict(config.SCREEN, {"watch_top": bad}):
+                self.assertIn("watch_top", " / ".join(config.validate()))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
