@@ -360,6 +360,11 @@ def parse_args(argv=None):
                     help="只保留量比最高的 N 檔（不給就全部保留）")
     ap.add_argument("--push", action="store_true",
                     help="把名單推到 Telegram（配合排程用，人不用開電腦看）")
+    # 使用者 10-08：「這訊號不用給」—— 08:40 的名單每天都一樣是量比前幾名，
+    # 看了也不會做什麼。但「出事」還是要出聲：選股失敗、或名單是 0 檔（今天
+    # 什麼都不會監看），這兩種照推。名單照樣寫進 watchlist.json 給 signals.py 用。
+    ap.add_argument("--alert-only", action="store_true",
+                    help="配合 --push：名單正常就不推，只在失敗或 0 檔時推")
     ap.add_argument("--push-top", type=int, default=3, metavar="N",
                     help="推播上顯示幾檔（預設 5）。不影響監看範圍")
     args = ap.parse_args(argv)
@@ -401,7 +406,7 @@ def run(args) -> None:
     for r in watchlist:
         print(f"{r['code']:<7}{r.get('name', ''):<10}{r['prev_close']:>9.2f}"
               f"{r['amplitude_pct']:>9.2f}{r['prev_volume']:>11,}{r['volume_ratio']:>8.2f}")
-    if args.push:
+    if args.push and (not args.alert_only or not watchlist):
         push_watchlist(payload, watchlist, show=args.push_top)
 
     if dropped:

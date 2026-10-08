@@ -7026,5 +7026,55 @@ class TestV9TheRulesAreWired(unittest.TestCase):
             self.assertEqual(config.validate(), [])
 
 
+class TestTheMorningListIsQuietUnlessSomethingIsWrong(unittest.TestCase):
+    """使用者 10-08：08:40 的「今日觀察名單」不用給。名單照寫（signals.py 要用），
+    只是不推；失敗或 0 檔照推 —— 那兩種是真的要人知道的。"""
+
+    def _run(self, argv, rows):
+        sent = []
+        with tempfile.TemporaryDirectory() as d, \
+             unittest.mock.patch.object(config, "WATCHLIST_FILE", Path(d) / "w.json"), \
+             unittest.mock.patch.object(screener, "Broker", lambda: None), \
+             unittest.mock.patch.object(screener, "screen", lambda b: list(rows)), \
+             unittest.mock.patch.object(screener, "archive_watchlist", lambda p: None), \
+             unittest.mock.patch.object(signals, "notify", sent.append), \
+             contextlib.redirect_stdout(io.StringIO()):
+            screener.main(argv)
+            written = json.loads((Path(d) / "w.json").read_text(encoding="utf-8"))
+        return sent, written
+
+    ROWS = [dict(r, prev_volume=5000) for r in TestWatchlistPush.ROWS]
+
+    def test_a_normal_list_is_written_but_not_pushed(self):
+        sent, written = self._run(["--push", "--alert-only"], self.ROWS)
+        self.assertEqual(sent, [])
+        self.assertEqual([r["code"] for r in written["items"]], ["3707", "2498"])
+
+    def test_an_empty_list_is_still_pushed(self):
+        sent, _ = self._run(["--push", "--alert-only"], [])
+        self.assertEqual(len(sent), 1)
+        self.assertIn("0 檔", sent[0])
+
+    def test_without_the_flag_it_pushes_as_before(self):
+        sent, _ = self._run(["--push"], self.ROWS)
+        self.assertEqual(len(sent), 1)
+
+    def test_a_failure_is_still_pushed(self):
+        sent = []
+        def explode(args):
+            raise RuntimeError("登入失敗")
+        with unittest.mock.patch.object(screener, "run", explode), \
+             unittest.mock.patch.object(signals, "notify", sent.append):
+            with self.assertRaises(RuntimeError):
+                screener.main(["--push", "--alert-only"])
+        self.assertEqual(len(sent), 1)
+        self.assertIn("登入失敗", sent[0])
+
+    def test_the_scheduled_bat_uses_it_and_keeps_windows_line_endings(self):
+        raw = (Path(__file__).parent / "morning.bat").read_bytes()
+        self.assertIn(b"python screener.py --push --alert-only", raw)
+        self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

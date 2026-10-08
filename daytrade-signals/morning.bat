@@ -1,5 +1,6 @@
 @echo off
-REM Pre-market screener: monitor the full candidate pool, push the top few.
+REM Pre-market screener: monitor the full candidate pool. Pushes to Telegram
+REM only when something is wrong (failure, or an empty list) -- user 10-08.
 REM Scheduled by Windows Task Scheduler on weekdays at 08:40.
 REM To test by hand: just double-click this file.
 REM Everything the run prints is appended to logs\morning.log, so a silent
@@ -19,11 +20,11 @@ echo   Takes about 1-2 minutes.
 echo   The screen stays BLANK until it finishes. That is normal,
 echo   it is NOT frozen. This window closes by itself.
 echo.
-echo   The watchlist is pushed to Telegram when it is done.
+echo   Telegram only hears from it if something is wrong.
 echo ==========================================================
 echo.
 echo ================ %DATE% %TIME% ================>>"logs\morning.log"
-python screener.py --push >>"logs\morning.log" 2>&1
+python screener.py --push --alert-only >>"logs\morning.log" 2>&1
 set RC=%ERRORLEVEL%
 echo [exit %RC%]>>"logs\morning.log"
 REM Show the tail on screen for a hand-run; harmless under the scheduler.
