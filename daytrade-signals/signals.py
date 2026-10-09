@@ -312,6 +312,8 @@ class SymbolState:
     sim_ups: int = 0                          # 試撮價往上跳了幾次
     sim_downs: int = 0                        # 往下跳了幾次
     sim_from: str = ""                        # 第一筆試撮的時間（從幾點開始看得到）
+    # 盤前算好的日線 RSI（14，Wilder）。使用者 10-09：只記錄、不當條件。
+    daily_rsi: float | None = None
 
     def record_simtrade(self, tick) -> bool:
         """記一筆試撮報價。只收 09:00 以前的 —— 13:25 之後的收盤集合競價也是
@@ -654,6 +656,8 @@ def evaluate(st: SymbolState, now: dtime | None = None, *,
         "sim_move_pct": st.sim_move_pct(),
         "sim_ups": st.sim_ups if st.sim_first else None,
         "sim_downs": st.sim_downs if st.sim_first else None,
+        # 日線 RSI：只記錄（使用者 10-09），不影響發不發。
+        "daily_rsi": st.daily_rsi,
         "rank": st.rank,
         "category": st.category,
         "ruleset": config.RULESET,
@@ -937,7 +941,7 @@ _push_warned = False
 CANDIDATE_FILE = config.BASE_DIR / "candidates.csv"
 CANDIDATE_FIELDS = ("date", "code", "name", "time", "entry", "stop", "target",
                     "lots", "reason", "or_high", "vwap", "volume_surge", "rank",
-                    "sim_from", "sim_move_pct", "sim_ups", "sim_downs",
+                    "sim_from", "sim_move_pct", "sim_ups", "sim_downs", "daily_rsi",
                     # 收盤回推要照**跟訊號一樣**的出場規則走，計畫就得跟著寫下來。
                     # 10-08 晚以前少了這幾欄：v10 的候選會被當成舊的「停損／目標」
                     # 回推，跟真的訊號用的是兩把尺（v10 還沒上線，沒有資料受影響）。
@@ -2006,6 +2010,7 @@ def run():
         st.rank = n
         # 近 5 日平均振幅；算不出來（量比沒查到的那幾檔）就用昨天一天的振幅。
         st.amplitude_pct = i.get("avg_amplitude_pct") or i.get("amplitude_pct")
+        st.daily_rsi = i.get("daily_rsi")
         st.avg_volume_lots = i.get("avg_volume_lots")
         st.category = str(i.get("category", "") or "")
         states[i["code"]] = st

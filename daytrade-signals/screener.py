@@ -126,6 +126,72 @@ def average_amplitude(ts_list, highs, lows, closes, lookback_days: int) -> float
     return round(sum(ranges) / len(ranges), 2)
 
 
+RSI_PERIOD = 14
+# 日線 RSI 要多少天的 K 棒：14 期 RSI 起算要 15 個收盤，Wilder 平滑再多十幾天才收斂到
+# 看盤軟體上的數字。抓 45 個日曆天 ≈ 30 個交易日。
+RSI_FETCH_DAYS = 45
+
+
+def daily_closes(ts_list, closes) -> list[float]:
+    """分鐘 K → 每天的收盤（當天最後一根），照日期排好。"""
+    per_day: dict = {}
+    for ts, c in zip(ts_list, closes):
+        dt = _bar_time(ts)
+        if dt is None:
+            continue
+        prev = per_day.get(dt.date())
+        if prev is None or dt >= prev[0]:
+            per_day[dt.date()] = (dt, float(c))
+    return [per_day[d][1] for d in sorted(per_day)]
+
+
+def wilder_rsi(closes: list[float], period: int = RSI_PERIOD) -> float | None:
+    """Wilder RSI（看盤軟體一般用的那一種）。收盤不夠 period+1 個 → None（不知道，不是 50）。
+
+    前 period 個漲跌取簡單平均當起點，之後每天 平均 = (前一個平均 × (period-1) + 今天) / period。
+    資料越長越接近看盤軟體的數字；30 個交易日左右差距通常在 1～2 點以內。
+    """
+    if len(closes) < period + 1:
+        return None
+    diffs = [b - a for a, b in zip(closes, closes[1:])]
+    gain = sum(max(d, 0.0) for d in diffs[:period]) / period
+    loss = sum(max(-d, 0.0) for d in diffs[:period]) / period
+    for d in diffs[period:]:
+        gain = (gain * (period - 1) + max(d, 0.0)) / period
+        loss = (loss * (period - 1) + max(-d, 0.0)) / period
+    if loss == 0:
+        return 100.0 if gain > 0 else 50.0
+    return round(100 - 100 / (1 + gain / loss), 1)
+
+
+def add_daily_rsi(broker, rows: list[dict], today: str | None = None) -> None:
+    """替最後選出來的那幾檔補上日線 RSI（daily_rsi）。**只記錄，不排序、不剔除。**
+
+    使用者 10-09 貼了一篇「盤前先刪掉日線 RSI 50 以下的」，選「只記錄日線 RSI」：
+    20 天後看「RSI 50 以上」跟「50 以下」兩組的結果分不分得出來。
+
+    另外打一次 kbars（拉長到 RSI_FETCH_DAYS），**不動量比那一段的資料範圍** ——
+    量比、平均振幅、排序、選誰，全部跟沒加這個功能時一模一樣。
+    算不出來（API 失敗、上市不到 15 天）就是 None。
+    """
+    today = today or datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.strptime(today, "%Y-%m-%d")
+             - timedelta(days=RSI_FETCH_DAYS)).strftime("%Y-%m-%d")
+    for r in rows:
+        r["daily_rsi"] = None
+        try:
+            kb = broker.kbars(r["code"], start, today)
+            closes = daily_closes(getattr(kb, "ts", []), getattr(kb, "Close", []))
+            # 盤前跑：今天還沒有 K 棒。萬一盤中手動重跑，今天那根還沒收完，不算。
+            last = _bar_time((getattr(kb, "ts", []) or [None])[-1])
+            if last is not None and last.strftime("%Y-%m-%d") == today:
+                closes = closes[:-1]
+            r["daily_rsi"] = wilder_rsi(closes)
+        except Exception as e:
+            log.debug("%s 日線 RSI 計算失敗：%s", r["code"], e)
+        throttle(config.SCREEN["kbar_sleep_sec"])
+
+
 # 量比迴圈每幾檔報一次進度。太密會把 log 洗掉，太疏就失去「它還活著」的作用。
 PROGRESS_EVERY = 10
 
@@ -245,7 +311,11 @@ def screen(broker: Broker) -> list[dict]:
         r["volume_ratio"] = 1.0
 
     rows.sort(key=lambda r: (r["volume_ratio"], r["amplitude_pct"]), reverse=True)
-    return rows[: cfg["max_universe"]]
+    rows = rows[: cfg["max_universe"]]
+    # 排序、選誰都定了之後才算 —— 它不參與任何決定（10-09 使用者：只記錄）。
+    log.info("計算日線 RSI（只記錄）：%d 檔", len(rows))
+    add_daily_rsi(broker, rows)
+    return rows
 
 
 def label(row: dict) -> str:

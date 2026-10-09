@@ -59,7 +59,7 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio",
           "mkt_signal_pct", "exit_date", "close_pos_pct", "vs_vwap_pct", "volume_x",
           "open_gap_pct", "low_gap_pct", "half_exit",
-          "sim_from", "sim_move_pct", "sim_ups", "sim_downs")
+          "sim_from", "sim_move_pct", "sim_ups", "sim_downs", "daily_rsi")
 
 
 @dataclass
@@ -153,6 +153,8 @@ class Outcome:
     sim_move_pct: float | None = None     # 第一筆到最後一筆試撮價走了幾 %
     sim_ups: float | None = None          # 試撮價往上跳了幾次
     sim_downs: float | None = None        # 往下跳了幾次
+    # 盤前算的日線 RSI（14，Wilder）。使用者 10-09：只記錄、不當條件。空白 = 算不出來。
+    daily_rsi: float | None = None
 
     @property
     def overnight(self) -> bool:
@@ -529,6 +531,7 @@ def _build(sig: dict, date: str, code: str, entry: float, stop: float, target: f
         sim_move_pct=_num(sig.get("sim_move_pct")),
         sim_ups=_num(sig.get("sim_ups")),
         sim_downs=_num(sig.get("sim_downs")),
+        daily_rsi=_num(sig.get("daily_rsi")),
         half_exit=round(half_exit, 2) if half_exit is not None else None,
     )
 
@@ -661,7 +664,7 @@ _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "exit_0930", "r_0930", "bid_ask_ratio", "mkt_signal_pct",
                     "close_pos_pct", "vs_vwap_pct", "volume_x",
                     "open_gap_pct", "low_gap_pct", "half_exit",
-                    "sim_move_pct", "sim_ups", "sim_downs")
+                    "sim_move_pct", "sim_ups", "sim_downs", "daily_rsi")
 
 
 def _bool(value) -> bool | None:

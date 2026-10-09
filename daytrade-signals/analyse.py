@@ -164,6 +164,16 @@ def by_surge_threshold(rows: list) -> dict:
     return _bucket(rows, key, labels)
 
 
+def by_daily_rsi(rows: list) -> dict:
+    """盤前的日線 RSI（使用者 10-09 選「只記錄」）。文章說「日線 RSI 低於 50 直接跳過」。
+    算不出來的不算進任何一組。"""
+    def key(o):
+        if o.daily_rsi is None:
+            return None
+        return "日線 RSI ≥50" if o.daily_rsi >= 50 else "日線 RSI <50"
+    return _bucket(rows, key, ["日線 RSI ≥50", "日線 RSI <50"])
+
+
 def by_sim_direction(rows: list) -> dict:
     """開盤前試撮價往哪走（使用者 10-08 選「只記錄、不當條件」）。
 
@@ -432,6 +442,12 @@ def report(rows: list) -> list[str]:
         "1.8 以下的在 candidates_outcomes.csv（python analyse.py --file "
         "candidates_outcomes.csv）。1.5-1.8 那一組要是跟 1.8-3 那一組分不出來，"
         "放寬門檻就多出訊號而不變差 —— 那時才算改規則。")
+
+    lines += render_group(
+        "十一、盤前日線 RSI", by_daily_rsi(rows),
+        "使用者 10-09 只要記錄、不當條件。量比高的股票多半本來就在漲，RSI <50 那一組"
+        "可能很少 —— 太少就是「還不知道」。九、十、十一這三組是同時在找的線索，比得越多"
+        "越容易碰巧看到差異：這裡看到的差異只能當下一輪要驗證的假設。")
 
     lines += ["", "---", "",
               "*本分析只描述已發生的樣本，不預測未來，不構成投資建議。*"]

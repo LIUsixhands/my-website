@@ -8332,5 +8332,128 @@ class TestNoQuotesIsNotNoBreakout(unittest.TestCase):
         self.assertEqual(st.last_price, 0.0)
 
 
+# ══════════════════════════════════════════════════════
+# 盤前日線 RSI：只記錄（使用者 10-09）
+# ══════════════════════════════════════════════════════
+class TestDailyRsiIsRecorded(unittest.TestCase):
+    """使用者 10-09 貼了「盤前先刪掉日線 RSI 50 以下的」，選「只記錄日線 RSI」。"""
+
+    # Wilder 原書／StockCharts 的教科書例子
+    WILDER = [44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.10, 45.42, 45.84, 46.08,
+              45.89, 46.03, 45.61, 46.28, 46.28, 46.00, 46.03, 46.41, 46.22, 45.64]
+
+    def test_it_matches_the_textbook_example(self):
+        """參考值 70.53 / 66.32 / 66.55 / 69.41 / 66.36 / 57.97（對方中間值有四捨五入）。"""
+        got = [screener.wilder_rsi(self.WILDER[:n]) for n in range(15, 21)]
+        for g, ref in zip(got, (70.53, 66.32, 66.55, 69.41, 66.36, 57.97)):
+            self.assertAlmostEqual(g, ref, delta=0.2)
+
+    def test_too_few_days_is_unknown_not_fifty(self):
+        self.assertIsNone(screener.wilder_rsi(self.WILDER[:14]))
+        self.assertIsNotNone(screener.wilder_rsi(self.WILDER[:15]))
+
+    def test_one_way_markets(self):
+        up = [float(i) for i in range(1, 20)]
+        self.assertEqual(screener.wilder_rsi(up), 100.0)
+        self.assertEqual(screener.wilder_rsi(up[::-1]), 0.0)
+        self.assertEqual(screener.wilder_rsi([10.0] * 20), 50.0)
+
+    def _kb_days(self, closes, with_today=False):
+        """每天兩根分鐘 K：09:01（開）與 13:30（收）。收盤要取最後那一根。"""
+        rows, day = [], datetime(2026, 9, 1)
+        n = 0
+        while n < len(closes):
+            if day.weekday() < 5:
+                d = day.strftime("%Y-%m-%d")
+                rows.append((d, "09:01", closes[n] - 1))
+                rows.append((d, "13:30", closes[n]))
+                n += 1
+            day += timedelta(days=1)
+        if with_today:
+            rows.append(("2026-10-12", "09:01", 999.0))
+        ts, cl = [], []
+        for d, hhmm, c in rows:
+            t = datetime(int(d[:4]), int(d[5:7]), int(d[8:]), int(hhmm[:2]), int(hhmm[3:]),
+                         tzinfo=dt_timezone.utc)
+            ts.append(int(t.timestamp() * 1e9))
+            cl.append(c)
+        return SimpleNamespace(ts=ts, Close=cl)
+
+    def test_daily_close_is_the_last_bar_of_the_day(self):
+        kb = self._kb_days([10.0, 11.0, 12.0])
+        self.assertEqual(screener.daily_closes(kb.ts, kb.Close), [10.0, 11.0, 12.0])
+
+    def test_rows_get_it_and_nothing_else_changes(self):
+        calls = []
+
+        class B:
+            def kbars(_, code, start, end):
+                calls.append((code, start, end))
+                return self._kb_days(self.WILDER)
+        rows = [{"code": "2330", "volume_ratio": 3.0}, {"code": "2317", "volume_ratio": 2.0}]
+        before = [dict(r) for r in rows]
+        with unittest.mock.patch.object(screener, "throttle", lambda s: None):
+            screener.add_daily_rsi(B(), rows, today="2026-10-12")
+        self.assertEqual([r["daily_rsi"] for r in rows], [57.9, 57.9])
+        self.assertEqual([{k: v for k, v in r.items() if k != "daily_rsi"} for r in rows], before)
+        self.assertEqual(calls[0], ("2330", "2026-08-28", "2026-10-12"))   # 45 個日曆天
+
+    def test_a_bar_from_today_is_not_used(self):
+        """盤中手動重跑時今天那根還沒收完，不能當成一天的收盤。"""
+        class B:
+            def kbars(_, code, start, end):
+                return self._kb_days(self.WILDER, with_today=True)
+        rows = [{"code": "2330"}]
+        with unittest.mock.patch.object(screener, "throttle", lambda s: None):
+            screener.add_daily_rsi(B(), rows, today="2026-10-12")
+        self.assertEqual(rows[0]["daily_rsi"], 57.9)
+
+    def test_a_failed_query_is_unknown(self):
+        class B:
+            def kbars(_, code, start, end):
+                raise RuntimeError("流量上限")
+        rows = [{"code": "2330"}]
+        with unittest.mock.patch.object(screener, "throttle", lambda s: None):
+            screener.add_daily_rsi(B(), rows, today="2026-10-12")
+        self.assertIsNone(rows[0]["daily_rsi"])
+
+    def test_it_is_computed_after_the_list_is_decided(self):
+        """排序、取前 N 檔之後才算 —— 它不可以影響選誰。"""
+        src = inspect.getsource(screener.screen)
+        self.assertLess(src.index('rows = rows[: cfg["max_universe"]]'),
+                        src.index("add_daily_rsi(broker, rows)"))
+        self.assertLess(src.index("rows.sort(key=lambda r: (r[\"volume_ratio\"]"),
+                        src.index("add_daily_rsi(broker, rows)"))
+
+    def test_the_signal_carries_it_and_never_blocks(self):
+        st = ready_state()
+        st.daily_rsi = 31.2                               # 文章說要直接跳過的那種
+        sig = evaluate(st, now=dtime(9, 3))
+        self.assertIsNotNone(sig, "日線 RSI 只記錄，不可以擋掉任何訊號")
+        self.assertEqual(sig["daily_rsi"], 31.2)
+        self.assertNotIn("RSI", format_signal(sig, 1, 1))  # 訊號上不加讓人自己判斷的指標
+
+    def test_run_reads_it_from_the_watchlist(self):
+        self.assertIn('st.daily_rsi = i.get("daily_rsi")', inspect.getsource(signals.run))
+        self.assertIn("daily_rsi", signals.CANDIDATE_FIELDS)
+
+    def test_it_reaches_the_outcome_row_and_the_csv(self):
+        sig = {"code": "2330", "time": "09:03:30", "entry": 100.0, "stop": 99.0,
+               "target": 101.5, "lots": 1, "daily_rsi": "48.6"}
+        o = oc.resolve(FakeKbarBroker(_kb([("09:41", 101.0, 100.0, 100.5)])), sig,
+                       "2026-09-24")
+        self.assertEqual(o.daily_rsi, 48.6)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            oc.append_csv([o], path)
+            self.assertEqual(oc.load_csv(path)[0].daily_rsi, 48.6)
+
+    def test_analyse_splits_at_fifty(self):
+        rows = [SimpleNamespace(daily_rsi=v) for v in (49.9, 50.0, 72.0, None, 30.0)]
+        groups = analyse.by_daily_rsi(rows)
+        self.assertEqual({k: len(v) for k, v in groups.items()},
+                         {"日線 RSI ≥50": 2, "日線 RSI <50": 2})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
