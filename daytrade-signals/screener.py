@@ -1,0 +1,516 @@
+"""
+screener.py — 盤前選股。每天 08:30 跑一次。
+
+    python3 screener.py              （Windows 是 python screener.py）
+    python3 screener.py --push       監看全部候選，推播只列量比最高的幾檔
+    python3 screener.py --top 5      連監看範圍也砍到 5 檔
+
+--top 與 --push-top 是兩件事，驗證期不要混為一談：
+
+  --top      砍掉的是**監看範圍**（寫進 watchlist.json，signals.py 真的會去盯的）
+  --push-top 砍掉的只是**推播上顯示幾檔**（給人看的，不影響程式監看誰）
+
+v10 起預設只盯量比前 10 檔（config.SCREEN["watch_top"]）。使用者 10-08 先選 3 檔，
+知道 3 檔多數日子會是 0 訊號後改成 10 檔；一天最多 3 個訊號的上限不變。沒被選上
+的那幾檔照樣存進當日存檔（not_watched），事後查得到。
+
+輸出 watchlist.json：10~20 檔候選 + 每檔的關鍵水位（昨高、昨低、昨均價、量能基準）。
+這一層只做「收斂」，不做預測。把 1800 檔縮到你眼睛顧得住的數量，就是它全部的工作。
+
+--top N 存在的理由：驗證期要的是**可重現**。每天用同一條排序規則取前 N 檔，
+20 天之後那份數據才回答得了「這套規則有沒有效」。手挑的話，賺賠都不知道
+該歸因給規則還是歸因給當天的判斷，等於白跑。
+"""
+import argparse
+import json
+import logging
+from datetime import datetime, timedelta
+
+import config
+import market_calendar
+from broker import Broker, throttle, _bar_time
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("screener")
+
+
+def passes_basic(snap, cfg: dict) -> dict | None:
+    """單檔的量價門檻。通過回傳整理好的列，不通過回傳 None。
+
+    抽成純函式才測得到 —— 這幾行決定了整天看哪幾檔，錯了不會有任何報錯。
+    """
+    close = float(getattr(snap, "close", 0) or 0)
+    high = float(getattr(snap, "high", 0) or 0)
+    low = float(getattr(snap, "low", 0) or 0)
+    vol = int(getattr(snap, "total_volume", 0) or 0)      # 張
+
+    if close <= 0 or vol <= 0 or high <= 0 or low <= 0:
+        return None
+    if not (cfg["min_price"] <= close <= cfg["max_price"]):
+        return None
+    if vol < cfg["min_prev_volume_lots"]:
+        return None
+    amplitude = (high - low) / close * 100
+    if amplitude < cfg["min_amplitude_pct"]:
+        return None
+
+    return {
+        "code": snap.code,
+        "prev_close": close,
+        "prev_high": high,
+        "prev_low": low,
+        "prev_avg": float(getattr(snap, "average_price", 0) or 0),
+        "prev_volume": vol,
+        "amplitude_pct": round(amplitude, 2),
+    }
+
+
+def daily_volumes(ts_list, volume_list) -> dict:
+    """把分鐘 K 的量依日期加總，回傳 {date: 當日總量}。"""
+    per_day: dict = {}
+    for ts, v in zip(ts_list, volume_list):
+        dt = _bar_time(ts)
+        if dt is None:
+            continue
+        per_day[dt.date()] = per_day.get(dt.date(), 0.0) + float(v or 0)
+    return per_day
+
+
+def volume_baseline(ts_list, volume_list, lookback_days: int) -> float:
+    """最近 N 個交易日的「日均量」，排除最後一天。
+
+    原本的寫法是 (每分鐘均量 × 270 ÷ 1000)，量綱整個錯掉：kbars 的 Volume
+    已經是張，再除 1000 會讓基準小三個數量級，於是量比全部變成四位數，
+    排序等於亂排。改成直接按日加總再取平均，單位自然對齊 prev_volume。
+
+    排除最後一天，是因為最後一天就是要被比較的那天（昨日）；
+    把它放進基準等於拿自己跟自己比，放大的量會被自己稀釋掉。
+    """
+    per_day = daily_volumes(ts_list, volume_list)
+    if len(per_day) < 2:
+        return 0.0
+    days = sorted(per_day)[:-1][-lookback_days:]
+    if not days:
+        return 0.0
+    return sum(per_day[d] for d in days) / len(days)
+
+
+def average_amplitude(ts_list, highs, lows, closes, lookback_days: int) -> float | None:
+    """最近 N 個完整交易日的平均日振幅 %（含昨天）。算不出來回 None。
+
+    每天的振幅 = (當日最高 − 當日最低) ÷ **前一日收盤**。用前一日收盤當分母，
+    跟漲跌停、跟「從昨收算漲幾 %」是同一把尺。所以第一天只當作「前一日」，
+    不計入平均 —— 要 N 天振幅就要 N+1 天的 K 棒。
+
+    v8 拿它定停利目標：這檔股票平常一天就動這麼多，目標設在「它本來就動得到」
+    的地方，而不是每檔都一樣的 8%。
+    """
+    per_day: dict = {}
+    for ts, h, l, c in zip(ts_list, highs, lows, closes):
+        dt = _bar_time(ts)
+        if dt is None:
+            continue
+        d = dt.date()
+        hi, lo, _ = per_day.get(d, (float("-inf"), float("inf"), 0.0))
+        per_day[d] = (max(hi, float(h)), min(lo, float(l)), float(c))   # 收盤 = 最後一根
+    days = sorted(per_day)
+    ranges = []
+    for prev, d in zip(days, days[1:]):
+        prev_close = per_day[prev][2]
+        hi, lo, _ = per_day[d]
+        if prev_close > 0 and hi >= lo:
+            ranges.append((hi - lo) / prev_close * 100)
+    ranges = ranges[-lookback_days:]
+    if not ranges:
+        return None
+    return round(sum(ranges) / len(ranges), 2)
+
+
+RSI_PERIOD = 14
+# 日線 RSI 要多少天的 K 棒：14 期 RSI 起算要 15 個收盤，Wilder 平滑再多十幾天才收斂到
+# 看盤軟體上的數字。抓 45 個日曆天 ≈ 30 個交易日。
+RSI_FETCH_DAYS = 45
+
+
+def daily_closes(ts_list, closes) -> list[float]:
+    """分鐘 K → 每天的收盤（當天最後一根），照日期排好。"""
+    per_day: dict = {}
+    for ts, c in zip(ts_list, closes):
+        dt = _bar_time(ts)
+        if dt is None:
+            continue
+        prev = per_day.get(dt.date())
+        if prev is None or dt >= prev[0]:
+            per_day[dt.date()] = (dt, float(c))
+    return [per_day[d][1] for d in sorted(per_day)]
+
+
+def wilder_rsi(closes: list[float], period: int = RSI_PERIOD) -> float | None:
+    """Wilder RSI（看盤軟體一般用的那一種）。收盤不夠 period+1 個 → None（不知道，不是 50）。
+
+    前 period 個漲跌取簡單平均當起點，之後每天 平均 = (前一個平均 × (period-1) + 今天) / period。
+    資料越長越接近看盤軟體的數字；30 個交易日左右差距通常在 1～2 點以內。
+    """
+    if len(closes) < period + 1:
+        return None
+    diffs = [b - a for a, b in zip(closes, closes[1:])]
+    gain = sum(max(d, 0.0) for d in diffs[:period]) / period
+    loss = sum(max(-d, 0.0) for d in diffs[:period]) / period
+    for d in diffs[period:]:
+        gain = (gain * (period - 1) + max(d, 0.0)) / period
+        loss = (loss * (period - 1) + max(-d, 0.0)) / period
+    if loss == 0:
+        return 100.0 if gain > 0 else 50.0
+    return round(100 - 100 / (1 + gain / loss), 1)
+
+
+def add_daily_rsi(broker, rows: list[dict], today: str | None = None) -> None:
+    """替最後選出來的那幾檔補上日線 RSI（daily_rsi）。**只記錄，不排序、不剔除。**
+
+    使用者 10-09 貼了一篇「盤前先刪掉日線 RSI 50 以下的」，選「只記錄日線 RSI」：
+    20 天後看「RSI 50 以上」跟「50 以下」兩組的結果分不分得出來。
+
+    另外打一次 kbars（拉長到 RSI_FETCH_DAYS），**不動量比那一段的資料範圍** ——
+    量比、平均振幅、排序、選誰，全部跟沒加這個功能時一模一樣。
+    算不出來（API 失敗、上市不到 15 天）就是 None。
+    """
+    today = today or datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.strptime(today, "%Y-%m-%d")
+             - timedelta(days=RSI_FETCH_DAYS)).strftime("%Y-%m-%d")
+    for r in rows:
+        r["daily_rsi"] = None
+        try:
+            kb = broker.kbars(r["code"], start, today)
+            closes = daily_closes(getattr(kb, "ts", []), getattr(kb, "Close", []))
+            # 盤前跑：今天還沒有 K 棒。萬一盤中手動重跑，今天那根還沒收完，不算。
+            last = _bar_time((getattr(kb, "ts", []) or [None])[-1])
+            if last is not None and last.strftime("%Y-%m-%d") == today:
+                closes = closes[:-1]
+            r["daily_rsi"] = wilder_rsi(closes)
+        except Exception as e:
+            log.debug("%s 日線 RSI 計算失敗：%s", r["code"], e)
+        throttle(config.SCREEN["kbar_sleep_sec"])
+
+
+# 量比迴圈每幾檔報一次進度。太密會把 log 洗掉，太疏就失去「它還活著」的作用。
+PROGRESS_EVERY = 10
+
+
+def is_disposition(contract) -> bool:
+    """處置中或暫停交易？
+
+    `disposition_level` 0 = 正常，>0 = 處置中（分盤撮合）。
+    認不出來的值一律當成**正常**：這一欄是後來才有的，舊版 shioaji 沒有它，
+    當成處置會把整個市場砍光。真正危險的那一側（處置股混進來）由
+    `disposition_match_interval_min` 再擋一次 —— 它只要有值就代表在分盤。
+    """
+    if getattr(contract, "trading_suspended", False):
+        return True
+    try:
+        if int(getattr(contract, "disposition_level", 0) or 0) > 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    try:
+        if float(getattr(contract, "disposition_match_interval_min", 0) or 0) > 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
+
+
+def screen(broker: Broker) -> list[dict]:
+    cfg = config.SCREEN
+    contracts = broker.all_stocks()
+    log.info("全市場商品檔：%d 檔", len(contracts))
+
+    # 第一道：合約層級過濾（不打 API，先砍掉大半）
+    stage1, skipped = [], []
+    for c in contracts:
+        code = getattr(c, "code", "")
+        if not code.isdigit() or len(code) != 4:   # 排除 ETF/權證/特別股等非四碼普通股
+            continue
+        if cfg["require_day_trade"] and not broker.is_day_tradable(c):
+            continue
+        if cfg["skip_disposition"] and is_disposition(c):
+            skipped.append(code)
+            continue
+        stage1.append(c)
+    log.info("可當沖 + 四碼普通股：%d 檔", len(stage1))
+    if skipped:
+        # 說出來。靜靜砍掉幾檔，和「今天本來就比較少」長得一模一樣。
+        log.info("處置／暫停交易剔除 %d 檔：%s", len(skipped),
+                 "、".join(skipped[:10]) + ("…" if len(skipped) > 10 else ""))
+
+    # 第二道：昨日量價（snapshots 帶回昨日收盤資訊）
+    # 代號→中文名稱。合約物件上就有，snapshot 上沒有，所以先在這裡收起來。
+    names = {getattr(c, "code", ""): getattr(c, "name", "") for c in stage1}
+    # 產業類別代碼。合約物件上就有，不用多打一次 API。
+    # 這是「輪動題材」唯一客觀又免費的代理：題材在輪動時，整個族群會一起有量。
+    # 存原始代碼不自己翻成中文 —— 翻錯比不翻糟，20 天後看實際出現哪些值再對照。
+    cats = {getattr(c, "code", ""): str(getattr(c, "category", "") or "") for c in stage1}
+    # 注意股不剔除（它還是正常撮合），但要記下來 —— 20 天後才答得出
+    # 「注意股的突破是不是比較假」。剔除是一回事，留紀錄是另一回事。
+    flags = {getattr(c, "code", ""): bool(getattr(c, "attention_flag", False))
+             for c in stage1}
+    snaps = broker.snapshots(stage1)
+    rows = []
+    for s in snaps:
+        try:
+            row = passes_basic(s, cfg)
+            if row:
+                row["name"] = names.get(row["code"], "")
+                row["category"] = cats.get(row["code"], "")
+                row["attention_flag"] = flags.get(row["code"], False)
+                rows.append(row)
+        except Exception as e:
+            log.debug("skip %s: %s", getattr(s, "code", "?"), e)
+
+    log.info("通過量價門檻：%d 檔", len(rows))
+
+    # 第三道：量能是否「異常」放大（今天有人在裡面才會有波動）
+    # 只對振幅前段的標的打 kbars —— 每檔一次 API，全打會撞到流量上限被停用一分鐘。
+    rows.sort(key=lambda r: r["amplitude_pct"], reverse=True)
+    probe, rest = rows[: cfg["max_kbar_queries"]], rows[cfg["max_kbar_queries"]:]
+    if rest:
+        log.info("量比只計算振幅前 %d 名（API 流量上限），其餘 %d 檔以 1.0 計",
+                 len(probe), len(rest))
+
+    start = (datetime.now() - timedelta(days=cfg["lookback_days"] * 3)).strftime("%Y-%m-%d")
+    end = datetime.now().strftime("%Y-%m-%d")
+    # 這段是整支程式唯一會跑很久的地方：每檔一次 API，中間還要刻意等（避開流量上限）。
+    # 以前它從頭到尾不出聲，排程跳出來的黑視窗就會有一分多鐘完全沒反應 ——
+    # 跟當掉長得一模一樣。2026-10-01 使用者就是因此把它關掉的（exit 0xC000013A，
+    # 也就是 CTRL+C），那天的盤前名單整個沒了。
+    #
+    # 所以這裡每隔幾檔就報一次進度。兩個作用：
+    #   1. 畫面上（或 log 裡）看得出它還活著，沒有人會再想關掉它
+    #   2. 萬一真的被砍，log 會停在「第幾檔」，而不是停在迴圈開始前
+    log.info("開始計算量比：%d 檔，預估 %.0f 秒。這段期間沒有其他訊息是正常的。",
+             len(probe), len(probe) * (cfg["kbar_sleep_sec"] + 0.5))
+    for i, r in enumerate(probe, 1):
+        try:
+            kb = broker.kbars(r["code"], start, end)
+            base = volume_baseline(getattr(kb, "ts", []), getattr(kb, "Volume", []),
+                                   cfg["lookback_days"])
+            r["volume_ratio"] = round(r["prev_volume"] / base, 2) if base > 0 else 1.0
+            # 平常一天的量（張）。13:25 記「今天量是平常幾倍」要用它。
+            if base > 0:
+                r["avg_volume_lots"] = round(base)
+            # 同一份 K 棒順手算平均振幅（v8 的停利目標用它）—— 不多打任何 API。
+            r["avg_amplitude_pct"] = average_amplitude(
+                getattr(kb, "ts", []), getattr(kb, "High", []), getattr(kb, "Low", []),
+                getattr(kb, "Close", []), cfg["lookback_days"])
+        except Exception as e:
+            log.debug("%s 量比計算失敗，以 1.0 計：%s", r["code"], e)
+            r["volume_ratio"] = 1.0
+        if i % PROGRESS_EVERY == 0 or i == len(probe):
+            log.info("量比計算中… %d/%d", i, len(probe))
+        throttle(cfg["kbar_sleep_sec"])
+    for r in rest:
+        r["volume_ratio"] = 1.0
+
+    rows.sort(key=lambda r: (r["volume_ratio"], r["amplitude_pct"]), reverse=True)
+    rows = rows[: cfg["max_universe"]]
+    # 排序、選誰都定了之後才算 —— 它不參與任何決定（10-09 使用者：只記錄）。
+    log.info("計算日線 RSI（只記錄）：%d 檔", len(rows))
+    add_daily_rsi(broker, rows)
+    return rows
+
+
+def label(row: dict) -> str:
+    """「代號 名稱」。拿不到名稱時只印代號，不要印出空格結尾的怪字串。"""
+    name = (row.get("name") or "").strip()
+    return f"{row['code']} {name}" if name else str(row["code"])
+
+
+def watchlist_archive_path(date: str):
+    """當日存檔的位置。date 是 payload 裡的 YYYY-MM-DD。"""
+    return config.JOURNAL_DIR / f"watchlist-{date.replace('-', '')}.json"
+
+
+def archive_watchlist(payload: dict) -> bool:
+    """把當日候選池另存一份帶日期的。回傳有沒有寫成功。
+
+    為什麼需要：`watchlist.json` 是單一檔案，每天 08:40 直接覆蓋。於是
+    「今天監看了哪 20 檔」這件事，隔天早上就永久消失了。
+
+    2026-10-05 就撞上：量比第一名的聯一光當天漲停 +9.95%，而系統沒發
+    訊號。想回答「開盤區間拉長會不會抓到它」，就得重跑那 20 檔的分鐘 K
+    —— 但 whatif.py 只重跑 outcomes.csv 裡有的股票，也就是**當天真的
+    發出過訊號**的那幾檔。沒發訊號的從來沒進過任何紀錄。
+
+    這個偏誤 whatif.py 的 docstring 早就寫明了，解法也寫了：「需要每天
+    完整的 watchlist.json 存檔」。但那時是靠人手動 copy，漏一天就永遠
+    補不回來。改成程式自己存。
+
+    寫失敗不中斷選股 —— 盤前那幾分鐘，當日的 watchlist.json 比歷史存檔
+    重要得多。但**一定要出聲**：靜悄悄漏掉的存檔，等於沒有存檔。
+    """
+    path = watchlist_archive_path(payload["date"])
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+        log.info("候選池存檔：%s", path.name)
+        return True
+    except OSError as e:
+        log.error("候選池存檔失敗（%s）—— 今天的 20 檔明天就會被覆蓋掉，"
+                  "要留的話現在手動 copy watchlist.json：%s", path.name, e)
+        print(f"\n[!] 候選池存檔失敗：{e}")
+        print(f"[!] watchlist.json 明天 08:40 會被覆蓋。要留就現在手動複製一份。")
+        return False
+
+
+def format_watchlist(payload: dict, rows: list, total: int | None = None) -> str:
+    """推到手機上的版本。窄螢幕看得懂就好，不要照搬終端機的表格。
+
+    total 是**實際監看**的檔數。推播只列前幾檔是為了讀得完，但訊息必須說出
+    真正在監看幾檔 —— 否則你會以為程式只盯這 5 檔，然後收到名單外的訊號時
+    以為系統出錯。
+    """
+    total = len(rows) if total is None else total
+    head = (f"\U0001f4cb {payload['date']} 今日觀察名單（{total} 檔）"
+            if total == len(rows) else
+            f"\U0001f4cb {payload['date']} 今日觀察名單\n"
+            f"監看 {total} 檔，以下為量比最高的 {len(rows)} 檔")
+    lines = [head, "────────────────"]
+    for i, r in enumerate(rows, 1):
+        lines.append(f"{i}. {label(r)}　昨收 {r['prev_close']:.2f}　"
+                     f"振幅 {r['amplitude_pct']:.1f}%　量比 {r['volume_ratio']:.2f}x")
+    lines += [
+        "────────────────",
+        f"來回成本基準 {payload['round_trip_cost_pct']}%",
+        "依量比排序自動選出，未經人工判斷。這是觀察名單，不是進場訊號。",
+    ]
+    return "\n".join(lines)
+
+
+def push_watchlist(payload: dict, rows: list, show: int = 5) -> None:
+    """借用 signals 的推播管道，金鑰與節流邏輯都不必重寫一份。"""
+    from signals import notify
+    notify(format_watchlist(payload, rows[:show], total=len(rows)))
+
+
+# 例外訊息可能很長（堆疊裡的 SQL、HTML 錯誤頁都有可能），推播只留前面這麼多字
+FAILURE_DETAIL_CHARS = 400
+
+
+def format_failure(exc: BaseException) -> str:
+    """失敗也要出聲。
+
+    08:40 什麼都沒收到時，你分不出「今天沒有名單」與「程式當掉了」—— 而這兩件事
+    該做的處置完全相反。所以 --push 模式下失敗必須推一則出來。
+    """
+    detail = f"{type(exc).__name__}: {exc}".strip()
+    if len(detail) > FAILURE_DETAIL_CHARS:
+        detail = detail[:FAILURE_DETAIL_CHARS] + "…（完整訊息在電腦上）"
+    return "\n".join([
+        f"\u26a0\ufe0f {datetime.now().strftime('%Y-%m-%d %H:%M')} 盤前選股失敗",
+        "────────────────",
+        detail,
+        "────────────────",
+        "今天沒有觀察名單，signals.py 不要開。",
+        "常見原因：金鑰的 IP 限制（家用 IP 會變）、筆電剛醒來還沒連上網路。",
+        "到電腦上手動跑一次就會看到完整錯誤。",
+    ])
+
+
+def push_failure(exc: BaseException) -> None:
+    """推失敗通知。推播自己壞掉也不能蓋掉原始錯誤，所以整段包起來。"""
+    from signals import notify
+    try:
+        notify(format_failure(exc))
+    except Exception as e:
+        log.error("連失敗通知都送不出去：%s", e)
+
+
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(description="盤前選股")
+    ap.add_argument("--top", type=int, metavar="N",
+                    help="只保留量比最高的 N 檔（不給就全部保留）")
+    ap.add_argument("--push", action="store_true",
+                    help="把名單推到 Telegram（配合排程用，人不用開電腦看）")
+    # 使用者 10-08：「這訊號不用給」—— 08:40 的名單每天都一樣是量比前幾名，
+    # 看了也不會做什麼。但「出事」還是要出聲：選股失敗、或名單是 0 檔（今天
+    # 什麼都不會監看），這兩種照推。名單照樣寫進 watchlist.json 給 signals.py 用。
+    ap.add_argument("--alert-only", action="store_true",
+                    help="配合 --push：名單正常就不推，只在失敗或 0 檔時推")
+    ap.add_argument("--push-top", type=int, default=3, metavar="N",
+                    help="推播上顯示幾檔（預設 5）。不影響監看範圍")
+    args = ap.parse_args(argv)
+    if args.top is not None and args.top < 1:
+        ap.error("--top 至少要 1")
+    if args.push_top < 1:
+        ap.error("--push-top 至少要 1")
+    return args
+
+
+def run(args) -> None:
+    errs = config.validate()
+    if errs:
+        raise SystemExit("config.py 參數有問題：\n" + "\n".join(f"  - {e}" for e in errs))
+    for w in config.warnings():
+        log.warning("設定提醒：%s", w)
+
+    # 休市日不選股、不寫名單、不推播（10-09 國慶補假照樣選了一份名單）。
+    closed = market_calendar.closed_today()
+    if closed:
+        log.info("今天休市（%s），不選股。", closed)
+        print(f"今天休市（{closed}），不選股。")
+        return
+
+    broker = Broker()
+    watchlist = screen(broker)
+    dropped = []
+    # 盯幾檔：命令列 --top 優先，沒給就照 config（v10 起是 10 檔）
+    top = args.top if args.top is not None else config.SCREEN.get("watch_top")
+    if top is not None and len(watchlist) > top:
+        # rows 已在 screen() 裡依 (量比, 振幅) 由高到低排好，直接取前 N 檔
+        watchlist, dropped = watchlist[:top], watchlist[top:]
+
+    payload = {
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "round_trip_cost_pct": round(config.round_trip_cost_pct(), 4),
+        "items": watchlist,
+        # 沒被選上的那幾檔也存著（signals.py 不看這一欄）。不存的話，
+        # 「只盯前幾檔是不是漏掉了好的」這一題永遠沒有資料可以回答。
+        "not_watched": dropped,
+    }
+    config.WATCHLIST_FILE.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    archive_watchlist(payload)
+
+    print(f"\n=== {payload['date']} 當沖候選池（{len(watchlist)} 檔）===")
+    print(f"來回成本基準：{payload['round_trip_cost_pct']}%（你的停利要遠大於這個數字）\n")
+    print(f"{'代號':<7}{'名稱':<10}{'昨收':>9}{'振幅%':>9}{'量(張)':>11}{'量比':>8}")
+    for r in watchlist:
+        print(f"{r['code']:<7}{r.get('name', ''):<10}{r['prev_close']:>9.2f}"
+              f"{r['amplitude_pct']:>9.2f}{r['prev_volume']:>11,}{r['volume_ratio']:>8.2f}")
+    if args.push and (not args.alert_only or not watchlist):
+        push_watchlist(payload, watchlist, show=args.push_top)
+
+    if dropped:
+        print(f"\n只盯量比前 {top} 檔：其餘 {len(dropped)} 檔不監看"
+              f"（{'、'.join(r['code'] for r in dropped)}）")
+        print(f"下一步：{config.PY_CMD} signals.py")
+    else:
+        print(f"\n下一步：{config.PY_CMD} signals.py（監看以上全部 {len(watchlist)} 檔）")
+        print("驗證期建議就這樣跑 —— 閘門擋在一天 5 個訊號，監看多檔只是增加樣本。")
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    try:
+        run(args)
+    except Exception as exc:
+        # 排程跑的時候沒有人在看畫面，失敗只能靠推播讓人知道
+        if args.push:
+            push_failure(exc)
+        raise
+
+
+if __name__ == "__main__":
+    main()
