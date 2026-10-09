@@ -1,5 +1,6 @@
 """文化第王 實登比較 — 走小登管線（.claude/skills/skill-xiao-deng/references/實登批次處理管線.py）。
-資料：不動產交易實價查詢服務網，板橋區 111/01–115/10，條件＝屋齡 25–35 年、3房2廳2衛（即本戶售屋條件）。
+資料：不動產交易實價查詢服務網，板橋區 111/01–115/10，條件＝屋齡 25–35 年、3房2廳2衛（即本戶售屋條件），再限建坪 30–40 坪；
+另含本社區逐門牌查詢 101/01–115/10（社區實登_*.xls）。
 口徑：扣車位重算淨單價（未拆價車位逐類別中位估算）、排除特殊關係、
 比較一律分【無車位】與【有車位】，有車位再並列含車／不含車；年度一律中位數。"""
 import re, sys, json, csv, glob, statistics as st
@@ -26,7 +27,6 @@ def is_community(a):
 LISTING = dict(樓層=6, 總價=2898, 建坪=34.39, 主建物=27.65, 附屬=3.57, 公設=3.17)
 LISTING['單價'] = LISTING['總價'] / LISTING['建坪']
 LISTING['主建物佔比'] = LISTING['主建物'] / LISTING['建坪']
-LISTING['主建物單價'] = LISTING['總價'] / LISTING['主建物']
 
 raw = []
 for f in sorted(HERE.glob('實登_*.xls')):
@@ -50,12 +50,11 @@ for x in rows:
     x['est'] = x['park'] and not (x['pk_val'] > 0 or x['pkv_row'])
     x['jzc'] = in_jzc(x['addr'])
     x['comm'] = is_community(x['addr'])
-    # 主建物單價（坪效）：扣車位後總價 ÷ 主建物坪數；實登主建物佔比的分母含車位面積
-    x['main_up'] = (x['val'] * x['base']) / (x['area'] * x['share']) if x['share'] else None
     x['road'] = (re.match(r'板橋區(.+?[路街道](?:[一二三四五六]段)?)', x['addr']) or [None, ''])[1]
 
-# 比較母體：住宅大樓、排除 1 樓（店面）、頂樓加蓋、夾層（夾層戶登記坪數小、單價虛高）
-def ok(x): return (x['typ'] == '住宅大樓' and x['fl'] and x['fl'] > 1
+# 比較母體：住宅大樓、建坪 30–40 坪（有車位者以扣除車位後的建坪計，與本戶 34.39 坪同級）、
+# 排除 1 樓（店面）、頂樓加蓋、夾層（夾層戶登記坪數小、單價虛高）
+def ok(x): return (x['typ'] == '住宅大樓' and x['fl'] and x['fl'] > 1 and 30 <= x['base'] <= 40
                    and '頂樓加蓋' not in x['note'] and '夾層' not in x['note'])
 base = [x for x in rows if ok(x)]
 def med(v): return round(st.median(v), 2) if v else None
@@ -76,10 +75,7 @@ def hl(g, name):
     out = {}
     for k, gg in (('無車位', [x for x in g if not x['park']]), ('有車位', [x for x in g if x['park']])):
         out[k] = P.headline(gg, window=(113, 115), name=f'{name} {k} 近三年', min_n=10) if any(113 <= x['yr'] for x in gg) else None
-    r3 = [x for x in g if x['yr'] >= 113]
-    out['主建物佔比中位'] = med([x['share'] for x in r3])
-    out['無車位主建物單價中位'] = med([x['main_up'] for x in r3 if not x['park'] and x['main_up']])
-    out['有車位主建物單價中位'] = med([x['main_up'] for x in r3 if x['park'] and x['main_up']])
+    out['主建物佔比中位'] = med([x['share'] for x in g if x['yr'] >= 113])
     return out
 
 JZ = [x for x in base if x['jzc']]
@@ -91,22 +87,57 @@ S['板橋_年度'] = by_year(base)
 S['江子翠_年度'] = by_year(JZ)
 S['板橋_近三年'] = hl(base, '板橋大樓')
 S['江子翠_近三年'] = hl(JZ, '江子翠大樓')
-# 同條件近似：江子翠、無車位、總面積 30–40 坪、近三年
-sim = [x for x in JZ if not x['park'] and 30 <= x['area'] <= 40 and x['yr'] >= 113]
-S['江子翠_無車位30-40坪_近三年'] = dict(n=len(sim), 單價中位=med([x['val'] for x in sim]),
-                                  總價中位=med([x['tot'] for x in sim]), 坪數中位=med([x['area'] for x in sim]))
-S['同社區'] = [dict(日期=x['date'], 門牌=x['addr'], 樓層=x['fl'], 總價=x['tot'], 坪數=x['area'], 單價=round(x.get('val', x['tot'] / x['area']), 2), 車位=x['npark'],
-                 用途=x['use'], 備註=x['note']) for x in sorted([x for x in raw if is_community(x['addr'])], key=lambda x: x['date'], reverse=True)]
+# 115 年單年（最新行情）
+for nm, g in (('江子翠', JZ), ('板橋', base)):
+    a = [x for x in g if x['yr'] == 115 and not x['park']]
+    S[f'{nm}_115無車位'] = dict(n=len(a), 單價中位=med([x['val'] for x in a]), 總價中位=med([x['tot'] for x in a]))
+
+# ---------- 文化第王（實登簡稱「文化遠見」）全社區成交 101–115：逐門牌查詢檔 ----------
+# 3弄6號查無社區名、位於巷道對側，非本社區，不列入
+craw = []
+for f in sorted(HERE.glob('社區實登_*.xls')):
+    if '3弄6號' in f.name: continue
+    craw += P.load(str(f))[1]
+ckeep, cdrop = P.clean(craw)
+# 社區檔車位面積、價格多未揭露 → 以板橋同條件母體「逐車位類別」的單席面積／價格中位估算
+KA, KVv = {}, {}
+for k in {k for x in rows for k in x['kinds']}:
+    g = [x for x in rows if set(x['kinds']) == {k} and x['pk_n']]
+    ar = [x['pk_area'] / x['pk_n'] for x in g if x['pk_area'] > 0]
+    vv = [(x['pk_val'] or x['pkv_row'] or 0) / x['pk_n'] for x in g if (x['pk_val'] or x['pkv_row'])]
+    if ar: KA[k] = st.median(ar)
+    if vv: KVv[k] = st.median(vv)
+S['車位類別估算'] = {k: dict(每席坪=round(KA.get(k, MA), 2), 每席萬=round(KVv.get(k, MV))) for k in KA}
+crows = []
+for x in ckeep:
+    pa = x['pk_area'] or sum(KA.get(k, MA) for k in x['kinds'])
+    pv = x['pk_val'] or x['pkv_row'] or sum(KVv.get(k, MV) for k in x['kinds'])
+    x['base'] = x['area'] - pa
+    x['val'] = (x['tot'] - pv) / x['base']
+    crows.append(x)
+def ptype(x):
+    if x['base'] < 15: return '套房'
+    if x['base'] < 30: return '兩房'
+    if x['base'] <= 40: return '三房30–40坪'
+    return '大坪數'
+S['社區成交'] = [dict(日期=x['date'], 年=x['yr'], 門牌=x['addr'].translate(T).split('182巷')[1], 樓層=x['fl'], 總價=x['tot'],
+                  坪數=x['area'], 扣車位坪數=round(x['base'], 2), 車位=x['npark'], 含車單價=round(x['tot'] / x['area'], 2),
+                  單價=round(x['val'], 2), 車位估算=bool(x['npark'] and not x['pkv_row']), 產品=ptype(x),
+                  用途=x['use'], 備註=x['note'].replace('\n', ' '))
+               for x in sorted(crows, key=lambda x: x['date'])]
+S['社區排除'] = [dict(日期=x['date'], 門牌=x['addr'].translate(T).split('182巷')[1], 原因=w) for w, x in cdrop]
+S['社區_年度'] = [dict(年=y, n=len(g), 中位=med([x['val'] for x in g]))
+                for y in sorted({x['yr'] for x in crows}) for g in [[x for x in crows if x['yr'] == y]]]
 
 with open(HERE / 'transactions.csv', 'w', newline='', encoding='utf-8-sig') as f:
     w = csv.writer(f)
     w.writerow(['交易日期', '門牌', '路段', '江子翠', '同社區', '樓層', '屋齡', '總價萬', '總面積坪', '主建物佔比', '車位數', '車位類別',
-                '車位價萬', '車位價來源', '扣車位面積坪', '含車單價', '不含車單價', '主建物單價', '用途', '備註'])
+                '車位價萬', '車位價來源', '扣車位面積坪', '含車單價', '不含車單價', '用途', '備註'])
     for x in sorted(base, key=lambda x: x['date'], reverse=True):
         pv = x['tot'] - x['val'] * x['base']
         w.writerow([x['date'], x['addr'].replace('板橋區', ''), x['road'], int(x['jzc']), int(x['comm']), x['fl'], x['age'],
                     x['tot'], x['area'], round(x['share'], 4), x['npark'], '/'.join(x['kinds']), round(pv),
                     '' if not x['park'] else ('估算(類別中位)' if x['est'] else '實登揭露'),
-                    round(x['base'], 2), round(x['gross'], 2), round(x['val'], 2), round(x['main_up'], 2) if x['main_up'] else '', x['use'], x['note']])
+                    round(x['base'], 2), round(x['gross'], 2), round(x['val'], 2), x['use'], x['note']])
 json.dump(S, open(HERE / 'summary.json', 'w'), ensure_ascii=False, indent=1)
-print(json.dumps({k: v for k, v in S.items() if k in ('大樓母體','江子翠母體','江子翠_年度','板橋_近三年','江子翠_近三年','江子翠_無車位30-40坪_近三年')}, ensure_ascii=False))
+print(json.dumps({k: v for k, v in S.items() if k in ('大樓母體','江子翠母體','江子翠_年度','板橋_年度','板橋_近三年','江子翠_近三年','江子翠_115無車位','板橋_115無車位','社區成交','社區排除','社區_年度')}, ensure_ascii=False))

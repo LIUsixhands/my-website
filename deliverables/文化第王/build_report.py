@@ -13,10 +13,16 @@ df = pd.read_csv(HERE / 'transactions.csv')
 df['備註'] = df['備註'].fillna('')
 df['yr'] = df['交易日期'].str[:3].astype(int)
 L = S['本戶']
+A = L['建坪']
 JZ3, BQ3 = S['江子翠_近三年'], S['板橋_近三年']
-JZN, JZP = JZ3['無車位'], JZ3['有車位']
-SIM = S['江子翠_無車位30-40坪_近三年']
-TWIN = next(r for r in S['同社區'] if '1弄10號七樓' in r['門牌'])
+JZN, JZP, BQN = JZ3['無車位'], JZ3['有車位'], BQ3['無車位']
+CM = S['社區成交']
+TWIN = next(r for r in CM if r['門牌'] == '1弄10號七樓')
+PREV = next(r for r in CM if r['門牌'] == '1弄10號十一樓')
+TWO = [r for r in CM if r['產品'] == '兩房' and r['年'] >= 113]
+TWO_MED = float(pd.Series([r['單價'] for r in TWO]).median())
+TARGET = 2800
+T_UP = TARGET / A
 
 def img(name):
     mime = 'image/png' if name.endswith('png') else 'image/jpeg'
@@ -26,98 +32,136 @@ def f2(v): return '—' if v is None or pd.isna(v) else f'{v:.2f}'
 def wan(v): return '—' if v is None or pd.isna(v) else f'{v:,.0f}'
 def pct(a, b): return f'{(a / b - 1) * 100:+.1f}%'
 
-# ---------- 年度趨勢圖（江子翠：無車位／有車位不含車／有車位含車；板橋無車位作背景線） ----------
-W, H, Lm, R, T, B = 560, 240, 40, 16, 26, 40
-YMIN, YMAX = 40, 90
-def X(y): return Lm + (y - 111) * (W - Lm - R) / 4
+# 用語（白話）：有車位物件的兩種單價
+P_HOUSE = '有車位・房屋單價（已扣車位）'
+P_ALL = '有車位・總價÷總坪數（車位一起算）'
+EX = df[(df['門牌'] == '莊敬路156號九樓')].iloc[0]   # 說明用實例
+
+def svg_open(W, H): return [f'<svg viewBox="0 0 {W} {H}" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK TC" font-size="10">']
+
+# ---------- 圖一：文化第王社區歷年成交（102–115，依產品分線） ----------
+W, H, Lm, R, T, B = 560, 215, 40, 16, 22, 40
+X0, X1, YMIN, YMAX = 102, 116, 45, 95
+def X(t): return Lm + (t - X0) * (W - Lm - R) / (X1 - X0)
 def Y(v): return T + (YMAX - v) * (H - T - B) / (YMAX - YMIN)
-svg = [f'<svg viewBox="0 0 {W} {H}" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK TC" font-size="10">']
-for v in range(YMIN, YMAX + 1, 10):
-    svg.append(f'<line x1="{Lm}" x2="{W-R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="#e3e8ec" stroke-width="1"/>'
+def tt(d): y, m, _ = d.split('/'); return int(y) + (int(m) - .5) / 12
+svg = svg_open(W, H)
+for v in range(50, YMAX + 1, 10):
+    svg.append(f'<line x1="{Lm}" x2="{W-R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="#e3e8ec"/>'
                f'<text x="{Lm-6}" y="{Y(v)+3:.1f}" text-anchor="end" fill="#7b8794">{v}</text>')
+for y in range(102, 116):
+    svg.append(f'<text x="{X(y+.5):.1f}" y="{H-B+14}" text-anchor="middle" fill="#7b8794" font-size="9">{y}</text>')
+svg.append(f'<text x="{W-R}" y="{T-10}" text-anchor="end" fill="#7b8794" font-size="9">單位：萬元／坪（有車位者為已扣車位的房屋單價）</text>')
+for v, c, lab, dy in [(L['單價'], '#C0392B', f'本戶開價 {L["單價"]:.1f}', -4), (T_UP, '#2E7D4F', f'建議成交參考 {T_UP:.1f}（{TARGET:,} 萬）', 11)]:
+    svg.append(f'<line x1="{Lm}" x2="{W-R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="{c}" stroke-width="1.2" stroke-dasharray="3 3"/>'
+               f'<text x="{Lm+4}" y="{Y(v)+dy:.1f}" fill="{c}" font-size="9" font-weight="700">{lab}</text>')
+STY = {'三房30–40坪': ('#1F4E5F', 4.2), '兩房': ('#C8963E', 3.4), '套房': ('#9aa7b2', 3), '大坪數': ('#6b7d8a', 3)}
+for prod in ['兩房', '三房30–40坪']:
+    pts = [(tt(r['日期']), r['單價']) for r in CM if r['產品'] == prod]
+    c, _ = STY[prod]
+    svg.append(f'<path d="{" ".join(("M" if i == 0 else "L") + f"{X(t):.1f},{Y(v):.1f}" for i, (t, v) in enumerate(pts))}" fill="none" stroke="{c}" stroke-width="{2.4 if prod.startswith("三") else 1.6}"/>')
+for r in CM:
+    c, rad = STY[r['產品']]
+    me = r['門牌'] == '1弄10號七樓'
+    svg.append(f'<circle cx="{X(tt(r["日期"])):.1f}" cy="{Y(r["單價"]):.1f}" r="{rad+1.5 if me else rad}" fill="{c}" stroke="#fff" stroke-width="1"/>')
+    if r['產品'] == '三房30–40坪':
+        svg.append(f'<text x="{X(tt(r["日期"])):.1f}" y="{Y(r["單價"])+14:.1f}" text-anchor="middle" fill="{c}" font-size="8.6" font-weight="700">{r["單價"]:.1f}</text>')
+for i, (prod, name) in enumerate([('三房30–40坪', '三房 30–40 坪（同本戶）'), ('兩房', '兩房 24–30 坪'), ('套房', '套房 10–11 坪'), ('大坪數', '大坪數 44 坪')]):
+    c, rad = STY[prod]; lx = Lm + 4 + i * 128
+    svg.append(f'<circle cx="{lx+6}" cy="{H-10}" r="{rad}" fill="{c}"/><text x="{lx+14}" y="{H-7}" fill="#4a5560" font-size="8.6">{name}</text>')
+svg.append('</svg>')
+chart_comm = ''.join(svg)
+
+comm_rows = ''
+for r in reversed(CM):
+    cls = ' class="hl"' if r['門牌'] == '1弄10號七樓' else ''
+    park = f'{r["車位"]}' + ('*' if r['車位估算'] else '') if r['車位'] else '—'
+    note = r['備註'].replace('含增建或未登記建物。', '含增建').replace(';', ' ').strip()
+    note = '、'.join(dict.fromkeys(n for n in note.split() if n))[:24]
+    comm_rows += (f'<tr{cls}><td>{r["日期"]}</td><td>{r["門牌"]}</td><td>{r["產品"].replace("30–40坪", "")}</td><td class="num">{wan(r["總價"])}</td>'
+                  f'<td class="num">{r["坪數"]:.2f}</td><td class="num">{park}</td><td class="num b">{r["單價"]:.2f}</td><td>{note}</td></tr>')
+
+# ---------- 圖二：江子翠／板橋 年度（30–40 坪） ----------
+W, H, Lm, R, T, B = 560, 220, 40, 16, 26, 40
+YMIN, YMAX = 40, 90
+def X2(y): return Lm + (y - 111) * (W - Lm - R) / 4
+def Y2(v): return T + (YMAX - v) * (H - T - B) / (YMAX - YMIN)
+svg = svg_open(W, H)
+for v in range(YMIN, YMAX + 1, 10):
+    svg.append(f'<line x1="{Lm}" x2="{W-R}" y1="{Y2(v):.1f}" y2="{Y2(v):.1f}" stroke="#e3e8ec"/>'
+               f'<text x="{Lm-6}" y="{Y2(v)+3:.1f}" text-anchor="end" fill="#7b8794">{v}</text>')
 for y in range(111, 116):
-    svg.append(f'<text x="{X(y):.1f}" y="{H-B+15}" text-anchor="middle" fill="#7b8794">{y}年</text>')
-svg.append(f'<text x="{W-R}" y="{T-10}" text-anchor="end" fill="#7b8794" font-size="9">單位：萬元／坪（年度中位數）</text>')
-# 本戶開價參考線
-svg.append(f'<line x1="{Lm}" x2="{W-R}" y1="{Y(L["單價"]):.1f}" y2="{Y(L["單價"]):.1f}" stroke="#C0392B" stroke-width="1.2" stroke-dasharray="2 3"/>'
-           f'<text x="{Lm+4}" y="{Y(L["單價"])-4:.1f}" fill="#C0392B" font-size="9" font-weight="700">本戶開價 {L["單價"]:.1f}</text>')
+    svg.append(f'<text x="{X2(y):.1f}" y="{H-B+15}" text-anchor="middle" fill="#7b8794">{y}年</text>')
+svg.append(f'<text x="{W-R}" y="{T-10}" text-anchor="end" fill="#7b8794" font-size="9">單位：萬元／坪（年度中位數，建坪 30–40 坪）</text>')
+def lab_dy(i, y, v):
+    # 江子翠兩條線同年互比：高的標上方、低的標下方，避免數字重疊
+    if i == 2: return -7
+    r = next(r for r in S['江子翠_年度'] if r['年'] == y)
+    other = r['不含車中位'] if i == 0 else r['無車位中位']
+    return -7 if other is None or v >= other else 13
 series = [('江子翠_年度', '無車位中位', '#1F4E5F', '', '江子翠 無車位'),
-          ('江子翠_年度', '不含車中位', '#C8963E', '', '江子翠 有車位（不含車）'),
-          ('江子翠_年度', '含車中位', '#C8963E', '5 3', '江子翠 有車位（含車）'),
-          ('板橋_年度', '無車位中位', '#9aa7b2', '2 3', '板橋全區 無車位')]
+          ('江子翠_年度', '不含車中位', '#C8963E', '', '江子翠 有車位・房屋單價（已扣車位）'),
+          ('板橋_年度', '無車位中位', '#9aa7b2', '3 3', '板橋全區 無車位')]
 for i, (grp, col, color, dash, name) in enumerate(series):
     pts = [(r['年'], r[col]) for r in S[grp] if r[col] is not None]
-    path = ' '.join(f'{"M" if j == 0 else "L"}{X(y):.1f},{Y(v):.1f}' for j, (y, v) in enumerate(pts))
-    svg.append(f'<path d="{path}" fill="none" stroke="{color}" stroke-width="{2.4 if i < 3 else 1.6}" stroke-dasharray="{dash}"/>')
+    svg.append(f'<path d="{" ".join(("M" if j == 0 else "L") + f"{X2(y):.1f},{Y2(v):.1f}" for j, (y, v) in enumerate(pts))}" fill="none" stroke="{color}" stroke-width="2.2" stroke-dasharray="{dash}"/>')
     for y, v in pts:
-        svg.append(f'<circle cx="{X(y):.1f}" cy="{Y(v):.1f}" r="{3.2 if i < 3 else 2.2}" fill="{color}"/>')
-        if i == 0:
-            dy = -7 if i == 0 else 13
-            svg.append(f'<text x="{X(y):.1f}" y="{Y(v)+dy:.1f}" text-anchor="middle" fill="{color}" font-size="9" font-weight="700">{v:.1f}</text>')
-    lx = Lm + 6 + i * 128
+        svg.append(f'<circle cx="{X2(y):.1f}" cy="{Y2(v):.1f}" r="3.2" fill="{color}"/>'
+                   f'<text x="{X2(y):.1f}" y="{Y2(v)+lab_dy(i, y, v):.1f}" text-anchor="middle" fill="{color}" font-size="9" font-weight="700">{v:.1f}</text>')
+    lx = Lm + 4 + i * 170
     svg.append(f'<line x1="{lx}" x2="{lx+18}" y1="{H-9}" y2="{H-9}" stroke="{color}" stroke-width="2.4" stroke-dasharray="{dash}"/>'
                f'<text x="{lx+22}" y="{H-6}" fill="#4a5560" font-size="8.6">{name}</text>')
 svg.append('</svg>')
-chart = ''.join(svg)
+chart_area = ''.join(svg)
 
-# ---------- 年度表 ----------
 def year_rows(grp):
     out = ''
     for r in S[grp]:
         out += (f'<tr><td>{r["年"]} 年{"（至10月）" if r["年"] == 115 else ""}</td>'
                 f'<td class="num">{r["無車位n"]}</td><td class="num b">{f2(r["無車位中位"])}</td><td class="num">{wan(r["無車位總價"])}</td>'
-                f'<td class="num">{r["有車位n"]}</td><td class="num">{f2(r["含車中位"])}</td><td class="num b">{f2(r["不含車中位"])}</td><td class="num">{wan(r["有車位總價"])}</td></tr>')
+                f'<td class="num">{r["有車位n"]}</td><td class="num b">{f2(r["不含車中位"])}</td><td class="num">{f2(r["含車中位"])}</td><td class="num">{wan(r["有車位總價"])}</td></tr>')
     return out
 jz_rows, bq_rows = year_rows('江子翠_年度'), year_rows('板橋_年度')
 
-# ---------- 本戶定位：同條件換算 ----------
-A = L['建坪']
+# ---------- 價格分析：各參考點換算本戶 34.39 坪 ----------
 anchors = [
-    ('同社區 10號7F（115/06）', '同棟正上方一層、同坪數、無車位', TWIN['單價'], TWIN['總價']),
-    ('江子翠 無車位 30–40坪', f'近三年 {SIM["n"]} 筆，與本戶坪數最接近', SIM['單價中位'], SIM['單價中位'] * A),
-    ('江子翠 無車位 全部', f'近三年 {JZN["n"]} 筆', JZN['net'], JZN['net'] * A),
-    ('江子翠 有車位（不含車）', f'近三年 {JZP["n"]} 筆，扣除車位價後', JZP['net'], JZP['net'] * A),
-    ('板橋全區 無車位', f'近三年 {BQ3["無車位"]["n"]} 筆', BQ3['無車位']['net'], BQ3['無車位']['net'] * A),
+    ('同棟同坪 10號7F', '115/06 成交，正上方一層、同坪數、無車位', TWIN['單價'], 'a'),
+    ('社區兩房 近三年中位', f'113–115 年 {len(TWO)} 筆（兩房坪數小、單價通常較高）', TWO_MED, 'a'),
+    ('同棟同坪 10號11F', f'111/09 成交 {wan(PREV["總價"])} 萬（三年前）', PREV['單價'], 'b'),
+    ('江子翠 無車位', f'近三年 30–40 坪 {JZN["n"]} 筆', JZN['net'], 'b'),
+    ('江子翠 ' + P_HOUSE, f'近三年 30–40 坪 {JZP["n"]} 筆', JZP['net'], 'b'),
+    ('板橋全區 無車位', f'近三年 30–40 坪 {BQN["n"]} 筆', BQN['net'], 'b'),
 ]
-pos_rows = (f'<tr class="hl"><td>本戶 10號6F 開價</td><td>無車位・34.39 坪・主建物 27.65 坪</td>'
-            f'<td class="num">{L["單價"]:.2f}</td><td class="num">{wan(L["總價"])}</td><td class="num">—</td></tr>')
-for nm, why, up, tot in anchors:
-    pos_rows += (f'<tr><td class="b">{nm}</td><td>{why}</td><td class="num">{up:.2f}</td>'
-                 f'<td class="num">{wan(tot)}</td><td class="num b">{pct(L["總價"], tot)}</td></tr>')
+pos_rows = (f'<tr class="hl"><td>本戶開價</td><td>10號6F・34.39 坪・無車位</td><td class="num">{L["單價"]:.2f}</td><td class="num">{wan(L["總價"])}</td></tr>'
+            f'<tr style="font-weight:700"><td style="background:#e4f1e8;color:#2E7D4F">建議成交參考</td><td style="background:#e4f1e8;color:#2E7D4F">依同棟同坪最新成交</td>'
+            f'<td class="num" style="background:#e4f1e8;color:#2E7D4F">{T_UP:.2f}</td><td class="num" style="background:#e4f1e8;color:#2E7D4F">{TARGET:,}</td></tr>')
+for nm, why, up, _ in anchors:
+    pos_rows += f'<tr><td class="b">{nm}</td><td>{why}</td><td class="num">{up:.2f}</td><td class="num">{wan(up * A)}</td></tr>'
 
-# 坪效：主建物單價
-MAIN_L = L['主建物單價']
-MAIN_TWIN = TWIN['總價'] / L['主建物']
-MAIN_JZ = JZ3['無車位主建物單價中位']
-MAIN_BQ = BQ3['無車位主建物單價中位']
-
-# ---------- 近三年江子翠明細 ----------
+# ---------- 近三年江子翠明細（30–40 坪） ----------
 jz = df[(df['江子翠'] == 1) & (df['yr'] >= 113)].sort_values('交易日期', ascending=False)
 def detail(g, park):
     out = ''
     for r in g.itertuples():
-        same = r.同社區 == 1
-        cls = ' class="hl"' if same else ''
-        addr = r.門牌.replace('文化路二段', '文化路2段').replace('十', '十')
+        cls = ' class="hl"' if r.同社區 == 1 else ''
         if park:
             est = '*' if str(r.車位價來源).startswith('估算') else ''
-            out += (f'<tr{cls}><td>{r.交易日期}</td><td>{addr}</td><td class="num">{r.屋齡}</td><td class="num">{wan(r.總價萬)}</td>'
+            out += (f'<tr{cls}><td>{r.交易日期}</td><td>{r.門牌}</td><td class="num">{r.屋齡}</td><td class="num">{wan(r.總價萬)}</td>'
                     f'<td class="num">{r.總面積坪:.2f}</td><td>{r.車位類別}</td><td class="num">{wan(r.車位價萬)}{est}</td>'
-                    f'<td class="num">{r.含車單價:.2f}</td><td class="num b">{r.不含車單價:.2f}{est}</td></tr>')
+                    f'<td class="num b">{r.不含車單價:.2f}{est}</td><td class="num">{r.含車單價:.2f}</td></tr>')
         else:
-            out += (f'<tr{cls}><td>{r.交易日期}</td><td>{addr}{"（同社區）" if same else ""}</td><td class="num">{r.屋齡}</td>'
-                    f'<td class="num">{wan(r.總價萬)}</td><td class="num">{r.總面積坪:.2f}</td><td class="num">{r.主建物佔比*100:.1f}%</td>'
-                    f'<td class="num b">{r.不含車單價:.2f}</td></tr>')
+            out += (f'<tr{cls}><td>{r.交易日期}</td><td>{r.門牌}{"（同社區）" if r.同社區 == 1 else ""}</td><td class="num">{r.屋齡}</td>'
+                    f'<td class="num">{wan(r.總價萬)}</td><td class="num">{r.總面積坪:.2f}</td><td class="num b">{r.不含車單價:.2f}</td></tr>')
     return out
 np_rows = detail(jz[jz['車位數'] == 0], False)
 pk_rows = detail(jz[jz['車位數'] > 0], True)
 
-# ---------- 房貸試算 ----------
+# ---------- 房貸試算（以建議成交參考價） ----------
 RATE, YEARS, LTV = 0.022, 30, 0.8
-loan = L['總價'] * LTV
+loan = TARGET * LTV
 r_m = RATE / 12
 pay = loan * 10000 * r_m / (1 - (1 + r_m) ** (-YEARS * 12))
-down = L['總價'] - loan
+down = TARGET - loan
 
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
 PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands.tw'
@@ -162,6 +206,7 @@ td {{ padding: 4px 5px; border-bottom: 1px solid #e1e7eb; vertical-align: top; }
 tr:nth-child(even) td {{ background: #eef3f6; }}
 tr.hl td {{ background: #C0392B !important; color: #fff; }}
 .tight td, .tight th {{ padding: 2.6px 4px; font-size: 7.3pt; }}
+.xs td, .xs th {{ padding: 1.7px 4px; font-size: 6.9pt; }}
 .num {{ font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }}
 .b {{ font-weight: 700; }}
 .foot {{ position: absolute; bottom: 0; left: 0; right: 0; height: 11mm; background: #163a47; color: #b9cad3; font-size: 6.4pt; line-height: 1.6; display: flex; align-items: center; justify-content: space-between; padding: 0 14mm; }}
@@ -204,15 +249,15 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
       <div style="flex:1">
         <div style="font-size:7.6pt;color:#E3B66A;letter-spacing:.3em">核心結論</div>
         <div style="font-size:9.4pt;line-height:1.9;margin-top:2mm">
-          同棟 7F 同坪數 115/06 成交 <b>{wan(TWIN["總價"])} 萬（{TWIN["單價"]:.1f} 萬/坪）</b>，本戶開價高出 {pct(L["總價"], TWIN["總價"])}。<br>
-          江子翠無車位近三年中位 {JZN["net"]:.1f} 萬/坪；本戶公設僅 9.2%，<b>換算主建物單價只高 {pct(MAIN_L, MAIN_JZ)}</b>。<br>
-          <span style="color:#E3B66A">同樣 34 坪權狀，主建物比一般大樓多約 {A*(L['主建物佔比']-JZ3['主建物佔比中位']):.0f} 坪。</span>
+          同棟同坪 10號7F 115/06 成交 <b>{wan(TWIN["總價"])} 萬（{TWIN["單價"]:.1f} 萬/坪）</b>。<br>
+          社區同級三房 111 年 {PREV["單價"]:.1f} → 115 年 {TWIN["單價"]:.1f} 萬/坪，逐年墊高。<br>
+          <span style="color:#E3B66A">合理成交參考約 <b>{TARGET:,} 萬</b>（{T_UP:.1f} 萬/坪），開價 {wan(L["總價"])} 萬。</span>
         </div>
       </div>
       <div class="qr" style="width:22mm"><img src="{img('QR_LINE.png')}"><div>加 LINE</div></div>
     </div>
   </div>
-  <div style="position:absolute;left:16mm;bottom:8mm;font-size:7.2pt;color:#8fa6b1">資料：內政部實價登錄（板橋區・屋齡25–35年・3房2廳2衛，111/01–115/10，查詢 2026-10-09）　｜　{CONTACT}</div>
+  <div style="position:absolute;left:16mm;bottom:8mm;font-size:7.2pt;color:#8fa6b1">資料：內政部實價登錄（板橋區・屋齡25–35年・3房2廳2衛・30–40坪，111/01–115/10；社區逐門牌 101–115，查詢 2026-10-09）　｜　{CONTACT}</div>
 </div>
 
 <!-- P2 物件總覽 -->
@@ -298,84 +343,94 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
   </div>
 </div>{foot(4)}</div>
 
-<!-- P5 年度行情 -->
+<!-- P5 社區成交 -->
 <div class="page"><div class="pad">
-  <div class="eyebrow">04 · MARKET TREND</div>
-  <div class="ttl">年度行情：有車位 vs 無車位</div>
-  <div class="sub">條件與本戶相同：板橋區、屋齡 25–35 年、3房2廳2衛、住宅大樓（排除 1 樓、頂樓加蓋、夾層戶與特殊關係交易）。
-  「江子翠」只取捷運站步行圈路段：文化路二段、莊敬路、雙十路二／三段、文聖街、民生路三段百號內等。</div>
-  {chart}
+  <div class="eyebrow">04 · COMMUNITY HISTORY</div>
+  <div class="ttl">文化第王歷年成交</div>
+  <div class="sub">本社區（實登簡稱「文化遠見」）101/01–115/10 逐門牌查詢，共 {len(CM)} 筆有效成交（另排除 {len(S["社區排除"])} 筆特殊關係交易）。
+  依產品分線：三房 30–40 坪即本戶同級產品。</div>
+  {chart_comm}
+  <div class="note" style="margin:3mm 0">同級三房成交單價：108 年 55.4 → 111 年 {PREV["單價"]:.1f} → 115 年 <b>{TWIN["單價"]:.1f}</b>（10號7F，與本戶同坪數、無車位）。
+  兩房近三年在 75–86 萬之間。社區價格逐年墊高，最新同級成交落在 81 萬上下。</div>
+  <table class="tight xs">
+    <tr><th>日期</th><th>門牌</th><th>產品</th><th>總價（萬）</th><th>坪數</th><th>車位</th><th>單價</th><th>備註</th></tr>
+    {comm_rows}
+  </table>
+  <div class="cap">單價：無車位＝總價÷坪數；有車位＝房屋單價（已扣車位），車位價未揭露者以板橋同類別車位中位數估算（標 *）。</div>
+</div>{foot(5)}</div>
+
+<!-- P6 區域行情 -->
+<div class="page"><div class="pad">
+  <div class="eyebrow">05 · MARKET TREND</div>
+  <div class="ttl">區域行情：有車位 vs 無車位</div>
+  <div class="sub">條件與本戶相同：板橋區、屋齡 25–35 年、3房2廳2衛、住宅大樓，<b>建坪 30–40 坪</b>（有車位者以扣除車位後的建坪計）。
+  排除 1 樓、頂樓加蓋、夾層戶與特殊關係交易。「江子翠」只取捷運站步行圈路段。</div>
+  <div class="note" style="margin-bottom:3.5mm"><b>有車位的物件，單價怎麼看？</b>總價裡含車位，所以有兩種算法：<br>
+  ① <b>房屋單價（已扣車位）</b>＝（總價－車位價）÷（建坪－車位坪數），可以直接和本戶這種無車位物件比。<br>
+  ② <b>總價÷總坪數（車位一起算）</b>，車位坪數便宜，會把單價拉低，網路上常看到的是這個數字。<br>
+  例：{EX["門牌"]}，{EX["交易日期"]} 成交 {wan(EX["總價萬"])} 萬、{EX["總面積坪"]:.2f} 坪，含坡道平面車位 {wan(EX["車位價萬"])} 萬 →
+  ① ({wan(EX["總價萬"])}－{wan(EX["車位價萬"])})÷{EX["扣車位面積坪"]:.2f} 坪＝<b>{EX["不含車單價"]:.1f}</b>；② {wan(EX["總價萬"])}÷{EX["總面積坪"]:.2f} 坪＝{EX["含車單價"]:.1f}。</div>
+  {chart_area}
   <h3 class="h">江子翠生活圈（{S["江子翠母體"]} 筆）</h3>
   <table>
     <tr><th rowspan="2">年度</th><th colspan="3">無車位（同本戶）</th><th class="g2" colspan="4">有車位</th></tr>
-    <tr><th>筆數</th><th>單價中位</th><th>總價中位</th><th class="g2">筆數</th><th class="g2">含車單價</th><th class="g2">不含車單價</th><th class="g2">總價中位</th></tr>
+    <tr><th>筆數</th><th>單價中位</th><th>總價中位</th><th class="g2">筆數</th><th class="g2">房屋單價<br>（已扣車位）</th><th class="g2">總價÷總坪數<br>（車位一起算）</th><th class="g2">總價中位</th></tr>
     {jz_rows}
   </table>
   <h3 class="h">板橋全區（{S["大樓母體"]} 筆）</h3>
   <table>
     <tr><th rowspan="2">年度</th><th colspan="3">無車位</th><th class="g2" colspan="4">有車位</th></tr>
-    <tr><th>筆數</th><th>單價中位</th><th>總價中位</th><th class="g2">筆數</th><th class="g2">含車單價</th><th class="g2">不含車單價</th><th class="g2">總價中位</th></tr>
+    <tr><th>筆數</th><th>單價中位</th><th>總價中位</th><th class="g2">筆數</th><th class="g2">房屋單價<br>（已扣車位）</th><th class="g2">總價÷總坪數<br>（車位一起算）</th><th class="g2">總價中位</th></tr>
     {bq_rows}
   </table>
-  <div class="note" style="margin-top:3.5mm">江子翠無車位單價從 111–112 年約 62 萬，113 年起站上 72–76 萬，比板橋全區高約三成，捷運站步行圈的價差明顯。
-  江子翠單一年度筆數僅 4–15 筆，判斷行情以近三年合計中位為準（無車位 {JZN['n']} 筆、有車位 {JZP['n']} 筆）。單價單位：萬元／坪；不含車＝（總價－車位價）÷（總面積－車位面積）。</div>
-</div>{foot(5)}</div>
-
-<!-- P6 本戶定位 -->
-<div class="page"><div class="pad">
-  <div class="eyebrow">05 · PRICE POSITIONING</div>
-  <div class="ttl">本戶價格定位</div>
-  <div class="sub">把各組成交單價乘上本戶建坪 {A} 坪，換算成「如果照這個行情，本戶值多少」，再跟開價比較。全部取近三年（113–115）中位數。</div>
-  <table>
-    <tr><th>比較對象</th><th>說明</th><th>單價（萬/坪）</th><th>換算本戶總價（萬）</th><th>開價差距</th></tr>
-    {pos_rows}
-  </table>
-  <h3 class="h">換算主建物單價：低公設的價差</h3>
-  <div class="kpi">
-    <div><div class="v">{MAIN_L:.1f}</div><div class="u">萬／主建物坪</div><div class="l">本戶開價</div></div>
-    <div><div class="v">{MAIN_TWIN:.1f}</div><div class="u">萬／主建物坪</div><div class="l">同棟 7F 成交</div></div>
-    <div><div class="v">{MAIN_JZ:.1f}</div><div class="u">萬／主建物坪</div><div class="l">江子翠 無車位中位</div></div>
-    <div><div class="v">{MAIN_BQ:.1f}</div><div class="u">萬／主建物坪</div><div class="l">板橋 無車位中位</div></div>
-  </div>
-  <div class="note">江子翠同條件大樓的權狀裡，主建物以外的公設與附屬約佔三成，本戶公設只有 9.2%。用建坪算，本戶開價比江子翠無車位中位高 {pct(L["單價"], JZN["net"])}；
-  改用主建物算，差距只剩 {pct(MAIN_L, MAIN_JZ)}。買的是室內空間，這個差距才是真正的價差。</div>
-  <h3 class="h">同社區成交紀錄（111–115）</h3>
-  <table>
-    <tr><th>日期</th><th>門牌</th><th>總價（萬）</th><th>坪數</th><th>單價</th><th>車位</th><th>說明</th></tr>
-    {''.join(f'<tr><td>{r["日期"]}</td><td>{r["門牌"].replace("板橋區", "")}</td><td class="num">{wan(r["總價"])}</td><td class="num">{r["坪數"]:.2f}</td><td class="num">{r["單價"]:.2f}</td><td class="num">{r["車位"]}</td><td>{"特殊關係交易，不列入行情" if "特殊關係" in r["備註"] else r["備註"].rstrip(";").replace(";", "、")}</td></tr>' for r in S["同社區"])}
-  </table>
-  <div class="warn" style="margin-top:3.5mm">樣本提醒：符合 3房2廳2衛條件的同社區成交，五年內只有 1 筆有效紀錄（10號7F）。同社區其他格局的成交未納入本次查詢，議價前可再補查。</div>
+  <div class="cap">江子翠 30–40 坪單一年度筆數少（0–9 筆），判斷行情以近三年合計為準：無車位 {JZN["n"]} 筆、有車位 {JZP["n"]} 筆。單位：萬元／坪。</div>
 </div>{foot(6)}</div>
 
-<!-- P7 明細 -->
+<!-- P7 價格分析 -->
 <div class="page"><div class="pad">
-  <div class="eyebrow">06 · TRANSACTIONS</div>
-  <div class="ttl">江子翠近三年成交明細</div>
-  <div class="sub">113/01–115/10，條件同前。紅底為同社區；* 為車位價未拆分，以同類別車位中位數估算。</div>
-  <h3 class="h" style="margin-top:0">無車位（{len(jz[jz["車位數"] == 0])} 筆）</h3>
-  <table class="tight">
-    <tr><th>日期</th><th>門牌</th><th>屋齡</th><th>總價</th><th>坪數</th><th>主建物佔比</th><th>單價</th></tr>
-    {np_rows}
+  <div class="eyebrow">06 · PRICE ANALYSIS</div>
+  <div class="ttl">價格分析：合理成交約 {TARGET:,} 萬</div>
+  <div class="sub">把各參考點的單價乘上本戶建坪 {A} 坪，換算成「照這個行情，本戶值多少」。單價取中位數，區域行情取近三年（113–115）。</div>
+  <div class="kpi">
+    <div><div class="v">{wan(L["總價"])}</div><div class="u">萬元</div><div class="l">開價（{L["單價"]:.1f} 萬/坪）</div></div>
+    <div style="border-top-color:#2E7D4F"><div class="v" style="color:#2E7D4F">{TARGET:,}</div><div class="u">萬元</div><div class="l">建議成交參考（{T_UP:.1f} 萬/坪）</div></div>
+    <div><div class="v">{wan(TWIN["總價"])}</div><div class="u">萬元</div><div class="l">同棟 7F 115/06 成交</div></div>
+    <div><div class="v">{(1 - TARGET / L["總價"]) * 100:.1f}%</div><div class="u">約 {L["總價"] - TARGET} 萬</div><div class="l">開價到參考價的空間</div></div>
+  </div>
+  <table>
+    <tr><th>參考點</th><th>說明</th><th>單價（萬/坪）</th><th>換算本戶總價（萬）</th></tr>
+    {pos_rows}
   </table>
+  <h3 class="h">為什麼是 {TARGET:,} 萬</h3>
+  <div class="feat"><div class="no">01</div><div><h3>同棟同坪剛成交 {wan(TWIN["總價"])} 萬</h3><p>10號7F 在 115/06 以 {TWIN["單價"]:.2f} 萬/坪成交，坪數、格局、座向與本戶相同，只差一層樓，是最直接的比價依據。{TARGET:,} 萬換算 {T_UP:.2f} 萬/坪，與這筆成交幾乎一致。</p></div></div>
+  <div class="feat"><div class="no">02</div><div><h3>社區價格逐年墊高</h3><p>同棟同坪 10號11F 在 111/09 成交 {wan(PREV["總價"])} 萬（{PREV["單價"]:.1f} 萬/坪），三年後 7F 成交 {wan(TWIN["總價"])} 萬。社區兩房近三年中位 {TWO_MED:.1f} 萬/坪，換算本戶約 {wan(TWO_MED * A)} 萬，也支撐 2,800 萬上下的價位。</p></div></div>
+  <div class="feat"><div class="no">03</div><div><h3>比區域行情高，有它的理由</h3><p>江子翠 30–40 坪無車位近三年中位 {JZN["net"]:.1f} 萬/坪，換算約 {wan(JZN["net"] * A)} 萬。本社區比區域中位高，來自捷運站步行 3 分鐘、新北市議會旁的位置，以及公設比僅 9.2%、同坪數室內空間較大。</p></div></div>
+  <div class="warn">提醒：本社區同級三房五年內只有 2 筆成交、江子翠 30–40 坪無車位近三年僅 {JZN["n"]} 筆，樣本少，行情帶較寬。建議成交參考價為依實登推估，不代表屋主同意的售價，實際以雙方議價為準。</div>
 </div>{foot(7)}</div>
 
+<!-- P8 明細 -->
 <div class="page"><div class="pad">
-  <div class="eyebrow">06 · TRANSACTIONS</div>
-  <div class="ttl">江子翠近三年成交明細（有車位）</div>
-  <div class="sub">有車位物件並列含車與不含車單價；* 為車位價未拆分，以同類別車位中位數估算。</div>
-  <h3 class="h" style="margin-top:0">有車位（{len(jz[jz["車位數"] > 0])} 筆）</h3>
+  <div class="eyebrow">07 · TRANSACTIONS</div>
+  <div class="ttl">江子翠近三年成交明細</div>
+  <div class="sub">113/01–115/10，建坪 30–40 坪，條件同前。紅底為本社區；* 為車位價未拆分，以同類別車位中位數估算。</div>
+  <h3 class="h" style="margin-top:0">無車位（{len(jz[jz["車位數"] == 0])} 筆）</h3>
   <table class="tight">
-    <tr><th class="g2">日期</th><th class="g2">門牌</th><th class="g2">屋齡</th><th class="g2">總價</th><th class="g2">坪數</th><th class="g2">車位</th><th class="g2">車位價</th><th class="g2">含車單價</th><th class="g2">不含車單價</th></tr>
+    <tr><th>日期</th><th>門牌</th><th>屋齡</th><th>總價</th><th>坪數</th><th>單價</th></tr>
+    {np_rows}
+  </table>
+  <h3 class="h">有車位（{len(jz[jz["車位數"] > 0])} 筆）</h3>
+  <table class="tight">
+    <tr><th class="g2">日期</th><th class="g2">門牌</th><th class="g2">屋齡</th><th class="g2">總價</th><th class="g2">總坪數</th><th class="g2">車位</th><th class="g2">車位價</th><th class="g2">房屋單價<br>（已扣車位）</th><th class="g2">總價÷總坪數<br>（車位一起算）</th></tr>
     {pk_rows}
   </table>
 </div>{foot(8)}</div>
 
 <!-- P8 購屋試算 -->
 <div class="page"><div class="pad">
-  <div class="eyebrow">07 · BUYER'S GUIDE</div>
+  <div class="eyebrow">08 · BUYER'S GUIDE</div>
   <div class="ttl">購屋試算與注意事項</div>
   <div class="kpi">
-    <div><div class="v">{wan(L["總價"])}</div><div class="u">萬元</div><div class="l">開價</div></div>
+    <div><div class="v">{TARGET:,}</div><div class="u">萬元</div><div class="l">以建議成交參考價試算</div></div>
     <div><div class="v">{wan(down)}</div><div class="u">萬元</div><div class="l">自備款（兩成）</div></div>
     <div><div class="v">{wan(loan)}</div><div class="u">萬元</div><div class="l">貸款（八成）</div></div>
     <div><div class="v">{pay/10000:.1f}</div><div class="u">萬元／月</div><div class="l">本息攤還</div></div>
@@ -393,7 +448,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
   <ul>
     <li>捷運江子翠站步行約 3 分鐘，雙北通勤方便。</li>
     <li>公設比 9.2%，34 坪權狀有 31 坪主建物＋陽台，坪效佳。</li>
-    <li>同棟 7F 剛在 115/06 以 {wan(TWIN["總價"])} 萬成交，價格有清楚依據。</li>
+    <li>同棟同坪 7F 剛在 115/06 以 {wan(TWIN["總價"])} 萬成交，出價有清楚依據。</li>
     <li>商業區，可自住也可作工作室或事務所。</li>
   </ul>
   <div style="margin-top:6mm;position:relative;background:#fff;border:1px solid #dde4e9;padding:5mm 36mm 5mm 6mm;font-size:7.8pt;line-height:1.8;color:#4a5560">
