@@ -41,6 +41,20 @@ import analyse
 import signals
 import exits
 from signals import RiskGate, SymbolState, evaluate, format_signal
+import market_calendar
+
+# 三支程式一開始會問「今天休市嗎」。測試在哪一天跑都要一樣 —— 週末或休市日
+# 跑測試時，不先釘住的話，選股／監看／日報的測試會全部提早結束。
+# 休市本身的行為在 TestMarketHolidays 裡用指定日期測。
+_MARKET_OPEN = unittest.mock.patch.object(market_calendar, "closed_today", lambda: None)
+
+
+def setUpModule():
+    _MARKET_OPEN.start()
+
+
+def tearDownModule():
+    _MARKET_OPEN.stop()
 
 # 風控在真錢模式查不到帳務時會重試幾次才關閘，每次之間會等。
 # 那個等待是為了讓連線喘口氣，不是要測的行為 —— 測試裡歸零，否則整套會慢 3 秒。
@@ -8102,6 +8116,156 @@ class TestWeakVolumeBreakoutsAreRecorded(unittest.TestCase):
         self.assertEqual([len(g) for g in groups.values()], [1, 1, 2, 2, 1])
         self.assertEqual(list(groups), ["量能 <1.2x", "量能 1.2-1.5x", "量能 1.5-1.8x",
                                         "量能 1.8-3x", "量能 3x+"])
+
+
+# ══════════════════════════════════════════════════════
+# 休市日（10-09 國慶補假照樣「✅ 今日監看 10 檔」）
+# ══════════════════════════════════════════════════════
+class TestMarketHolidays(unittest.TestCase):
+    """使用者 10-09：「今天休市，說有監看 10 檔，不是很怪嗎？」"""
+
+    def _closed(self, reason):
+        return unittest.mock.patch.object(market_calendar, "closed_today", lambda: reason)
+
+    def test_the_2026_calendar(self):
+        cr = market_calendar.closed_reason
+        self.assertEqual(cr("2026-10-09"), "國慶日補假")
+        for d in ("2026-10-26", "2026-12-25", "2026-02-20", "2026-09-28"):
+            self.assertIsNotNone(cr(d), d)
+        self.assertEqual(cr("2026-10-10"), "週末")
+        self.assertEqual(cr("2026-10-11"), "週末")
+        for d in ("2026-10-08", "2026-10-12", "2026-02-11", "2026-02-23"):
+            self.assertIsNone(cr(d), d)
+        self.assertIsNone(cr(datetime(2026, 10, 12, 9, 0)))
+
+    def test_every_listed_day_is_a_weekday(self):
+        """表上只放平日 —— 週末本來就判得出來，放進去只會讓人以為表是對的。"""
+        for d in market_calendar.CLOSED_DAYS:
+            self.assertLess(datetime.strptime(d, "%Y-%m-%d").weekday(), 5, d)
+
+    def test_next_open_day_skips_the_long_weekend(self):
+        self.assertEqual(market_calendar.next_open_day("2026-10-09"), "2026-10-12")
+        self.assertEqual(market_calendar.next_open_day("2026-10-23"), "2026-10-27")
+        self.assertEqual(market_calendar.next_open_day("2026-02-11"), "2026-02-23")
+        self.assertEqual(market_calendar.label("2026-10-12"), "10-12（一）")
+
+    def test_the_year_must_be_filled_in(self):
+        self.assertTrue(market_calendar.year_is_known("2026-12-01"))
+        self.assertFalse(market_calendar.year_is_known("2027-01-04"))
+
+    def test_the_message(self):
+        text = signals.format_market_closed("國慶日補假", today="2026-10-09")
+        self.assertEqual(text, "📅 今天 10-09（五） 休市（國慶日補假），不監看、不出日報。\n"
+                               "下一個開盤日：10-12（一）")
+
+    def test_the_monitor_says_one_line_and_stops(self):
+        sent = []
+        with self._closed("國慶日補假"), \
+                unittest.mock.patch.object(signals, "notify", sent.append), \
+                unittest.mock.patch.object(signals, "Broker",
+                                           side_effect=AssertionError("不該登入")), \
+                unittest.mock.patch.object(signals, "RiskGate",
+                                           side_effect=AssertionError("不該碰 state.json")):
+            signals.main()                                  # 不拋例外 = 離開碼 0
+        self.assertEqual(len(sent), 1)
+        self.assertIn("休市（國慶日補假）", sent[0])
+        self.assertNotIn("監看 10 檔", sent[0])
+
+    def test_the_screener_writes_nothing_and_pushes_nothing(self):
+        sent = []
+        with tempfile.TemporaryDirectory() as d, self._closed("國慶日補假"), \
+                unittest.mock.patch.object(config, "WATCHLIST_FILE", Path(d) / "w.json"), \
+                unittest.mock.patch.object(screener, "Broker",
+                                           side_effect=AssertionError("不該登入")), \
+                unittest.mock.patch.object(signals, "notify", sent.append), \
+                contextlib.redirect_stdout(io.StringIO()):
+            screener.main(["--push", "--alert-only"])
+            self.assertFalse((Path(d) / "w.json").exists())
+        self.assertEqual(sent, [])
+
+    def test_the_review_stays_quiet(self):
+        sent = []
+        with self._closed("國慶日補假"), \
+                unittest.mock.patch.object(review, "_connect",
+                                           side_effect=AssertionError("不該登入")), \
+                unittest.mock.patch.object(review, "push_summary",
+                                           side_effect=AssertionError("不該推日報")), \
+                unittest.mock.patch.object(signals, "notify", sent.append), \
+                contextlib.redirect_stdout(io.StringIO()):
+            review.main([])
+        self.assertEqual(sent, [])
+
+    def test_the_review_also_reads_the_monitors_verdict(self):
+        """表上沒有的休市日，監看 09:03 判出來記在 state.json。"""
+        state = {"date": datetime.now().strftime("%Y-%m-%d"), "signals": [],
+                 "market_closed": "09:03 沒有任何成交，0050 今天也沒有 K 棒"}
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "state.json"
+            path.write_text(json.dumps(state), encoding="utf-8")
+            with unittest.mock.patch.object(config, "STATE_FILE", path), \
+                    unittest.mock.patch.object(review, "_connect",
+                                               side_effect=AssertionError("不該登入")), \
+                    contextlib.redirect_stdout(io.StringIO()) as out:
+                review.main(["--no-push"])
+        self.assertIn("不出日報", out.getvalue())
+
+    def test_an_open_day_runs_as_before(self):
+        self.assertIsNone(market_calendar.closed_reason("2026-10-12"))
+        with unittest.mock.patch.object(signals, "Broker",
+                                        side_effect=RuntimeError("照常往下走")), \
+                unittest.mock.patch.object(signals, "push_failure", lambda e: None), \
+                unittest.mock.patch.object(config, "WATCHLIST_FILE") as wl:
+            wl.exists.return_value = True
+            wl.read_text.return_value = json.dumps(
+                {"date": datetime.now().strftime("%Y-%m-%d"), "items": [{"code": "2330"}]})
+            with self.assertRaises(RuntimeError):
+                signals.main()
+
+    # ── 表上沒有的休市日：09:03 的保險 ──
+    def _kb_broker(self, ts=None, exc=None):
+        b = SimpleNamespace(MARKET_PROXY="0050", calls=[])
+
+        def kbars(code, start, end):
+            b.calls.append((code, start, end))
+            if exc:
+                raise exc
+            return SimpleNamespace(ts=list(ts or []))
+        b.kbars = kbars
+        return b
+
+    def test_no_bars_today_means_closed(self):
+        b = self._kb_broker(ts=[])
+        self.assertIs(signals.check_market_open(b, "2026-10-09"), False)
+        self.assertEqual(b.calls, [("0050", "2026-10-09", "2026-10-09")])
+
+    def test_bars_today_means_open(self):
+        self.assertIs(signals.check_market_open(self._kb_broker(ts=[1, 2]), "2026-10-12"), True)
+
+    def test_a_failed_query_is_not_a_holiday(self):
+        b = self._kb_broker(exc=RuntimeError("流量上限"))
+        self.assertIsNone(signals.check_market_open(b, "2026-10-12"))
+
+    def test_the_loop_checks_only_when_nothing_traded(self):
+        src = textwrap.dedent(inspect.getsource(signals.run))
+        self.assertIn('if not quotes["n"]:', src)
+        self.assertIn("is_open is False", src)
+        self.assertIn('gate.state["market_closed"] = reason', src)
+        # 判出休市要離開迴圈，不然 09:30 還會推「今日訊號 0 個」
+        block = src[src.index("is_open is False"):src.index("notify(format_no_quotes())")]
+        self.assertIn("break", block)
+
+    def test_real_ticks_are_counted_but_trial_matches_are_not(self):
+        tree = ast.parse(textwrap.dedent(inspect.getsource(signals.run)))
+        on_tick = next(n for n in ast.walk(tree)
+                       if isinstance(n, ast.FunctionDef) and n.name == "on_tick")
+        first, second = on_tick.body[0], on_tick.body[1]
+        self.assertIn("simtrade", ast.unparse(first.test))         # 試撮先 return
+        self.assertEqual(ast.unparse(second), "quotes['n'] += 1")
+
+    def test_a_december_reminder_when_next_year_is_missing(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("market_calendar.year_is_known", src)
+        self.assertIn("datetime.now().month == 12", src)
 
 
 if __name__ == "__main__":

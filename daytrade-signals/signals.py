@@ -19,6 +19,7 @@ from datetime import datetime, time as dtime, timedelta
 
 import config
 import exits
+import market_calendar
 import outcome
 from broker import Broker
 
@@ -1171,6 +1172,36 @@ class EntryDesk:
                     self.sent += 1
 
 
+def format_market_closed(reason: str, today: str | None = None) -> str:
+    """休市日早上推的那一行。下一個開盤日一起講，免得以為程式壞了。"""
+    today = today or datetime.now().strftime("%Y-%m-%d")
+    nxt = market_calendar.next_open_day(today)
+    return (f"📅 今天 {market_calendar.label(today)} 休市（{reason}），不監看、不出日報。\n"
+            f"下一個開盤日：{market_calendar.label(nxt)}")
+
+
+# 表上沒有的休市日（颱風假、臨時公告）：開盤後這個時間還沒有任何一筆成交，
+# 就去看 0050 今天有沒有任何一根分鐘 K。
+MARKET_CHECK_AT = dtime(9, 3)
+
+
+def check_market_open(broker, today: str | None = None) -> bool | None:
+    """0050 今天有沒有任何一根分鐘 K。True = 有開盤；False = 沒有（休市）；
+    None = 查不到（查詢失敗）—— 那不是休市，不可以當休市處理。"""
+    today = today or datetime.now().strftime("%Y-%m-%d")
+    try:
+        kb = broker.kbars(broker.MARKET_PROXY, today, today)
+    except Exception as e:
+        log.warning("開盤確認（0050 分鐘 K）失敗：%s", e)
+        return None
+    return bool(list(getattr(kb, "ts", []) or []))
+
+
+def format_no_quotes() -> str:
+    return ("⚠️ 09:03 還沒收到任何一筆成交，但今天有開盤 —— 監看可能收不到行情。\n"
+            "到電腦上看監看視窗；或把 logs\\monitor.log 最後幾行貼出來。")
+
+
 def format_too_late(now: datetime) -> str:
     """啟動太晚 —— 今天不會有訊號，而且畫面上看不出來。
 
@@ -1915,6 +1946,14 @@ def run():
     for w in config.warnings():
         log.warning("設定提醒：%s", w)
 
+    # 休市日：推一行就結束，不碰 state.json（10-09 國慶補假照樣「✅ 今日監看
+    # 10 檔」、09:30「今日訊號 0 個」—— 看起來像開盤了只是沒訊號）。
+    closed = market_calendar.closed_today()
+    if closed:
+        log.info("今天休市（%s），不監看。", closed)
+        notify(format_market_closed(closed))
+        return
+
     if not config.WATCHLIST_FILE.exists():
         raise SystemExit(f"找不到 {config.WATCHLIST_FILE.name}，請先跑 screener.py")
     wl = json.loads(config.WATCHLIST_FILE.read_text(encoding="utf-8"))
@@ -2014,6 +2053,8 @@ def run():
         log.warning("已還原 %d 個今日訊號繼續追蹤結局（重開前已結束的可能會再推一次）",
                     len(gate.state["signals"]))
 
+    quotes = {"n": 0}
+
     @broker.api.on_tick_stk_v1()
     def on_tick(exchange, tick):
         if getattr(tick, "simtrade", 0):
@@ -2022,6 +2063,7 @@ def run():
             if st:
                 st.record_simtrade(tick)
             return
+        quotes["n"] += 1            # 真的成交（不是試撮）—— 09:03 的開盤確認看這個
         st = states.get(tick.code)
         if not st:
             # 不在今天名單裡、但昨天留倉的那幾檔：只看停損目標，不算訊號。
@@ -2064,6 +2106,10 @@ def run():
            f"{config.RISK['max_daily_loss']:,} 元")
     if carried or carry_notes:
         notify(format_carry_start(carried, carry_notes))
+    nxt_year = str(datetime.now().year + 1)
+    if datetime.now().month == 12 and not market_calendar.year_is_known(nxt_year + "-01-01"):
+        notify(f"⚠️ {nxt_year} 年的休市表還沒填（market_calendar.py）。"
+               "證交所公告後補進去，不然國定假日只能靠 09:03 的保險判斷。")
 
     if (config.SIGNAL["backfill_opening_range"]
             and datetime.now().time() >= _t(config.SIGNAL["or_end"])):
@@ -2080,10 +2126,22 @@ def run():
     poll_every = config.RISK["poll_interval_sec"]
     last_poll = time.monotonic()
     flattened = False
+    market_checked = False
     try:
         while datetime.now().time() < close_at:
             time.sleep(30)
             broker.ensure_session()
+            # 表上沒有的休市日：09:03 還沒有任何成交 → 看 0050 今天有沒有 K 棒。
+            if not market_checked and datetime.now().time() >= MARKET_CHECK_AT:
+                market_checked = True
+                if not quotes["n"]:
+                    is_open = check_market_open(broker)
+                    if is_open is False:
+                        reason = "09:03 沒有任何成交，0050 今天也沒有 K 棒"
+                        notify(format_market_closed(reason))
+                        gate.state["market_closed"] = reason
+                        break
+                    notify(format_no_quotes())
             # 批次發訊號與 🔒 收窗的備援。正常情況回呼早就做了，這裡是為了
             # 「那一刻剛好沒有報價進來」的日子 —— 不然訊號會卡在記憶體裡，
             # 09:30 的 🔒 也不會發。

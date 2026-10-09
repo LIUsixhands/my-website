@@ -15,6 +15,7 @@ import logging
 from datetime import datetime
 
 import config
+import market_calendar
 
 log = logging.getLogger("review")
 
@@ -539,7 +540,16 @@ def push_failure(exc: BaseException) -> None:
 
 def run(args) -> None:
     import outcome as oc
+    # 休市日沒有日報可出（10-09 國慶補假：早上已經推過「今天休市」）。
+    # 表上漏掉的休市日，監看 09:03 判出來會在 state 裡記 market_closed。
+    closed = market_calendar.closed_today()
     signals, state = load_signals()
+    if not closed and (state or {}).get("market_closed"):
+        closed = str(state.get("market_closed"))
+    if closed:
+        log.info("今天休市（%s），不出日報。", closed)
+        print(f"今天休市（{closed}），不出日報。")
+        return
     trades, pnl, note, broker = _connect()
     outcomes = None
     carried_out = None

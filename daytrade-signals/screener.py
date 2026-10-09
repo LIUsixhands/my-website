@@ -27,6 +27,7 @@ import logging
 from datetime import datetime, timedelta
 
 import config
+import market_calendar
 from broker import Broker, throttle, _bar_time
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -381,6 +382,13 @@ def run(args) -> None:
         raise SystemExit("config.py 參數有問題：\n" + "\n".join(f"  - {e}" for e in errs))
     for w in config.warnings():
         log.warning("設定提醒：%s", w)
+
+    # 休市日不選股、不寫名單、不推播（10-09 國慶補假照樣選了一份名單）。
+    closed = market_calendar.closed_today()
+    if closed:
+        log.info("今天休市（%s），不選股。", closed)
+        print(f"今天休市（{closed}），不選股。")
+        return
 
     broker = Broker()
     watchlist = screen(broker)
