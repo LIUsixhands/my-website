@@ -120,7 +120,7 @@ pay = loan * 10000 * r_m / (1 - (1 + r_m) ** (-YEARS * 12))
 down = L['總價'] - loan
 
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
-PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands-studio.netlify.app'
+PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands.tw'
 CONTACT = f'助哥 {PHONE}　｜　LINE {LINE_ID}　｜　{WEB}'
 def foot(n):
     return (f'<div class="foot"><div>{DISC}<br><span class="ct">{CONTACT}</span></div>'
