@@ -862,7 +862,8 @@ def format_signal(sig: dict, ordinal: int, batch_total: int | None) -> str:
     return "\n".join(lines)
 
 
-def format_window_closed(sent: int, watched: int) -> str:
+def format_window_closed(sent: int, watched: int, quoted: int | None = None,
+                         locked: int | None = None) -> str:
     """進場窗口關掉時**一定**要發的一則 —— 包括一個訊號都沒有的時候。
     v7 起是 09:30（entry_window_end），不再是 09:05 批次那一刻。
 
@@ -872,6 +873,11 @@ def format_window_closed(sent: int, watched: int) -> str:
 
     sent 是真的推出去的檔數，由呼叫端在發完之後算 —— 訊號那一則印的分母是
     批次挑中的檔數，萬一其中有人被風控擋掉，以這一則的數字為準。
+
+    quoted / locked：監看的檔數裡，有幾檔收到過真的成交、幾檔的開盤區間定好了
+    （None = 不知道，舊呼叫端）。10-09 國慶補假一筆成交都沒有，這一則卻說「沒有
+    一檔通過突破、均價線、量能」—— 使用者：「真的有連線永豐嗎？如有連線，應當
+    回報無法監看啊」。沒有行情就要說沒有行情，不可以說成「沒有一檔突破」。
     """
     cfg, r = config.SIGNAL, config.RISK
     at = cfg["entry_window_end"][:5]
@@ -889,13 +895,32 @@ def format_window_closed(sent: int, watched: int) -> str:
         ]
         if holds_overnight():
             lines.append(f"{outcome.FLATTEN_AT:%H:%M} 還沒結束的會再通知你，要不要留倉由你決定。")
-    else:
+    elif quoted == 0:
         lines += [
-            f"今日訊號：0 個",
-            f"監看的 {watched} 檔，沒有一檔在 {cfg['or_end'][:5]}–{at} 之間"
+            "今日訊號：0 個",
+            f"監看的 {watched} 檔，{cfg['or_start'][:5]}–{at} 一筆成交都沒收到 —— "
+            "不是沒有突破，是根本沒有行情，那幾道閘一次都沒判過。",
+            "",
+            "可能是休市，或行情連線有問題（登入成功不代表收得到報價）。",
+            "到電腦上看監看視窗，或把 logs\\monitor.log 最後幾行貼出來。",
+        ]
+    else:
+        seen = ""
+        if quoted is not None:
+            seen = f"（收到成交 {quoted} 檔"
+            if locked is not None:
+                seen += f"、開盤區間定好 {locked} 檔"
+            seen += "）"
+        lines += [
+            "今日訊號：0 個",
+            f"監看的 {watched} 檔{seen}，沒有一檔在 {cfg['or_end'][:5]}–{at} 之間"
             "同時通過突破、均價線、量能"
             + ("、開盤在昨收附近" if cfg.get("near_prev_close_pct") is not None else "")
             + "這幾道閘。",
+        ]
+        if quoted is not None and quoted < watched:
+            lines.append(f"有 {watched - quoted} 檔整段沒有成交，那幾檔等於沒有判。")
+        lines += [
             "",
             "不會再有新的買入訊號。",
             "⚠️ 這不是當掉。程式還在跑，會執行到 13:30 —— 只是今天不出手。",
@@ -1108,11 +1133,14 @@ class EntryDesk:
     """
 
     def __init__(self, emit, blocked, say, watched: int, sent: int = 0,
-                 now: datetime | None = None, reprice=None):
+                 now: datetime | None = None, reprice=None, seen=None):
         cfg = config.SIGNAL
         # reprice(sig, now) -> (sig | None, 原因)：09:05 那一批發出前用當下價格重算。
         # None = 不重算（測試、舊呼叫端）。
         self.reprice = reprice
+        # seen() -> (收到過成交的檔數, 開盤區間定好的檔數)。None = 不知道（測試、
+        # dryrun）。09:30 那一則要分得出「沒突破」和「根本沒行情」。
+        self.seen = seen
         self.batch = SignalBatch(_t(cfg["signal_batch_at"]),
                                  config.RISK["max_signals_per_day"])
         self.window_end = _t(cfg["entry_window_end"])
@@ -1163,7 +1191,8 @@ class EntryDesk:
                 chosen = fresh
             self._send(chosen, now, len(chosen))
         if closing:
-            self.say(format_window_closed(self.sent, self.watched))
+            quoted, locked = self.seen() if self.seen else (None, None)
+            self.say(format_window_closed(self.sent, self.watched, quoted, locked))
 
     def _send(self, sigs: list[dict], now: datetime, batch_total: int | None) -> None:
         for sig in sigs:
@@ -2039,7 +2068,9 @@ def run():
     desk = EntryDesk(emit=_emit, blocked=record_candidate, say=notify,
                      watched=len(states), sent=len(gate.state.get("signals", [])),
                      reprice=lambda sig, now: reprice_at_send(
-                         sig, states.get(str(sig["code"])), now))
+                         sig, states.get(str(sig["code"])), now),
+                     seen=lambda: (sum(1 for s in states.values() if s.last_price),
+                                   sum(1 for s in states.values() if s.or_locked)))
     # 盤中重開時，今天已經發過的訊號也要繼續盯 —— 否則它們的結局只剩收盤後才知道。
     # 代價是已經結束的那幾筆會被重新追蹤，價格再次碰到時會重複推播一次。
     for past in gate.state.get("signals", []):
@@ -2100,7 +2131,11 @@ def run():
             version=sj.constant.QuoteVersion.v1,
         )
     log.info("已訂閱 %d 檔，開始監看。Ctrl+C 結束。", len(states))
+    # 「✅」只代表登入永豐、訂閱完成 —— 不代表收得到報價（10-09 休市日照樣 ✅）。
+    # 有沒有行情 09:03 才知道，這裡講清楚。
     notify(f"✅ 今日監看 {len(states)} 檔：{'、'.join(states)}\n"
+           f"已登入永豐、訂閱完成；{MARKET_CHECK_AT:%H:%M} 確認有沒有收到行情"
+           f"（沒收到會再通知）。\n"
            f"紅線：最多 {config.RISK['max_signals_per_day']} 訊號／"
            f"{config.RISK['max_trades_per_day']} 筆／虧損上限 "
            f"{config.RISK['max_daily_loss']:,} 元")

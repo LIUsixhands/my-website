@@ -8268,5 +8268,69 @@ class TestMarketHolidays(unittest.TestCase):
         self.assertIn("datetime.now().month == 12", src)
 
 
+class TestNoQuotesIsNotNoBreakout(unittest.TestCase):
+    """10-09 國慶補假：一筆成交都沒有，09:30 卻推「沒有一檔通過突破、均價線、
+    量能這幾道閘」。使用者：「真的有連線永豐嗎？如有連線，應當回報無法監看啊」。
+    登入成功、訂閱成功，不代表收得到報價 —— 沒有行情就要說沒有行情。"""
+
+    def test_no_quotes_at_all_says_so(self):
+        text = signals.format_window_closed(0, 10, quoted=0, locked=0)
+        self.assertIn("一筆成交都沒收到", text)
+        self.assertIn("不是沒有突破，是根本沒有行情", text)
+        self.assertIn("monitor.log", text)
+        self.assertNotIn("同時通過突破", text)
+        self.assertNotIn("不是當掉", text)          # 不可以叫人放心
+
+    def test_quotes_but_no_breakout_says_what_was_seen(self):
+        text = signals.format_window_closed(0, 10, quoted=10, locked=10)
+        self.assertIn("監看的 10 檔（收到成交 10 檔、開盤區間定好 10 檔），沒有一檔", text)
+        self.assertIn("不是當掉", text)
+        self.assertNotIn("整段沒有成交", text)
+
+    def test_some_symbols_silent_are_named(self):
+        text = signals.format_window_closed(0, 10, quoted=7, locked=7)
+        self.assertIn("有 3 檔整段沒有成交，那幾檔等於沒有判", text)
+
+    def test_old_callers_keep_the_old_text(self):
+        text = signals.format_window_closed(0, 20)
+        self.assertIn("監看的 20 檔，沒有一檔", text)
+
+    def test_a_day_with_signals_is_unchanged(self):
+        self.assertEqual(signals.format_window_closed(2, 10, quoted=0, locked=0),
+                         signals.format_window_closed(2, 10))
+
+    def test_the_desk_asks_what_was_seen_when_it_closes(self):
+        said, asked = [], []
+        day = datetime(2026, 10, 9)
+
+        def seen():
+            asked.append(1)
+            return 0, 0
+        desk = signals.EntryDesk(emit=lambda *a: True, blocked=lambda *a: None,
+                                 say=said.append, watched=10, seen=seen,
+                                 now=day.replace(hour=8, minute=50))
+        desk.tick(day.replace(hour=9, minute=29))
+        self.assertEqual(asked, [])
+        desk.tick(day.replace(hour=9, minute=30))
+        self.assertEqual(len(asked), 1)
+        self.assertIn("根本沒有行情", said[0])
+
+    def test_run_counts_real_quotes_and_locked_ranges(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("seen=lambda: (sum(1 for s in states.values() if s.last_price),", src)
+        self.assertIn("sum(1 for s in states.values() if s.or_locked)", src)
+
+    def test_the_start_message_does_not_promise_quotes(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("已登入永豐、訂閱完成；{MARKET_CHECK_AT:%H:%M} 確認有沒有收到行情", src)
+
+    def test_a_trial_match_does_not_count_as_a_quote(self):
+        """試撮不設 last_price —— 不然休市日之外，開盤前的試撮也會被當成「有行情」。"""
+        st = SymbolState("2330", 99.0)
+        st.record_simtrade(SimpleNamespace(close=100.0, simtrade=1,
+                                           datetime=datetime(2026, 10, 12, 8, 55)))
+        self.assertEqual(st.last_price, 0.0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
