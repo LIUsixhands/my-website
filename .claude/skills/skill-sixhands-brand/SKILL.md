@@ -74,8 +74,8 @@ description: Sixhands Studio 品牌識別模組 — 對外交付物掛品牌與 
 
 | 管道 | 連結 |
 |---|---|
-| 官網 | https://sixhands-studio.netlify.app/ |
-| 所有連結頁 | https://sixhands-studio.netlify.app/bio-links.html |
+| 官網 | https://sixhands.tw/ |
+| 所有連結頁 | https://sixhands.tw/bio-links.html |
 | LINE 官方帳號 | https://line.me/R/ti/p/@080akczk（@080akczk） |
 | YouTube | ［待填：頻道網址］ |
 | Facebook 粉專 | ［待填：粉專網址］ |
@@ -90,11 +90,11 @@ description: Sixhands Studio 品牌識別模組 — 對外交付物掛品牌與 
 
 | 位置 | 必放內容 |
 |---|---|
-| **封面** | 「預約帶看」標題＋**助哥 0925-313-570**＋LINE QR＋官網 QR＋`LINE @080akczk`、`sixhands-studio.netlify.app` |
-| **每一頁頁尾** | 第 1 行：法定揭露（永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號）<br>第 2 行：**助哥 0925-313-570　｜　LINE @080akczk　｜　sixhands-studio.netlify.app** |
+| **封面** | 「預約帶看」標題＋**助哥 0925-313-570**＋LINE QR＋官網 QR＋`LINE @080akczk`、`sixhands.tw` |
+| **每一頁頁尾** | 第 1 行：法定揭露（永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號）<br>第 2 行：**助哥 0925-313-570　｜　LINE @080akczk　｜　sixhands.tw** |
 | **末頁** | 聯絡卡：助哥 0925-313-570、永慶不動產 七期河南市政店、LINE／官網＋兩個 QR |
 
-- QR 檔：`qr_line.png`（→ https://line.me/R/ti/p/@080akczk）、`qr_web.png`（→ https://sixhands-studio.netlify.app）。放 QR 一律白底或米白底襯，寬度 ≥ 20mm，掃描才穩。
+- QR 檔：`qr_line.png`（→ https://line.me/R/ti/p/@080akczk）、`qr_web.png`（→ https://sixhands.tw）。放 QR 一律白底或米白底襯，寬度 ≥ 20mm，掃描才穩。
 - 稱呼一律寫「**助哥**」，**不寫本名「劉力助」**。
 - 電話格式固定 `0925-313-570`，排版時加 `white-space:nowrap`，不可斷行。
 - 範例實作：`deliverables/富邦天空樹/build_report.py`（`CONTACT`、`foot()`、封面「預約帶看」區塊）。

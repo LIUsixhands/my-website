@@ -125,7 +125,7 @@ feat_rows += (f'<tr><td>實登 高樓層 26F+ 二手中位</td><td class="num">{
               f'<td>{S["樓層帶"][2]["二手"]["n"]} 筆，107–115</td></tr>')
 
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
-PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands-studio.netlify.app'
+PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands.tw'
 CONTACT = f'助哥 {PHONE}　｜　LINE {LINE_ID}　｜　{WEB}'
 
 def foot(n):
