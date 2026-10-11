@@ -17,7 +17,7 @@
   法一 單套均價法：同級距、同區、最新一筆新屋成交的每間價 × (1 + 新屋修正)
                    第一棟標的直接套用；其他棟再乘「本棟平均月租 ÷ 第一棟平均月租」（房間大小、租金等級差）
   法二 收益法：滿租年租 ÷ 買方要求的毛投報率（買方看的就是毛投報）
-  加權：單套 × 權重 + 收益 × 權重 → 試算中值；最終合理價、建議價由分析師填在 case.json（判斷值），本檔檢查是否偏離
+  加權：單套 × 權重 + 收益 × 權重 → 試算中值（一中案起助哥定案：收益權重 0，收益只列毛投報參考）；最終合理價、建議價由分析師填在 case.json（判斷值），本檔檢查是否偏離
 依賴：xlrd、playwright（Chromium 在 /opt/pw-browsers）、字型 WenQuanYi Zen Hei。
 """
 import base64, csv, glob, json, re, statistics as st, sys
@@ -325,16 +325,22 @@ page(f'''<div class="eyebrow">03　COMPARABLES</div><div class="ttl">同級距�
 def val_page(S, n):
     ref = S['參考']
     rent_adj = '' if S['租金比'] == 1 else f"<br>× 租金等級 {S['租金比'] * 100:.1f}%（本棟平均月租 {S['均租']:,.0f} 元 ÷ {base['名稱']} {base['均租']:,.0f} 元）"
-    m = f'''<table><tr><th>方法</th><th>計算</th><th class="num">結果（萬）</th></tr>
-<tr><td class="b">法一　單套均價法<br><span class="gr">權重 {C['權重']['單套'] * 100:.0f}%</span></td>
-<td>參考 {ref['區']}{ref['門牌']}（{ref['日期']} 成交，{ref['房']} 房、屋齡 {ref['屋齡']} 年，每間 {w(ref['每間'])} 萬）<br>
-<span class="gr">× 新屋修正 +{C['新屋修正']}%{rent_adj}<br>→ 每間約 {w(S['每間'])} 萬（±{C.get('單套區間', 3.5)}%）× {S['房']} 間</span></td>
-<td class="num b">{w(S['法一'][0])}–{w(S['法一'][1])}</td></tr>
-<tr><td class="b">法二　收益法<br><span class="gr">權重 {C['權重']['收益'] * 100:.0f}%</span></td>
+    if C['權重']['收益']:
+        inc_rows = (f'''<tr><td class="b">法二　收益法<br><span class="gr">權重 {C['權重']['收益'] * 100:.0f}%</span></td>
 <td>滿租年租 {S['年租']:.1f} 萬 ÷ 買方要求毛投報 {C['毛投報'][0]}%–{C['毛投報'][1]}%</td>
 <td class="num b">{w(S['法二'][0])}–{w(S['法二'][1])}</td></tr>
 <tr><td class="b">加權試算</td><td>{w(sum(S['法一']) / 2)} × {C['權重']['單套']:g} ＋ {w(sum(S['法二']) / 2)} × {C['權重']['收益']:g}</td>
-<td class="num b">{w(S['試算中值'])}</td></tr>
+<td class="num b">{w(S['試算中值'])}</td></tr>''')
+    else:  # 收益不計入權重，只列毛投報給屋主參考
+        inc_rows = (f'''<tr><td class="b">收益參考<br><span class="gr">不計入估價</span></td>
+<td>滿租年租 {S['年租']:.1f} 萬；以合理價計，滿租毛投報約 {S['年租'] / S['合理價'][1] * 100:.2f}%–{S['年租'] / S['合理價'][0] * 100:.2f}%</td>
+<td class="num">—</td></tr>''')
+    m = f'''<table><tr><th>方法</th><th>計算</th><th class="num">結果（萬）</th></tr>
+<tr><td class="b">單套均價法<br><span class="gr">權重 {C['權重']['單套'] * 100:.0f}%</span></td>
+<td>參考 {ref['區']}{ref['門牌']}（{ref['日期']} 成交，{ref['房']} 房、屋齡 {ref['屋齡']} 年，每間 {w(ref['每間'])} 萬）<br>
+<span class="gr">× 新屋修正 +{C['新屋修正']}%{rent_adj}<br>→ 每間約 {w(S['每間'])} 萬（±{C.get('單套區間', 3.5)}%）× {S['房']} 間</span></td>
+<td class="num b">{w(S['法一'][0])}–{w(S['法一'][1])}</td></tr>
+{inc_rows}
 <tr class="hl"><td colspan="2">合理價判斷（每間約 {S['合理價'][0] / S['房']:.0f}–{S['合理價'][1] / S['房']:.0f} 萬）</td>
 <td class="num">{w(S['合理價'][0])}–{w(S['合理價'][1])}</td></tr></table>'''
     k = f'''<div class="kpi">
