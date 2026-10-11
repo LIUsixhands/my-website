@@ -11,7 +11,8 @@
   估價計算.json             計算結果（給內部 md 或複核用）
 
 方法（細節見 整棟套房估價方法.md）——⛔ 不用地坪估價（助哥 2026-10-11：買方不認同）
-  篩選：衛 ≥ 房 × 房衛比下限、排除旅館；依房數分級距（10 房以下／10–19／20–29／30 以上）
+  篩選：房 ≥6（4–5 房多為透天別墅）、衛 ≥ 房 × 房衛比下限；排除旅館、無隔間、
+        住家格局（6–9 房廳 >1、10 房以上廳 >3，但登記成廳≈房者保留）、每房建坪 >15 坪；依房數分級距（10 房以下／10–19／20–29／30 以上）
   行情表：各級距「每間套房平均總價」（總價 ÷ 房數）中位數，近三年全屋齡＋近五年新屋兩種口徑
   法一 單套均價法：同級距、同區、最新一筆新屋成交的每間價 × (1 + 新屋修正)
                    第一棟標的直接套用；其他棟再乘「本棟平均月租 ÷ 第一棟平均月租」（房間大小、租金等級差）
@@ -62,10 +63,12 @@ def load(path):
         if not m:
             continue
         rooms = int(m.group(1))
-        if rooms < C.get('最少房數', 5):
+        if rooms < C.get('最少房數', 6):
             continue
         bm = re.search(r'(\d+)衛', v[14])
         baths = int(bm.group(1)) if bm else 0
+        hm = re.search(r'(\d+)廳', v[14])
+        halls = int(hm.group(1)) if hm else 0
         blds = bld.get(v[0], [])
         price = num(v[4])
         nt = re.search(r'實際成交價為([\d,]+)元', v[18])  # 備註載明實際成交價時以備註為準
@@ -78,10 +81,18 @@ def load(path):
         age = int(age) if age != '' else None
         use = '|'.join(x[4] for x in blds)
         ex = ''
+        area = num(v[6])
+        hall_max = 1 if rooms < 10 else 3  # 套房透天：廳很少；登記把每間都算廳（廳≈房）也算套房
         if baths < rooms * C['房衛比下限']:
             ex = '房衛比低（非套房）'
         elif '旅' in use:
             ex = '旅館'
+        elif '無隔間' in v[14]:
+            ex = '無隔間'
+        elif halls > hall_max and halls < rooms * 0.8:
+            ex = '住家格局（透天別墅等，廳數多）'
+        elif area / rooms > C.get('每房建坪上限', 15):
+            ex = '每房建坪過大（非套房）'
         addr = v[1].translate(str.maketrans('０１２３４５６７８９－', '0123456789-'))
         addr = re.sub(r'^(北區|中區|南區|西區|西屯區|東區|南屯區|北屯區)', '', addr)
         out.append(dict(區=dist, 門牌=addr, 日期=v[3], t=ym(v[3]), 總價=price, 房=rooms, 衛=baths, 屋齡=age,
@@ -89,7 +100,13 @@ def load(path):
     return out
 
 
-rows = [r for f in C['實登檔'] for r in load(DIR / f)]
+rows, seen = [], set()
+for f in C['實登檔']:
+    for r in load(DIR / f):
+        key = (r['門牌'], r['日期'], round(r['總價']))
+        if key not in seen:  # 分批撈的檔案可能重疊
+            seen.add(key)
+            rows.append(r)
 rows.sort(key=lambda r: (r['房'], -r['t']))
 ok = [r for r in rows if not r['排除']]
 win3, win5 = ym(C['近三年起']), ym(C['新屋行情起'])
@@ -235,27 +252,70 @@ page(f'''<div class="eyebrow">01　PROPERTY</div><div class="ttl">物件概要</
 <div class="sub" style="margin-top:2mm">{C.get('租金說明', '租金以屋主提供之租金表、每間最新一期租金計算。')}</div>
 {photo}''', 2)
 
-# P3 市場行情：房數級距
+# P3 市場行情：房數級距 ＋ 各區單套均價折線圖
 trow = ''
 for t in tiers:
     hl = ' class="hl"' if t['級距'] == A[0]['級距'] else ''
     trow += (f'<tr{hl}><td>{t["級距"]}</td><td class="num">{t["n3"]}</td><td class="num b">{w(t["m3"])} 萬</td><td class="num">{w(t["tot3"])} 萬</td>'
              f'<td class="num">{t["n5"]}</td><td class="num b">{w(t["m5"])} 萬</td></tr>')
-cases = A[0]['同級案例']
-HL = ' class="hl"'
-crow = ''.join(f'<tr{HL if r is A[0]["參考"] else ""}><td>{r["區"]}</td><td>{r["門牌"]}</td><td>{r["日期"]}</td><td class="num">{w(r["總價"])}</td>'
-               f'<td class="num">{r["房"]}</td><td class="num">{r["屋齡"]}</td><td class="num b">{w(r["每間"])}</td></tr>' for r in cases)
 y3, y5 = C['近三年起'], C['新屋行情起']
+
+# 各區 × 房數級距 每間均價中位數（y5 起、全屋齡）
+DCOL = ['#1A2942', '#B8893E', '#3d7a5a', '#a8382e', '#6b5fa8', '#2f7fa8', '#8a6a2c']
+dline = []
+for i, d in enumerate(dists):
+    pts = []
+    for j, (lo, hi, lab) in enumerate(TIERS):
+        s = [r['每間'] for r in ok if r['區'] == d and r['級距'] == lab and r['t'] >= win5]
+        pts.append((j, st.median(s), len(s)) if s else None)
+    dline.append((d, DCOL[i % len(DCOL)], pts))
+LW2, LH2, PL, PR, PT, PB = 640, 300, 50, 20, 20, 46
+ymax = max(p[1] for _, _, ps in dline for p in ps if p) * 1.12
+ymax = (int(ymax / 200) + 1) * 200
+X = lambda j: PL + (j + .5) * (LW2 - PL - PR) / len(TIERS)
+Y = lambda v: PT + (1 - v / ymax) * (LH2 - PT - PB)
+g = [f'<svg viewBox="0 0 {LW2} {LH2}" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="WenQuanYi Zen Hei" font-size="10">']
+for v in range(0, ymax + 1, 200):
+    g.append(f'<line x1="{PL}" x2="{LW2 - PR}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="#e5e7eb"/>'
+             f'<text x="{PL - 6}" y="{Y(v) + 3:.1f}" text-anchor="end" fill="#888">{v}</text>')
+for j, (lo, hi, lab) in enumerate(TIERS):
+    g.append(f'<text x="{X(j):.1f}" y="{LH2 - PB + 16}" text-anchor="middle" fill="#333" font-size="10.5">{lab}</text>')
+g.append(f'<text x="{PL}" y="{PT - 6}" fill="#888" font-size="9">萬元／間</text>')
+for d, col, pts in dline:
+    seg, path = [p for p in pts if p], ''
+    path = ' '.join(f'{"M" if k == 0 else "L"}{X(p[0]):.1f},{Y(p[1]):.1f}' for k, p in enumerate(seg))
+    g.append(f'<path d="{path}" fill="none" stroke="{col}" stroke-width="2.2"/>')
+    for p in seg:
+        g.append(f'<circle cx="{X(p[0]):.1f}" cy="{Y(p[1]):.1f}" r="3.6" fill="{col}"/>')
+lx = PL
+for d, col, _ in dline:
+    g.append(f'<rect x="{lx}" y="{LH2 - 16}" width="14" height="4" fill="{col}"/><text x="{lx + 18}" y="{LH2 - 11}" fill="#333" font-size="10">{d}</text>')
+    lx += 80
+g.append('</svg>')
+dchart = ''.join(g)
+dtab = ('<table class="mini"><tr><th>區</th>' + ''.join(f'<th class="num">{lab}</th>' for _, _, lab in TIERS) + '</tr>' +
+        ''.join(f'<tr><td><span style="color:{col}">●</span> {d}</td>' +
+                ''.join(f'<td class="num">{p[1]:.0f} 萬（{p[2]}）</td>' if p else '<td class="num">—</td>' for p in pts) + '</tr>'
+                for d, col, pts in dline) + '</table>')
+
 page(f'''<div class="eyebrow">02　MARKET</div><div class="ttl">市場行情：每間套房平均總價</div>
-<div class="sub">撈取 {'、'.join(dists)} 實價登錄（{C['撈取條件']}），篩出衛浴數 ≥ 房數 × {C['房衛比下限']} 的整棟套房型物件，排除旅館、宿舍、醫院，
-有效樣本 <b>{len(ok)} 筆</b>。每間套房平均總價 ＝ 成交總價 ÷ 房數。</div>
+<div class="sub">撈取 {'、'.join(dists)} 實價登錄（{C['撈取條件']}），篩出 6 房以上、衛浴數 ≥ 房數 × {C['房衛比下限']} 的整棟套房；
+排除 4–5 房透天別墅、住家格局（廳數多）、旅館、無隔間、每房坪數過大等非套房物件，有效樣本 <b>{len(ok)} 筆</b>。每間套房平均總價 ＝ 成交總價 ÷ 房數。</div>
 <table><tr><th>房數級距</th><th class="num">{y3} 起 筆數</th><th class="num">每間均價中位數</th><th class="num">總價中位數</th>
 <th class="num">{y5} 起新屋（≤{NEW} 年）筆數</th><th class="num">每間均價中位數</th></tr>{trow}</table>
-<div class="note" style="margin-top:3mm"><b>房數越多，每間越便宜。</b>　房數越多總價越高，買得起的人越少，每間得讓價才賣得掉（30 房以上每間明顯低一截）。<br>{C['市場觀察']}<br>
-<span class="gr">10 房以下的成交多為 5–6 房的自住型透天別墅，每房價格反映的是自住產品，不列入套房比較。</span></div>
-<div class="ttl2">同級距（{A[0]['級距']}）新屋成交案例（{y5} 起、屋齡 ≤{NEW} 年）</div>
-<table><tr><th>區</th><th>門牌</th><th>成交</th><th class="num">總價(萬)</th><th class="num">房</th><th class="num">屋齡</th><th class="num">每間均價(萬)</th></tr>{crow}</table>
-<div class="ttl2">每間套房均價比較（萬元／間）</div>{chart}''', 3)
+<div class="ttl2">各區每間套房均價（{y5} 起成交、全屋齡，中位數；括號為筆數）</div>{dchart}{dtab}
+<div class="note" style="margin-top:2mm"><b>房數越多，每間越便宜。</b>　房數越多總價越高，買得起的人越少，每間得讓價才賣得掉；各區都是同樣的走勢。<br>{C['市場觀察']}<br>
+<span class="gr">10 房以下樣本少，且多為店面住家混合；30 房以上每間明顯低一截。</span></div>''', 3)
+
+# P4 同級距成交案例
+cases = A[0]['同級案例'][:C.get('案例表上限', 18)]
+HL = ' class="hl"'
+crow = ''.join(f'<tr{HL if r is A[0]["參考"] else ""}><td>{r["區"]}</td><td>{r["門牌"]}</td><td>{r["日期"]}</td><td class="num">{w(r["總價"])}</td>'
+               f'<td class="num">{r["房"]}</td><td class="num">{r["屋齡"]}</td><td class="num">{r["建坪"] / r["房"]:.1f}</td><td class="num b">{w(r["每間"])}</td></tr>' for r in cases)
+page(f'''<div class="eyebrow">03　COMPARABLES</div><div class="ttl">同級距成交案例</div>
+<div class="sub">{A[0]['級距']}、{y5} 起成交、屋齡 ≤{NEW} 年，共 {len(A[0]['同級案例'])} 筆（列出最新 {len(cases)} 筆）。每間建坪 ＝ 登記建坪 ÷ 房數，含公設與樓梯間。</div>
+<table><tr><th>區</th><th>門牌</th><th>成交</th><th class="num">總價(萬)</th><th class="num">房</th><th class="num">屋齡</th><th class="num">每間建坪</th><th class="num">每間均價(萬)</th></tr>{crow}</table>
+<div class="ttl2">每間套房均價比較（萬元／間）</div>{chart}''', 4)
 
 
 # P4/P5 各棟估價
@@ -299,10 +359,10 @@ def val_page(S, n):
 
 
 for i, S in enumerate(A):
-    val_page(S, 4 + i)
+    val_page(S, 5 + i)
 
 # 末頁：售價策略 + 限制 + 聯絡
-N = 4 + len(A)
+N = 5 + len(A)
 plan = ''.join(f'<tr><td class="b">{S["名稱"]}</td><td class="num">{w(S["開價"])}／{w(S["底價"])}</td><td class="num">{w(S["合理價"][0])}–{w(S["合理價"][1])}</td>'
                f'<td class="num b">{w(S["建議開價"])}／{w(S["建議底價"])}</td><td class="num">{S["建議開價"] / S["房"]:.0f}／{S["建議底價"] / S["房"]:.0f}</td>'
                f'<td class="num">{(S["開價"] / S["中值"] - 1) * 100:+.0f}%</td></tr>' for S in A)
@@ -342,6 +402,7 @@ th.num { text-align: right; }
 .note { background: #f7f1e3; border-left: 4px solid #B8893E; padding: 3mm 4mm; font-size: 8.4pt; line-height: 1.75; }
 .warn { background: #f3f4f6; border-left: 4px solid #9ca3af; padding: 3mm 4mm; font-size: 7.6pt; line-height: 1.7; color: #555; margin-top: 4mm; }
 ul { margin-left: 5mm; } li { font-size: 8.8pt; line-height: 1.8; margin-bottom: 1mm; }
+table.mini td, table.mini th { padding: 2.5px 6px; font-size: 7.8pt; }
 ul.small li { font-size: 7.9pt; line-height: 1.65; }
 .kpi { display: flex; gap: 3mm; margin: 2mm 0 4mm; }
 .kpi > div { flex: 1; border: 1px solid #e5e7eb; border-top: 3px solid #B8893E; padding: 3mm 2mm; text-align: center; }
