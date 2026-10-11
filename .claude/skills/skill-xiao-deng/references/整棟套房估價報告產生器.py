@@ -16,6 +16,9 @@
   法一 地單價法：地坪 × 核心案例每坪地價（取值區間）
   法二 每房價法：同區、房數最接近的核心案例每房價 × (標的每房地坪 ÷ 案例每房地坪) × 房數
   法三 收益法：滿租年租 × (1 − 空置率 − 費用率) ÷ 資本化率
+  總價流動性修正（法一、法二）：總價越高、買得起的人越少，越難賣。
+    修正 % ＝ (比較案例總價 − 本棟試算總價) ÷ 1,000 萬 × 流動性係數，上下限 ±流動性上限
+    本棟總價比案例低 → 加價；比案例高 → 減價。法三不另修（資本化率已反映買方要求的報酬）。
   最終合理價、建議開價／底價由分析師填在 case.json（判斷值），本檔檢查是否落在三法區間內。
 依賴：xlrd、playwright（Chromium 在 /opt/pw-browsers）、字型 WenQuanYi Zen Hei。
 """
@@ -119,6 +122,14 @@ for b in ['新（≤5 年）', '中（6–15 年）', '舊（>15 年）']:
         bands.append((b, len(s), st.median(x['每房'] for x in s), st.median(x['地每房'] for x in s)))
 
 LU = st.median(r['地單價'] for r in core)
+CT = st.median(r['總價'] for r in core)  # 核心案例總價中位數（流動性基準）
+
+
+def liq(base, subj):
+    """總價流動性修正：本棟總價每比基準低 1,000 萬，加 流動性係數 %；高則減。"""
+    cap = C.get('流動性上限', 10)
+    pct = (base - subj) / 1000 * C.get('流動性係數', 1.0)
+    return max(-cap, min(cap, pct)) / 100
 lu_lo, lu_hi = C['地單價取值']
 
 # ---------- 2. 三法估價 ----------
@@ -128,12 +139,16 @@ for S in C['標的']:
     S['年租'] = S['月租'] * 12 / 10000
     S['均租'] = S['月租'] / len(S['租金'])
     S['淨收'] = S['年租'] * (1 - (C['空置率'] + C['費用率']) / 100)
-    S['法一'] = (S['地坪'] * lu_lo, S['地坪'] * lu_hi)
+    pre1 = S['地坪'] * LU
+    S['流動一'] = liq(CT, pre1)
+    S['法一'] = (S['地坪'] * lu_lo * (1 + S['流動一']), S['地坪'] * lu_hi * (1 + S['流動一']))
     same = [r for r in core if r['區'] == S['區']] or core
-    ref = min(same, key=lambda r: abs(r['房'] - S['房']))
+    ref = min(same, key=lambda r: (abs(r['房'] - S['房']) / S['房'] + abs(r['總價'] - S['底價']) / S['底價']))
     S['法二參考'] = ref
     S['法二每房'] = ref['每房'] * S['地每房'] / ref['地每房']
-    S['法二'] = S['法二每房'] * S['房']
+    pre2 = S['法二每房'] * S['房']
+    S['流動二'] = liq(ref['總價'], pre2)
+    S['法二'] = pre2 * (1 + S['流動二'])
     c_lo, c_hi = C['資本化率']
     S['法三'] = (S['淨收'] / (c_hi / 100), S['淨收'] / (c_lo / 100))
     lo = min(S['法一'][0], S['法二'], S['法三'][0])
@@ -154,7 +169,7 @@ json.dump(dict(地單價中位=LU, 核心案例=[{k: r[k] for k in ('區', '門�
           open(DIR / '估價計算.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1, default=str)
 for S in C['標的']:
     print(f"{S['名稱']}：法一 {S['法一'][0]:.0f}–{S['法一'][1]:.0f}｜法二 {S['法二']:.0f}（參考 {S['法二參考']['門牌']}）｜"
-          f"法三 {S['法三'][0]:.0f}–{S['法三'][1]:.0f}｜判斷合理價 {S['合理價'][0]}–{S['合理價'][1]}")
+          f"法三 {S['法三'][0]:.0f}–{S['法三'][1]:.0f}｜流動性 {S['流動一']*100:+.1f}%/{S['流動二']*100:+.1f}%｜判斷合理價 {S['合理價'][0]}–{S['合理價'][1]}")
 
 
 # ---------- 3. HTML ----------
@@ -266,6 +281,9 @@ page(f'''<div class="eyebrow">02　MARKET</div><div class="ttl">市場行情：�
 <table><tr><th>屋齡</th><th class="num">筆數</th><th class="num">每房價中位數</th><th class="num">每房地坪中位數</th></tr>{band_rows}</table>
 <div class="note" style="margin-top:3mm"><b>為什麼不能只看「總價 ÷ 房數」？</b>　舊樓的每房價反而比新樓高，因為舊樓房數少、每房分到的土地多，
 整棟透天的價值大部分在土地。所以本報告以<b>每坪土地價</b>為主要比較基準，每房價則依「每房分到幾坪地」校正。</div>
+<div class="note" style="margin-top:2mm"><b>總價越高，越難賣。</b>　10 間套房每間 300 萬，總價 3,000 萬，買得起的人很多；50 間同樣每間 300 萬，總價 1.5 億，買方就少很多，
+每間價格得讓一些才賣得掉。本報告把這個因素量化為「總價流動性修正」：本棟總價每比比較案例低 1,000 萬，加 {C.get('流動性係數', 1.0):g}%；高則減，上限 ±{C.get('流動性上限', 10)}%。
+核心比較案例總價中位數為 <b>{w(CT)} 萬</b>。</div>
 <div class="ttl2">核心比較案例（{C['近三年起']} 以後成交、屋齡 ≤{C['新屋門檻']} 年）</div>
 <table><tr><th>區</th><th>門牌</th><th>成交</th><th class="num">總價(萬)</th><th class="num">房</th><th class="num">屋齡</th><th class="num">地坪</th>
 <th class="num">每房(萬)</th><th class="num">地/房</th><th class="num">每坪地價</th></tr>{core_rows}</table>
@@ -276,10 +294,10 @@ page(f'''<div class="eyebrow">02　MARKET</div><div class="ttl">市場行情：�
 def val_page(S, n):
     ref = S['法二參考']
     m = f'''<table><tr><th>方法</th><th>計算</th><th class="num">結果（萬）</th></tr>
-<tr><td class="b">法一　每坪地價法</td><td>地坪 {S['地坪']:.2f} 坪 × 每坪地價 {lu_lo}–{lu_hi} 萬<br><span class="gr">取近三年新套房成交中位數 {LU:.0f} 萬附近</span></td>
+<tr><td class="b">法一　每坪地價法</td><td>地坪 {S['地坪']:.2f} 坪 × 每坪地價 {lu_lo}–{lu_hi} 萬 × 流動性修正 {S['流動一'] * 100:+.1f}%<br><span class="gr">每坪地價取近三年新套房成交中位數 {LU:.0f} 萬附近；案例總價中位 {w(CT)} 萬 vs 本棟約 {w(S['地坪'] * LU)} 萬</span></td>
 <td class="num b">{w(S['法一'][0])}–{w(S['法一'][1])}</td></tr>
 <tr><td class="b">法二　每房價法</td><td>參考 {ref['區']}{re.sub(r"^(北區|中區|南區|西屯區)", "", ref['門牌'])}（{ref['日期']}，{ref['房']} 房，每房 {w(ref['每房'])} 萬，每房地坪 {ref['地每房']:.2f}）<br>
-<span class="gr">本棟每房地坪 {S['地每房']:.2f} → 校正 {(S['地每房'] / ref['地每房'] - 1) * 100:+.0f}% → 每房約 {w(S['法二每房'])} 萬 × {S['房']} 房</span></td>
+<span class="gr">本棟每房地坪 {S['地每房']:.2f} → 校正 {(S['地每房'] / ref['地每房'] - 1) * 100:+.0f}% → 每房約 {w(S['法二每房'])} 萬 × {S['房']} 房<br>× 流動性修正 {S['流動二'] * 100:+.1f}%（案例總價 {w(ref['總價'])} 萬 vs 本棟約 {w(S['法二每房'] * S['房'])} 萬）</span></td>
 <td class="num b">{w(S['法二'])}</td></tr>
 <tr><td class="b">法三　收益法</td><td>滿租年租 {S['年租']:.1f} 萬 × (1 − {'空置 ' + str(C['空置率']) + '% − ' if C['空置率'] else ''}費用 {C['費用率']}%) = 淨收 {S['淨收']:.0f} 萬<br>
 <span class="gr">÷ 資本化率 {C['資本化率'][0]}%–{C['資本化率'][1]}%（推估值）</span></td>
