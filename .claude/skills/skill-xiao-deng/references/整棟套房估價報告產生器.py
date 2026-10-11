@@ -146,7 +146,8 @@ for S in C['標的']:
             print(f'⚠️ {S["名稱"]} {k} {a}–{b} 超出三法區間 {lo:.0f}–{hi:.0f}，請確認判斷依據')
     S['毛投報_開'] = S['年租'] / S['開價'] * 100
     S['毛投報_底'] = S['年租'] / S['底價'] * 100
-    S['實收率'] = S['實收'] / 10000 / S['年租'] * 100
+    if S.get('實收'):
+        S['實收率'] = S['實收'] / 10000 / S['年租'] * 100
 
 json.dump(dict(地單價中位=LU, 核心案例=[{k: r[k] for k in ('區', '門牌', '日期', '總價', '房', '屋齡', '地坪', '每房', '地每房', '地單價')} for r in core],
                標的=[{k: v for k, v in S.items() if k != '租金'} for S in C['標的']]),
@@ -237,9 +238,10 @@ rent_rows = [
     ('滿租年租金', lambda S: f"{S['年租']:.1f} 萬"),
     ('平均每間月租', lambda S: f"{S['均租']:,.0f} 元"),
     ('每間月租範圍', lambda S: f"{min(S['租金'].values()) / 10000:.1f}–{max(S['租金'].values()) / 10000:.1f} 萬"),
-    ('114 年實收', lambda S: f"{S['實收'] / 10000:.1f} 萬（滿租的 {S['實收率']:.0f}%）"),
     ('每房分到的土地', lambda S: f"{S['地每房']:.2f} 坪"),
 ]
+if all(S.get('實收') for S in A):
+    rent_rows.insert(-1, ('去年實收', lambda S: f"{S['實收'] / 10000:.1f} 萬"))
 rent = ''.join(f'<tr><td>{lab}</td>' + ''.join(f'<td class="num">{fn(S)}</td>' for S in A) + '</tr>' for lab, fn in rent_rows)
 head = '<tr><th></th>' + ''.join(f'<th>{S["名稱"]}</th>' for S in A) + '</tr>'
 photo = f'<div class="photo"><img src="{img(DIR / C["照片"])}"><div class="cap">標的套房室內實景</div></div>' if C.get('照片') else ''
@@ -247,7 +249,7 @@ page(f'''<div class="eyebrow">01　PROPERTY</div><div class="ttl">物件概要</
 <table class="spec">{head}{spec}</table>
 <div class="ttl2">租金收益現況</div>
 <table class="spec">{head}{rent}</table>
-<div class="sub" style="margin-top:2mm">租金以屋主提供之 114 年度租金表、每間最新一期租金計算。114 年多數房間 2–3 月起租，實收低於滿租屬正常。</div>
+<div class="sub" style="margin-top:2mm">{C.get('租金說明', '租金以屋主提供之租金表、每間最新一期租金計算。')}</div>
 {photo}''', 2)
 
 # P3 市場行情
@@ -279,7 +281,7 @@ def val_page(S, n):
 <tr><td class="b">法二　每房價法</td><td>參考 {ref['區']}{re.sub(r"^(北區|中區|南區|西屯區)", "", ref['門牌'])}（{ref['日期']}，{ref['房']} 房，每房 {w(ref['每房'])} 萬，每房地坪 {ref['地每房']:.2f}）<br>
 <span class="gr">本棟每房地坪 {S['地每房']:.2f} → 校正 {(S['地每房'] / ref['地每房'] - 1) * 100:+.0f}% → 每房約 {w(S['法二每房'])} 萬 × {S['房']} 房</span></td>
 <td class="num b">{w(S['法二'])}</td></tr>
-<tr><td class="b">法三　收益法</td><td>滿租年租 {S['年租']:.1f} 萬 × (1 − 空置 {C['空置率']}% − 費用 {C['費用率']}%) = 淨收 {S['淨收']:.0f} 萬<br>
+<tr><td class="b">法三　收益法</td><td>滿租年租 {S['年租']:.1f} 萬 × (1 − {'空置 ' + str(C['空置率']) + '% − ' if C['空置率'] else ''}費用 {C['費用率']}%) = 淨收 {S['淨收']:.0f} 萬<br>
 <span class="gr">÷ 資本化率 {C['資本化率'][0]}%–{C['資本化率'][1]}%（推估值）</span></td>
 <td class="num b">{w(S['法三'][0])}–{w(S['法三'][1])}</td></tr>
 <tr class="hl"><td colspan="2">三法區間　→　合理價判斷</td><td class="num">{w(S['合理價'][0])}–{w(S['合理價'][1])}</td></tr></table>'''
