@@ -309,12 +309,15 @@ page(f'''<div class="eyebrow">02　MARKET</div><div class="ttl">市場行情：�
 
 # P4 同級距成交案例
 cases = A[0]['同級案例'][:C.get('案例表上限', 18)]
+allv = sorted(r['每間'] for r in A[0]['同級案例'])
+q = st.quantiles(allv, n=4) if len(allv) >= 4 else [allv[0], st.median(allv), allv[-1]]
 HL = ' class="hl"'
 crow = ''.join(f'<tr{HL if r is A[0]["參考"] else ""}><td>{r["區"]}</td><td>{r["門牌"]}</td><td>{r["日期"]}</td><td class="num">{w(r["總價"])}</td>'
-               f'<td class="num">{r["房"]}</td><td class="num">{r["屋齡"]}</td><td class="num">{r["建坪"] / r["房"]:.1f}</td><td class="num b">{w(r["每間"])}</td></tr>' for r in cases)
+               f'<td class="num">{r["房"]}</td><td class="num">{r["屋齡"]}</td><td class="num b">{w(r["每間"])}</td></tr>' for r in cases)
 page(f'''<div class="eyebrow">03　COMPARABLES</div><div class="ttl">同級距成交案例</div>
-<div class="sub">{A[0]['級距']}、{y5} 起成交、屋齡 ≤{NEW} 年，共 {len(A[0]['同級案例'])} 筆（列出最新 {len(cases)} 筆）。每間建坪 ＝ 登記建坪 ÷ 房數，含公設與樓梯間。</div>
-<table><tr><th>區</th><th>門牌</th><th>成交</th><th class="num">總價(萬)</th><th class="num">房</th><th class="num">屋齡</th><th class="num">每間建坪</th><th class="num">每間均價(萬)</th></tr>{crow}</table>
+<div class="sub">{A[0]['級距']}、{y5} 起成交、屋齡 ≤{NEW} 年，共 {len(A[0]['同級案例'])} 筆（列出最新 {len(cases)} 筆）。每間均價：最低 {w(min(allv))} 萬，四分之一在 {w(q[0])} 萬以下，中位數 {w(q[1])} 萬，四分之一在 {w(q[2])} 萬以上，最高 {w(max(allv))} 萬。<br>
+同一棟套房常有大小間，難以用房間坪數比較；本報告以<b>租金等級</b>反映房間大小與裝修差異。</div>
+<table><tr><th>區</th><th>門牌</th><th>成交</th><th class="num">總價(萬)</th><th class="num">房</th><th class="num">屋齡</th><th class="num">每間均價(萬)</th></tr>{crow}</table>
 <div class="ttl2">每間套房均價比較（萬元／間）</div>{chart}''', 4)
 
 
