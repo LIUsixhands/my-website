@@ -14,7 +14,8 @@
   篩選：房 ≥6（4–5 房多為透天別墅）、衛 ≥ 房 × 房衛比下限；排除旅館、無隔間、
         住家格局（6–9 房廳 >1；10 房以上廳 >3，但登記成廳≈房者保留）、每房建坪 >15 坪；依房數分級距（10 房以下／10–19／20–29／30 以上）
   行情表：各級距「每間套房平均總價」（總價 ÷ 房數）中位數，近三年全屋齡＋近五年新屋兩種口徑
-  法一 單套均價法：同級距、同區、最新一筆新屋成交的每間價 × (1 + 新屋修正)
+  法一 單套均價法：case.json 有「單套參考」（門牌清單）時，每間區間＝這幾筆真實成交的最低～最高；
+                   沒有時，同級距、同區、最新一筆新屋成交的每間價 × (1 + 新屋修正) ± 單套區間
                    第一棟標的直接套用；其他棟再乘「本棟平均月租 ÷ 第一棟平均月租」（房間大小、租金等級差）
   法二 收益法：滿租年租 ÷ 買方要求的毛投報率（買方看的就是毛投報）
   加權：單套 × 權重 + 收益 × 權重 → 試算中值（一中案起助哥定案：收益權重 0，收益只列毛投報參考）；最終合理價、建議價由分析師填在 case.json（判斷值），本檔檢查是否偏離
@@ -142,13 +143,25 @@ for S in A:
     if not same:
         sys.exit(f'{S["名稱"]}：{S["級距"]}沒有近年新屋成交，請放寬撈取範圍')
     S['同級案例'] = sorted(cand, key=lambda r: -r['t'])
-    ref = max(same, key=lambda r: r['t'])
-    S['參考'] = ref
     S['租金比'] = 1.0 if base is None else S['均租'] / base['均租']
+    adj = (1 + C.get('新屋修正', 0) / 100) * S['租金比']
+    if C.get('單套參考'):  # 指定幾筆真實成交，區間＝這幾筆每間價的最低～最高（不再用 ± 判斷值）
+        refs = [r for r in cand if any(k in r['門牌'] for k in C['單套參考'])]
+        if len(refs) != len(C['單套參考']):
+            sys.exit(f'單套參考找不到：{C["單套參考"]}（同級距新屋只有 {[r["門牌"] for r in cand]}）')
+        S['參考群'] = sorted(refs, key=lambda r: -r['每間'])
+        lo_v, hi_v = min(r['每間'] for r in refs), max(r['每間'] for r in refs)
+        S['參考'] = S['參考群'][0]
+        S['每間區間'] = (lo_v * adj, hi_v * adj)
+    else:
+        ref = max(same, key=lambda r: r['t'])
+        S['參考群'] = [ref]
+        S['參考'] = ref
+        band = C.get('單套區間', 3.5) / 100
+        S['每間區間'] = (ref['每間'] * adj * (1 - band), ref['每間'] * adj * (1 + band))
     base = base or S
-    S['每間'] = ref['每間'] * (1 + C['新屋修正'] / 100) * S['租金比']
-    band = C.get('單套區間', 3.5) / 100
-    S['法一'] = (S['每間'] * (1 - band) * S['房'], S['每間'] * (1 + band) * S['房'])
+    S['每間'] = sum(S['每間區間']) / 2
+    S['法一'] = (S['每間區間'][0] * S['房'], S['每間區間'][1] * S['房'])
     y_lo, y_hi = C['毛投報']
     S['法二'] = (S['年租'] / (y_hi / 100), S['年租'] / (y_lo / 100))
     wt = C['權重']
@@ -164,7 +177,7 @@ json.dump(dict(級距行情=tiers, 標的=[{k: v for k, v in S.items() if k not 
 for t in tiers:
     print(t)
 for S in A:
-    print(f"{S['名稱']}：每間 {S['每間']:.0f}（參考 {S['參考']['門牌']} {S['參考']['每間']:.0f}，租金比 {S['租金比']:.3f}）｜"
+    print(f"{S['名稱']}：每間 {S['每間區間'][0]:.0f}–{S['每間區間'][1]:.0f}（參考 {[r['門牌'] for r in S['參考群']]}，租金比 {S['租金比']:.3f}）｜"
           f"法一 {S['法一'][0]:.0f}–{S['法一'][1]:.0f}｜法二 {S['法二'][0]:.0f}–{S['法二'][1]:.0f}｜加權 {S['試算中值']:.0f}｜判斷 {S['合理價']}")
 
 
@@ -312,7 +325,7 @@ cases = A[0]['同級案例'][:C.get('案例表上限', 18)]
 allv = sorted(r['每間'] for r in A[0]['同級案例'])
 q = st.quantiles(allv, n=4) if len(allv) >= 4 else [allv[0], st.median(allv), allv[-1]]
 HL = ' class="hl"'
-crow = ''.join(f'<tr{HL if r is A[0]["參考"] else ""}><td>{r["區"]}</td><td>{r["門牌"]}</td><td>{r["日期"]}</td><td class="num">{w(r["總價"])}</td>'
+crow = ''.join(f'<tr{HL if r in A[0]["參考群"] else ""}><td>{r["區"]}</td><td>{r["門牌"]}</td><td>{r["日期"]}</td><td class="num">{w(r["總價"])}</td>'
                f'<td class="num">{r["房"]}</td><td class="num">{r["屋齡"]}</td><td class="num b">{w(r["每間"])}</td></tr>' for r in cases)
 page(f'''<div class="eyebrow">03　COMPARABLES</div><div class="ttl">同級距成交案例</div>
 <div class="sub">{A[0]['級距']}、{y5} 起成交、屋齡 ≤{NEW} 年，共 {len(A[0]['同級案例'])} 筆（列出最新 {len(cases)} 筆）。每間均價：最低 {w(min(allv))} 萬，四分之一在 {w(q[0])} 萬以下，中位數 {w(q[1])} 萬，四分之一在 {w(q[2])} 萬以上，最高 {w(max(allv))} 萬。<br>
@@ -332,13 +345,15 @@ def val_page(S, n):
 <tr><td class="b">加權試算</td><td>{w(sum(S['法一']) / 2)} × {C['權重']['單套']:g} ＋ {w(sum(S['法二']) / 2)} × {C['權重']['收益']:g}</td>
 <td class="num b">{w(S['試算中值'])}</td></tr>''')
     else:  # 收益不計入權重，只列毛投報給屋主參考
-        inc_rows = (f'''<tr><td class="b">收益參考<br><span class="gr">不計入估價</span></td>
+        inc_rows = (f'''<tr><td class="b" style="white-space:nowrap">收益參考<br><span class="gr">不計入估價</span></td>
 <td>滿租年租 {S['年租']:.1f} 萬；以合理價計，滿租毛投報約 {S['年租'] / S['合理價'][1] * 100:.2f}%–{S['年租'] / S['合理價'][0] * 100:.2f}%</td>
 <td class="num">—</td></tr>''')
+    refs_txt = '參考同級距新屋成交：' + '、'.join(f"{r['區']}{r['門牌']}（{r['日期']}，{r['房']} 房、屋齡 {r['屋齡']} 年，每間 {w(r['每間'])} 萬）" for r in S['參考群'])
+    adj_txt = (f"× 新屋修正 +{C['新屋修正']}%" if C.get('新屋修正') else '') + rent_adj.replace('<br>', '') + ('<br>' if (C.get('新屋修正') or rent_adj) else '')
     m = f'''<table><tr><th>方法</th><th>計算</th><th class="num">結果（萬）</th></tr>
-<tr><td class="b">單套均價法<br><span class="gr">權重 {C['權重']['單套'] * 100:.0f}%</span></td>
-<td>參考 {ref['區']}{ref['門牌']}（{ref['日期']} 成交，{ref['房']} 房、屋齡 {ref['屋齡']} 年，每間 {w(ref['每間'])} 萬）<br>
-<span class="gr">× 新屋修正 +{C['新屋修正']}%{rent_adj}<br>→ 每間約 {w(S['每間'])} 萬（±{C.get('單套區間', 3.5)}%）× {S['房']} 間</span></td>
+<tr><td class="b" style="white-space:nowrap">單套均價法<br><span class="gr">權重 {C['權重']['單套'] * 100:.0f}%</span></td>
+<td>{refs_txt}<br>
+<span class="gr">{adj_txt}→ 每間 {w(S['每間區間'][0])}–{w(S['每間區間'][1])} 萬 × {S['房']} 間</span></td>
 <td class="num b">{w(S['法一'][0])}–{w(S['法一'][1])}</td></tr>
 {inc_rows}
 <tr class="hl"><td colspan="2">合理價判斷（每間約 {S['合理價'][0] / S['房']:.0f}–{S['合理價'][1] / S['房']:.0f} 萬）</td>
