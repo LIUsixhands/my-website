@@ -7793,6 +7793,36 @@ class TestV10TheCloseReplay(unittest.TestCase):
         text = review.format_push([dict(V10_SIG)], [o], [o])
         self.assertIn("移動停利（先出一半 103.00）", text)
 
+    def test_one_lot_is_not_called_a_half(self):
+        """10-12 建榮：1 張，漲到「先出一半」的價位時沒有賣，整張改移動停利。
+        日報寫「先出一半 98.70」會讓人以為有一半先落袋。"""
+        from dataclasses import replace
+        o = self._resolve([("09:12", 100.5, 103.2, 100.4, 103, 300),
+                           ("09:13", 103, 105.0, 103.6, 104.8, 300),
+                           ("09:14", 104.8, 104.9, 103.0, 103.2, 300)])
+        one = replace(o, lots=1)
+        text = review.format_push([dict(V10_SIG, lots=1)], [one], [one])
+        self.assertIn("移動停利（漲到 103.00 後整張改移動停利，1 張沒分）", text)
+        self.assertNotIn("先出一半", text)
+
+
+class TestTheStopMessageDoesNotSayTheProgramStopped(unittest.TestCase):
+    """10-12 第一天：09:05 三個訊號額度用完，推「🚨 今日停手…收工」，之後出場
+    通知照來 —— 停的是「發新訊號」，不是整支程式。"""
+
+    def test_it_says_tracking_continues(self):
+        sent = []
+        with tempfile.TemporaryDirectory() as d, \
+                unittest.mock.patch.object(config, "STATE_FILE", Path(d) / "state.json"), \
+                unittest.mock.patch.object(signals, "notify", sent.append):
+            gate = RiskGate(FakeBroker())
+            gate._close("已達當日訊號上限 3 個")
+        self.assertEqual(len(sent), 1)
+        self.assertIn("今日停手", sent[0])
+        self.assertIn("今天不會再發新的買入訊號", sent[0])
+        self.assertIn("出場通知照常會來", sent[0])
+        self.assertNotIn("收工", sent[0])
+
 
 class TestV10TheRulesAreWired(unittest.TestCase):
     def test_the_shipped_config_is_v10(self):

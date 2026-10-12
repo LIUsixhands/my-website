@@ -80,7 +80,11 @@ class RiskGate:
             self.state["closed_reason"] = reason
             self.save()
             log.warning("🚨 風控閘門關閉：%s", reason)
-            notify(f"🚨 今日停手\n原因：{reason}\n\n收工。明天再來，市場不會跑掉。")
+            # 停的是「發新訊號」，不是整支程式：已發出的照樣追蹤到出場。原本寫「收工」，
+            # 10-12 第一天 09:05 額度用完就推這一則，之後出場通知照來 —— 兩則互相矛盾。
+            notify(f"🚨 今日停手\n原因：{reason}\n\n"
+                   "今天不會再發新的買入訊號。\n"
+                   "已經發出的會繼續追蹤，出場通知照常會來。")
 
     @staticmethod
     def _trailing_losses(rows: list[float]) -> int:

@@ -419,8 +419,12 @@ def format_push(signals: list[dict], outcomes, history: list,
         lines.append("")
         for o in outcomes:
             label = f"{o.code} {names.get(o.code, '')}".strip()
-            half = (f"（先出一半 {o.half_exit:.2f}）"
-                    if getattr(o, "half_exit", None) is not None else "")
+            half = ""
+            if getattr(o, "half_exit", None) is not None:
+                # 1 張分不了：到「先出一半」那個價位時沒有賣，是整張改成移動停利
+                # （10-12 建榮）。寫「先出一半」會讓人以為有一半先落袋。
+                half = (f"（漲到 {o.half_exit:.2f} 後整張改移動停利，1 張沒分）"
+                        if o.lots == 1 else f"（先出一半 {o.half_exit:.2f}）")
             lines.append(f"{RESOLUTION_MARK.get(o.result, '')} {label}　{o.result}{half}")
             lines.append(f"　{o.r_multiple:+.2f}R　{round(o.net_amount):+,.0f} 元")
         for o in holding:
