@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 
 import config
 import market_calendar
+import premarket
 from broker import Broker, throttle, _bar_time
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -392,6 +393,11 @@ def push_watchlist(payload: dict, rows: list, show: int = 5) -> None:
     notify(format_watchlist(payload, rows[:show], total=len(rows)))
 
 
+def push_pick(payload: dict) -> None:
+    from signals import notify
+    notify(premarket.format_pick(payload.get("pick"), payload["date"]))
+
+
 # 例外訊息可能很長（堆疊裡的 SQL、HTML 錯誤頁都有可能），推播只留前面這麼多字
 FAILURE_DETAIL_CHARS = 400
 
@@ -477,6 +483,10 @@ def run(args) -> None:
         # 沒被選上的那幾檔也存著（signals.py 不看這一欄）。不存的話，
         # 「只盯前幾檔是不是漏掉了好的」這一題永遠沒有資料可以回答。
         "not_watched": dropped,
+        # 08:45 盤前首選：整個候選池（盯的 + 沒盯的）裡挑一檔（使用者 10-13）。
+        # 跟 v10 的突破訊號分開記錄，不影響上面盯哪幾檔。
+        "pick": premarket.choose(watchlist + dropped,
+                                 watched=[r["code"] for r in watchlist]),
     }
     config.WATCHLIST_FILE.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -491,6 +501,15 @@ def run(args) -> None:
               f"{r['amplitude_pct']:>9.2f}{r['prev_volume']:>11,}{r['volume_ratio']:>8.2f}")
     if args.push and (not args.alert_only or not watchlist):
         push_watchlist(payload, watchlist, show=args.push_top)
+    pick = payload["pick"]
+    if pick:
+        print(f"\n{premarket.LABEL}：{pick['code']} {pick.get('name', '')}"
+              f"（總分 {pick['total']}，{premarket.PICK_AT:%H:%M} 推播）")
+    if args.push and pick:
+        # --alert-only 也要推：這一則是訊號，不是名單。候選池是空的就沒有首選 ——
+        # 那一天上面已經推過「名單是空的」警告。
+        premarket.wait_until(premarket.PICK_AT)
+        push_pick(payload)
 
     if dropped:
         print(f"\n只盯量比前 {top} 檔：其餘 {len(dropped)} 檔不監看"

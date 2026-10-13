@@ -2074,6 +2074,21 @@ def run():
         notify(msg)
         return True
 
+    # 08:45 盤前首選（10-13）：自己一個追蹤器、結果寫在 state["pick"]，
+    # 不佔 v10 的額度、不進風控閘門。不在前 10 檔的，另外開一個狀態只給它用 ——
+    # 放進 states 的話它就會參加 v10 的突破判斷。
+    import premarket
+    pick = wl.get("pick")
+
+    def _save_pick():
+        with signal_lock:
+            gate.save()
+
+    pick_watch = premarket.PickWatch(pick, gate.state, notify, save=_save_pick)
+    pick_st = None
+    if pick and pick["code"] not in states:
+        pick_st = SymbolState(pick["code"], float(pick["prev_close"]), pick.get("name", ""))
+
     desk = EntryDesk(emit=_emit, blocked=record_candidate, say=notify,
                      watched=len(states), sent=len(gate.state.get("signals", [])),
                      reprice=lambda sig, now: reprice_at_send(
@@ -2106,12 +2121,20 @@ def run():
         quotes["n"] += 1            # 真的成交（不是試撮）—— 09:03 的開盤確認看這個
         st = states.get(tick.code)
         if not st:
+            if pick_st is not None and tick.code == pick_st.code:
+                pick_st.update(tick)
+                for msg in pick_watch.on_tick(pick_st):
+                    notify(msg)
+                return
             # 不在今天名單裡、但昨天留倉的那幾檔：只看停損目標，不算訊號。
             if tick.code in carried_codes:
                 for done in tracker.on_price(tick.code, float(tick.close)):
                     notify(done)
             return
         st.update(tick)
+        if tick.code == pick_watch.code:
+            for msg in pick_watch.on_tick(st):
+                notify(msg)
         # 先看已發出的訊號有沒有走完，再看要不要發新的
         for done in tracker.on_price(st.code, st.last_price, vwap=st.vwap,
                                      total_volume=st.total_volume):
@@ -2132,8 +2155,9 @@ def run():
         desk.tick()
 
     carried_codes = {str(c["code"]) for c in carried} - set(states)
+    extra = sorted(carried_codes | ({pick_st.code} if pick_st is not None else set()))
     import shioaji as sj  # 只有真的要訂閱行情時才需要
-    for code in list(states) + sorted(carried_codes):
+    for code in list(states) + extra:
         broker.api.quote.subscribe(
             broker.stock(code),
             quote_type=sj.constant.QuoteType.Tick,
@@ -2147,7 +2171,9 @@ def run():
            f"（沒收到會再通知）。\n"
            f"紅線：最多 {config.RISK['max_signals_per_day']} 訊號／"
            f"{config.RISK['max_trades_per_day']} 筆／虧損上限 "
-           f"{config.RISK['max_daily_loss']:,} 元")
+           f"{config.RISK['max_daily_loss']:,} 元"
+           + (f"\n{premarket.LABEL}：{pick['code']} {pick.get('name', '')}".rstrip()
+              + f"（{premarket.ENTRY_AT:%H:%M} 開盤價進場，分開記錄）" if pick else ""))
     if carried or carry_notes:
         notify(format_carry_start(carried, carry_notes))
     nxt_year = str(datetime.now().year + 1)
@@ -2198,7 +2224,7 @@ def run():
             # 與 outcome.py 的收盤回推用同一個時間，兩邊才比得起來。
             if not flattened and datetime.now().time() >= outcome.FLATTEN_AT:
                 flattened = True
-                for msg in tracker.flatten():
+                for msg in tracker.flatten() + pick_watch.flatten():
                     notify(msg)
             # 主動輪詢風控。只在訊號觸發時才檢查的話，虧損上限的「停手」通知
             # 會等到下一個訊號才發 —— 而那可能是收盤前，早就來不及了。

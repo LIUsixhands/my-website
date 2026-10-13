@@ -1,6 +1,8 @@
 @echo off
-REM Pre-market screener: monitor the full candidate pool. Pushes to Telegram
-REM only when something is wrong (failure, or an empty list) -- user 10-08.
+REM Pre-market screener: monitor the full candidate pool. The list itself is
+REM pushed only when something is wrong (failure, or an empty list) -- user 10-08.
+REM From 10-13 it also pushes the 08:45 pre-market pick (one stock from the pool of
+REM 20), waiting until 08:45 if it finishes early.
 REM Scheduled by Windows Task Scheduler on weekdays at 08:40.
 REM To test by hand: just double-click this file.
 REM Everything the run prints is appended to logs\morning.log, so a silent
@@ -16,11 +18,13 @@ echo.
 echo ==========================================================
 echo   PRE-MARKET SCREENER IS RUNNING  --  DO NOT CLOSE
 echo.
-echo   Takes about 1-2 minutes.
+echo   Takes about 1-2 minutes, then waits until 08:45
+echo   to push the pre-market pick.
 echo   The screen stays BLANK until it finishes. That is normal,
 echo   it is NOT frozen. This window closes by itself.
 echo.
-echo   Telegram only hears from it if something is wrong.
+echo   Telegram gets the 08:45 pick, plus an alert if
+echo   something is wrong.
 echo ==========================================================
 echo.
 echo ================ %DATE% %TIME% ================>>"logs\morning.log"

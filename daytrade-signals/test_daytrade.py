@@ -47,14 +47,20 @@ import market_calendar
 # 跑測試時，不先釘住的話，選股／監看／日報的測試會全部提早結束。
 # 休市本身的行為在 TestMarketHolidays 裡用指定日期測。
 _MARKET_OPEN = unittest.mock.patch.object(market_calendar, "closed_today", lambda: None)
+# 選股推首選前會等到 08:45。測試剛好在 08:00–08:45 跑的話會真的睡上幾分鐘 ——
+# 等待本身在 TestPremarketPick 裡用注入的時鐘測。
+import premarket
+_NO_WAIT = unittest.mock.patch.object(premarket, "wait_until", lambda *a, **k: 0.0)
 
 
 def setUpModule():
     _MARKET_OPEN.start()
+    _NO_WAIT.start()
 
 
 def tearDownModule():
     _MARKET_OPEN.stop()
+    _NO_WAIT.stop()
 
 # 風控在真錢模式查不到帳務時會重試幾次才關閘，每次之間會等。
 # 那個等待是為了讓連線喘口氣，不是要測的行為 —— 測試裡歸零，否則整套會慢 3 秒。
@@ -7326,19 +7332,28 @@ class TestTheMorningListIsQuietUnlessSomethingIsWrong(unittest.TestCase):
 
     ROWS = [dict(r, prev_volume=5000) for r in TestWatchlistPush.ROWS]
 
+    # 10-13 起 08:45 多推一則盤前首選 —— 那是訊號，不是名單，--alert-only 照推。
+    # 這組測試管的是「名單」那一則，所以把首選分開數。
+    @staticmethod
+    def _split(sent):
+        picks = [m for m in sent if m.startswith("🌅")]
+        return [m for m in sent if not m.startswith("🌅")], picks
+
     def test_a_normal_list_is_written_but_not_pushed(self):
         sent, written = self._run(["--push", "--alert-only"], self.ROWS)
-        self.assertEqual(sent, [])
+        lists, picks = self._split(sent)
+        self.assertEqual(lists, [])
+        self.assertEqual(len(picks), 1, "首選照推")
         self.assertEqual([r["code"] for r in written["items"]], ["3707", "2498"])
 
     def test_an_empty_list_is_still_pushed(self):
         sent, _ = self._run(["--push", "--alert-only"], [])
-        self.assertEqual(len(sent), 1)
+        self.assertEqual(len(sent), 1, "空名單只推那一則警告，沒有首選可推")
         self.assertIn("0 檔", sent[0])
 
     def test_without_the_flag_it_pushes_as_before(self):
-        sent, _ = self._run(["--push"], self.ROWS)
-        self.assertEqual(len(sent), 1)
+        lists, picks = self._split(self._run(["--push"], self.ROWS)[0])
+        self.assertEqual((len(lists), len(picks)), (1, 1))
 
     def test_a_failure_is_still_pushed(self):
         sent = []
@@ -7355,6 +7370,255 @@ class TestTheMorningListIsQuietUnlessSomethingIsWrong(unittest.TestCase):
         raw = (Path(__file__).parent / "morning.bat").read_bytes()
         self.assertIn(b"python screener.py --push --alert-only", raw)
         self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+
+
+class TestPremarketPick(unittest.TestCase):
+    """08:45 盤前首選（使用者 10-13）：候選池 20 檔挑一檔，09:00 開盤價買進，
+    照 v10 出場，跟突破訊號分開記錄。
+
+    「勝率最高」現在算不出來 —— 所以這裡釘的是：公式照寫的算、訊息不宣稱勝率、
+    跟 v10 的額度與統計完全分開。"""
+
+    @staticmethod
+    def _row(code, vr=2.0, amp=5.0, rsi=60.0, close=100.0, hi=101.0, lo=95.0, name=""):
+        return {"code": code, "name": name or f"名{code}", "prev_close": close,
+                "prev_high": hi, "prev_low": lo, "volume_ratio": vr,
+                "avg_amplitude_pct": amp, "amplitude_pct": amp, "daily_rsi": rsi}
+
+    # ── 分數 ──
+    def test_each_factor_is_ranked_and_the_lowest_total_wins(self):
+        pool = [self._row("1111", vr=3.0, amp=4.0, rsi=60, close=100, hi=100, lo=90),   # 1+2+1+1
+                self._row("2222", vr=2.0, amp=6.0, rsi=75, close=95, hi=100, lo=90),    # 2+1+2+2
+                self._row("3333", vr=1.0, amp=3.0, rsi=40, close=90, hi=100, lo=90)]    # 3+3+3+3
+        ranked = premarket.score(pool)
+        self.assertEqual([s["code"] for s in ranked], ["1111", "2222", "3333"])
+        self.assertEqual(ranked[0]["ranks"], {"volume_ratio": 1, "amplitude": 2,
+                                              "rsi_gap": 1, "close_pos": 1})
+        self.assertEqual([s["total"] for s in ranked], [5, 7, 12])
+
+    def test_rsi_near_60_beats_an_overheated_one(self):
+        """恆大、系統電 10-13 之前一週大漲 +30%／+50% —— 那種 RSI 會很高。"""
+        f = premarket.features
+        self.assertLess(f(self._row("1", rsi=62))["rsi_gap"], f(self._row("2", rsi=85))["rsi_gap"])
+        self.assertLess(f(self._row("1", rsi=62))["rsi_gap"], f(self._row("2", rsi=35))["rsi_gap"])
+
+    def test_close_position_in_yesterdays_range(self):
+        self.assertEqual(premarket.features(self._row("1", close=99, hi=100, lo=90))["close_pos"], 90.0)
+        self.assertIsNone(premarket.features(self._row("1", close=99, hi=99, lo=99))["close_pos"],
+                          "高低一樣算不出位置，不可以除以零")
+
+    def test_missing_data_ranks_last_not_first(self):
+        pool = [self._row("1111", rsi=None), self._row("2222", rsi=70)]
+        ranked = {s["code"]: s for s in premarket.score(pool)}
+        self.assertEqual(ranked["1111"]["ranks"]["rsi_gap"], 2)
+        self.assertEqual(ranked["2222"]["ranks"]["rsi_gap"], 1)
+
+    def test_ties_go_to_the_higher_volume_ratio_then_the_pool_order(self):
+        a = self._row("1111", vr=2.0, amp=6.0)
+        b = self._row("2222", vr=3.0, amp=4.0)       # 量比贏、振幅輸 —— 總分一樣
+        self.assertEqual(premarket.score([a, b])[0]["code"], "2222")
+        self.assertEqual(premarket.score([self._row("1"), self._row("2")])[0]["code"], "1")
+
+    def test_choose_records_why_and_who_came_next(self):
+        pool = [self._row(str(1000 + i), vr=5 - i) for i in range(4)]
+        pick = premarket.choose(pool, watched=["1000"])
+        self.assertEqual(pick["code"], "1000")
+        self.assertTrue(pick["watched"])
+        self.assertEqual(pick["pool_size"], 4)
+        self.assertEqual([s["code"] for s in pick["runners_up"]], ["1001", "1002"])
+        self.assertIsNone(premarket.choose([]))
+
+    # ── 08:45 那一則 ──
+    def test_the_message_does_not_claim_a_win_rate(self):
+        pick = premarket.choose([self._row("2603", name="長榮"), self._row("2615", vr=1.0)])
+        text = premarket.format_pick(pick, "2026-10-14")
+        self.assertIn("2603 長榮", text)
+        self.assertIn("未驗證", text)
+        self.assertIn("開盤價買進", text)
+        self.assertIn("總分", text)
+        self.assertIn("次佳：2615", text)
+        self.assertNotIn("勝率", text)
+        self.assertNotIn("**", text, "Telegram 沒開 parse_mode")
+        self.assertIn("不佔每日 3 個額度", text)
+
+    def test_it_waits_until_0845_only_when_run_on_schedule(self):
+        slept = []
+        real = _NO_WAIT.temp_original
+        d = datetime(2026, 10, 14)
+        self.assertEqual(real(dtime(8, 45), now=d.replace(hour=8, minute=41, second=30),
+                              sleep=slept.append), 210.0)
+        self.assertEqual(slept, [210.0])
+        self.assertEqual(real(dtime(8, 45), now=d.replace(hour=8, minute=50), sleep=slept.append), 0.0)
+        self.assertEqual(real(dtime(8, 45), now=d.replace(hour=20), sleep=slept.append), 0.0)
+        self.assertEqual(len(slept), 1, "晚上手動跑不等")
+
+    # ── 開盤價進場的計畫 ──
+    PICK = {"code": "1111", "name": "測試", "prev_close": 98.0, "amplitude_pct": 5.0,
+            "features": {}, "ranks": {}, "total": 4}
+
+    def test_the_plan_uses_the_open_as_entry_and_has_no_range(self):
+        p = premarket.plan(self.PICK, 100.0)
+        self.assertEqual(p["entry"], 100.0)
+        self.assertEqual(p["stop"], 97.0, "沒有區間高 —— 只有固定 3%")
+        self.assertEqual(p["target"], 105.0)
+        self.assertEqual(p["half_at"], 102.5)
+        self.assertEqual(p["key_level"], 100.0, "跌破開盤價 = 跌破進場價")
+        self.assertIsNone(p["or_high"])
+        self.assertEqual(p["lots"], 1)
+        self.assertIn("盤前首選", p["name"])
+        self.assertTrue(exits.uses_v10(p))
+
+    def test_a_limit_up_open_cannot_be_bought(self):
+        pick = dict(self.PICK, prev_close=91.0)        # 漲停 100.0
+        self.assertIsNone(premarket.plan(pick, 100.0))
+
+    # ── 盤中 ──
+    def _st(self, price, day_open=100.0, vwap=99.0):
+        st = SymbolState("1111", 98.0, "測試")
+        st.last_price, st.day_open, st.vwap, st.total_volume = price, day_open, vwap, 1000
+        return st
+
+    def test_it_enters_at_the_open_and_exits_on_the_v10_rules(self):
+        state, sent, saves = {}, [], []
+        w = premarket.PickWatch(self.PICK, state, sent.append, save=lambda: saves.append(1))
+        at = lambda h, m, s=0: datetime(2026, 10, 14, h, m, s)
+        self.assertEqual(w.on_tick(self._st(100.5), now=at(8, 59, 58)), [], "09:00 前不進場")
+        msgs = w.on_tick(self._st(100.5), now=at(9, 0, 2))
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("進場：100.00", msgs[0], "開盤價，不是第一筆之後的價格")
+        self.assertIn("（＝進場價）", msgs[0])
+        self.assertNotIn("跌回區間", msgs[0])
+        self.assertEqual(state["pick"]["sig"]["entry"], 100.0)
+        self.assertTrue(saves)
+        self.assertEqual(w.on_tick(self._st(99.5), now=at(9, 1, 10)), [])
+        msgs = w.on_tick(self._st(99.6), now=at(9, 2, 0))       # 09:01 收在 99.5 < 開盤
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("跌破開盤價", msgs[0])
+        self.assertIn("盤前首選", msgs[0])
+        self.assertEqual(state["pick"]["live_result"], exits.BELOW_OPEN)
+        self.assertEqual(state["pick"]["live_exit"], 99.5)
+
+    def test_a_limit_up_open_is_skipped_and_said(self):
+        state = {}
+        w = premarket.PickWatch(dict(self.PICK, prev_close=91.0), state, lambda m: None)
+        msgs = w.on_tick(self._st(100.0), now=datetime(2026, 10, 14, 9, 0, 1))
+        self.assertIn("買不到", msgs[0])
+        self.assertNotIn("sig", state["pick"])
+        self.assertEqual(w.on_tick(self._st(100.0), now=datetime(2026, 10, 14, 9, 5)), [])
+
+    def test_a_restart_keeps_tracking_an_open_pick_but_not_a_finished_one(self):
+        sig = dict(premarket.plan(self.PICK, 100.0), time="09:00:02")
+        live = premarket.PickWatch(self.PICK, {"pick": {"code": "1111", "sig": sig}}, print)
+        self.assertEqual(len(live.tracker.open), 1)
+        done = premarket.PickWatch(self.PICK, {"pick": {"code": "1111", "sig": sig,
+                                                        "live_result": "停損"}}, print)
+        self.assertEqual(done.tracker.open, [])
+        other = {"pick": {"code": "9999", "sig": sig}}
+        premarket.PickWatch(self.PICK, other, print)
+        self.assertEqual(other["pick"]["code"], "1111", "昨天／別檔的紀錄不可以接過來")
+
+    def test_flatten_closes_it_at_1325(self):
+        state = {}
+        w = premarket.PickWatch(self.PICK, state, print)
+        w.on_tick(self._st(100.5), now=datetime(2026, 10, 14, 9, 0, 2))
+        w.on_tick(self._st(101.0), now=datetime(2026, 10, 14, 9, 0, 30))
+        msgs = w.flatten()
+        self.assertEqual(len(msgs), 1)
+        self.assertEqual(state["pick"]["live_result"], oc.FLAT)
+
+    # ── 收盤後 ──
+    def test_resolve_prefers_the_live_result(self):
+        sig = dict(premarket.plan(self.PICK, 100.0), time="09:00:02")
+        rec = {"code": "1111", "sig": sig, "live_result": exits.BELOW_OPEN,
+               "live_exit": 99.5, "live_at": "09:02:00"}
+        row = premarket.resolve(None, self.PICK, rec, "2026-10-14")
+        self.assertEqual((row["result"], row["exit_price"], row["source"]),
+                         (exits.BELOW_OPEN, 99.5, "盤中"))
+        self.assertAlmostEqual(row["r_multiple"], round(-0.5 / 3.0, 2))
+        self.assertLess(row["net_r"], row["r_multiple"])
+        self.assertLess(row["net_amount"], 0)
+
+    def test_resolve_walks_the_bars_when_the_monitor_missed_it(self):
+        d = datetime(2026, 10, 14)
+        bars = [(d.replace(hour=9, minute=1), 100.0, 101.0, 99.8, 100.8, 500.0),
+                (d.replace(hour=9, minute=2), 100.8, 103.0, 100.7, 102.9, 800.0),
+                # 移動停利線 = 102.5 × 0.985 → 往下取檔位 100.5；這一根低點 100.4 碰到
+                (d.replace(hour=9, minute=3), 102.9, 103.0, 100.4, 101.2, 300.0)]
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", lambda b, c, dt: bars):
+            row = premarket.resolve(object(), self.PICK, {}, "2026-10-14")
+        self.assertEqual(row["entry"], 100.0, "第一根的開盤價")
+        self.assertEqual(row["source"], "分鐘 K")
+        self.assertEqual(row["half_exit"], 102.5)
+        self.assertEqual((row["result"], row["exit_price"]), (exits.TRAIL, 100.5))
+        self.assertIsNone(premarket.resolve(object(), self.PICK, {"skipped": "x"}, "2026-10-14"))
+
+    def test_one_row_per_day_in_picks_csv(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "picks.csv"
+            premarket.append({"date": "2026-10-14", "code": "1111", "net_pct": 1}, path)
+            premarket.append({"date": "2026-10-14", "code": "2222", "net_pct": 2}, path)
+            premarket.append({"date": "2026-10-13", "code": "3333", "net_pct": 3}, path)
+            rows = premarket.load(path)
+        self.assertEqual([(r["date"], r["code"]) for r in rows],
+                         [("2026-10-13", "3333"), ("2026-10-14", "2222")])
+
+    def test_the_daily_report_section_is_separate(self):
+        today = {"result": exits.BELOW_OPEN, "r_multiple": -0.17, "net_amount": -707}
+        hist = [{"net_pct": "-0.7", "r_multiple": "-0.17", "net_r": "-0.24", "net_amount": "-707"},
+                {"net_pct": "1.2", "r_multiple": "0.5", "net_r": "0.43", "net_amount": "1200"}]
+        lines = premarket.report_lines(today, self.PICK, hist)
+        text = "\n".join(lines)
+        self.assertIn("盤前首選（分開記錄）", text)
+        self.assertIn("1111 測試", text)
+        self.assertIn("首選累計 2 筆｜勝率 50.0%", text)
+        self.assertIn("扣成本", text)
+        for row in [l for l in lines if l.startswith("　")]:
+            self.assertLessEqual(len(row), 20, "手機一行放得下")
+        self.assertIn("買不到", "\n".join(premarket.report_lines(None, self.PICK, [], "開盤漲停，買不到")))
+        self.assertEqual(premarket.report_lines(None, None, []), [])
+
+    def test_the_section_sits_above_the_footer_and_outside_v10_totals(self):
+        text = review.format_push([], None, [], extra=["────────────────", "🌅 盤前首選（分開記錄）"])
+        self.assertLess(text.index("盤前首選"), text.index("驗證期未下單"))
+        self.assertIn("今天沒有任何訊號", text)
+
+    # ── 接線 ──
+    def test_the_screener_picks_from_the_whole_pool_and_pushes_it(self):
+        rows = [dict(self._row("1111", vr=3.0, amp=3.0, rsi=90), prev_volume=5000),
+                dict(self._row("2222", vr=2.0, amp=9.0, rsi=60), prev_volume=5000)]
+        sent = []
+        with tempfile.TemporaryDirectory() as d, \
+             unittest.mock.patch.object(config, "WATCHLIST_FILE", Path(d) / "w.json"), \
+             unittest.mock.patch.object(screener, "Broker", lambda: None), \
+             unittest.mock.patch.object(screener, "screen", lambda b: list(rows)), \
+             unittest.mock.patch.object(screener, "archive_watchlist", lambda p: None), \
+             unittest.mock.patch.object(signals, "notify", sent.append), \
+             contextlib.redirect_stdout(io.StringIO()):
+            screener.main(["--push", "--alert-only", "--top", "1"])
+            written = json.loads((Path(d) / "w.json").read_text(encoding="utf-8"))
+        self.assertEqual([r["code"] for r in written["items"]], ["1111"], "盤中 v10 照舊")
+        self.assertEqual(written["pick"]["code"], "2222", "沒盯的那一檔也可以是首選")
+        self.assertFalse(written["pick"]["watched"])
+        self.assertEqual(len(sent), 1)
+        self.assertIn("2222", sent[0])
+
+    def test_the_monitor_wires_the_pick_in(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("premarket.PickWatch(", src)
+        self.assertIn("pick_watch.on_tick(pick_st)", src)
+        self.assertIn("pick_watch.on_tick(st)", src)
+        self.assertIn("pick_watch.flatten()", src)
+        self.assertIn("{pick_st.code}", src, "沒在前 10 檔的首選也要訂閱")
+        # 首選不可以進 states —— 進去就會參加 v10 的突破判斷、佔額度
+        self.assertNotIn("states[pick", src)
+
+    def test_review_writes_the_pick_section(self):
+        src = inspect.getsource(review.run)
+        self.assertIn("pick_section(broker, state)", src)
+        self.assertIn("push_summary(signals, outcomes, carried_out, pick_lines)", src)
+
+    def test_picks_csv_is_not_committed(self):
+        self.assertIn("picks.csv", (Path(__file__).parent / ".gitignore").read_text(encoding="utf-8"))
 
 
 class TestTheBatchIsRepricedWhenItGoesOut(unittest.TestCase):

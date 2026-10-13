@@ -10,6 +10,8 @@ outcomes.csv
 # 漏掉的後果不是「檔案多了一個」，是個人損益紀錄會跟著 commit 上 GitHub。
 candidates.csv
 candidates_outcomes.csv
+# 08:45 盤前首選的結局（同一類個人交易紀錄）
+picks.csv
 
 # 交易日誌含個人損益與持股，不進版控。
 # 要給 Claude 做跨日稽核時，直接把本機的 journal/ 目錄丟給它。

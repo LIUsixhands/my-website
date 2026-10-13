@@ -380,7 +380,7 @@ def _r_text(rows) -> str:
 
 
 def format_push(signals: list[dict], outcomes, history: list,
-                carried: list | None = None) -> str:
+                carried: list | None = None, extra: list[str] | None = None) -> str:
     """推到手機上的當日結果。
 
     覆盤寫進 journal 而沒有人看，等於沒寫。這則訊息的工作是讓你在手機上
@@ -452,6 +452,8 @@ def format_push(signals: list[dict], outcomes, history: list,
 
     if history:
         lines += cumulative_lines(history)
+    # 08:45 盤前首選那一段（分開記錄，不混進上面 v10 的數字）
+    lines += extra or []
 
     lines += [
         "────────────────",
@@ -497,7 +499,8 @@ def cumulative_lines(history: list) -> list[str]:
     return lines
 
 
-def push_summary(signals: list[dict], outcomes, carried: list | None = None) -> None:
+def push_summary(signals: list[dict], outcomes, carried: list | None = None,
+                 extra: list[str] | None = None) -> None:
     """推播失敗不該讓覆盤跟著失敗 —— journal 已經寫好了。"""
     from signals import notify
     import outcome as oc
@@ -507,7 +510,7 @@ def push_summary(signals: list[dict], outcomes, carried: list | None = None) -> 
         log.warning("讀不到 outcomes.csv，累計數字先略過：%s", e)
         history = []
     try:
-        notify(format_push(signals, outcomes, history, carried))
+        notify(format_push(signals, outcomes, history, carried, extra))
     except Exception as e:
         log.error("當日結果推播失敗：%s", e)
 
@@ -551,6 +554,39 @@ def push_failure(exc: BaseException) -> None:
         log.error("連失敗通知都送不出去：%s", e)
 
 
+def today_pick() -> dict | None:
+    """今天 08:45 的首選（watchlist.json 裡的 pick）。不是今天的名單就沒有。"""
+    try:
+        wl = json.loads(config.WATCHLIST_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if wl.get("date") != datetime.now().strftime("%Y-%m-%d"):
+        return None
+    return wl.get("pick")
+
+
+def pick_section(broker, state: dict | None) -> list[str]:
+    """回推首選、寫進 picks.csv、回傳日報那一段。壞掉不可以讓日報產不出來。"""
+    import premarket
+    pick = today_pick()
+    if not pick:
+        return []
+    rec = (state or {}).get("pick") or {}
+    if rec.get("code") != pick["code"]:
+        rec = {}
+    row = None
+    try:
+        if broker is not None:
+            row = premarket.resolve(broker, pick, rec, datetime.now().strftime("%Y-%m-%d"))
+            if row:
+                premarket.append(row)
+        history = premarket.load()
+    except Exception as e:
+        log.warning("盤前首選回推失敗（不影響日報）：%s", e)
+        history = []
+    return premarket.report_lines(row, pick, history, skipped=rec.get("skipped", ""))
+
+
 def run(args) -> None:
     import outcome as oc
     # 休市日沒有日報可出（10-09 國慶補假：早上已經推過「今天休市」）。
@@ -583,12 +619,16 @@ def run(args) -> None:
                 oc.append_candidates_csv(oc.resolve_candidates(broker, pending))
         except Exception as e:                   # 候選壞掉不可以讓日報產不出來
             log.warning("候選回推失敗（不影響日報）：%s", e)
+    pick_lines = pick_section(broker, state)
     lines = render(signals, trades, state, pnl, note, outcomes, carried_out)
+    if pick_lines:
+        lines += ["", "## 盤前首選（分開記錄）", ""] + [l for l in pick_lines
+                                                  if not l.startswith("────")]
     path = write_journal(lines)
     print("\n".join(lines))
     print(f"\n→ 已寫入 {path}")
     if not args.no_push:
-        push_summary(signals, outcomes, carried_out)
+        push_summary(signals, outcomes, carried_out, pick_lines)
 
 
 def main(argv=None):
