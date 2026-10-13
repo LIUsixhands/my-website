@@ -310,6 +310,30 @@ PICK_FIELDS = ("date", "code", "name", "entry", "stop", "target", "lots", "half_
                "amplitude", "daily_rsi", "close_pos", "watched", "source")
 
 
+# 盤中進場是開盤後第一筆成交（09:00:0x）。回推時用 09:00:01：walk_v10「進場那一分鐘
+# 不判」才會跳過 09:00–09:01 那一根，跟盤中一致。寫 09:00:00 的話那一根會被拿去判
+# 「跌破開盤價」—— 盤中不會判的那一分鐘。
+REPLAY_ENTRY_TIME = "09:00:01"
+
+
+def replay(pick: dict, full: list, date: str, sig: dict | None = None):
+    """用當天分鐘 K（開高低收量）照同一套規則走一遍。回傳 (訊號, walk_v10 的結果)；
+    沒有 K 棒、開盤漲停買不到、進場後沒有 K 棒 → None。whatif.py 也用這一個。"""
+    import outcome as oc
+    if not full:
+        return None
+    if not sig:
+        sig = plan(pick, full[0][1])          # 第一根的開盤價 = 開盤價
+        if sig is None:
+            return None
+        sig["time"] = REPLAY_ENTRY_TIME
+    fired = datetime.strptime(f"{date} {sig['time']}", "%Y-%m-%d %H:%M:%S")
+    walked = oc.walk_v10(full, sig, fired)
+    if walked is None:
+        return None
+    return sig, walked
+
+
 def resolve(broker, pick: dict, rec: dict | None, date: str) -> dict | None:
     """首選那一筆的結局。盤中有判過的以盤中為準（跟 v10 同一個原則）；
     沒有（監看沒開、中途掛掉）就用分鐘 K 照同一套規則回推。"""
@@ -324,19 +348,10 @@ def resolve(broker, pick: dict, rec: dict | None, date: str) -> dict | None:
         result, exit_price, exit_at, source = (rec["live_result"], float(rec["live_exit"]),
                                                rec.get("live_at", ""), "盤中")
     else:
-        full = oc.day_bars_ohlcv(broker, pick["code"], date)
-        if not full:
+        replayed = replay(pick, oc.day_bars_ohlcv(broker, pick["code"], date), date, sig)
+        if replayed is None:
             return None
-        if not sig:
-            sig = plan(pick, full[0][1])
-            if sig is None:
-                return None
-            sig["time"] = ENTRY_AT.strftime("%H:%M:%S")
-        fired = datetime.strptime(f"{date} {sig['time']}", "%Y-%m-%d %H:%M:%S")
-        walked = oc.walk_v10(full, sig, fired)
-        if walked is None:
-            return None
-        result, exit_price, _used, exit_at, half = walked
+        sig, (result, exit_price, _used, exit_at, half) = replayed
         source = "分鐘 K"
     entry, stop, lots = float(sig["entry"]), float(sig["stop"]), int(sig["lots"])
     pct, r = exits.blended(entry, stop, lots, half, exit_price)

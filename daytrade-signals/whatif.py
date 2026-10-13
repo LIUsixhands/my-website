@@ -27,6 +27,9 @@
 **它是重建，不是盤中紀錄。** 量能倍數和均價線都是分鐘 K 的近似（見 whynot.py）。
 所以 2 分鐘那一列會拿去跟盤中真的發出的訊號對答案，對不上的寫在報表最前面。
 
+10-13 再加一張「三種進場方式」：突破即買（v10）、回踩再買（使用者貼的文章）、
+08:45 盤前首選（開盤價）。同一批日子、同一套出場，只換進場方式。
+
 用法：
     python whatif.py                      # 10-12（v10 第一天）到昨天
     python whatif.py --since 2026-10-12 --until 2026-11-09
@@ -43,6 +46,7 @@ import config
 import exits
 import market_calendar
 import outcome as oc
+import premarket
 import whynot
 
 log = logging.getLogger("whatif")
@@ -105,6 +109,7 @@ class Trade:
     exit_price: float = 0.0
     exit_at: str = ""
     r_multiple: float = 0.0
+    net_r: float = 0.0           # 扣掉來回成本之後的 R
     net_pct: float = 0.0
     held_min: int = 0
 
@@ -235,11 +240,141 @@ def _walk(p: dict, b, vr: float, plan: dict, batch: bool) -> Trade:
     result, exit_price, _used, exit_at, half = walked
     pct, r = exits.blended(plan["entry"], plan["stop"], plan["lots"], half, exit_price)
     tr.result, tr.exit_price, tr.exit_at = result, round(exit_price, 2), exit_at
+    _finish(tr, plan["entry"], plan["stop"], r, pct, exit_at, fired)
+    return tr
+
+
+def _finish(tr: Trade, entry: float, stop: float, r: float, pct: float,
+            exit_at: str, fired: datetime) -> None:
+    cost = config.round_trip_cost_pct()
     tr.r_multiple = round(r, 2)
-    tr.net_pct = round(pct - config.round_trip_cost_pct(), 3)
+    tr.net_r = round(r - cost / 100 * entry / (entry - stop), 2) if entry > stop else tr.r_multiple
+    tr.net_pct = round(pct - cost, 3)
     end = datetime.combine(fired.date(), _t(exit_at)) if exit_at else fired
     tr.held_min = max(0, int((end - fired).total_seconds() // 60))
+
+
+# ── 進場方式的比較組 ──────────────────────────────────────
+# 10-13 使用者貼了一篇當沖心得：「前 5 分鐘不追第一根」「等第一次回踩再決定 ——
+# 回踩時量縮、守住突破位置，再重新往上才進場」。v10 是突破就買，沒有這一步。
+# 使用者選「加進 whatif 當比較組」：同一批日子、同一套出場，只換進場方式。
+BREAKOUT = "突破即買（v10 現在）"
+PULLBACK = "回踩再買"
+PICK = "盤前首選（開盤價）"
+PULLBACK_BAND_PCT = 0.5      # 低點回到突破點上方 0.5% 以內，算「回踩到了」
+
+
+def pullback_entry(wbars, or_high: float, trigger: float, or_start: dtime,
+                   or_end: dtime, win_end: dtime):
+    """回踩再買。wbars = [(dt, 高, 低, 收, 量)]。回傳 (進場那一根, 突破時的量能倍數,
+    前一根的高點) 或 None。
+
+    1. 先要有一次 v10 會買的突破（突破、均價線、量能三關都過）
+    2. 之後有一根的低點回到突破點附近（區間高 +0.5% 以內），而且量比突破那一根小
+       —— 文章的「回踩時量能縮下來」
+    3. 再來有一根收盤高過前一根的高點、收在均價線上 —— 「重新出現往上的力道」
+    中途任何一根收回區間（區間高 -0.2% 以下）＝突破失敗，當天不買。
+    一直沒回踩就一路漲上去的，買不到 —— 這是這種進場方式的代價，要算進去。
+    """
+    hold = or_high * (1 - config.SIGNAL["exit_reason_buffer_pct"] / 100)
+    near = or_high * (1 + PULLBACK_BAND_PCT / 100)
+    stage, brk, prev = 0, None, None
+    for b in wbars:
+        if not (or_end < b[0].time() <= win_end):
+            prev = b
+            continue
+        if stage == 0:
+            vr = _gates(wbars, b, trigger, or_start)
+            if vr is not None:
+                stage, brk = 1, (b, vr)
+        elif b[3] < hold:
+            return None
+        elif stage == 1:
+            if b[2] <= near and b[4] < brk[0][4]:
+                stage = 2
+        elif stage == 2 and b[3] > prev[1]:
+            vw = whynot.vwap_upto(wbars, b[0])
+            if vw is None or b[3] >= vw:
+                return b, brk[1], prev[1]
+        prev = b
+    return None
+
+
+def replay_pullback_day(stocks: list[dict], optimistic: bool = False,
+                        limit: int | None = None) -> tuple[list[Trade], int]:
+    """一天、回踩再買、開盤區間 2 分鐘。依進場時間先到先買，額度跟 v10 一樣。
+    保守：那一根的收盤；樂觀：剛越過前一根高點的價位。"""
+    cfg = config.SIGNAL
+    limit = config.RISK["max_signals_per_day"] if limit is None else limit
+    or_start = _t(cfg["or_start"])
+    or_end, _batch, win_end = schedule(CURRENT_OR)
+    hits = []
+    for s in stocks:
+        bars = s.get("bars") or []
+        rng = opening_range(bars, CURRENT_OR)
+        if not rng:
+            continue
+        wbars = _wn(bars)
+        trigger = rng[0] * (1 + cfg["breakout_buffer_pct"] / 100)
+        got = pullback_entry(wbars, rng[0], trigger, or_start, or_end, win_end)
+        if got:
+            p = dict(stock=s, or_high=rng[0], trigger=trigger, wbars=wbars,
+                     day_open=bars[0][1] if bars else None)
+            hits.append((got[0], got[1], got[2], p))
+    hits.sort(key=lambda x: (x[0][0], x[3]["stock"].get("rank") or 9999))
+    sent, capped = [], 0
+    for b, vr, prev_high, p in hits:
+        if len(sent) >= limit:
+            capped += 1
+            continue
+        entry = min(b[3], prev_high) if optimistic else b[3]
+        plan = _plan(p["stock"], p["or_high"], p["day_open"],
+                     config.round_to_tick(entry, "up"), b[0].time())
+        if plan is not None:
+            sent.append(_walk(p, b, vr, plan, False))
+    return sent, capped
+
+
+def pick_of(payload: dict) -> dict | None:
+    """那一天的盤前首選。10-14 起存檔裡就有；之前的日子用同一條公式重算
+    （候選池 = 盯的 + 沒盯的）。"""
+    if payload.get("pick"):
+        return payload["pick"]
+    items = payload.get("items") or []
+    return premarket.choose(items + (payload.get("not_watched") or []),
+                            watched=[i["code"] for i in items])
+
+
+def pick_trade(day: str, pick: dict | None, bars) -> Trade | None:
+    """盤前首選那一筆：開盤價買進、照 v10 出場（跟 premarket.resolve 同一個走法）。"""
+    if not pick:
+        return None
+    replayed = premarket.replay(pick, bars or [], day)
+    if replayed is None:
+        return None
+    sig, (result, exit_price, _used, exit_at, half) = replayed
+    fired = datetime.strptime(f"{day} {sig['time']}", "%Y-%m-%d %H:%M:%S")
+    pct, r = exits.blended(sig["entry"], sig["stop"], sig["lots"], half, exit_price)
+    tr = Trade(date=day, code=str(pick["code"]), name=pick.get("name", ""), fired=fired,
+               or_high=0.0, entry=sig["entry"], stop=sig["stop"], lots=sig["lots"],
+               vol_ratio=round(float((pick.get("features") or {}).get("volume_ratio") or 0), 2),
+               batch=False, result=result, exit_price=round(float(exit_price), 2),
+               exit_at=exit_at)
+    _finish(tr, sig["entry"], sig["stop"], r, pct, exit_at, fired)
     return tr
+
+
+def run_entries(days: list[tuple[str, list[dict]]], picks: list[tuple[str, dict, list]],
+                results: dict) -> dict:
+    """三種進場方式（區間 2 分鐘、保守進場價）。突破即買直接拿主表那一格。"""
+    pull, capped = [], 0
+    for _d, stocks in days:
+        t, c = replay_pullback_day(stocks)
+        pull += t
+        capped += c
+    chosen = [t for t in (pick_trade(d, p, b) for d, p, b in picks) if t]
+    return {BREAKOUT: results[(CURRENT_OR, CAUTIOUS)], PULLBACK: (pull, capped),
+            PICK: (chosen, 0)}
 
 
 def summarise(trades: list[Trade]) -> dict:
@@ -252,6 +387,7 @@ def summarise(trades: list[Trade]) -> dict:
     return {"n": len(trades), "wins": len(wins),
             "rate": round(len(wins) / len(trades) * 100),
             "avg_r": round(sum(t.r_multiple for t in trades) / len(trades), 2),
+            "avg_net_r": round(sum(t.net_r for t in trades) / len(trades), 2),
             "total_r": round(sum(t.r_multiple for t in trades), 2),
             "avg_min": round(sum(t.held_min for t in trades) / len(trades)),
             "reasons": reasons}
@@ -279,7 +415,8 @@ def crosscheck(replayed: dict[str, set], actual: dict[str, set]) -> list[str]:
     return lines + [""]
 
 
-def render(results: dict, days: list[str], check: list[str], missing: list) -> list[str]:
+def render(results: dict, days: list[str], check: list[str], missing: list,
+           entries: dict | None = None, recomputed: int = 0) -> list[str]:
     """results[(區間分鐘, 樂觀/保守)] = (trades, 額度滿了沒發的檔數)。"""
     first, last = (days[0], days[-1]) if days else ("—", "—")
     out = [
@@ -320,13 +457,15 @@ def render(results: dict, days: list[str], check: list[str], missing: list) -> l
                        f"{s['avg_r']:+.2f} | {s['total_r']:+.2f} | {s['avg_min']} 分 | "
                        f"{capped} |")
         out.append("")
+    if entries:
+        out += _entry_lines(entries, recomputed)
     out += ["## 出場原因（保守）", "", "| 區間 | 出場原因 |", "|---|---|"]
     for orm in GRID_OR:
         s = summarise(results.get((orm, CAUTIOUS), ([], 0))[0])
         why = "、".join(f"{k} {v}" for k, v in sorted(
             s.get("reasons", {}).items(), key=lambda kv: -kv[1])) or "—"
         out.append(f"| {orm} 分 | {why} |")
-    out += ["", "## 每一筆（保守）", "",
+    out += ["", "## 每一筆（保守，開盤區間各種長度）", "",
             "| 區間 | 日期 | 代號 | 名稱 | 進場時間 | 進場 | 停損 | 張數 | 量能 | 出場 | 出場價 | R |",
             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for orm in GRID_OR:
@@ -337,6 +476,32 @@ def render(results: dict, days: list[str], check: list[str], missing: list) -> l
                        f"{t.entry:.2f} | {t.stop:.2f} | {t.lots} | {t.vol_ratio:.2f}x | "
                        f"{t.result} {t.exit_at[:5]} | {t.exit_price:.2f} | "
                        f"{t.r_multiple:+.2f} |")
+    return out
+
+
+def _entry_lines(entries: dict, recomputed: int) -> list[str]:
+    out = [f"## 三種進場方式（區間 {CURRENT_OR} 分鐘、保守進場價、出場都照 v10）", "",
+           "| 進場方式 | 筆數 | 賺的 | 勝率 | 平均R | 扣成本R | 合計R | 平均持有 | 額度滿了沒發 |",
+           "|---|---|---|---|---|---|---|---|---|"]
+    for label in (BREAKOUT, PULLBACK, PICK):
+        trades, capped = entries.get(label, ([], 0))
+        s = summarise(trades)
+        if not s["n"]:
+            out.append(f"| {label} | 0 | — | — | — | — | — | — | {capped} |")
+            continue
+        out.append(f"| {label} | {s['n']} | {s['wins']} | {s['rate']}% | {s['avg_r']:+.2f} | "
+                   f"{s['avg_net_r']:+.2f} | {s['total_r']:+.2f} | {s['avg_min']} 分 | {capped} |")
+    out += [
+        "",
+        f"- **回踩再買**：先有一次 v10 會買的突破；之後低點回到區間高 +{PULLBACK_BAND_PCT:g}% 以內、"
+        "量比突破那一根小；再有一根收盤高過前一根高點、站上均價線才買。中途收回區間就不買。"
+        "一路漲上去沒回踩的，買不到 —— 那也算在結果裡。",
+        "- **盤前首選**：一天最多 1 筆，不受 3 檔額度限制，所以筆數跟另外兩列不能直接比總和，"
+        "要看平均。",
+    ]
+    if recomputed:
+        out.append(f"- 其中 {recomputed} 天的首選是**用現在的公式重算的**（10-14 以前還沒有首選）。")
+    out += ["- 三列還是同一批日子、同一套近似，比較的是彼此，不是絕對數字。", ""]
     return out
 
 
@@ -405,6 +570,21 @@ def stocks_for(day: str, payload: dict, fetch) -> tuple[list[dict], list[str]]:
     return stocks, missing
 
 
+def pick_for(day: str, payload: dict, stocks: list[dict], fetch):
+    """(日期, 首選, 分鐘 K)。首選不在盯的那 10 檔裡，就另外抓它的分鐘 K（有快取用快取）。"""
+    pick = pick_of(payload)
+    if not pick:
+        return None
+    code = str(pick["code"])
+    bars = next((x["bars"] for x in stocks if x["code"] == code), None)
+    if bars is None:
+        bars = load_cached(day, code)
+        if bars is None:
+            bars = fetch(code, day)
+            save_cached(day, code, bars)
+    return day, pick, bars
+
+
 def actual_signals(since: str, until: str) -> dict[str, set]:
     out: dict[str, set] = {}
     for r in oc.load_csv():
@@ -451,19 +631,24 @@ def main(argv=None):
         time.sleep(config.SCREEN["kbar_sleep_sec"])
         return oc.day_bars_ohlcv(broker, code, day)
 
-    days, missing = [], []
+    days, missing, picks, recomputed = [], [], [], 0
     for d, payload in archived:
         stocks, miss = stocks_for(d, payload, fetch)
         days.append((d, stocks))
         missing += miss
+        got = pick_for(d, payload, stocks, fetch)
+        if got:
+            picks.append(got)
+            recomputed += 0 if payload.get("pick") else 1
 
     results = run_all(days)
+    entries = run_entries(days, picks, results)
     replayed: dict[str, set] = {}
     for t in results[(CURRENT_OR, CAUTIOUS)][0]:
         replayed.setdefault(t.date, set()).add(t.code)
     check = crosscheck(replayed, actual_signals(args.since, args.until))
 
-    lines = render(results, [d for d, _ in days], check, missing)
+    lines = render(results, [d for d, _ in days], check, missing, entries, recomputed)
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")

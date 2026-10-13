@@ -33,6 +33,7 @@ import config
 import preflight
 import review
 import whatif
+import whynot
 import broker as broker_mod
 from broker import Broker
 import outcome as oc
@@ -5196,6 +5197,149 @@ class TestWhatIfOpeningRangeLength(unittest.TestCase):
         self.assertIn("10-13 2609", bad)
         self.assertIn("10-13 9999", bad)
         self.assertIn("無法對答案", whatif.crosscheck({}, {})[0])
+
+
+class TestWhatIfEntryStyles(unittest.TestCase):
+    """whatif 的第二張表：同一批日子、同一套出場，只換進場方式。
+
+    10-13 使用者貼的文章說「等第一次回踩、量縮守住、再往上才進場」；同一天又加了
+    08:45 盤前首選（開盤價就買）—— 正好是文章說不要做的事。三列擺在一起，11-09
+    用自己的資料回答文章對不對。"""
+
+    D = datetime(2026, 10, 13)
+
+    def _bars(self, spec):
+        return [(datetime.combine(self.D.date(), dtime(int(t[:2]), int(t[3:]))),
+                 o, h, l, c, v) for t, o, h, l, c, v in spec]
+
+    HEAD = [("09:00", 100.0, 100.0, 100.0, 100.0, 50),
+            ("09:01", 100.0, 101.0, 99.5, 100.5, 100),
+            ("09:02", 100.5, 101.0, 100.0, 100.5, 100),
+            ("09:03", 100.5, 101.5, 100.5, 101.5, 400)]      # 帶量突破（區間高 101.0）
+
+    def _entry(self, tail):
+        bars = whatif._wn(self._bars(self.HEAD + tail))
+        or_end, _b, win_end = whatif.schedule(2)
+        return whatif.pullback_entry(bars, 101.0, 101.101, dtime(9, 0), or_end, win_end)
+
+    def test_breakout_then_a_quiet_pullback_then_a_push(self):
+        got = self._entry([("09:04", 101.5, 101.6, 101.2, 101.3, 150),   # 回踩：低 101.2 ≤ 101.505、量 150 < 400
+                           ("09:05", 101.3, 102.0, 101.3, 101.9, 300)])  # 收 101.9 > 前一根高 101.6
+        self.assertIsNotNone(got)
+        bar, vr, prev_high = got
+        self.assertEqual(bar[0].time(), dtime(9, 5))
+        self.assertEqual(prev_high, 101.6)
+        self.assertAlmostEqual(vr, 4.0)
+
+    def test_closing_back_in_the_range_kills_it(self):
+        self.assertIsNone(self._entry([("09:04", 101.5, 101.6, 100.5, 100.7, 150),   # 收 100.7 < 100.798
+                                       ("09:05", 100.7, 102.0, 100.7, 101.9, 300)]))
+
+    def test_a_runner_that_never_pulls_back_is_missed(self):
+        """強勢股常常不回頭 —— 這就是回踩進場的代價，結果裡要看得到。"""
+        self.assertIsNone(self._entry([("09:04", 101.5, 102.5, 101.9, 102.4, 300),
+                                       ("09:05", 102.4, 103.5, 102.3, 103.4, 300)]))
+
+    def test_a_heavy_pullback_is_not_a_quiet_one(self):
+        """回踩的量比突破那一根還大 —— 那是有人在賣，不是「量縮守住」。"""
+        self.assertIsNone(self._entry([("09:04", 101.5, 101.6, 101.2, 101.3, 500),
+                                       ("09:05", 101.3, 102.0, 101.3, 101.9, 300)]))
+
+    def test_the_push_must_be_above_the_average_price(self):
+        """突破那一根量很大、衝很高 —— 均價線被拉到 104 附近。回踩後重新往上收 102.5，
+        高過前一根，但還在均價線下：今天買的人多數還在賠，不算力道回來。"""
+        spike = self.HEAD[:3] + [("09:03", 101.0, 108.0, 101.0, 107.0, 2000)]
+        bars = whatif._wn(self._bars(spike + [("09:04", 107.0, 102.0, 101.3, 101.8, 500),
+                                              ("09:05", 101.8, 102.6, 101.8, 102.5, 300)]))
+        or_end, _b, win_end = whatif.schedule(2)
+        self.assertGreater(whynot.vwap_upto(bars, bars[-1][0]), 102.5)
+        self.assertIsNone(whatif.pullback_entry(bars, 101.0, 101.101, dtime(9, 0), or_end, win_end))
+
+    def _stock(self, code, tail, rank=1):
+        return {"code": code, "name": code, "rank": rank, "prev_close": 100.0,
+                "amplitude_pct": None, "bars": self._bars(self.HEAD + tail)}
+
+    GOOD = [("09:04", 101.5, 101.6, 101.2, 101.3, 150),
+            ("09:05", 101.3, 102.5, 101.3, 102.4, 300),
+            ("09:06", 101.9, 102.0, 100.5, 100.6, 100)]       # 收回區間 → 🚪
+
+    def test_the_day_replay_uses_the_v10_plan_and_exits(self):
+        trades, capped = whatif.replay_pullback_day([self._stock("1111", self.GOOD)])
+        self.assertEqual(capped, 0)
+        t, = trades
+        self.assertEqual((t.entry, t.fired.time()), (102.5, dtime(9, 5)), "收 102.4 往上進位")
+        self.assertFalse(t.batch)
+        self.assertEqual((t.result, t.exit_price), (exits.BACK_IN_RANGE, 100.6))
+        self.assertLess(t.net_r, t.r_multiple)
+        opt, = whatif.replay_pullback_day([self._stock("1111", self.GOOD)], optimistic=True)[0]
+        self.assertEqual(opt.entry, 102.0, "剛越過前一根高點 101.6，往上進位")
+
+    def test_the_day_replay_respects_the_cap_by_entry_time(self):
+        late = [("09:04", 101.5, 101.6, 101.2, 101.3, 150),
+                ("09:05", 101.3, 101.5, 101.2, 101.4, 120),
+                ("09:06", 101.4, 102.0, 101.4, 101.9, 300)]
+        trades, capped = whatif.replay_pullback_day(
+            [self._stock("2222", late, rank=1), self._stock("1111", self.GOOD, rank=2)], limit=1)
+        self.assertEqual([t.code for t in trades], ["1111"], "09:05 比 09:06 先")
+        self.assertEqual(capped, 1)
+
+    # ── 盤前首選 ──
+    PICK = {"code": "3333", "name": "丙", "prev_close": 98.0, "amplitude_pct": 5.0,
+            "features": {"volume_ratio": 3.2}, "ranks": {}, "total": 6}
+
+    def test_the_pick_buys_the_open_and_skips_the_entry_minute(self):
+        """盤中進場在 09:00:0x，那一分鐘不判。回推寫成 09:00:00 的話，09:00–09:01
+        那一根會被拿去判「跌破開盤價」—— 盤中不會判的那一分鐘。"""
+        bars = self._bars([("09:01", 100.0, 100.5, 99.0, 99.5, 500),   # 收在開盤下 —— 不判
+                           ("09:02", 99.5, 101.0, 99.5, 100.8, 300),
+                           ("09:03", 100.8, 100.9, 99.6, 99.7, 200)])  # 這一根才判 → 出場
+        t = whatif.pick_trade("2026-10-13", self.PICK, bars)
+        self.assertEqual(t.entry, 100.0)
+        self.assertEqual((t.result, t.exit_price, t.exit_at),
+                         (exits.BELOW_OPEN, 99.7, "09:03:00"))
+        self.assertEqual(t.vol_ratio, 3.2)
+        self.assertIsNone(whatif.pick_trade("2026-10-13", None, bars))
+        self.assertIsNone(whatif.pick_trade("2026-10-13", self.PICK, []))
+
+    def test_old_days_recompute_the_pick_from_the_whole_pool(self):
+        item = lambda c, vr: {"code": c, "name": c, "prev_close": 50.0, "prev_high": 51.0,
+                              "prev_low": 49.0, "volume_ratio": vr, "amplitude_pct": 4.0}
+        payload = {"items": [item("1111", 1.0)], "not_watched": [item("2222", 5.0)]}
+        pick = whatif.pick_of(payload)
+        self.assertEqual(pick["code"], "2222")
+        self.assertFalse(pick["watched"])
+        self.assertEqual(whatif.pick_of(dict(payload, pick={"code": "9"}))["code"], "9",
+                         "存檔裡有就用存檔的（盤中實際推的那一檔）")
+
+    def test_the_report_has_the_entry_table(self):
+        trades, _ = whatif.replay_pullback_day([self._stock("1111", self.GOOD)])
+        entries = {whatif.BREAKOUT: ([], 0), whatif.PULLBACK: (trades, 0), whatif.PICK: ([], 0)}
+        text = "\n".join(whatif.render({}, ["2026-10-13"], [], [], entries, recomputed=2))
+        self.assertIn("三種進場方式", text)
+        self.assertIn("| 回踩再買 | 1 |", text)
+        self.assertIn("| 盤前首選（開盤價） | 0 |", text)
+        self.assertIn("2 天的首選是**用現在的公式重算的**", text)
+        self.assertIn("扣成本R", text)
+
+    def test_the_picks_bars_are_fetched_only_when_not_already_loaded(self):
+        calls = []
+        fetch = lambda code, day: calls.append(code) or [("bar",)]
+        payload = {"pick": {"code": "1111"}}
+        got = whatif.pick_for("2026-10-13", payload, [{"code": "1111", "bars": ["x"]}], fetch)
+        self.assertEqual(got, ("2026-10-13", {"code": "1111"}, ["x"]))
+        self.assertEqual(calls, [])
+        with unittest.mock.patch.object(whatif, "load_cached", lambda d, c: None), \
+             unittest.mock.patch.object(whatif, "save_cached", lambda d, c, b: None):
+            got = whatif.pick_for("2026-10-13", payload, [], fetch)
+        self.assertEqual(calls, ["1111"], "不在盯的 10 檔裡 —— 另外抓")
+        self.assertIsNone(whatif.pick_for("2026-10-13", {"items": []}, [], fetch))
+
+    def test_main_runs_the_entry_comparison_and_counts_recomputed_days(self):
+        src = inspect.getsource(whatif.main)
+        self.assertIn("run_entries(days, picks, results)", src)
+        self.assertIn("pick_for(d, payload, stocks, fetch)", src)
+        self.assertIn('recomputed += 0 if payload.get("pick") else 1', src)
+        self.assertIn("entries, recomputed)", src)
 
 
 class TestWhatIfReadsTheArchivedWatchlists(unittest.TestCase):
