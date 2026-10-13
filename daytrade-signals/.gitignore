@@ -17,6 +17,8 @@ journal/*.md
 # 當日候選池存檔（screener.py 自己寫的）。裡面是你每天在盯哪些股票，
 # 跟 watchlist.json 是同一份東西，只是多了日期 —— 排除理由一樣。
 journal/watchlist-*.json
+# whatif.py 的分鐘 K 快取：體積大，而且看得出你每天盯哪些股票。
+journal/kbars/
 
 __pycache__/
 *.pyc
