@@ -4970,132 +4970,232 @@ class TestTheLateStartWarningIsActuallyWired(unittest.TestCase):
                       "run() 沒有真的呼叫 warn_if_too_late()")
 
 
-@under_v5_rules
-class TestWhatIfReplay(unittest.TestCase):
-    """whatif.py 的核心：拿同一份分鐘 K 重跑不同的進場／出場規則。
+class TestWhatIfOpeningRangeLength(unittest.TestCase):
+    """whatif.py：同樣的 v10，只把開盤區間換成 1／2／3／5／15 分鐘重跑。
 
-    它要回答的是「使用者沒指定、我用猜的填進去」的那幾格 —— 區間 2 分鐘是
-    我選的，沒有任何數據支持。回測算得出來的事情就不要等 20 天。
-
-    但這支程式的結論對自己有利（只重跑當天真的突破了的那些股票），所以它的
-    報表第一行就要寫這件事。測試把那句話也釘住。
+    10-13 使用者：「還有注意一下要看 9:00～9:02 及還是其他時間」。2 分鐘是我
+    猜的。這支程式在 11-09（第 20 天）回答它，所以它量到的必須是**真的會發的
+    那個規則**：三關進場、09:05 批次重新定價、上限 3 檔、六條出場、
+    盤中同一套停損目標張數。差一樣，比出來的就不是區間長短的差別。
     """
 
-    D = datetime(2026, 10, 2)
+    D = datetime(2026, 10, 13)
 
     def _bars(self, spec):
-        """spec = [("09:01", high, low, close), ...]，label 是該分鐘的結束時間。"""
-        return [(datetime.combine(self.D.date(),
-                                  dtime(*(int(x) for x in t.split(":")))), h, l, c)
-                for t, h, l, c in spec]
+        """spec = [("09:01", 開, 高, 低, 收, 量)]，label 是那一分鐘的結束時間。"""
+        return [(datetime.combine(self.D.date(), dtime(int(t[:2]), int(t[3:]))),
+                 o, h, l, c, v) for t, o, h, l, c, v in spec]
 
-    # 09:00–09:02 區間 100.0/99.0；09:03 突破；之後走到 102 再回落
-    DAY = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
-           ("09:03", 100.8, 99.9, 100.6), ("09:04", 101.5, 100.2, 101.4),
-           ("09:05", 102.0, 101.0, 101.8), ("09:30", 101.2, 100.9, 101.0),
-           ("12:00", 101.0, 96.0, 96.5)]
+    def _stock(self, code="1111", ratio=4.0, rank=1, prev_close=100.0, tail=None,
+               batch_close=102.0):
+        """09:01–09:02 區間高 101.0（觸發價 101.101）；09:03 帶量突破；09:05 收在
+        batch_close；09:07 收回 100.6 —— 跌回區間（101.0 × 0.998 = 100.798 以下）。"""
+        spec = [("09:00", 100.0, 100.0, 100.0, 100.0, 50),
+                ("09:01", 100.0, 101.0, 99.5, 100.5, 100),
+                ("09:02", 100.5, 101.0, 100.0, 100.5, 100),
+                ("09:03", 100.5, 101.5, 100.5, 101.5, 100 * ratio),
+                ("09:04", 101.5, 102.0, 101.4, 101.8, 100),
+                ("09:05", 101.8, 102.5, 100.5, batch_close, 100)]
+        spec += tail if tail is not None else [
+            ("09:06", 102.0, 102.2, 101.5, 101.6, 100),
+            ("09:07", 101.6, 101.6, 100.5, 100.6, 100)]
+        return {"code": code, "name": f"測{code}", "rank": rank,
+                "prev_close": prev_close, "amplitude_pct": None,
+                "bars": self._bars(spec)}
 
-    def test_the_opening_range_uses_end_labelled_bars(self):
-        hi, lo = whatif.opening_range(self._bars(self.DAY), 2)
-        self.assertAlmostEqual(hi, 100.0)
-        self.assertAlmostEqual(lo, 99.0)
+    def test_each_length_gets_the_same_batch_delay_and_window(self):
+        self.assertEqual(whatif.schedule(2), (dtime(9, 2), dtime(9, 5), dtime(9, 30)),
+                         "2 分鐘必須重現現在的規則：09:05 批次、09:30 截止")
+        self.assertEqual(whatif.schedule(15), (dtime(9, 15), dtime(9, 18), dtime(9, 43)))
+
+    def test_the_opening_range_uses_end_labelled_bars_and_skips_the_pre_open_one(self):
+        s = self._stock()
+        s["bars"][0] = (s["bars"][0][0], 130.0, 130.0, 130.0, 130.0, 50)
+        hi, lo = whatif.opening_range(s["bars"], 2)
+        self.assertEqual((hi, lo), (101.0, 99.5), "label 09:00 那根是盤前，不算區間")
 
     def test_a_longer_range_swallows_the_breakout(self):
-        """15 分鐘的區間把 09:03 那根也收進去 —— 區間高變成當日高，突破就不見了。
-        這正是回測要量的東西：區間長度直接決定了你買在哪裡。"""
-        hi, _ = whatif.opening_range(self._bars(self.DAY), 15)
-        self.assertAlmostEqual(hi, 102.0)
+        """15 分鐘的區間把 09:03 的突破也收進去 —— 區間長度直接決定你買在哪裡。"""
+        s = self._stock()
+        self.assertEqual(whatif.opening_range(s["bars"], 15)[0], 102.5)
+        trades, _ = whatif.replay_day([s], 15)
+        self.assertEqual(trades, [])
 
-    def test_it_enters_on_the_first_breakout_inside_the_window(self):
-        r = whatif.replay(self._bars(self.DAY), 2, 3, 1.5, None)
-        self.assertAlmostEqual(r.or_high, 100.0)
-        # 突破點 100.0 × 1.001 = 100.1，往上進位到合法檔位（0.5 檔）= 100.5
-        self.assertAlmostEqual(r.entry, 100.5)
+    def test_the_batch_is_repriced_at_send_time_and_walked_with_the_v10_exits(self):
+        trades, capped = whatif.replay_day([self._stock()], 2)
+        self.assertEqual(capped, 0)
+        self.assertEqual(len(trades), 1)
+        t = trades[0]
+        self.assertTrue(t.batch)
+        self.assertEqual(t.fired.time(), dtime(9, 5))
+        self.assertEqual(t.entry, 102.0, "批次發出那一刻的價格，不是 09:03 的突破價")
+        # 停損跟盤中同一套：固定 3% → 98.94 進位 99.0；結構線 101.0×0.998 → 100.7；取低
+        self.assertEqual(t.stop, 99.0)
+        self.assertEqual((t.result, t.exit_price), (exits.BACK_IN_RANGE, 100.6))
+        self.assertEqual(t.exit_at, "09:07:00")
+        self.assertAlmostEqual(t.r_multiple, round((100.6 - 102.0) / 3.0, 2))
 
-    def test_a_breakout_after_the_window_does_not_count(self):
-        late = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
-                ("09:03", 99.9, 99.1, 99.5), ("09:04", 99.8, 99.0, 99.4),
-                ("09:20", 105.0, 99.0, 104.0)]
-        self.assertIsNone(whatif.replay(self._bars(late), 2, 3, 1.5, None))
+    def test_weak_volume_never_fires(self):
+        s = self._stock(ratio=1.5)
+        self.assertEqual(whatif.replay_day([s], 2)[0], [])
 
-    def test_the_pessimistic_entry_is_worse_than_the_optimistic_one(self):
-        """只報一個數字，會讓人把其中一端當成事實。
+    def _late(self, code="3333", rank=2, more=()):
+        """09:05 前都沒動，09:10 才帶量突破。"""
+        s = self._stock(code=code, rank=rank)
+        quiet = [("09:03", 100.5, 100.8, 100.4, 100.6, 100),
+                 ("09:04", 100.6, 100.8, 100.4, 100.6, 100),
+                 ("09:05", 100.6, 100.8, 100.4, 100.6, 100),
+                 ("09:10", 100.6, 102.0, 100.6, 101.8, 500)] + list(more)
+        s["bars"] = s["bars"][:3] + self._bars(quiet + [("12:00", 101.8, 101.9, 101.7, 101.8, 100)])
+        return s
 
-        用一路往上的日子來比，兩邊都會到目標 —— 差別才純粹是進場價。
-        """
-        up = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
-              ("09:03", 101.0, 99.9, 100.9), ("09:20", 115.0, 101.0, 114.0)]
-        good = whatif.replay(self._bars(up), 2, 3, 1.5, None, optimistic=True)
-        bad = whatif.replay(self._bars(up), 2, 3, 1.5, None, optimistic=False)
-        self.assertLess(good.entry, bad.entry)
-        self.assertEqual((good.result, bad.result), (oc.TARGET, oc.TARGET))
-        self.assertGreater(good.net_pct, bad.net_pct)
+    def test_below_the_average_price_never_fires(self):
+        """09:05 之後即時發的那一條路，也要過均價線這一關。"""
+        s = self._late()
+        self.assertEqual(len(whatif.replay_day([s], 2)[0]), 1)
+        # 盤前那一筆很大很貴 —— 均價線被拉到 110 附近，突破時還在線下
+        s["bars"][0] = (s["bars"][0][0], 110.0, 110.0, 110.0, 110.0, 100000)
+        self.assertEqual(whatif.replay_day([s], 2)[0], [])
 
-    def test_the_bar_that_contains_the_breakout_is_not_counted(self):
-        """那一根裡面有一段是突破前的價格。算進去會製造假停損 ——
-        09-24 五個訊號誤判了四個就是這個原因。"""
-        dip = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
-               ("09:03", 100.8, 98.0, 100.6),      # 同一根裡有突破前的 98.0
-               ("09:10", 103.0, 100.5, 102.8)]
-        r = whatif.replay(self._bars(dip), 2, 3, 1.5, None)
-        self.assertEqual(r.result, oc.TARGET)
+    def test_one_signal_per_stock_per_day(self):
+        s = self._stock(tail=[("09:06", 102.0, 102.2, 101.5, 101.6, 100),
+                              ("09:08", 101.6, 104.0, 101.6, 103.8, 2000),
+                              ("12:00", 103.8, 103.9, 103.7, 103.8, 100)])
+        trades, _ = whatif.replay_day([s], 2)
+        self.assertEqual(len(trades), 1, "同一檔一天只發一次")
 
-    def test_the_stop_never_sits_above_the_breakout(self):
-        r = whatif.replay(self._bars(self.DAY), 2, 3, 1.5, None)
-        self.assertLess(r.stop, r.or_high)
+    def test_the_cap_also_stops_later_breakouts(self):
+        trades, capped = whatif.replay_day([self._stock(), self._late()], 2, limit=1)
+        self.assertEqual([t.code for t in trades], ["1111"])
+        self.assertEqual(capped, 1)
 
-    def test_the_time_exit_closes_at_that_bar(self):
-        r = whatif.replay(self._bars(self.DAY), 2, 3, 5.0, dtime(9, 30))
-        self.assertEqual(r.result, "時間到")
-        self.assertAlmostEqual(r.exit_price, 101.0)
+    def test_the_batch_takes_the_strongest_volume_up_to_the_cap(self):
+        stocks = [self._stock(code=str(1000 + i), ratio=r, rank=i + 1)
+                  for i, r in enumerate((2.0, 4.0, 3.0, 2.5))]
+        trades, capped = whatif.replay_day(stocks, 2)
+        self.assertEqual({t.code for t in trades}, {"1001", "1002", "1003"},
+                         "量能 4.0／3.0／2.5 入選，2.0 落選")
+        self.assertEqual(capped, 1, "額度滿了沒發的要算出來")
 
-    def test_holding_on_instead_runs_into_the_later_stop(self):
-        """同一天、同一筆：09:30 走是賺的，抱著是賠的。這就是兩欄要並存的理由。"""
-        timed = whatif.replay(self._bars(self.DAY), 2, 3, 5.0, dtime(9, 30))
-        held = whatif.replay(self._bars(self.DAY), 2, 3, 5.0, None)
-        self.assertGreater(timed.r_multiple, 0)
-        self.assertEqual(held.result, oc.STOP)
+    def test_a_batch_pick_that_fell_back_frees_its_slot(self):
+        """09:05 已經跌回區間的不發（盤中也是），那個名額留給之後的突破。"""
+        fell = self._stock(code="2222", ratio=4.0, batch_close=100.9)
+        # 盤前大量壓低均價線（約 100.1）：100.9 還在線上，只是跌回了觸發價 101.101 以下
+        fell["bars"][0] = (fell["bars"][0][0], 100.0, 100.0, 100.0, 100.0, 5000)
+        quiet = [("09:03", 100.5, 100.8, 100.4, 100.6, 100),
+                 ("09:04", 100.6, 100.8, 100.4, 100.6, 100),
+                 ("09:05", 100.6, 100.8, 100.4, 100.6, 100),
+                 ("09:10", 100.6, 102.0, 100.6, 101.8, 500),
+                 ("12:00", 101.8, 101.9, 101.7, 101.8, 100)]
+        late = self._stock(code="3333", rank=2)
+        late["bars"] = late["bars"][:3] + self._bars(quiet)
+        trades, _ = whatif.replay_day([fell, late], 2, limit=1)
+        self.assertEqual([t.code for t in trades], ["3333"])
+        self.assertFalse(trades[0].batch)
+        self.assertEqual(trades[0].fired.time(), dtime(9, 10))
 
-    def test_a_bar_touching_both_is_judged_a_stop(self):
-        both = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
-                ("09:03", 100.8, 99.9, 100.6),
-                ("09:05", 110.0, 90.0, 100.0)]       # 同一根同時到停損與目標
-        self.assertEqual(whatif.replay(self._bars(both), 2, 3, 1.5, None).result,
-                         oc.STOP)
+    def test_a_batch_pick_below_the_average_price_at_send_time_is_dropped(self):
+        """09:03 衝過均價線，09:05 發出那一刻又掉回線下 —— 盤中不發，這裡也不能發。"""
+        s = self._stock()
+        s["bars"][0] = (s["bars"][0][0], 103.0, 103.0, 103.0, 103.0, 2000)   # 均價線 ≈ 102.6
+        t3 = s["bars"][3]
+        s["bars"][3] = (t3[0], 100.5, 104.0, 100.5, 101.5, t3[5])           # 09:03 高點衝過線
+        self.assertEqual(whatif.replay_day([s], 2)[0], [])
 
-    def test_the_pre_open_bar_is_not_part_of_the_range(self):
-        """label 09:00 的那根涵蓋 (08:59, 09:00]，是**開盤前**的價格。
+    def test_cautious_entries_are_never_better_than_optimistic_ones(self):
+        """只報一種進場價，會讓人把其中一端當成事實。"""
+        quiet = [("09:03", 100.5, 100.8, 100.4, 100.6, 100),
+                 ("09:10", 100.6, 102.0, 100.6, 101.8, 500),
+                 ("12:00", 101.8, 101.9, 101.7, 101.8, 100)]
+        s = self._stock()
+        s["bars"] = s["bars"][:3] + self._bars(quiet)
+        bad = whatif.replay_day([s], 2)[0][0]
+        good = whatif.replay_day([s], 2, optimistic=True)[0][0]
+        self.assertEqual(good.entry, 101.5, "觸發價 101.101 往上進位")
+        self.assertEqual(bad.entry, 102.0, "那一分鐘收 101.8 往上進位")
+        self.assertGreater(good.r_multiple, bad.r_multiple)
 
-        收進開盤區間的話，區間高會被盤前的單一筆成交污染，而突破就永遠
-        觸發不了。這和 09-24「包著訊號那一刻的 K 棒」是同一種 off-by-one。
-        """
-        with_pre = [("09:00", 130.0, 129.0, 129.5)] + self.DAY
-        hi, _ = whatif.opening_range(self._bars(with_pre), 2)
-        self.assertAlmostEqual(hi, 100.0, msg="盤前那根不可以算進開盤區間")
+    def test_limit_up_cannot_be_bought(self):
+        s = self._stock(prev_close=92.0)          # 漲停 101.2 —— 102 買不到
+        self.assertEqual(whatif.replay_day([s], 2)[0], [])
 
-    def test_the_structural_stop_takes_over_once_the_entry_has_chased(self):
-        """追高之後，固定 % 的停損會飄到突破點之上 —— 那是 v3 修掉的矛盾。
+    def test_the_report_leads_with_luck_and_approximation(self):
+        """一次比五種，總有一種剛好好看。這句要在最前面，不是埋在最後。"""
+        trades, _ = whatif.replay_day([self._stock()], 2)
+        res = {(2, whatif.CAUTIOUS): (trades, 0)}
+        text = "\n".join(whatif.render(res, ["2026-10-13"], [], [])[:8])
+        self.assertIn("運氣", text)
+        self.assertIn("近似", text)
+        self.assertIn("全部股票", text)
+        full = "\n".join(whatif.render(res, ["2026-10-13"], [], []))
+        self.assertIn("2 分（現在）", full)
+        self.assertIn("跌回區間", full)
 
-        回測如果沒有把結構線一起算，它量到的就不是實際會發的那個規則。
-        """
-        chased = [("09:01", 100.0, 99.0, 99.5), ("09:02", 100.0, 99.2, 99.8),
-                  ("09:03", 103.5, 99.9, 103.0),       # 這一根直接衝高 3%
-                  ("09:20", 110.0, 102.0, 109.0)]
-        r = whatif.replay(self._bars(chased), 2, 3, 1.5, None, optimistic=False)
-        self.assertAlmostEqual(r.entry, 103.0)
-        self.assertLess(r.stop, r.or_high, "停損必須在突破點之下")
-        # 固定 % 會算出 103.0 × 0.985 = 101.46 → 進位 101.5，在 100.0 之上
-        self.assertLess(r.stop, 101.5)
+    def test_the_two_minute_replay_is_checked_against_what_was_really_sent(self):
+        ok = whatif.crosscheck({"2026-10-13": {"1325"}}, {"2026-10-13": {"1325"}})
+        self.assertIn("✅", ok[0])
+        bad = "\n".join(whatif.crosscheck({"2026-10-13": {"1325", "9999"}},
+                                          {"2026-10-13": {"1325", "2609"}}))
+        self.assertIn("🛑", bad)
+        self.assertIn("10-13 2609", bad)
+        self.assertIn("10-13 9999", bad)
+        self.assertIn("無法對答案", whatif.crosscheck({}, {})[0])
 
-    def test_summarise_refuses_to_invent_numbers_from_nothing(self):
-        self.assertEqual(whatif.summarise([]), {"n": 0})
 
-    def test_the_report_leads_with_its_own_bias(self):
-        """結論偏樂觀這件事要寫在最前面，不是藏在附註裡 ——
-        埋在下面沒有人會讀到，等於沒有揭露。"""
-        text = "\n".join(whatif.render({}, 25, True)[:8])
-        self.assertIn("對自己有利", text)
-        self.assertIn("watchlist", text)
+class TestWhatIfReadsTheArchivedWatchlists(unittest.TestCase):
+    """股票來源是每天盤前存的名單，不是 outcomes.csv —— 只重跑有發訊號的那幾檔，
+    區間一改就量不到「原本沒突破、現在會買進來」的那些（第一版的偏誤）。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.saved = (config.JOURNAL_DIR, whatif.CACHE_DIR)
+        config.JOURNAL_DIR = Path(self.tmp.name) / "journal"
+        whatif.CACHE_DIR = config.JOURNAL_DIR / "kbars"
+        config.JOURNAL_DIR.mkdir(parents=True)
+
+    def tearDown(self):
+        config.JOURNAL_DIR, whatif.CACHE_DIR = self.saved
+        self.tmp.cleanup()
+
+    def _archive(self, day, codes):
+        items = [{"code": c, "name": f"名{c}", "prev_close": 50.0, "amplitude_pct": 4.0}
+                 for c in codes]
+        (config.JOURNAL_DIR / f"watchlist-{day.replace('-', '')}.json").write_text(
+            json.dumps({"date": day, "items": items}), encoding="utf-8")
+
+    def test_only_open_days_inside_the_period(self):
+        for d in ("2026-10-08", "2026-10-09", "2026-10-12", "2026-10-13"):
+            self._archive(d, ["1111"])
+        got = [d for d, _ in whatif.archived_days("2026-10-09", "2026-10-13")]
+        self.assertEqual(got, ["2026-10-12", "2026-10-13"],
+                         "10-08 在期間外；10-09 國慶補假休市")
+
+    def test_every_watched_stock_is_replayed_and_bars_are_fetched_once(self):
+        self._archive("2026-10-12", ["1111", "2222"])
+        bar = [(datetime(2026, 10, 12, 9, 1), 50.0, 50.5, 49.9, 50.2, 10.0)]
+        calls = []
+
+        def fetch(code, day):
+            calls.append(code)
+            return bar if code == "1111" else []
+
+        (day, payload), = whatif.archived_days("2026-10-12", "2026-10-12")
+        stocks, missing = whatif.stocks_for(day, payload, fetch)
+        self.assertEqual([s["code"] for s in stocks], ["1111"])
+        self.assertEqual(stocks[0]["rank"], 1)
+        self.assertEqual(stocks[0]["amplitude_pct"], 4.0)
+        self.assertEqual(missing, ["10-12 2222"], "抓不到的要講出來，不是默默少一檔")
+        whatif.stocks_for(day, payload, fetch)
+        self.assertEqual(calls, ["1111", "2222", "2222"], "抓過的從快取讀，不再打券商")
+
+    def test_today_is_never_cached(self):
+        """盤中存下來的是半天的 K 棒，之後會一直被當成整天。"""
+        today = datetime.now().strftime("%Y-%m-%d")
+        bar = [(datetime.now().replace(second=0, microsecond=0), 1.0, 1.0, 1.0, 1.0, 1.0)]
+        whatif.save_cached(today, "1111", bar)
+        self.assertIsNone(whatif.load_cached(today, "1111"))
+        whatif.save_cached("2026-10-12", "1111", bar)
+        self.assertEqual(whatif.load_cached("2026-10-12", "1111"), bar)
 
 
 class TestInsideOutsideVolume(unittest.TestCase):
