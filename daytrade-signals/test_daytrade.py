@@ -1301,6 +1301,56 @@ class TestBarContainingTheSignalIsExcluded(unittest.TestCase):
         self.assertEqual(o.bars, 1)
 
 
+class TestRAfterCostsIsShownNextToR(unittest.TestCase):
+    """10-13 日報：v10 累計 +0.21R，金額卻 -597 元。兩個都對 —— R 是價差換算、
+    沒扣成本；金額有扣 —— 但並排放著像算錯。合計與累計那兩行把扣成本後的 R
+    一起寫出來。"""
+
+    def _oc(self, code="1325", entry=31.65, stop=30.75, exit_price=32.00, lots=4,
+            date="2026-10-13"):
+        gross = (exit_price - entry) / entry * 100
+        return oc.Outcome(date=date, code=code, time="09:06:26", entry=entry,
+                          stop=stop, target=33.55, lots=lots, result="量縮",
+                          exit_price=exit_price,
+                          r_multiple=round((exit_price - entry) / (entry - stop), 2),
+                          gross_pct=gross, net_pct=gross - 0.207, bars=26,
+                          ruleset=config.RULESET)
+
+    def test_costs_are_converted_with_the_same_entry_and_stop(self):
+        o = self._oc()                       # 10-13 恆大
+        self.assertAlmostEqual(o.r_multiple, 0.39)
+        self.assertAlmostEqual(o.net_r, 0.39 - 0.00207 * 31.65 / 0.90, places=6)
+
+    def test_a_flat_exit_is_a_small_loss_after_costs(self):
+        """10-13 陽明：進場 63.90、出場 63.90 —— 0R，但扣成本是賠的。"""
+        o = self._oc(code="2609", entry=63.90, stop=62.00, exit_price=63.90, lots=2)
+        self.assertEqual(o.r_multiple, 0)
+        self.assertLess(o.net_r, 0)
+
+    def test_no_risk_does_not_divide_by_zero(self):
+        o = self._oc()
+        o.stop = o.entry                     # 舊紀錄或壞資料：停損等於進場價
+        self.assertEqual(o.net_r, o.r_multiple)
+
+    def test_summary_carries_the_average_after_costs(self):
+        rows = [self._oc(), self._oc(code="2609", entry=63.90, stop=62.00,
+                                     exit_price=63.90, lots=2)]
+        s = oc.summarise(rows)
+        self.assertAlmostEqual(s["avg_net_r"], round(sum(o.net_r for o in rows) / 2, 2))
+        self.assertLess(s["avg_net_r"], s["avg_r"])
+
+    def test_the_total_and_the_cumulative_lines_show_both(self):
+        today = [self._oc(), self._oc(code="2609", entry=63.90, stop=62.00,
+                                      exit_price=63.90, lots=2)]
+        text = review.format_push([{"code": "1325"}, {"code": "2609"}], today, today)
+        total = next(l for l in text.splitlines() if l.startswith("合計"))
+        net = sum(o.net_r for o in today)
+        self.assertIn(f"+0.39R（扣成本 {net:+.2f}R）", total)
+        avg = next(l for l in text.splitlines() if l.startswith("勝率"))
+        self.assertIn("扣成本", avg)
+        self.assertIn("R 每筆一樣重、金額照張數算", text)
+
+
 class TestDailyPush(unittest.TestCase):
     """覆盤寫進 journal 而沒有人看，等於沒寫。當日結果要推到手機上。"""
 
@@ -5872,6 +5922,54 @@ class TestWhyNotChecksItsOwnAnswers(unittest.TestCase):
         text = "\n".join(whynot.crosscheck_lines({"8182"}, rows))
         self.assertIn("✅", text)
         self.assertNotIn("🛑", text)
+
+    def _hit(self, code, hhmm):
+        import whynot
+        row = self._row(code, whynot.PASS)
+        row[2]["hit_at"] = datetime(2026, 10, 13, int(hhmm[:2]), int(hhmm[3:]))
+        return row
+
+    def test_the_time_the_daily_cap_filled(self):
+        import whynot
+        self.assertEqual(whynot.cap_filled_at(["09:16:32", "09:06:26", "09:09:38"]),
+                         dtime(9, 16, 32))
+        self.assertIsNone(whynot.cap_filled_at(["09:06:26", "09:09:38"]),
+                          "沒發滿 3 個就沒有「額度用完」這回事")
+
+    def test_a_pass_after_the_cap_filled_is_named_as_such(self):
+        """10-13：長榮、萬海 09:24 過關，但 3 個額度 09:16:32 已經用完。
+        原本寫「可能是批次只取前 3 檔」—— 不是批次，是當天額度。"""
+        import whynot
+        rows = [self._row("2609", whynot.PASS), self._hit("2603", "09:24")]
+        text = "\n".join(whynot.crosscheck_lines({"2609"}, rows, dtime(9, 16, 32)))
+        self.assertIn("2603", text)
+        self.assertIn("09:16:32 已經用完", text)
+        self.assertIn("09:24 才過關", text)
+        self.assertNotIn("批次", text)
+
+    def test_a_bar_straddling_the_cap_time_is_not_claimed(self):
+        """label 09:17 那根涵蓋 09:16–09:17，可能在 09:16:32 之前就過關了 —— 說不死。"""
+        import whynot
+        rows = [self._row("2609", whynot.PASS), self._hit("2603", "09:17")]
+        text = "\n".join(whynot.crosscheck_lines({"2609"}, rows, dtime(9, 16, 32)))
+        self.assertNotIn("已經用完", text)
+        self.assertIn("可能是", text)
+
+    def test_render_passes_the_cap_time_down(self):
+        import whynot
+        rows = [self._row("2609", whynot.PASS), self._hit("2603", "09:24")]
+        text = "\n".join(whynot.render("2026-10-13", rows, actual={"2609"}, check=True,
+                                       cap_full_at=dtime(9, 16, 32)))
+        self.assertIn("已經用完", text)
+
+    def test_main_passes_the_cap_time(self):
+        import ast, io as _io, whynot
+        tree = ast.parse(_io.open(whynot.__file__, encoding="utf-8").read())
+        main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
+        calls = [n for n in ast.walk(main) if isinstance(n, ast.Call)
+                 and getattr(n.func, "id", "") == "render"]
+        self.assertTrue(calls)
+        self.assertIn("cap_full_at", {k.arg for c in calls for k in c.keywords})
 
     def test_no_record_means_unverified_not_correct(self):
         """沒有紀錄可以對，不等於對 —— 要明講沒驗證過。"""

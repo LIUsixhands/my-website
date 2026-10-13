@@ -173,7 +173,7 @@ def diagnose(bars, prev_close: float | None = None,
     return out
 
 
-def crosscheck_lines(actual: set | None, rows) -> list[str]:
+def crosscheck_lines(actual: set | None, rows, cap_full_at: dtime | None = None) -> list[str]:
     """拿 outcomes.csv 裡當天真的發出去的訊號，對重建結果的答案。
 
     這一段存在的原因：第一版 whynot 把 2026-10-05 的加高判成「量能 0.23x
@@ -197,22 +197,38 @@ def crosscheck_lines(actual: set | None, rows) -> list[str]:
         why = d["verdict"] if d else "不在名單裡"
         out.append(f"> - {code}：盤中**有發**訊號，重建卻判定「{why}」"
                    f" —— 重建比盤中嚴格，被擋的那幾檔可能其實會過")
+    cap = config.RISK["max_signals_per_day"]
     for code in extra:
-        out.append(f"> - {code}：重建判定**會發**，盤中卻沒發"
-                   f" —— 可能是批次只取前 {config.RISK['max_signals_per_day']} 檔，"
-                   f"或盤中 tick 層級的細節分鐘 K 看不到")
+        d = next((d for c, _, d in rows if c == code), {})
+        hit = d.get("hit_at")
+        # K 棒 label 是那一分鐘的結束時間：整根都在額度用完之後，才說得死。
+        if cap_full_at and hit and (hit - timedelta(minutes=1)).time() >= cap_full_at:
+            out.append(f"> - {code}：重建判定**會發**，盤中沒發 —— 當天 {cap} 個額度"
+                       f"在 {cap_full_at.strftime('%H:%M:%S')} 已經用完，這一檔 "
+                       f"{hit.strftime('%H:%M')} 才過關。照規則本來就不發，不是程式出錯")
+        else:
+            out.append(f"> - {code}：重建判定**會發**，盤中卻沒發"
+                       f" —— 可能是 09:05 那一批只取前 {cap} 檔，"
+                       f"或盤中 tick 層級的細節分鐘 K 看不到")
     return out + [""]
 
 
+def cap_filled_at(times: list[str]) -> dtime | None:
+    """當天第 N 個訊號（N = 每日上限）發出的時間；沒發滿就是 None。"""
+    cap = config.RISK["max_signals_per_day"]
+    parsed = sorted(_t(t) for t in times if t and t.count(":") == 2)
+    return parsed[cap - 1] if len(parsed) >= cap else None
+
+
 def render(date: str, rows: list, actual: set | None = None,
-           check: bool = False) -> list[str]:
+           check: bool = False, cap_full_at: dtime | None = None) -> list[str]:
     cfg = config.SIGNAL
     out = [
         f"# whynot —— {date} 監看的 {len(rows)} 檔，各自卡在哪一關",
         "",
     ]
     if check:
-        out += crosscheck_lines(actual, rows)
+        out += crosscheck_lines(actual, rows, cap_full_at)
     out += [
         "> **這是用分鐘 K 事後重建的，不是盤中那條路徑的紀錄。**",
         "> 量能倍數是分鐘版近似（盤中用 tick 的每秒成交率），均價線也是估的",
@@ -328,9 +344,12 @@ def main(argv=None):
         import outcome as oc
         today = [r for r in oc.load_csv() if r.date == args.date]
         actual = {str(r.code) for r in today} if today else None
+        cap_full_at = cap_filled_at([r.time for r in today])
     except Exception as e:
         log.warning("outcomes.csv 讀不到，無法對答案：%s", e)
-    text = "\n".join(render(args.date, rows, actual=actual, check=True))
+        cap_full_at = None
+    text = "\n".join(render(args.date, rows, actual=actual, check=True,
+                            cap_full_at=cap_full_at))
     print()
     print(text)
     out = args.out or (config.JOURNAL_DIR / f"whynot-{args.date.replace('-', '')}.md")

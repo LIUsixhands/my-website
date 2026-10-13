@@ -165,6 +165,19 @@ class Outcome:
         return self.net_pct > 0
 
     @property
+    def net_r(self) -> float:
+        """扣掉來回成本之後是幾 R。
+
+        r_multiple 是價差換算的，沒扣成本；net_amount 有扣。10-13 日報：v10 累計
+        +0.21R、金額卻 -597 元 —— 兩個數字都對，但並排放著看起來像矛盾。成本換算
+        成 R 用同一個進場價與停損距離，跟 r_multiple 的口徑一致。
+        """
+        risk = self.entry - self.stop
+        if risk <= 0:
+            return self.r_multiple
+        return self.r_multiple - (self.gross_pct - self.net_pct) / 100 * self.entry / risk
+
+    @property
     def net_amount(self) -> float:
         """扣掉成本後的損益金額（元）。
 
@@ -827,6 +840,7 @@ def summarise(outcomes: list[Outcome]) -> dict:
         "payoff": round(avg_win / abs(avg_loss), 2) if avg_loss else None,
         "total_net_pct": round(sum(o.net_pct for o in outcomes), 3),
         "avg_r": round(avg([o.r_multiple for o in outcomes]), 2),
+        "avg_net_r": round(avg([o.net_r for o in outcomes]), 2),
         "by_result": {r: sum(1 for o in outcomes if o.result == r)
                       for r in (TARGET, STOP, FLAT)},
     }

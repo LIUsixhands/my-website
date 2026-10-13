@@ -371,6 +371,14 @@ def write_journal(lines: list[str], date: str | None = None) -> "Path":
     return path
 
 
+def _r_text(rows) -> str:
+    """「+0.07R（扣成本 -0.14R）」。R 是價差換算的、沒扣成本；金額有扣。只寫前者，
+    累計 +0.21R 旁邊卻是 -597 元，看起來像算錯（10-13）。"""
+    gross = sum(o.r_multiple for o in rows)
+    net = sum(o.net_r for o in rows)
+    return f"{gross:+.2f}R（扣成本 {net:+.2f}R）"
+
+
 def format_push(signals: list[dict], outcomes, history: list,
                 carried: list | None = None) -> str:
     """推到手機上的當日結果。
@@ -401,8 +409,7 @@ def format_push(signals: list[dict], outcomes, history: list,
                      f"{day['wins']} 勝 {day['n'] - day['wins']} 敗"
                      + (f"｜留倉 {len(holding)}" if holding else ""))
         amount = lambda rows: sum(round(o.net_amount) for o in rows)
-        lines.append(f"合計 {sum(o.r_multiple for o in outcomes):+.2f}R　"
-                     f"{amount(outcomes):+,.0f} 元")
+        lines.append(f"合計 {_r_text(outcomes)}　{amount(outcomes):+,.0f} 元")
         today_fill = oc.fill_stats(outcomes)
         if today_fill.get("known"):
             lines.append(f"掛進場價買得到 {today_fill['filled']}/{today_fill['known']} 筆")
@@ -449,6 +456,7 @@ def format_push(signals: list[dict], outcomes, history: list,
     lines += [
         "────────────────",
         f"勝＝扣掉 {config.round_trip_cost_pct():.3f}% 來回成本後為正",
+        "R 每筆一樣重、金額照張數算，兩者正負可能不同。",
         "金額依訊號的建議張數與目前成本設定估算。",
         "驗證期未下單，這不是你的實際損益。",
     ]
@@ -472,7 +480,8 @@ def cumulative_lines(history: list) -> list[str]:
         lines += [
             f"{version} 累計 {days} 個有訊號的交易日／{total['n']} 筆"
             f"（{min(o.date for o in current)} 起）",
-            f"勝率 {total['win_rate']}%　平均 {total['avg_r']:+.2f}R",
+            f"勝率 {total['win_rate']}%　平均 {total['avg_r']:+.2f}R"
+            f"（扣成本 {total['avg_net_r']:+.2f}R）",
             f"掛進場價買得到 {_fill_text(oc.fill_stats(current))}",
             f"平均賺 {total['avg_win_pct']:+.2f}%　"
             f"平均賠 {total['avg_loss_pct']:+.2f}%",
