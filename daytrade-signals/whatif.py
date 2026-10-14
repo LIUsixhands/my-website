@@ -27,6 +27,8 @@
 **它是重建，不是盤中紀錄。** 量能倍數和均價線都是分鐘 K 的近似（見 whynot.py）。
 所以 2 分鐘那一列會拿去跟盤中真的發出的訊號對答案，對不上的寫在報表最前面。
 
+10-14 再加一張「停損寬度」：1.5％／2％／2.5％／現在，突破訊號和首選各一組。
+
 10-13 再加一張「三種進場方式」：突破即買（v10）、回踩再買（使用者貼的文章）、
 08:45 盤前首選（開盤價）。同一批日子、同一套出場，只換進場方式。
 
@@ -141,8 +143,27 @@ def _plan(stock: dict, or_high: float, day_open: float | None, entry: float,
     return signals._price_plan(st, entry, now)
 
 
+def restop(plan: dict | None, pct: float | None) -> dict | None:
+    """停損換成「進場價往下 pct %」（不看結構線），張數照單筆風險上限重算。
+    pct = None 就是現在的規則，原樣回傳。先出一半的價位跟目標有關、跟停損無關，不動。
+
+    張數一起重算，是因為停損縮小、單筆風險固定 4,000 元時，實際會多買幾張 ——
+    不重算的話，「停損改小」量到的只是一半的效果。"""
+    if plan is None or pct is None:
+        return plan
+    entry = plan["entry"]
+    stop = config.round_to_tick(entry * (1 - pct / 100), "up")
+    if stop >= entry:
+        return None
+    risk_per_lot = round((entry - stop) * 1000, 2)
+    cap = config.RISK["per_trade_risk"]
+    return dict(plan, stop=stop, lots=max(1, int(cap // risk_per_lot)),
+                risk_per_lot=round(risk_per_lot), oversized=risk_per_lot > cap)
+
+
 def replay_day(stocks: list[dict], or_minutes: int, optimistic: bool = False,
-               limit: int | None = None) -> tuple[list[Trade], int]:
+               limit: int | None = None, stop_pct: float | None = None
+               ) -> tuple[list[Trade], int]:
     """一天、一種區間長度。stocks = [{code, name, rank, prev_close, amplitude_pct,
     bars}]，bars = [(dt, 開, 高, 低, 收, 量)]。回傳 (發出的訊號, 因為額度滿了沒發的檔數)。
 
@@ -178,7 +199,8 @@ def replay_day(stocks: list[dict], or_minutes: int, optimistic: bool = False,
     sent: list[Trade] = []
 
     def fire(p, b, vr, entry, batch):
-        plan = _plan(p["stock"], p["or_high"], p["day_open"], entry, b[0].time())
+        plan = restop(_plan(p["stock"], p["or_high"], p["day_open"], entry, b[0].time()),
+                      stop_pct)
         if plan is None:                              # 漲停買不到、停損進位到進場價
             return False
         sent.append(_walk(p, b, vr, plan, batch))
@@ -345,11 +367,16 @@ def pick_of(payload: dict) -> dict | None:
                             watched=[i["code"] for i in items])
 
 
-def pick_trade(day: str, pick: dict | None, bars) -> Trade | None:
+def pick_trade(day: str, pick: dict | None, bars, stop_pct: float | None = None
+               ) -> Trade | None:
     """盤前首選那一筆：開盤價買進、照 v10 出場（跟 premarket.resolve 同一個走法）。"""
-    if not pick:
+    if not pick or not bars:
         return None
-    replayed = premarket.replay(pick, bars or [], day)
+    sig = restop(premarket.plan(pick, bars[0][1]), stop_pct)
+    if sig is None:
+        return None
+    sig["time"] = premarket.REPLAY_ENTRY_TIME
+    replayed = premarket.replay(pick, bars, day, sig)
     if replayed is None:
         return None
     sig, (result, exit_price, _used, exit_at, half) = replayed
@@ -362,6 +389,51 @@ def pick_trade(day: str, pick: dict | None, bars) -> Trade | None:
                exit_at=exit_at)
     _finish(tr, sig["entry"], sig["stop"], r, pct, exit_at, fired)
     return tr
+
+
+# ── 停損寬度 ──────────────────────────────────────────────
+# 10-14 使用者：「回測停損不到 3%」。None = 現在的規則（v10：進場價 -3% 與區間高下方
+# 0.2% 取寬的那條；首選：開盤價 -3%）。
+STOP_GRID = (1.5, 2.0, 2.5, None)
+
+
+def run_stops(days: list[tuple[str, list[dict]]], picks: list[tuple[str, dict, list]]) -> dict:
+    """{停損 %: (v10 突破即買的訊號, 盤前首選)}。區間 2 分鐘、保守進場價。"""
+    out = {}
+    for pct in STOP_GRID:
+        v10 = [t for _d, stocks in days for t in replay_day(stocks, CURRENT_OR, stop_pct=pct)[0]]
+        chosen = [t for t in (pick_trade(d, p, b, stop_pct=pct) for d, p, b in picks) if t]
+        out[pct] = (v10, chosen)
+    return out
+
+
+def _stop_lines(stops: dict) -> list[str]:
+    def cells(trades):
+        s = summarise(trades)
+        if not s["n"]:
+            return "0 | — | — | — | — | —"
+        return (f"{s['n']} | {s['stops']} | {s['rate']}% | {s['avg_r']:+.2f} | "
+                f"{s['avg_net_r']:+.2f} | {s['amount']:+,}")
+    out = ["## 停損寬度（區間 2 分鐘、保守進場價、其他出場照 v10）", "",
+           "| 停損 | 突破：筆數 | 被停損 | 勝率 | 平均R | 扣成本R | 金額 "
+           "| 首選：筆數 | 被停損 | 勝率 | 平均R | 扣成本R | 金額 |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for pct in STOP_GRID:
+        v10, chosen = stops.get(pct, ([], []))
+        name = f"{pct:g}%" if pct is not None else "現在"
+        out.append(f"| {name} | {cells(v10)} | {cells(chosen)} |")
+    out += [
+        "",
+        "- **現在**：突破訊號是「進場價 -3%」和「區間高下方 0.2%」取比較寬的那條；首選是開盤價 -3%。"
+        "其他列是只用「進場價往下 X%」。",
+        "- 停損改小，張數會照單筆風險 4,000 元重算（買比較多張）。所以**每一筆冒的錢差不多**，"
+        "R 可以直接比；金額欄是照那個張數算的。",
+        "- 停損越小，越容易被開盤的上下震盪洗掉（「被停損」那一欄），但每次賠得少、張數多。"
+        "哪一邊贏要看數字，不是看感覺。",
+        "- 一次比 4 種，一樣會有「剛好」最好看的那一種 —— 只能當下一輪要驗證的新規則。",
+        "",
+    ]
+    return out
 
 
 def run_entries(days: list[tuple[str, list[dict]]], picks: list[tuple[str, dict, list]],
@@ -390,6 +462,8 @@ def summarise(trades: list[Trade]) -> dict:
             "avg_net_r": round(sum(t.net_r for t in trades) / len(trades), 2),
             "total_r": round(sum(t.r_multiple for t in trades), 2),
             "avg_min": round(sum(t.held_min for t in trades) / len(trades)),
+            "stops": sum(1 for t in trades if t.result == oc.STOP),
+            "amount": round(sum(t.net_pct / 100 * t.entry * 1000 * t.lots for t in trades)),
             "reasons": reasons}
 
 
@@ -416,7 +490,8 @@ def crosscheck(replayed: dict[str, set], actual: dict[str, set]) -> list[str]:
 
 
 def render(results: dict, days: list[str], check: list[str], missing: list,
-           entries: dict | None = None, recomputed: int = 0) -> list[str]:
+           entries: dict | None = None, recomputed: int = 0,
+           stops: dict | None = None) -> list[str]:
     """results[(區間分鐘, 樂觀/保守)] = (trades, 額度滿了沒發的檔數)。"""
     first, last = (days[0], days[-1]) if days else ("—", "—")
     out = [
@@ -459,6 +534,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
         out.append("")
     if entries:
         out += _entry_lines(entries, recomputed)
+    if stops:
+        out += _stop_lines(stops)
     out += ["## 出場原因（保守）", "", "| 區間 | 出場原因 |", "|---|---|"]
     for orm in GRID_OR:
         s = summarise(results.get((orm, CAUTIOUS), ([], 0))[0])
@@ -643,12 +720,13 @@ def main(argv=None):
 
     results = run_all(days)
     entries = run_entries(days, picks, results)
+    stops = run_stops(days, picks)
     replayed: dict[str, set] = {}
     for t in results[(CURRENT_OR, CAUTIOUS)][0]:
         replayed.setdefault(t.date, set()).add(t.code)
     check = crosscheck(replayed, actual_signals(args.since, args.until))
 
-    lines = render(results, [d for d, _ in days], check, missing, entries, recomputed)
+    lines = render(results, [d for d, _ in days], check, missing, entries, recomputed, stops)
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")

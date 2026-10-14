@@ -5340,7 +5340,78 @@ class TestWhatIfEntryStyles(unittest.TestCase):
         self.assertIn("run_entries(days, picks, results)", src)
         self.assertIn("pick_for(d, payload, stocks, fetch)", src)
         self.assertIn('recomputed += 0 if payload.get("pick") else 1', src)
-        self.assertIn("entries, recomputed)", src)
+        self.assertIn("entries, recomputed, stops)", src)
+
+
+class TestWhatIfStopWidths(unittest.TestCase):
+    """whatif 的第三張表：停損 1.5%／2%／2.5%／現在（使用者 10-14：「回測停損不到 3%」）。
+    同一批日子、同一套進場與其他出場，只換停損；張數照單筆風險重算。"""
+
+    PLAN = {"entry": 100.0, "stop": 97.0, "target": 105.0, "half_at": 102.5, "lots": 1,
+            "risk_per_lot": 3000, "oversized": False}
+
+    def test_restop_moves_the_stop_and_resizes(self):
+        p = whatif.restop(dict(self.PLAN), 2.0)
+        self.assertEqual((p["stop"], p["lots"], p["risk_per_lot"]), (98.0, 2, 2000))
+        self.assertEqual(p["half_at"], 102.5, "先出一半跟目標有關，不動")
+        self.assertFalse(p["oversized"])
+        self.assertIs(whatif.restop(self.PLAN, None), self.PLAN, "None = 現在的規則")
+        self.assertIsNone(whatif.restop(None, 2.0))
+        big = whatif.restop(dict(self.PLAN, entry=300.0), 2.0)        # 6,000 元一張
+        self.assertEqual((big["lots"], big["oversized"]), (1, True))
+
+    D = datetime(2026, 10, 14)
+
+    def _bars(self, spec):
+        return [(datetime.combine(self.D.date(), dtime(int(t[:2]), int(t[3:]))),
+                 o, h, l, c, v) for t, o, h, l, c, v in spec]
+
+    def test_a_tight_stop_gets_shaken_out_where_the_wide_one_survives(self):
+        """開盤價 100 買，09:03 那一根下探 98.4 再拉上去：2% 停損（98.0）撐住、1.5%（98.5）被掃。"""
+        pick = {"code": "1111", "name": "測", "prev_close": 98.0, "amplitude_pct": 5.0,
+                "features": {}, "ranks": {}}
+        bars = self._bars([("09:01", 100.0, 100.5, 99.8, 100.2, 500),
+                           ("09:02", 100.2, 100.6, 100.0, 100.4, 300),
+                           ("09:03", 100.4, 100.6, 98.4, 100.3, 300),
+                           ("09:04", 100.3, 103.0, 100.3, 102.8, 300)])
+        tight = whatif.pick_trade("2026-10-14", pick, bars, stop_pct=1.5)
+        wide = whatif.pick_trade("2026-10-14", pick, bars, stop_pct=2.0)
+        self.assertEqual((tight.result, tight.exit_price, tight.stop), (oc.STOP, 98.5, 98.5))
+        self.assertNotEqual(wide.result, oc.STOP)
+        self.assertEqual(wide.lots, 2, "停損 2 元 → 一張 2,000 → 4,000 元可以買 2 張")
+
+    def test_run_and_render(self):
+        pick = {"code": "1111", "name": "測", "prev_close": 98.0, "amplitude_pct": 5.0,
+                "features": {}, "ranks": {}}
+        bars = self._bars([("09:01", 100.0, 100.5, 99.8, 100.2, 500),
+                           ("09:03", 100.4, 100.6, 98.4, 100.3, 300)])
+        stops = whatif.run_stops([("2026-10-14", [])], [("2026-10-14", pick, bars)])
+        self.assertEqual(set(stops), set(whatif.STOP_GRID))
+        self.assertEqual(stops[1.5][1][0].result, oc.STOP)
+        text = "\n".join(whatif._stop_lines(stops))
+        self.assertIn("停損寬度", text)
+        self.assertIn("| 1.5% | 0 | — | — | — | — | — | 1 | 1 |", text)
+        self.assertIn("| 現在 |", text)
+        self.assertIn("張數會照單筆風險 4,000 元重算", text)
+        full = "\n".join(whatif.render({}, ["2026-10-14"], [], [], stops=stops))
+        self.assertIn("停損寬度", full)
+
+    def test_the_new_stop_rounds_toward_the_entry(self):
+        """往進場價那一邊進位（較緊）：實際風險不會超過設定的 %，跟盤中同一個方向。"""
+        p = whatif.restop(dict(self.PLAN, entry=101.0), 1.5)    # 101 × 0.985 = 99.485
+        self.assertEqual(p["stop"], 99.5)
+
+    def test_the_breakout_side_uses_the_new_stop_too(self):
+        stock = TestWhatIfOpeningRangeLength("test_each_length_gets_the_same_batch_delay_and_window")._stock()
+        now, = whatif.replay_day([stock], 2)[0]
+        tight, = whatif.replay_day([stock], 2, stop_pct=1.5)[0]
+        self.assertEqual(now.stop, 99.0)
+        self.assertEqual(tight.stop, config.round_to_tick(tight.entry * 0.985, "up"))
+        self.assertGreater(tight.lots, now.lots)
+
+    def test_main_runs_it(self):
+        src = inspect.getsource(whatif.main)
+        self.assertIn("stops = run_stops(days, picks)", src)
 
 
 class TestWhatIfReadsTheArchivedWatchlists(unittest.TestCase):
