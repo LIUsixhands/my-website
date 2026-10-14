@@ -7649,13 +7649,34 @@ class TestPremarketPick(unittest.TestCase):
         pick = premarket.choose([self._row("2603", name="長榮"), self._row("2615", vr=1.0)])
         text = premarket.format_pick(pick, "2026-10-14")
         self.assertIn("2603 長榮", text)
-        self.assertIn("未驗證", text)
         self.assertIn("開盤價買進", text)
-        self.assertIn("總分", text)
         self.assertIn("次佳：2615", text)
         self.assertNotIn("勝率", text)
         self.assertNotIn("**", text, "Telegram 沒開 parse_mode")
-        self.assertIn("不佔每日 3 個額度", text)
+
+    def test_the_message_follows_the_layout_the_user_chose(self):
+        """10-14 使用者給的版面，一字不差。"""
+        pick = {"code": "6217", "name": "中探針", "prev_close": 197.0, "amplitude_pct": 6.87,
+                "features": {"volume_ratio": 4.09, "amplitude": 6.87, "rsi": 64.2, "close_pos": 100.0},
+                "ranks": {"volume_ratio": 2, "amplitude": 5, "rsi_gap": 1, "close_pos": 3},
+                "total": 11, "pool_size": 20,
+                "runners_up": [{"code": "8431", "name": "匯鑽科", "total": 27},
+                               {"code": "2468", "name": "華經", "total": 30}]}
+        sep = "─" * 16
+        self.assertEqual(premarket.format_pick(pick, "2026-10-14"), "\n".join([
+            "🌅 2026-10-14 盤前首選", sep,
+            "6217 中探針",
+            "09:00 開盤價買進，13:25 前出場",
+            "停損：開盤價 -3%",
+            "先出一半：開盤價 +3.4%", sep,
+            "昨收 197.00｜量比 4.09x｜近 5 日振幅 6.9%",
+            "日線 RSI 64｜昨收在昨天高低的 100% 位置", sep,
+            "次佳：8431 匯鑽科（27）、2468 華經（30）", sep]))
+        pick.update(runners_up=[], amplitude_pct=None)
+        text = premarket.format_pick(pick, "2026-10-14")
+        self.assertNotIn("次佳", text)
+        self.assertNotIn("先出一半", text, "沒有振幅就算不出目標，不亂寫")
+        self.assertFalse(text.endswith(sep + "\n" + sep), "沒有次佳時不留兩條連續分隔線")
 
     def test_it_waits_until_0845_only_when_run_on_schedule(self):
         slept = []

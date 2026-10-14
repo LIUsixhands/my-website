@@ -9,7 +9,7 @@
   - 出場照 v10（停損、先出一半＋移動停利、跌破開盤價、跌破均價線、量縮、13:25）
 
 **「勝率最高」現在算不出來** —— 那要先有幾十筆紀錄證明哪些條件真的提高勝率。
-所以這裡是一條寫明的公式，訊息上寫「盤前首選（未驗證）」，不寫勝率最高。
+所以這裡是一條寫明的公式（還沒驗證），訊息上不寫勝率。
 跟 v10 的突破訊號**分開記錄**（picks.csv）、不佔每日 3 個額度、不進風控閘門。
 11-09 兩套放在一起比。
 
@@ -135,7 +135,7 @@ def format_pick(pick: dict | None, date: str) -> str:
     if not pick:
         return (f"🌅 {date} {LABEL}\n────────────────\n"
                 "今天候選池是空的，沒有首選。")
-    f, r = pick["features"], pick["ranks"]
+    f = pick["features"]
     label = f"{pick['code']} {pick.get('name', '')}".strip()
     half_pct = None
     amp = pick.get("amplitude_pct")
@@ -144,30 +144,25 @@ def format_pick(pick: dict | None, date: str) -> str:
         half_pct = min(max(amp, lo), hi) * config.SIGNAL["exit_half_fraction"]
     others = "、".join(f"{s['code']} {s.get('name', '')}".strip() + f"（{s['total']}）"
                       for s in pick.get("runners_up", []))
+    # 10-14 使用者定的版面：買法、停損、先出一半放最前面；排名細節不推（在 state／picks.csv）。
     lines = [
-        f"🌅 {date} {LABEL}（未驗證）",
+        f"🌅 {date} {LABEL}",
         "────────────────",
         label,
         f"{ENTRY_AT:%H:%M} 開盤價買進，{_flatten_at():%H:%M} 前出場",
+        f"停損：開盤價 -{config.SIGNAL['stop_loss_pct']:g}%",
+    ]
+    if half_pct:
+        lines.append(f"先出一半：開盤價 +{half_pct:.1f}%")
+    lines += [
+        "────────────────",
         f"昨收 {pick['prev_close']:.2f}｜量比 {_f(f['volume_ratio'], '.2f')}x"
         f"｜近 5 日振幅 {_f(f['amplitude'], '.1f')}%",
         f"日線 RSI {_f(f['rsi'], '.0f')}｜昨收在昨天高低的 {_f(f['close_pos'], '.0f')}% 位置",
-        "────────────────",
-        f"怎麼選的：候選池 {pick['pool_size']} 檔，四項各自排名後加總，總分最低的那一檔",
-        f"量比第 {r['volume_ratio']}｜振幅第 {r['amplitude']}｜RSI 第 {r['rsi_gap']}"
-        f"｜收盤位置第 {r['close_pos']} → 總分 {pick['total']}",
     ]
     if others:
-        lines.append(f"次佳：{others}")
-    lines += [
-        "────────────────",
-        f"停損：開盤價 -{config.SIGNAL['stop_loss_pct']:g}%"
-        + (f"｜先出一半：開盤價 +{half_pct:.1f}%" if half_pct else ""),
-        "其餘照 v10 出場。開盤後會再推一次實際價格。",
-        "────────────────",
-        "盤前就選的，沒有經過驗證；跟盤中突破訊號分開記錄，不佔每日 3 個額度。",
-        "驗證期不下單。",
-    ]
+        lines += ["────────────────", f"次佳：{others}"]
+    lines.append("────────────────")
     return "\n".join(lines)
 
 
