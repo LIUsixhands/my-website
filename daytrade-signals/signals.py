@@ -1507,9 +1507,15 @@ def format_half(o: OpenSignal, price: float, half: float) -> str:
         lines.append(f"先賣 {n} 張（共 {o.lots} 張），剩下 {o.lots - n} 張改成移動停利：")
     else:
         lines.append("先賣一半，剩下的改成移動停利：")
+    # 盤前首選（開盤價進場）沒有開盤區間，「跌回區間」不適用 —— 10-14 中探針那一則
+    # 照樣寫了，看起來像多一條規則。
+    rest = ["停損", "跌破開盤價"]
+    if o.pos is None or o.pos.or_high:
+        rest.append("跌回區間")
+    rest += ["跌破均價線", "量縮", outcome.FLATTEN_AT.strftime("%H:%M")]
     lines += [
         f"從最高點回落 {trail:g}% 就出，最低不低於成本 {o.entry:.2f}。",
-        "其他出場條件照舊（停損、跌破開盤價、跌回區間、跌破均價線、量縮、13:25）。",
+        f"其他出場條件照舊（{'、'.join(rest)}）。",
     ]
     if abs(price - half) >= 0.01:
         lines.append(f"觸發時報價 {price:.2f}")

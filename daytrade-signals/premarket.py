@@ -215,6 +215,12 @@ def format_entry(sig: dict) -> str:
         "做多（盤前首選，開盤價買進）",
         f"進場：{sig['entry']:.2f}",
         f"張數：{sig['lots']} 張",
+    ]
+    if sig.get("oversized"):
+        # 跟 v10 訊號同一句。10-14 中探針 200.50、停損 194.50：一張就 6,000 元。
+        lines.append(f"⚠️ 一張的停損風險 {sig['risk_per_lot']:,} 元，"
+                     f"超過上限 {config.RISK['per_trade_risk']:,} 元")
+    lines += [
         "────────────────",
         *plan_lines,
         "────────────────",

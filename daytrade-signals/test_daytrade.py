@@ -7642,6 +7642,26 @@ class TestPremarketPick(unittest.TestCase):
         self.assertEqual(state["pick"]["live_result"], exits.BELOW_OPEN)
         self.assertEqual(state["pick"]["live_exit"], 99.5)
 
+    def test_the_entry_message_warns_when_one_lot_is_over_the_risk_limit(self):
+        """10-14 中探針：開盤 200.50、停損 194.50 —— 一張 6,000 元，超過 4,000。"""
+        pick = dict(self.PICK, code="6217", name="中探針", prev_close=197.0, amplitude_pct=6.9)
+        sig = dict(premarket.plan(pick, 200.5), time="09:00:16")
+        self.assertEqual((sig["stop"], sig["lots"]), (194.5, 1))
+        text = premarket.format_entry(sig)
+        self.assertIn("⚠️ 一張的停損風險 6,000 元，超過上限 4,000 元", text)
+        small = dict(premarket.plan(self.PICK, 100.0), time="09:00:02")
+        self.assertNotIn("⚠️", premarket.format_entry(small))
+
+    def test_the_half_message_does_not_list_a_range_the_pick_does_not_have(self):
+        state, sent = {}, []
+        w = premarket.PickWatch(self.PICK, state, sent.append)
+        at = lambda h, m, s=0: datetime(2026, 10, 14, h, m, s)
+        w.on_tick(self._st(100.5), now=at(9, 0, 2))
+        msgs = w.on_tick(self._st(102.5, vwap=101.0), now=at(9, 0, 40))
+        half = next(m for m in msgs if m.startswith("🟡"))
+        self.assertNotIn("跌回區間", half)
+        self.assertIn("跌破開盤價、跌破均價線", half)
+
     def test_a_limit_up_open_is_skipped_and_said(self):
         state = {}
         w = premarket.PickWatch(dict(self.PICK, prev_close=91.0), state, lambda m: None)
@@ -8229,6 +8249,8 @@ class TestV10TheLiveTracker(unittest.TestCase):
         self.assertEqual(len(msgs), 1)
         self.assertIn("先出一半", msgs[0])
         self.assertIn("先賣 2 張（共 4 張），剩下 2 張改成移動停利", msgs[0])
+        self.assertIn("停損、跌破開盤價、跌回區間、跌破均價線、量縮、13:25", msgs[0],
+                      "突破訊號有開盤區間 —— 跌回區間那一條要講")
         self.assertEqual(self.halved, [103.0])
         tr.on_price("2330", 105.0, _at(2))
         msgs = tr.on_price("2330", 103.5, _at(3))                    # 105 × 0.985 = 103.43 → 103.0
