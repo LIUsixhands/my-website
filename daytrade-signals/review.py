@@ -118,7 +118,9 @@ def audit(signals: list[dict], trades: list, state: dict) -> list[str]:
         issues.append(f"❌ 做了計畫外的標的：{'、'.join(sorted(off_plan))}"
                       f" —— 這是盤中臨時起意，不是系統。")
 
-    if state.get("closed") and trades:
+    # 額度用完（routine）不算：那 3 個訊號照做本來就會有成交。原本只要閘門關了又有
+    # 成交就判「最危險」—— 真的下單之後，每個發滿 3 個訊號的日子都會被誤判。
+    if state.get("closed") and trades and not state.get("closed_routine"):
         issues.append(f"❌ 風控閘門已因「{state.get('closed_reason', '')}」關閉，"
                       f"但當日仍有成交紀錄。這是最危險的一條。")
 

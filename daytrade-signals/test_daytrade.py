@@ -640,7 +640,8 @@ class TestRiskGate(unittest.TestCase):
         gate = RiskGate(FakeBroker(pnl_rows=[]))
         gate.state["signals_sent"] = config.RISK["max_signals_per_day"]
         self.assertFalse(gate.check())
-        self.assertIn("訊號上限", gate.state["closed_reason"])
+        self.assertIn("額度用完", gate.state["closed_reason"])
+        self.assertTrue(gate.state["closed_routine"])
 
     def test_closes_on_trade_count_limit(self):
         trades = [object()] * (config.RISK["max_trades_per_day"] * 2)
@@ -8444,12 +8445,39 @@ class TestTheStopMessageDoesNotSayTheProgramStopped(unittest.TestCase):
                 unittest.mock.patch.object(config, "STATE_FILE", Path(d) / "state.json"), \
                 unittest.mock.patch.object(signals, "notify", sent.append):
             gate = RiskGate(FakeBroker())
-            gate._close("已達當日訊號上限 3 個")
+            gate._close("單日虧損已達上限")
         self.assertEqual(len(sent), 1)
-        self.assertIn("今日停手", sent[0])
+        self.assertIn("🚨 今日停手", sent[0])
         self.assertIn("今天不會再發新的買入訊號", sent[0])
         self.assertIn("出場通知照常會來", sent[0])
         self.assertNotIn("收工", sent[0])
+        self.assertFalse(gate.state["closed_routine"])
+
+    def test_using_up_the_daily_slots_is_not_an_alarm(self):
+        """10-14：第 3 個訊號已經寫「今天的額度用完了」，09:15 又推一則 🚨 今日停手。
+        額度用完是正常的一天，不是煞車。"""
+        sent = []
+        with tempfile.TemporaryDirectory() as d, \
+                unittest.mock.patch.object(config, "STATE_FILE", Path(d) / "state.json"), \
+                unittest.mock.patch.object(signals, "notify", sent.append):
+            gate = RiskGate(FakeBroker(pnl_rows=[]))
+            gate.state["signals_sent"] = config.RISK["max_signals_per_day"]
+            gate.check()
+        self.assertEqual(len(sent), 1)
+        self.assertTrue(sent[0].startswith("📭 今天的 3 個訊號額度用完了"))
+        self.assertNotIn("🚨", sent[0])
+        self.assertNotIn("停手", sent[0])
+        self.assertIn("出場通知照常會來", sent[0])
+
+    def test_trading_the_three_signals_is_not_flagged_as_a_violation(self):
+        """真的下單之後：3 個訊號照做 → 額度用完關閘 → 有成交。那不是違規。"""
+        trade = SimpleNamespace(contract=SimpleNamespace(code="2330"))
+        sigs = [{"code": "2330"}]
+        routine = {"closed": True, "closed_reason": "額度用完", "closed_routine": True}
+        alarm = {"closed": True, "closed_reason": "單日虧損已達上限"}
+        with unittest.mock.patch.object(review, "_trade_code", lambda t: "2330"):
+            self.assertFalse(any("最危險" in i for i in review.audit(sigs, [trade], routine)))
+            self.assertTrue(any("最危險" in i for i in review.audit(sigs, [trade], alarm)))
 
 
 class TestV10TheRulesAreWired(unittest.TestCase):

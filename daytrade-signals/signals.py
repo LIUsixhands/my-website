@@ -74,15 +74,20 @@ class RiskGate:
         config.STATE_FILE.write_text(
             json.dumps(self.state, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def _close(self, reason: str):
+    def _close(self, reason: str, routine: bool = False):
+        """routine=True：額度用完 —— 正常的一天，不是煞車。10-14 第三個訊號的訊息已經
+        寫「今天的額度用完了」，4 分鐘後又來一則 🚨 今日停手，看起來像出事了。"""
         if not self.state["closed"]:
             self.state["closed"] = True
             self.state["closed_reason"] = reason
+            # 額度用完的那種關閘，之前那 3 筆照做是正常的 —— 盤後稽核要分得出來
+            self.state["closed_routine"] = routine
             self.save()
-            log.warning("🚨 風控閘門關閉：%s", reason)
+            log.warning("%s 風控閘門關閉：%s", "📭" if routine else "🚨", reason)
             # 停的是「發新訊號」，不是整支程式：已發出的照樣追蹤到出場。原本寫「收工」，
             # 10-12 第一天 09:05 額度用完就推這一則，之後出場通知照來 —— 兩則互相矛盾。
-            notify(f"🚨 今日停手\n原因：{reason}\n\n"
+            head = f"📭 {reason}" if routine else f"🚨 今日停手\n原因：{reason}\n"
+            notify(f"{head}\n"
                    "今天不會再發新的買入訊號。\n"
                    "已經發出的會繼續追蹤，出場通知照常會來。")
 
@@ -129,7 +134,7 @@ class RiskGate:
 
         r = config.RISK
         if self.state["signals_sent"] >= r["max_signals_per_day"]:
-            self._close(f"已達當日訊號上限 {r['max_signals_per_day']} 個")
+            self._close(f"今天的 {r['max_signals_per_day']} 個訊號額度用完了", routine=True)
             return False
 
         trades = self._requery(self.broker.trades_today, "成交紀錄")
