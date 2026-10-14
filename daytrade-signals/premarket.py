@@ -313,7 +313,8 @@ PICK_FIELDS = ("date", "code", "name", "entry", "stop", "target", "lots", "half_
                "result", "exit_price", "exit_at", "half_exit", "r_multiple", "net_r",
                "gross_pct", "net_pct", "net_amount", "total", "rank_volume",
                "rank_amplitude", "rank_rsi", "rank_close_pos", "volume_ratio",
-               "amplitude", "daily_rsi", "close_pos", "watched", "source")
+               "amplitude", "daily_rsi", "close_pos", "watched", "source",
+               "mfe_pct", "mae_pct")
 
 
 # 盤中進場是開盤後第一筆成交（09:00:0x）。回推時用 09:00:01：walk_v10「進場那一分鐘
@@ -350,11 +351,13 @@ def resolve(broker, pick: dict, rec: dict | None, date: str) -> dict | None:
         return None
     sig = rec.get("sig")
     half = _num(rec.get("live_half"))
+    # 盤中判過的也要抓 K 棒：進場後當天最高／最低（事後紀錄）只有 K 棒算得出來
+    full = oc.day_bars_ohlcv(broker, pick["code"], date) if broker is not None else []
     if sig and rec.get("live_result") and rec.get("live_exit") is not None:
         result, exit_price, exit_at, source = (rec["live_result"], float(rec["live_exit"]),
                                                rec.get("live_at", ""), "盤中")
     else:
-        replayed = replay(pick, oc.day_bars_ohlcv(broker, pick["code"], date), date, sig)
+        replayed = replay(pick, full, date, sig)
         if replayed is None:
             return None
         sig, (result, exit_price, _used, exit_at, half) = replayed
@@ -364,6 +367,8 @@ def resolve(broker, pick: dict, rec: dict | None, date: str) -> dict | None:
     cost = config.round_trip_cost_pct()
     risk = entry - stop
     f, rk = pick.get("features", {}), pick.get("ranks", {})
+    fired = datetime.strptime(f"{date} {sig['time']}", "%Y-%m-%d %H:%M:%S")
+    mfe, mae = excursions(full, entry, fired)
     return {
         "date": date, "code": pick["code"], "name": pick.get("name", ""),
         "entry": entry, "stop": stop, "target": float(sig["target"]), "lots": lots,
@@ -378,8 +383,22 @@ def resolve(broker, pick: dict, rec: dict | None, date: str) -> dict | None:
         "rank_close_pos": rk.get("close_pos"), "volume_ratio": f.get("volume_ratio"),
         "amplitude": f.get("amplitude"), "daily_rsi": f.get("rsi"),
         "close_pos": f.get("close_pos"), "watched": pick.get("watched"),
-        "source": source,
+        "source": source, "mfe_pct": mfe, "mae_pct": mae,
     }
+
+
+def excursions(full: list, entry: float, fired: datetime) -> tuple:
+    """進場後到 13:25，最高漲到比進場價高幾 %、最低跌到低幾 %（跟 outcomes.csv 的
+    mfe_pct／mae_pct 同一個算法）。**事後紀錄**：收盤後才算得出來，盤中不用，
+    只拿來比「移動停利放寬會怎樣」這種規則。沒有 K 棒就留空，不要猜。"""
+    import outcome as oc
+    after = [b for b in full
+             if b[0] >= fired + oc.BAR_SPAN and b[0].time() <= oc.FLATTEN_AT]
+    if not after or not entry:
+        return None, None
+    hi = max(b[2] for b in after)
+    lo = min(b[3] for b in after)
+    return round((hi - entry) / entry * 100, 3), round((lo - entry) / entry * 100, 3)
 
 
 def load(path=None) -> list[dict]:

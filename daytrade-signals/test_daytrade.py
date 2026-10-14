@@ -7717,6 +7717,30 @@ class TestPremarketPick(unittest.TestCase):
         self.assertEqual((row["result"], row["exit_price"]), (exits.TRAIL, 100.5))
         self.assertIsNone(premarket.resolve(object(), self.PICK, {"skipped": "x"}, "2026-10-14"))
 
+    def test_the_days_high_and_low_after_entry_are_recorded(self):
+        """事後紀錄（使用者 10-14：「是預測嗎？」—— 不是）。10-14 中探針 200.50 進、
+        205.50 出，之後漲停 216.50：照規則拿 0.83R，當天最多有 2.67R。11-09 拿它比
+        「移動停利放寬會怎樣」。盤中判過的那一筆也要算 —— K 棒照抓。"""
+        d = datetime(2026, 10, 14)
+        bars = [(d.replace(hour=9, minute=0), 200.5, 200.5, 200.5, 200.5, 50.0),   # 盤前那根不算
+                (d.replace(hour=9, minute=1), 200.5, 203.0, 199.0, 202.0, 500.0),  # 進場那一分鐘不算
+                (d.replace(hour=9, minute=2), 202.0, 208.5, 201.0, 205.5, 400.0),
+                (d.replace(hour=9, minute=46), 210.0, 216.5, 209.5, 215.0, 900.0),  # 高 ≠ 收
+                (d.replace(hour=13, minute=30), 216.5, 230.0, 100.0, 216.5, 10.0)]  # 13:25 之後不算
+        pick = dict(self.PICK, code="6217", prev_close=197.0, amplitude_pct=6.9)
+        sig = dict(premarket.plan(pick, 200.5), time="09:00:16")
+        rec = {"code": "6217", "sig": sig, "live_result": exits.TRAIL, "live_exit": 205.5,
+               "live_at": "09:09:04", "live_half": 207.5}
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", lambda b, c, dt: bars):
+            row = premarket.resolve(object(), pick, rec, "2026-10-14")
+        self.assertEqual(row["source"], "盤中", "結局照盤中，K 棒只拿來算極值")
+        self.assertAlmostEqual(row["mfe_pct"], round((216.5 - 200.5) / 200.5 * 100, 3))
+        self.assertAlmostEqual(row["mae_pct"], round((201.0 - 200.5) / 200.5 * 100, 3))
+        self.assertIn("mfe_pct", premarket.PICK_FIELDS)
+        self.assertIn("mae_pct", premarket.PICK_FIELDS)
+        no_bars = premarket.resolve(None, pick, rec, "2026-10-14")
+        self.assertIsNone(no_bars["mfe_pct"], "沒有 K 棒就留空，不要猜")
+
     def test_one_row_per_day_in_picks_csv(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "picks.csv"
