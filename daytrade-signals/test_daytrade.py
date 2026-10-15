@@ -7807,7 +7807,35 @@ class TestPremarketPick(unittest.TestCase):
         self.assertEqual(row["source"], "分鐘 K")
         self.assertEqual(row["half_exit"], 102.5)
         self.assertEqual((row["result"], row["exit_price"]), (exits.TRAIL, 100.5))
-        self.assertIsNone(premarket.resolve(object(), self.PICK, {"skipped": "x"}, "2026-10-14"))
+
+    def test_a_pick_that_opened_locked_is_still_recorded(self):
+        """10-15 律勝開盤 38.00 就漲停。買不到也要留一列 —— 11-09 才數得出首選幾天
+        買不到（量比高、收在最高點的股票，正是最容易一開就鎖漲停的那種）。"""
+        pick = dict(self.PICK, features={"volume_ratio": 4.22, "amplitude": 7.1, "rsi": 66.0,
+                                          "close_pos": 100.0},
+                    ranks={"volume_ratio": 1, "amplitude": 2, "rsi_gap": 3, "close_pos": 1})
+        rec = {"code": "1111", "skipped": "開盤漲停，買不到"}
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv",
+                                        lambda *a: self.fail("買不到就不用抓 K 棒")):
+            row = premarket.resolve(object(), pick, rec, "2026-10-15")
+        self.assertEqual((row["date"], row["code"], row["result"]),
+                         ("2026-10-15", "1111", "開盤漲停，買不到"))
+        self.assertEqual((row["volume_ratio"], row["rank_close_pos"], row["total"]), (4.22, 1, 4))
+        self.assertNotIn("net_pct", row, "沒有進場就沒有損益")
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "picks.csv"
+            premarket.append({"date": "2026-10-14", "code": "6217", "result": exits.TRAIL,
+                              "net_pct": "2.3", "r_multiple": "0.83", "net_r": "0.76",
+                              "net_amount": "4585"}, path)
+            premarket.append(row, path)
+            hist = premarket.load(path)
+        self.assertEqual(len(hist), 2)
+        text = "\n".join(premarket.report_lines(row, pick, hist, rec["skipped"]))
+        self.assertIn("1111 測試　開盤漲停，買不到", text)
+        self.assertIn("首選累計 1 筆｜勝率 100.0%", text, "買不到的那天不算一筆")
+        self.assertIn("首選累計損益 +4,585 元", text)
+        self.assertIn("另有 1 天開盤漲停買不到", text)
+        self.assertNotIn("買不到", "\n".join(premarket.report_lines(None, pick, hist[:1])))
 
     def test_the_days_high_and_low_after_entry_are_recorded(self):
         """事後紀錄（使用者 10-14：「是預測嗎？」—— 不是）。10-14 中探針 200.50 進、
@@ -7826,6 +7854,7 @@ class TestPremarketPick(unittest.TestCase):
         with unittest.mock.patch.object(oc, "day_bars_ohlcv", lambda b, c, dt: bars):
             row = premarket.resolve(object(), pick, rec, "2026-10-14")
         self.assertEqual(row["source"], "盤中", "結局照盤中，K 棒只拿來算極值")
+        self.assertEqual(row["total"], pick["total"], "選它的理由也要記")
         self.assertAlmostEqual(row["mfe_pct"], round((216.5 - 200.5) / 200.5 * 100, 3))
         self.assertAlmostEqual(row["mae_pct"], round((201.0 - 200.5) / 200.5 * 100, 3))
         self.assertIn("mfe_pct", premarket.PICK_FIELDS)

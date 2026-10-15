@@ -343,7 +343,10 @@ def resolve(broker, pick: dict, rec: dict | None, date: str) -> dict | None:
     import outcome as oc
     rec = rec or {}
     if rec.get("skipped"):
-        return None
+        # 10-15 律勝開盤就漲停：買不到也要留一列，11-09 才數得出「首選幾天買不到」。
+        # 沒有 net_pct —— 不進勝率、平均 R、累計損益。
+        return {"date": date, "code": pick["code"], "name": pick.get("name", ""),
+                "result": rec["skipped"], "source": "盤中", **_pick_fields(pick)}
     sig = rec.get("sig")
     half = _num(rec.get("live_half"))
     # 盤中判過的也要抓 K 棒：進場後當天最高／最低（事後紀錄）只有 K 棒算得出來
@@ -361,7 +364,6 @@ def resolve(broker, pick: dict, rec: dict | None, date: str) -> dict | None:
     pct, r = exits.blended(entry, stop, lots, half, exit_price)
     cost = config.round_trip_cost_pct()
     risk = entry - stop
-    f, rk = pick.get("features", {}), pick.get("ranks", {})
     fired = datetime.strptime(f"{date} {sig['time']}", "%Y-%m-%d %H:%M:%S")
     mfe, mae = excursions(full, entry, fired)
     return {
@@ -373,12 +375,19 @@ def resolve(broker, pick: dict, rec: dict | None, date: str) -> dict | None:
         "net_r": round(r - cost / 100 * entry / risk, 2) if risk > 0 else round(r, 2),
         "gross_pct": round(pct, 3), "net_pct": round(pct - cost, 3),
         "net_amount": round((pct - cost) / 100 * entry * 1000 * lots),
+        **_pick_fields(pick), "source": source, "mfe_pct": mfe, "mae_pct": mae,
+    }
+
+
+def _pick_fields(pick: dict) -> dict:
+    """選它的理由（分數、排名、四項數值）—— 進場或買不到都一樣要記。"""
+    f, rk = pick.get("features", {}), pick.get("ranks", {})
+    return {
         "total": pick.get("total"), "rank_volume": rk.get("volume_ratio"),
         "rank_amplitude": rk.get("amplitude"), "rank_rsi": rk.get("rsi_gap"),
         "rank_close_pos": rk.get("close_pos"), "volume_ratio": f.get("volume_ratio"),
         "amplitude": f.get("amplitude"), "daily_rsi": f.get("rsi"),
         "close_pos": f.get("close_pos"), "watched": pick.get("watched"),
-        "source": source, "mfe_pct": mfe, "mae_pct": mae,
     }
 
 
@@ -444,4 +453,7 @@ def report_lines(today: dict | None, pick: dict | None, history: list[dict],
         lines += [f"首選累計 {n} 筆｜勝率 {wins / n * 100:.1f}%",
                   f"平均 {avg_r:+.2f}R（扣成本 {avg_net:+.2f}R）",
                   f"首選累計損益 {amount:+,.0f} 元"]
+    locked = sum(1 for r in history if _num(r.get("net_pct")) is None and "買不到" in (r.get("result") or ""))
+    if locked:
+        lines.append(f"另有 {locked} 天開盤漲停買不到")
     return lines
