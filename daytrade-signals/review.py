@@ -415,6 +415,9 @@ def format_push(signals: list[dict], outcomes, history: list,
         today_fill = oc.fill_stats(outcomes)
         if today_fill.get("known"):
             lines.append(f"掛進場價買得到 {today_fill['filled']}/{today_fill['known']} 筆")
+        chase = oc.chase_stats(outcomes)
+        if chase["n"]:
+            lines.append(_chase_text(chase))
         # 「照規則今天真的會做到哪幾筆」要把閘門整套跑一遍，不是取前 N 筆。
         # 原本寫成 outcomes[:cap]，那只算了筆數上限，沒算日虧上限與連敗停手 ——
         # 2026-10-01 五訊號（四停損 + 最後一個目標）下，前 4 筆算出 -12,622 元，
@@ -467,6 +470,12 @@ def format_push(signals: list[dict], outcomes, history: list,
     return "\n".join(lines)
 
 
+def _chase_text(chase: dict) -> str:
+    """10-15 使用者：「手動一定買不到」。慢一步用市價追，平均多付多少。"""
+    return (f"慢一步市價追：平均多付 {chase['avg_pct']:+.2f}%"
+            f"（R 約 {-chase['avg_r']:+.2f}，{chase['n']} 筆）")
+
+
 def cumulative_lines(history: list) -> list[str]:
     """日報最下面的累計：**只算目前這一版規則**，全部版本只留一行參考。
 
@@ -487,6 +496,7 @@ def cumulative_lines(history: list) -> list[str]:
             f"勝率 {total['win_rate']}%　平均 {total['avg_r']:+.2f}R"
             f"（扣成本 {total['avg_net_r']:+.2f}R）",
             f"掛進場價買得到 {_fill_text(oc.fill_stats(current))}",
+            *([_chase_text(c)] if (c := oc.chase_stats(current))["n"] else []),
             f"平均賺 {total['avg_win_pct']:+.2f}%　"
             f"平均賠 {total['avg_loss_pct']:+.2f}%",
             f"{version} 累計損益 {sum(round(o.net_amount) for o in current):+,.0f} 元",

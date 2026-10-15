@@ -118,6 +118,7 @@ class Trade:
     net_r: float = 0.0           # 扣掉來回成本之後的 R
     net_pct: float = 0.0
     held_min: int = 0
+    chase_pct: float | None = None   # 慢一步用市價追，比進場價多付幾 %（下一根 K 的開盤）
 
 
 def _gates(wbars, b, trigger: float, or_start: dtime) -> float | None:
@@ -260,6 +261,9 @@ def _walk(p: dict, b, vr: float, plan: dict, batch: bool) -> Trade:
     tr = Trade(date=fired.strftime("%Y-%m-%d"), code=str(s["code"]), name=s.get("name", ""),
                fired=fired, or_high=p["or_high"], entry=plan["entry"], stop=plan["stop"],
                lots=plan["lots"], vol_ratio=round(vr, 2), batch=batch)
+    chase = oc.chase_price(s["bars"], fired)
+    if chase is not None:
+        tr.chase_pct = round((chase - plan["entry"]) / plan["entry"] * 100, 3)
     if walked is None:                                # 之後一根 K 都沒有
         tr.result, tr.exit_price = oc.FLAT, plan["entry"]
         return tr
@@ -440,6 +444,41 @@ def _stop_lines(stops: dict) -> list[str]:
     return out
 
 
+# ── 手動下單 ──────────────────────────────────────────
+# 10-15 使用者：「訊號到手動下單都過頭了」「手動一定買不到」。恩德 09:06 訊號 25.60，
+# 09:07 已經 25.80；沛爾 09:17 訊號 40.05，09:18 已經 40.45。
+def _chased_r(t: Trade, net: bool) -> float:
+    """出場價不變、進場改成慢一步的市價：R 少「多付的錢 ÷ 每股風險」。"""
+    r = t.net_r if net else t.r_multiple
+    if t.chase_pct is None or t.entry <= t.stop:
+        return r
+    return r - t.chase_pct / 100 * t.entry / (t.entry - t.stop)
+
+
+def _chase_lines(trades: list[Trade]) -> list[str]:
+    known = [t for t in trades if t.chase_pct is not None]
+    out = [f"## 手動下單：慢一步用市價追（v10 突破即買、區間 {CURRENT_OR} 分鐘、保守進場價）", ""]
+    if not known:
+        return out + ["沒有可以算的訊號。", ""]
+    n = len(known)
+    avg = lambda xs: sum(xs) / n
+    out += ["| 筆數 | 平均多付 | 平均R（訊號價） | 平均R（追價） | 扣成本R（追價） |",
+            "|---|---|---|---|---|",
+            f"| {n} | {avg([t.chase_pct for t in known]):+.2f}% | "
+            f"{avg([t.r_multiple for t in known]):+.2f} | "
+            f"{avg([_chased_r(t, False) for t in known]):+.2f} | "
+            f"{avg([_chased_r(t, True) for t in known]):+.2f} |",
+            "",
+            "- **追價**＝訊號那一分鐘結束後的第一筆成交（訊號後 0～60 秒）。人看到訊息、打開 App、"
+            "下市價單，大概就是這個價。實際手動通常更慢，所以這是**偏樂觀**的估計。",
+            "- 出場價照舊，只把進場價換成追價。前面幾張表都是用訊號價算的 —— "
+            "要手動下單的話，看這一欄。",
+            "- 掛限價在訊號價是另一種做法：不會多付，但一路往上的那幾筆會買不到"
+            "（日報的「掛進場價買得到」）。",
+            ""]
+    return out
+
+
 # ── 大盤 ──────────────────────────────────────────────
 # 跟 broker.MARKET_PROXY 同一檔：kbars 拿得到分鐘 K、跟加權指數走勢幾乎一樣。
 MARKET_PROXY = "0050"
@@ -609,6 +648,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
         out += _stop_lines(stops)
     if market:
         out += _market_lines(market)
+    if results.get((CURRENT_OR, CAUTIOUS)):
+        out += _chase_lines(results[(CURRENT_OR, CAUTIOUS)][0])
     out += ["## 出場原因（保守）", "", "| 區間 | 出場原因 |", "|---|---|"]
     for orm in GRID_OR:
         s = summarise(results.get((orm, CAUTIOUS), ([], 0))[0])

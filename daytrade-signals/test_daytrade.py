@@ -5490,6 +5490,26 @@ class TestWhatIfMarket(unittest.TestCase):
         self.assertEqual(got, ["bars"])
         self.assertEqual(calls, ["0050", ("save", "0050")])
 
+    def test_the_manual_chase_table(self):
+        """10-15「手動一定買不到」：v10 每一筆也算慢一步用市價追的價格。"""
+        stock = TestWhatIfOpeningRangeLength("test_each_length_gets_the_same_batch_delay_and_window")._stock()
+        tr, = whatif.replay_day([stock], 2)[0]
+        nxt = next(b for b in stock["bars"] if b[0] >= tr.fired + timedelta(minutes=1))
+        self.assertEqual(tr.chase_pct, round((nxt[1] - tr.entry) / tr.entry * 100, 3))
+
+        a = self._trade("09:06", -1.57, r=-0.47)
+        a.entry, a.stop, a.chase_pct = 25.6, 24.85, 0.8          # 恩德
+        b = self._trade("09:17", -0.5, r=-0.17, code="2222")
+        b.chase_pct = None                                        # 沒有下一根 K
+        text = "\n".join(whatif._chase_lines([a, b]))
+        chased = -0.47 - 0.8 / 100 * 25.6 / 0.75
+        self.assertIn(f"| 1 | +0.80% | -0.47 | {chased:+.2f} | {chased - 0.07:+.2f} |", text)
+        self.assertIn("偏樂觀", text)
+        self.assertIn("沒有可以算的訊號", "\n".join(whatif._chase_lines([b])))
+        full = "\n".join(whatif.render({(2, whatif.CAUTIOUS): ([a], 0)}, ["2026-10-15"], [], []))
+        self.assertIn("## 手動下單：慢一步用市價追", full)
+        self.assertNotIn("手動下單", "\n".join(whatif.render({}, ["2026-10-15"], [], [])))
+
     def test_main_runs_it_on_the_v10_column(self):
         src = inspect.getsource(whatif.main)
         self.assertIn("markets[d] = market_bars(d, fetch)", src)
@@ -8204,6 +8224,79 @@ T0 = datetime(2026, 10, 12, 9, 10)
 
 def _at(minutes, seconds=0):
     return T0 + timedelta(minutes=minutes, seconds=seconds)
+
+
+class TestTheCostOfChasingByHand(unittest.TestCase):
+    """10-15 使用者：「訊號到手動下單都過頭了」「手動一定買不到」。恩德 09:06:09 訊號 25.60，
+    09:07 已經 25.80。每一筆記下「慢一步用市價追」的價格 —— 只記錄，成績照舊用訊號價。"""
+
+    D = datetime(2026, 10, 15)
+
+    def _full(self, spec):
+        return [(self.D.replace(hour=9, minute=m), o, max(o, c), min(o, c), c, 100.0)
+                for m, o, c in spec]
+
+    def test_it_is_the_open_of_the_first_whole_bar_after_the_signal(self):
+        # K 棒的時間是結束時間：09:07 那根是 09:06～09:07，含訊號前的成交 → 不算
+        full = self._full([(6, 25.3, 25.5), (7, 25.5, 25.6), (8, 25.8, 25.7), (9, 25.6, 25.4)])
+        fired = self.D.replace(hour=9, minute=6, second=9)
+        self.assertEqual(oc.chase_price(full, fired), 25.8, "09:08 那根（09:07 開始）的開盤")
+        self.assertEqual(oc.chase_price(full, self.D.replace(hour=9, minute=7)), 25.8,
+                         "訊號剛好在整分 → 下一根就是完整的")
+        self.assertIsNone(oc.chase_price(full, self.D.replace(hour=9, minute=9)))
+        self.assertIsNone(oc.chase_price([], fired))
+
+    def test_resolve_records_it_and_the_result_still_uses_the_signal_price(self):
+        sig = dict(V10_SIG, time="09:10:00", entry=100.0, stop=97.0)
+        full = [(T0.replace(minute=m), o, o + 0.5, o - 0.5, o, 100.0)
+                for m, o in ((10, 99.9), (11, 100.8), (12, 101.0))]
+        sig_live = dict(sig, live_result=exits.BELOW_VWAP, live_exit=99.0, live_at="09:20:00")
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", lambda b, c, d: full):
+            live = oc._resolve_v10(object(), sig_live, "2026-10-12", "2330", T0, 100.0, 97.0, 106.0)
+            walked = oc._resolve_v10(object(), sig, "2026-10-12", "2330", T0, 100.0, 97.0, 106.0)
+        self.assertEqual(live.chase_1m_pct, 0.8, "09:11 那根（09:10 開始）開 100.8")
+        self.assertEqual(live.entry, 100.0, "成績照舊用訊號價")
+        self.assertEqual(live.r_multiple, round((99.0 - 100.0) / 3.0, 2))
+        self.assertEqual(walked.chase_1m_pct, 0.8, "K 棒回推的那條路也要記")
+        self.assertIn("chase_1m_pct", oc.FIELDS)
+
+    def test_it_survives_the_csv_round_trip_and_old_rows_stay_blank(self):
+        o = _v10_outcome(chase_1m_pct=0.8)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "outcomes.csv"
+            oc.append_csv([o, _v10_outcome(code="1111", chase_1m_pct=None)], path)
+            back = {r.code: r for r in oc.load_csv(path)}
+        self.assertEqual(back[o.code].chase_1m_pct, 0.8)
+        self.assertIsNone(back["1111"].chase_1m_pct, "舊列沒有這欄 —— 留空，不是 0")
+
+    def test_the_stats_and_the_report_line(self):
+        rows = [_v10_outcome(chase_1m_pct=0.8, entry=25.6, stop=24.85),
+                _v10_outcome(code="1111", chase_1m_pct=1.0, entry=40.05, stop=38.85),
+                _v10_outcome(code="2222", chase_1m_pct=None)]
+        st = oc.chase_stats(rows)
+        self.assertEqual((st["n"], st["avg_pct"]), (2, 0.9), "沒有紀錄的不算")
+        r1, r2 = 0.8 / 100 * 25.6 / 0.75, 1.0 / 100 * 40.05 / 1.2
+        self.assertEqual(st["avg_r"], round((r1 + r2) / 2, 2))
+        self.assertEqual(oc.chase_stats([_v10_outcome(chase_1m_pct=None)]), {"n": 0})
+        text = review._chase_text(st)
+        self.assertEqual(text, f"慢一步市價追：平均多付 +0.90%（R 約 {-st['avg_r']:+.2f}，2 筆）")
+        self.assertNotIn("**", text)
+
+    def test_the_daily_report_shows_it_today_and_cumulative(self):
+        rows = [_v10_outcome(chase_1m_pct=0.8)]
+        sigs = [{"code": "1528", "name": "恩德", "time": "09:06:09"}]
+        today = review.format_push(sigs, rows, rows)
+        self.assertEqual(today.count("慢一步市價追"), 2, "今天一行、累計一行")
+        old = [_v10_outcome(chase_1m_pct=None)]
+        none = review.format_push(sigs, old, old)
+        self.assertNotIn("慢一步市價追", none, "舊資料沒有就不印")
+
+
+def _v10_outcome(code="1528", chase_1m_pct=None, entry=100.0, stop=97.0):
+    return oc.Outcome(date="2026-10-15", code=code, time="09:06:09", entry=entry, stop=stop,
+                      target=entry * 1.06, lots=1, result=exits.BELOW_VWAP,
+                      exit_price=entry * 0.99, r_multiple=-0.33, gross_pct=-1.0,
+                      net_pct=-1.2, bars=3, ruleset=config.RULESET, chase_1m_pct=chase_1m_pct)
 
 
 class TestV10TheSixExits(unittest.TestCase):

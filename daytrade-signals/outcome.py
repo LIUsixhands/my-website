@@ -59,7 +59,8 @@ FIELDS = ("date", "code", "time", "entry", "stop", "target", "lots",
           "exit_at", "ruleset", "exit_0930", "r_0930", "bid_ask_ratio",
           "mkt_signal_pct", "exit_date", "close_pos_pct", "vs_vwap_pct", "volume_x",
           "open_gap_pct", "low_gap_pct", "half_exit",
-          "sim_from", "sim_move_pct", "sim_ups", "sim_downs", "daily_rsi")
+          "sim_from", "sim_move_pct", "sim_ups", "sim_downs", "daily_rsi",
+          "chase_1m_pct")
 
 
 @dataclass
@@ -96,6 +97,11 @@ class Outcome:
     # low_5m_pct 用分鐘 K，看不到訊號後的頭 60 秒；急拉的訊號正好都在那 60 秒
     # 內跑掉，所以分鐘 K 版本對這幾筆會偏悲觀。兩欄並存，20 天後互相對照。
     fill_low_pct: float | None = None
+    # 手動下單慢一步、用市價追的話，要比訊號價多付幾 %（10-15 使用者：「訊號到手動
+    # 下單都過頭了」，恩德 09:06 訊號 25.60、09:07 已經 25.80）。用訊號之後**第一根
+    # 完整 K 棒的開盤價** —— 訊號後 0～60 秒（平均約 30 秒）那一刻的第一筆成交。
+    # 正數 = 要多付；只是記錄，回推的成績照舊用訊號價。
+    chase_1m_pct: float | None = None
     rank: int = 0                 # 盤前選股名次（1 = 量比最高），0 = 未知
     category: str = ""            # 產業類別代碼 —— 「輪動題材」的客觀代理
     # 當日大盤（0050 代理）。這套系統只做多，多方突破在綠盤日結構上逆風，
@@ -459,9 +465,17 @@ def walk_v10(full: list[tuple], sig: dict, fired: datetime):
     return FLAT, last, after, FLATTEN_AT.strftime("%H:%M:%S"), pos.half_price
 
 
+def chase_price(full: list[tuple], fired: datetime) -> float | None:
+    """訊號之後第一根**完整** K 棒（label ≥ 訊號 + 1 分鐘，label 是結束時間）的開盤價：
+    人看到訊息、打開 App 下市價單時，大概會成交的價格。沒有 K 棒就 None。"""
+    nxt = next((b for b in full if b[0] >= fired + BAR_SPAN), None)
+    return None if nxt is None else nxt[1]
+
+
 def _resolve_v10(broker, sig: dict, date: str, code: str, fired: datetime,
                  entry: float, stop: float, target: float) -> "Outcome | None":
     full = day_bars_ohlcv(broker, code, date)
+    chase = chase_price(full, fired)
     bars = [(b[0], b[2], b[3], b[4]) for b in full
             if b[0] >= fired + BAR_SPAN and b[0].time() <= FLATTEN_AT]
     live_result = str(sig.get("live_result") or "")
@@ -470,19 +484,19 @@ def _resolve_v10(broker, sig: dict, date: str, code: str, fired: datetime,
         # 盤中 tick 判定過的以它為準（見 resolve 的說明）
         return _build(sig, date, code, entry, stop, target, live_result, live_exit, 0,
                       str(sig.get("live_at") or ""), "", bars, [], False,
-                      half_exit=_num(sig.get("live_half")))
+                      half_exit=_num(sig.get("live_half")), chase=chase)
     walked = walk_v10(full, sig, fired) if full else None
     if walked is None:
         return None                        # 沒有 tick 判定也沒有 K 棒 —— 不要猜
     result, exit_price, used, exit_at, half = walked
     return _build(sig, date, code, entry, stop, target, result, exit_price, used,
-                  exit_at, "", bars, [], False, half_exit=half)
+                  exit_at, "", bars, [], False, half_exit=half, chase=chase)
 
 
 def _build(sig: dict, date: str, code: str, entry: float, stop: float, target: float,
            result: str, exit_price: float, used: int, exit_at: str, exit_date: str,
            bars: list, day2: list, overnight: bool,
-           half_exit: float | None = None) -> "Outcome":
+           half_exit: float | None = None, chase: float | None = None) -> "Outcome":
     """resolve() 走完之後，把結果與發訊號當下的現場條件組成一列 Outcome。
     v10 先出過一半的，報酬與 R 用兩段合起來算（exits.blended）。"""
     risk = entry - stop
@@ -526,6 +540,7 @@ def _build(sig: dict, date: str, code: str, entry: float, stop: float, target: f
         if result == STOP else None,
         low_5m_pct=_pct_above(low_5m, entry) if low_5m is not None else None,
         fill_low_pct=_pct_above(fill_low, entry) if fill_low is not None else None,
+        chase_1m_pct=_pct_above(chase, entry) if chase is not None else None,
         rank=int(sig.get("rank") or 0),
         category=str(sig.get("category") or ""),
         exit_at=exit_at,
@@ -677,7 +692,8 @@ _OPTIONAL_FIELDS = ("or_high", "vwap", "volume_surge", "extension_pct",
                     "exit_0930", "r_0930", "bid_ask_ratio", "mkt_signal_pct",
                     "close_pos_pct", "vs_vwap_pct", "volume_x",
                     "open_gap_pct", "low_gap_pct", "half_exit",
-                    "sim_move_pct", "sim_ups", "sim_downs", "daily_rsi")
+                    "sim_move_pct", "sim_ups", "sim_downs", "daily_rsi",
+                    "chase_1m_pct")
 
 
 def _bool(value) -> bool | None:
@@ -741,6 +757,20 @@ def fill_stats(outcomes: list[Outcome]) -> dict:
         # 買不到的那幾筆，當時最低價離進場價多遠（平均）—— 要追幾毛才追得上。
         "avg_miss_pct": round(sum(p for p in known if p > 0) / max(len(known) - len(filled), 1), 3)
         if len(known) > len(filled) else None,
+    }
+
+
+def chase_stats(outcomes: list[Outcome]) -> dict:
+    """手動慢一步、用市價追：平均多付幾 %、折成幾 R。沒有紀錄的不算（舊列）。"""
+    known = [o for o in outcomes if o.chase_1m_pct is not None and o.entry > o.stop]
+    if not known:
+        return {"n": 0}
+    return {
+        "n": len(known),
+        "avg_pct": round(sum(o.chase_1m_pct for o in known) / len(known), 2),
+        # 多付的錢 ÷ 每股風險 —— 出場價不變的話，R 會少這麼多
+        "avg_r": round(sum(o.chase_1m_pct / 100 * o.entry / (o.entry - o.stop)
+                           for o in known) / len(known), 2),
     }
 
 
