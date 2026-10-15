@@ -455,26 +455,43 @@ def _chased_r(t: Trade, net: bool) -> float:
     return r - t.chase_pct / 100 * t.entry / (t.entry - t.stop)
 
 
-def _chase_lines(trades: list[Trade]) -> list[str]:
-    known = [t for t in trades if t.chase_pct is not None]
-    out = [f"## 手動下單：慢一步用市價追（v10 突破即買、區間 {CURRENT_OR} 分鐘、保守進場價）", ""]
-    if not known:
+def _over_breakout(t: Trade, price: float) -> float:
+    """price 比這一筆的突破價（區間高 + 緩衝）貴幾 %。"""
+    trigger = t.or_high * (1 + config.SIGNAL["breakout_buffer_pct"] / 100)
+    return (price - trigger) / trigger * 100
+
+
+def _chase_lines(ideal: list[Trade], late: list[Trade]) -> list[str]:
+    """10-15 使用者要的版本：拿**突破價**當基準，不是拿保守價。
+
+    第一版拿保守價（那一分鐘的收盤）當基準，再晚幾秒當然幾乎沒差 —— 表上寫「只多付
+    0.03%」，看起來手動沒成本，其實保守價本身就已經晚了。真正的差距在突破價和手動
+    價之間：同一批 4 天，樂觀 +0.49R、保守 -0.12R。"""
+    out = [f"## 手動下單：進場價差多少（v10 突破即買、區間 {CURRENT_OR} 分鐘）", ""]
+    chased = [t for t in late if t.chase_pct is not None]
+    if not ideal and not late:
         return out + ["沒有可以算的訊號。", ""]
-    n = len(known)
-    avg = lambda xs: sum(xs) / n
-    out += ["| 筆數 | 平均多付 | 平均R（訊號價） | 平均R（追價） | 扣成本R（追價） |",
-            "|---|---|---|---|---|",
-            f"| {n} | {avg([t.chase_pct for t in known]):+.2f}% | "
-            f"{avg([t.r_multiple for t in known]):+.2f} | "
-            f"{avg([_chased_r(t, False) for t in known]):+.2f} | "
-            f"{avg([_chased_r(t, True) for t in known]):+.2f} |",
+
+    def row(label, trades, price, r):
+        if not trades:
+            return f"| {label} | 0 | — | — | — |"
+        n = len(trades)
+        return (f"| {label} | {n} | {sum(_over_breakout(t, price(t)) for t in trades) / n:+.2f}% | "
+                f"{sum(r(t, False) for t in trades) / n:+.2f} | "
+                f"{sum(r(t, True) for t in trades) / n:+.2f} |")
+
+    plain = lambda t, net: t.net_r if net else t.r_multiple
+    out += ["| 進場價 | 筆數 | 比突破價貴 | 平均R | 扣成本R |", "|---|---|---|---|---|",
+            row("剛好買在突破價（觸價單的理想情況）", ideal, lambda t: t.entry, plain),
+            row("那一分鐘的收盤價（晚幾十秒）", late, lambda t: t.entry, plain),
+            row("慢一步市價追（下一分鐘第一筆）", chased,
+                lambda t: t.entry * (1 + t.chase_pct / 100), _chased_r),
             "",
-            "- **追價**＝訊號那一分鐘結束後的第一筆成交（訊號後 0～60 秒）。人看到訊息、打開 App、"
-            "下市價單，大概就是這個價。實際手動通常更慢，所以這是**偏樂觀**的估計。",
-            "- 出場價照舊，只把進場價換成追價。前面幾張表都是用訊號價算的 —— "
-            "要手動下單的話，看這一欄。",
-            "- 掛限價在訊號價是另一種做法：不會多付，但一路往上的那幾筆會買不到"
-            "（日報的「掛進場價買得到」）。",
+            "- **第一列和最後一列的差距，就是手動下單的成本。** 每一列都是同一批訊號、同一套出場，"
+            "只換進場價。",
+            "- 09:05 那一批三列的進場價差不多（都是發出當下的價格），差距主要來自之後即時發的那幾筆。",
+            "- 第一列是最理想的情況：真的用觸價單，成交價也可能比突破價高一兩檔。",
+            "- 最後一列是訊號後 0～60 秒的價格，實際手動通常更慢，所以還是**偏樂觀**。",
             ""]
     return out
 
@@ -649,7 +666,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
     if market:
         out += _market_lines(market)
     if results.get((CURRENT_OR, CAUTIOUS)):
-        out += _chase_lines(results[(CURRENT_OR, CAUTIOUS)][0])
+        out += _chase_lines(results.get((CURRENT_OR, OPTIMISTIC), ([], 0))[0],
+                            results[(CURRENT_OR, CAUTIOUS)][0])
     out += ["## 出場原因（保守）", "", "| 區間 | 出場原因 |", "|---|---|"]
     for orm in GRID_OR:
         s = summarise(results.get((orm, CAUTIOUS), ([], 0))[0])

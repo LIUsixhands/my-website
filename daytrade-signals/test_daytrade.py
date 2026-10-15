@@ -5497,17 +5497,32 @@ class TestWhatIfMarket(unittest.TestCase):
         nxt = next(b for b in stock["bars"] if b[0] >= tr.fired + timedelta(minutes=1))
         self.assertEqual(tr.chase_pct, round((nxt[1] - tr.entry) / tr.entry * 100, 3))
 
+        # 恩德：區間高 25.50 → 突破價 25.5255；理想買在 25.53，保守 25.60，慢一步追 +0.8%
+        ideal = self._trade("09:06", 0.5, r=0.2)
+        ideal.or_high, ideal.entry, ideal.stop = 25.5, 25.53, 24.85
         a = self._trade("09:06", -1.57, r=-0.47)
-        a.entry, a.stop, a.chase_pct = 25.6, 24.85, 0.8          # 恩德
+        a.or_high, a.entry, a.stop, a.chase_pct = 25.5, 25.6, 24.85, 0.8
         b = self._trade("09:17", -0.5, r=-0.17, code="2222")
         b.chase_pct = None                                        # 沒有下一根 K
-        text = "\n".join(whatif._chase_lines([a, b]))
-        chased = -0.47 - 0.8 / 100 * 25.6 / 0.75
-        self.assertIn(f"| 1 | +0.80% | -0.47 | {chased:+.2f} | {chased - 0.07:+.2f} |", text)
+        text = "\n".join(whatif._chase_lines([ideal], [a, b]))
+        trig = 25.5 * 1.001
+        self.assertIn(f"| 剛好買在突破價（觸價單的理想情況） | 1 | "
+                      f"{(25.53 - trig) / trig * 100:+.2f}% | +0.20 | +0.13 |", text)
+        late_over = ((25.6 - trig) / trig * 100 + (100 - 100.1) / 100.1 * 100) / 2
+        self.assertIn(f"| 那一分鐘的收盤價（晚幾十秒） | 2 | {late_over:+.2f}% | -0.32 | -0.39 |", text)
+        self.assertIn("| 慢一步市價追（下一分鐘第一筆） | 1 | +1.09% | -0.74 | -0.81 |", text,
+                      "基準是突破價，不是保守價 —— 25.6 × 1.008 比 25.5255 貴 1.09%")
+        self.assertIn("第一列和最後一列的差距，就是手動下單的成本", text)
         self.assertIn("偏樂觀", text)
-        self.assertIn("沒有可以算的訊號", "\n".join(whatif._chase_lines([b])))
-        full = "\n".join(whatif.render({(2, whatif.CAUTIOUS): ([a], 0)}, ["2026-10-15"], [], []))
-        self.assertIn("## 手動下單：慢一步用市價追", full)
+        self.assertIn("| 剛好買在突破價（觸價單的理想情況） | 0 | — |",
+                      "\n".join(whatif._chase_lines([], [b])))
+        self.assertIn("沒有可以算的訊號", "\n".join(whatif._chase_lines([], [])))
+        full = "\n".join(whatif.render({(2, whatif.CAUTIOUS): ([a], 0),
+                                         (2, whatif.OPTIMISTIC): ([ideal], 0)},
+                                        ["2026-10-15"], [], []))
+        self.assertIn("## 手動下單：進場價差多少", full)
+        self.assertIn(f"| 剛好買在突破價（觸價單的理想情況） | 1 | "
+                      f"{(25.53 - trig) / trig * 100:+.2f}% | +0.20 |", full, "樂觀那一欄接進來")
         self.assertNotIn("手動下單", "\n".join(whatif.render({}, ["2026-10-15"], [], [])))
 
     def test_the_screen_shows_every_comparison_table(self):
