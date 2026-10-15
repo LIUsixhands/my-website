@@ -496,6 +496,81 @@ def _chase_lines(ideal: list[Trade], late: list[Trade]) -> list[str]:
     return out
 
 
+# ── 觸價單：只看價格 ─────────────────────────────────────
+# 10-15：手動下單表的第一列（剛好買在突破價 +0.49R）太樂觀 —— 它假設三關都過的那一刻
+# 還能買在突破價，但量能與均價線通常比價格晚過關。券商的觸價單只看價格：一碰到突破價
+# 就送單，不管量能、均價線。假突破也會買進去。這一張回答「真的用觸價單會怎樣」。
+def replay_trigger_day(stocks: list[dict], or_minutes: int = CURRENT_OR,
+                       limit: int | None = None) -> tuple[list[Trade], int]:
+    """一天。每檔第一次碰到突破價（區間高 + 緩衝）就買：那一根開盤已經在突破價之上
+    （跳上去）就買在開盤價，否則買在突破價。沒有 09:05 批次（單子早就掛在券商那邊），
+    照碰到的時間先後，上限 3 檔，09:30 之後碰到的不算。出場照 v10。"""
+    cfg = config.SIGNAL
+    limit = config.RISK["max_signals_per_day"] if limit is None else limit
+    or_end, _batch, win_end = schedule(or_minutes)
+    hits = []
+    for s in stocks:
+        bars = s.get("bars") or []
+        rng = opening_range(bars, or_minutes)
+        if not rng:
+            continue
+        trigger = rng[0] * (1 + cfg["breakout_buffer_pct"] / 100)
+        b = next((b for b in bars if or_end < b[0].time() <= win_end and b[2] >= trigger), None)
+        if b is not None:
+            hits.append((b, s, rng[0], trigger))
+    hits.sort(key=lambda x: (x[0][0], x[1].get("rank") or 9999, str(x[1]["code"])))
+    sent: list[Trade] = []
+    capped = 0
+    for b, s, or_high, trigger in hits:
+        if len(sent) >= limit:
+            capped += 1
+            continue
+        entry = config.round_to_tick(max(trigger, b[1]), "up")
+        day_open = s["bars"][0][1] if s.get("bars") else None
+        plan = _plan(s, or_high, day_open, entry, b[0].time())
+        if plan is None:                              # 漲停買不到
+            continue
+        p = {"stock": s, "or_high": or_high}
+        sent.append(_walk(p, _wn([b])[0], 0.0, plan, False))
+    return sent, capped
+
+
+def run_trigger(days: list[tuple[str, list[dict]]]) -> tuple[list[Trade], int]:
+    trades, capped = [], 0
+    for _d, stocks in days:
+        t, c = replay_trigger_day(stocks)
+        trades += t
+        capped += c
+    return trades, capped
+
+
+def _trigger_lines(trigger: tuple[list[Trade], int], results: dict) -> list[str]:
+    out = [f"## 觸價單：只看價格（區間 {CURRENT_OR} 分鐘、出場照 v10）", "",
+           "| 進場方式 | 筆數 | 賺的 | 勝率 | 平均R | 扣成本R | 金額 | 額度滿了沒發 |",
+           "|---|---|---|---|---|---|---|---|"]
+    rows = (("觸價單：碰到突破價就買（不看量能、均價線）", trigger),
+            ("v10 三關都過、剛好買在突破價（樂觀）", results.get((CURRENT_OR, OPTIMISTIC), ([], 0))),
+            ("v10 三關都過、那一分鐘收盤價（保守）", results.get((CURRENT_OR, CAUTIOUS), ([], 0))))
+    for label, (trades, capped) in rows:
+        st = summarise(trades)
+        if not st["n"]:
+            out.append(f"| {label} | 0 | — | — | — | — | — | {capped} |")
+            continue
+        out.append(f"| {label} | {st['n']} | {st['wins']} | {st['rate']}% | {st['avg_r']:+.2f} | "
+                   f"{st['avg_net_r']:+.2f} | {st['amount']:+,} | {capped} |")
+    out += [
+        "",
+        "- **第一列才是觸價單真正會有的成績**：只看價格，假突破（一碰就掉回來）也會買進去。",
+        "- 第二列是「三關都過、還能買在突破價」—— 實際做不到（量能、均價線通常比價格晚過關），"
+        "只是上限。",
+        "- 第一列的成交價已經算了「那一分鐘一開盤就跳過突破價」的情況（買在開盤價），"
+        "但沒算送單那一瞬間再往上跳一兩檔，所以還是**偏樂觀**一點。",
+        "- 觸價單沒有 09:05 批次：單子早就掛在券商那邊，誰先碰到誰先成交，滿 3 檔就停。",
+        "",
+    ]
+    return out
+
+
 # ── 大盤 ──────────────────────────────────────────────
 # 跟 broker.MARKET_PROXY 同一檔：kbars 拿得到分鐘 K、跟加權指數走勢幾乎一樣。
 MARKET_PROXY = "0050"
@@ -618,7 +693,8 @@ def crosscheck(replayed: dict[str, set], actual: dict[str, set]) -> list[str]:
 
 def render(results: dict, days: list[str], check: list[str], missing: list,
            entries: dict | None = None, recomputed: int = 0,
-           stops: dict | None = None, market: dict | None = None) -> list[str]:
+           stops: dict | None = None, market: dict | None = None,
+           trigger: tuple | None = None) -> list[str]:
     """results[(區間分鐘, 樂觀/保守)] = (trades, 額度滿了沒發的檔數)。"""
     first, last = (days[0], days[-1]) if days else ("—", "—")
     out = [
@@ -665,6 +741,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
         out += _stop_lines(stops)
     if market:
         out += _market_lines(market)
+    if trigger is not None:
+        out += _trigger_lines(trigger, results)
     if results.get((CURRENT_OR, CAUTIOUS)):
         out += _chase_lines(results.get((CURRENT_OR, OPTIMISTIC), ([], 0))[0],
                             results[(CURRENT_OR, CAUTIOUS)][0])
@@ -871,13 +949,14 @@ def main(argv=None):
     entries = run_entries(days, picks, results)
     stops = run_stops(days, picks)
     market = run_market(results[(CURRENT_OR, CAUTIOUS)][0], markets)
+    trigger = run_trigger(days)
     replayed: dict[str, set] = {}
     for t in results[(CURRENT_OR, CAUTIOUS)][0]:
         replayed.setdefault(t.date, set()).add(t.code)
     check = crosscheck(replayed, actual_signals(args.since, args.until))
 
     lines = render(results, [d for d, _ in days], check, missing, entries, recomputed, stops,
-                   market=market)
+                   market=market, trigger=trigger)
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")

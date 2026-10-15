@@ -5543,7 +5543,72 @@ class TestWhatIfMarket(unittest.TestCase):
         src = inspect.getsource(whatif.main)
         self.assertIn("markets[d] = market_bars(d, fetch)", src)
         self.assertIn("run_market(results[(CURRENT_OR, CAUTIOUS)][0], markets)", src)
-        self.assertIn("market=market)", src)
+        self.assertIn("market=market, trigger=trigger)", src)
+
+
+class TestWhatIfPriceOnlyTrigger(unittest.TestCase):
+    """whatif 第六張表：觸價單（10-15）。券商的觸價單只看價格 —— 碰到突破價就送單，
+    不等量能、不等均價線。假突破也會買進去。手動下單表的第一列（三關都過、還買在突破價）
+    做不到，這一張才是觸價單真正會有的成績。"""
+
+    def _stock(self, **kw):
+        return TestWhatIfOpeningRangeLength("test_each_length_gets_the_same_batch_delay_and_window")._stock(**kw)
+
+    def test_no_volume_still_buys_at_the_breakout_price(self):
+        s = self._stock(ratio=1.0)                      # 09:03 沒帶量 → v10 不買
+        self.assertEqual(whatif.replay_day([s], 2)[0], [])
+        (t,), capped = whatif.replay_trigger_day([s])
+        self.assertEqual(capped, 0)
+        self.assertEqual(t.entry, config.round_to_tick(101.0 * 1.001, "up"),
+                         "碰到突破價 101.101 → 往上取到下一檔")
+        self.assertEqual(t.fired.strftime("%H:%M"), "09:03")
+        self.assertFalse(t.batch, "觸價單沒有 09:05 批次")
+
+    def test_a_spike_that_falls_back_is_bought_too(self):
+        """保勝 10-15：一碰到就掉回來。觸價單只要碰到就成交 —— 那一分鐘收在哪不管。"""
+        s = self._stock()
+        t3 = s["bars"][3]
+        s["bars"][3] = (t3[0], 100.5, 101.2, 100.4, 100.8, t3[5])   # 高 101.2、收 100.8
+        (t,), _ = whatif.replay_trigger_day([s])
+        self.assertEqual(t.fired.strftime("%H:%M"), "09:03")
+
+    def test_a_gap_over_the_trigger_fills_at_the_open(self):
+        s = self._stock()
+        t3 = s["bars"][3]
+        s["bars"][3] = (t3[0], 102.0, 102.5, 101.5, 102.0, t3[5])   # 09:03 一開就在 102
+        (t,), _ = whatif.replay_trigger_day([s])
+        self.assertEqual(t.entry, 102.0)
+
+    def test_first_touched_first_filled_up_to_the_cap(self):
+        early = [self._stock(code=c, rank=r) for c, r in (("2222", 2), ("3333", 3), ("4444", 4))]
+        late = self._stock(code="1111", rank=1)
+        b = late["bars"]
+        late["bars"] = b[:3] + [(b[3][0], 100.5, 100.9, 100.4, 100.8, 100)] + \
+            [(b[4][0], 100.8, 101.8, 100.8, 101.6, 100)] + b[5:]    # 09:04 才碰到
+        sent, capped = whatif.replay_trigger_day([late] + early)
+        self.assertEqual([t.code for t in sent], ["2222", "3333", "4444"],
+                         "量比第一名也一樣：晚碰到就排在後面")
+        self.assertEqual(capped, 1)
+
+    def test_touches_outside_the_window_do_not_count(self):
+        s = self._stock(tail=[("09:31", 101.0, 103.0, 101.0, 102.5, 100)])
+        s["bars"] = s["bars"][:3] + s["bars"][6:]          # 09:03–09:05 拿掉，只剩 09:31
+        self.assertEqual(whatif.replay_trigger_day([s]), ([], 0))
+        self.assertEqual(whatif.replay_trigger_day([{"code": "9", "bars": []}]), ([], 0))
+
+    def test_the_table_and_the_wiring(self):
+        trig = whatif.run_trigger([("2026-10-13", [self._stock(ratio=1.0)])])
+        self.assertEqual(len(trig[0]), 1)
+        text = "\n".join(whatif._trigger_lines(trig, {}))
+        self.assertIn("| 觸價單：碰到突破價就買（不看量能、均價線） | 1 |", text)
+        self.assertIn("| v10 三關都過、剛好買在突破價（樂觀） | 0 | — |", text)
+        self.assertIn("第一列才是觸價單真正會有的成績", text)
+        full = "\n".join(whatif.render({}, ["2026-10-13"], [], [], trigger=trig))
+        self.assertIn("## 觸價單：只看價格", full)
+        self.assertIn("## 觸價單", "\n".join(whatif.summary_part(
+            whatif.render({}, ["2026-10-13"], [], [], trigger=trig))))
+        self.assertNotIn("觸價單：只看價格", "\n".join(whatif.render({}, ["2026-10-13"], [], [])))
+        self.assertIn("trigger = run_trigger(days)", inspect.getsource(whatif.main))
 
 
 class TestWhatIfReadsTheArchivedWatchlists(unittest.TestCase):
