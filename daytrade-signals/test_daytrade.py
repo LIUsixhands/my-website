@@ -5340,7 +5340,7 @@ class TestWhatIfEntryStyles(unittest.TestCase):
         self.assertIn("run_entries(days, picks, results)", src)
         self.assertIn("pick_for(d, payload, stocks, fetch)", src)
         self.assertIn('recomputed += 0 if payload.get("pick") else 1', src)
-        self.assertIn("entries, recomputed, stops)", src)
+        self.assertIn("entries, recomputed, stops,", src)
 
 
 class TestWhatIfStopWidths(unittest.TestCase):
@@ -5412,6 +5412,89 @@ class TestWhatIfStopWidths(unittest.TestCase):
     def test_main_runs_it(self):
         src = inspect.getsource(whatif.main)
         self.assertIn("stops = run_stops(days, picks)", src)
+
+
+class TestWhatIfMarket(unittest.TestCase):
+    """whatif 的第四張表：大盤。10-15 加權指數一開盤就是當天最高、收黑 3.41%，v10 三筆全輸。
+    使用者：「大盤不好，突破就下跌」。照進場那一分鐘大盤在不在開盤價之上分組（盤中做得到），
+    再照當天收紅收黑分組（收盤才知道，只能看）。"""
+
+    D = datetime(2026, 10, 15)
+
+    def _m(self, spec):
+        """大盤分鐘 K：[(時間, 開, 收)]。"""
+        return [(datetime.combine(self.D.date(), dtime(int(t[:2]), int(t[3:]))), o, max(o, c),
+                 min(o, c), c, 1000.0) for t, o, c in spec]
+
+    def _trade(self, hhmm, net_pct, r=0.5, code="1111", day="2026-10-15"):
+        fired = datetime.strptime(f"{day} {hhmm}", "%Y-%m-%d %H:%M")
+        return whatif.Trade(date=day, code=code, name="測", fired=fired, or_high=100.0,
+                            entry=100.0, stop=97.0, lots=1, vol_ratio=2.0, batch=False,
+                            result=oc.STOP if r < 0 else exits.TRAIL, r_multiple=r,
+                            net_r=r - 0.07, net_pct=net_pct)
+
+    # 開高走低：09:01 還在開盤價之上，09:03 起跌破，收黑
+    FADE = [("09:01", 200.0, 200.5), ("09:02", 200.5, 200.0), ("09:03", 200.0, 199.0),
+            ("13:30", 197.0, 194.0)]
+
+    def test_the_state_uses_only_bars_up_to_the_entry_minute(self):
+        m = self._m(self.FADE)
+        self.assertEqual(whatif.market_state(m, self.D.replace(hour=9, minute=1)), whatif.MKT_UP)
+        self.assertEqual(whatif.market_state(m, self.D.replace(hour=9, minute=2)), whatif.MKT_UP,
+                         "等於開盤價算之上")
+        self.assertEqual(whatif.market_state(m, self.D.replace(hour=9, minute=3)), whatif.MKT_DOWN)
+        self.assertEqual(whatif.market_state(m, self.D.replace(hour=9, minute=2, second=30)),
+                         whatif.MKT_UP, "09:03 那根還沒收完，不能偷看")
+        self.assertIsNone(whatif.market_state(m, self.D.replace(hour=8, minute=59)))
+        self.assertIsNone(whatif.market_state([], self.D))
+
+    def test_the_day_colour_is_close_against_open(self):
+        self.assertEqual(whatif.day_color(self._m(self.FADE)), whatif.DAY_BLACK)
+        self.assertEqual(whatif.day_color(self._m([("09:01", 100.0, 99.0), ("13:30", 99.0, 100.5)])),
+                         whatif.DAY_RED, "開低收高也是紅 K")
+        self.assertEqual(whatif.day_color(self._m([("09:01", 100.0, 100.0)])), whatif.DAY_BLACK)
+        self.assertIsNone(whatif.day_color([]))
+
+    def test_each_trade_lands_in_one_now_group_and_one_day_group(self):
+        markets = {"2026-10-15": self._m(self.FADE)}
+        early, late = self._trade("09:01", 1.0), self._trade("09:05", -3.2, r=-1.0, code="2222")
+        lost = self._trade("09:05", 0.5, code="3333", day="2026-10-16")    # 那天沒有大盤 K
+        g = whatif.run_market([early, late, lost], markets)
+        self.assertEqual([t.code for t in g[whatif.MKT_UP]], ["1111"])
+        self.assertEqual([t.code for t in g[whatif.MKT_DOWN]], ["2222"])
+        self.assertEqual([t.code for t in g[whatif.DAY_BLACK]], ["1111", "2222"])
+        self.assertEqual(g[whatif.DAY_RED], [])
+        self.assertEqual([t.code for t in g[whatif.MKT_UNKNOWN]], ["3333"], "缺資料不猜")
+
+        text = "\n".join(whatif._market_lines(g))
+        self.assertIn("| 進場時大盤在開盤價之上 | 1 | 1 | 100% | +0.50 | +0.43 | +1,000 |", text)
+        self.assertIn("| 進場時大盤在開盤價之下 | 1 | 0 | 0% | -1.00 | -1.07 | -3,200 |", text)
+        self.assertIn("| 大盤當天收紅（收盤才知道） | 0 | — |", text)
+        self.assertIn("| 大盤資料缺 | 1 |", text)
+        self.assertIn("後兩列不能變成規則", text)
+        self.assertNotIn("大盤資料缺", "\n".join(whatif._market_lines(
+            whatif.run_market([early], markets))), "沒缺就不列")
+        full = "\n".join(whatif.render({}, ["2026-10-15"], [], [], market=g))
+        self.assertIn("## 大盤（v10 突破即買", full)
+
+    def test_the_market_bars_come_from_the_cache_first(self):
+        calls = []
+        cached = self._m(self.FADE)
+        with unittest.mock.patch.object(whatif, "load_cached", lambda d, c: cached if c == "0050" else None), \
+             unittest.mock.patch.object(whatif, "save_cached", lambda *a: calls.append(("save", a[1]))):
+            self.assertIs(whatif.market_bars("2026-10-15", lambda c, d: calls.append(c)), cached)
+        self.assertEqual(calls, [])
+        with unittest.mock.patch.object(whatif, "load_cached", lambda d, c: None), \
+             unittest.mock.patch.object(whatif, "save_cached", lambda *a: calls.append(("save", a[1]))):
+            got = whatif.market_bars("2026-10-15", lambda c, d: calls.append(c) or ["bars"])
+        self.assertEqual(got, ["bars"])
+        self.assertEqual(calls, ["0050", ("save", "0050")])
+
+    def test_main_runs_it_on_the_v10_column(self):
+        src = inspect.getsource(whatif.main)
+        self.assertIn("markets[d] = market_bars(d, fetch)", src)
+        self.assertIn("run_market(results[(CURRENT_OR, CAUTIOUS)][0], markets)", src)
+        self.assertIn("market=market)", src)
 
 
 class TestWhatIfReadsTheArchivedWatchlists(unittest.TestCase):

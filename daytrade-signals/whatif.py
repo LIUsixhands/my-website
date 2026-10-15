@@ -27,6 +27,10 @@
 **它是重建，不是盤中紀錄。** 量能倍數和均價線都是分鐘 K 的近似（見 whynot.py）。
 所以 2 分鐘那一列會拿去跟盤中真的發出的訊號對答案，對不上的寫在報表最前面。
 
+10-15 再加一張「大盤」：加權指數一開盤就是當天最高、收黑 3.41%，v10 三筆全輸。使用者：
+「大盤不好，突破就下跌」。把 v10 的每一筆照進場那一分鐘大盤（0050）在不在今天開盤價之上
+分組 —— 那一刻就知道，可以變成規則；另外照大盤當天收紅／收黑分組 —— 收盤才知道，只能看。
+
 10-14 再加一張「停損寬度」：1.5％／2％／2.5％／現在，突破訊號和首選各一組。
 
 10-13 再加一張「三種進場方式」：突破即買（v10）、回踩再買（使用者貼的文章）、
@@ -436,6 +440,73 @@ def _stop_lines(stops: dict) -> list[str]:
     return out
 
 
+# ── 大盤 ──────────────────────────────────────────────
+# 跟 broker.MARKET_PROXY 同一檔：kbars 拿得到分鐘 K、跟加權指數走勢幾乎一樣。
+MARKET_PROXY = "0050"
+MKT_UP = "進場時大盤在開盤價之上"
+MKT_DOWN = "進場時大盤在開盤價之下"
+DAY_RED = "大盤當天收紅（收盤才知道）"
+DAY_BLACK = "大盤當天收黑（收盤才知道）"
+MKT_UNKNOWN = "大盤資料缺"
+MARKET_GROUPS = (MKT_UP, MKT_DOWN, DAY_RED, DAY_BLACK, MKT_UNKNOWN)
+
+
+def market_state(mbars, at: datetime) -> str | None:
+    """at 那一分鐘（含）以前最後一根的收盤，跟大盤今天的開盤價比。平盤算「之上」。
+    只用 at 以前的 K 棒 —— 這個分組拿去當規則，盤中做得到。"""
+    if not mbars:
+        return None
+    seen = [b for b in mbars if b[0] <= at]
+    if not seen:
+        return None
+    return MKT_UP if seen[-1][4] >= mbars[0][1] else MKT_DOWN
+
+
+def day_color(mbars) -> str | None:
+    """收盤比開盤高 → 收紅（紅 K）；平或低 → 收黑。事後資訊，只能看、不能當規則。"""
+    if not mbars:
+        return None
+    return DAY_RED if mbars[-1][4] > mbars[0][1] else DAY_BLACK
+
+
+def run_market(trades: list[Trade], markets: dict) -> dict:
+    """{分組: [這一組的訊號]}。同一筆會同時在「進場當下」和「當天收盤」各出現一次。"""
+    out = {k: [] for k in MARKET_GROUPS}
+    for t in trades:
+        mbars = markets.get(t.date)
+        now, day = market_state(mbars, t.fired), day_color(mbars)
+        if now is None or day is None:
+            out[MKT_UNKNOWN].append(t)
+            continue
+        out[now].append(t)
+        out[day].append(t)
+    return out
+
+
+def _market_lines(groups: dict) -> list[str]:
+    out = [f"## 大盤（v10 突破即買、區間 {CURRENT_OR} 分鐘、保守進場價）", "",
+           "| 分組 | 筆數 | 賺的 | 勝率 | 平均R | 扣成本R | 金額 |", "|---|---|---|---|---|---|---|"]
+    for label in MARKET_GROUPS:
+        s = summarise(groups.get(label, []))
+        if not s["n"]:
+            if label != MKT_UNKNOWN:
+                out.append(f"| {label} | 0 | — | — | — | — | — |")
+            continue
+        out.append(f"| {label} | {s['n']} | {s['wins']} | {s['rate']}% | {s['avg_r']:+.2f} | "
+                   f"{s['avg_net_r']:+.2f} | {s['amount']:+,} |")
+    out += [
+        "",
+        f"- 大盤用 {MARKET_PROXY}（元大台灣50）的分鐘 K 代表，跟加權指數走勢幾乎一樣。",
+        "- **前兩列可以變成規則**：進場那一分鐘就知道大盤在開盤價之上還是之下。"
+        "如果「之下」那一列明顯比較差，v11 可以考慮「大盤在開盤價之下就不做多」。",
+        "- **後兩列不能變成規則**：收紅收黑要收盤才知道，只能拿來確認「大盤不好的日子，突破比較容易失敗」"
+        "這個觀察對不對。",
+        "- 前兩列加起來、後兩列加起來，都是同一批訊號。",
+        "",
+    ]
+    return out
+
+
 def run_entries(days: list[tuple[str, list[dict]]], picks: list[tuple[str, dict, list]],
                 results: dict) -> dict:
     """三種進場方式（區間 2 分鐘、保守進場價）。突破即買直接拿主表那一格。"""
@@ -491,7 +562,7 @@ def crosscheck(replayed: dict[str, set], actual: dict[str, set]) -> list[str]:
 
 def render(results: dict, days: list[str], check: list[str], missing: list,
            entries: dict | None = None, recomputed: int = 0,
-           stops: dict | None = None) -> list[str]:
+           stops: dict | None = None, market: dict | None = None) -> list[str]:
     """results[(區間分鐘, 樂觀/保守)] = (trades, 額度滿了沒發的檔數)。"""
     first, last = (days[0], days[-1]) if days else ("—", "—")
     out = [
@@ -536,6 +607,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
         out += _entry_lines(entries, recomputed)
     if stops:
         out += _stop_lines(stops)
+    if market:
+        out += _market_lines(market)
     out += ["## 出場原因（保守）", "", "| 區間 | 出場原因 |", "|---|---|"]
     for orm in GRID_OR:
         s = summarise(results.get((orm, CAUTIOUS), ([], 0))[0])
@@ -662,6 +735,15 @@ def pick_for(day: str, payload: dict, stocks: list[dict], fetch):
     return day, pick, bars
 
 
+def market_bars(day: str, fetch):
+    """那一天大盤（0050）的分鐘 K，有快取用快取。"""
+    bars = load_cached(day, MARKET_PROXY)
+    if bars is None:
+        bars = fetch(MARKET_PROXY, day)
+        save_cached(day, MARKET_PROXY, bars)
+    return bars
+
+
 def actual_signals(since: str, until: str) -> dict[str, set]:
     out: dict[str, set] = {}
     for r in oc.load_csv():
@@ -708,10 +790,11 @@ def main(argv=None):
         time.sleep(config.SCREEN["kbar_sleep_sec"])
         return oc.day_bars_ohlcv(broker, code, day)
 
-    days, missing, picks, recomputed = [], [], [], 0
+    days, missing, picks, recomputed, markets = [], [], [], 0, {}
     for d, payload in archived:
         stocks, miss = stocks_for(d, payload, fetch)
         days.append((d, stocks))
+        markets[d] = market_bars(d, fetch)
         missing += miss
         got = pick_for(d, payload, stocks, fetch)
         if got:
@@ -721,12 +804,14 @@ def main(argv=None):
     results = run_all(days)
     entries = run_entries(days, picks, results)
     stops = run_stops(days, picks)
+    market = run_market(results[(CURRENT_OR, CAUTIOUS)][0], markets)
     replayed: dict[str, set] = {}
     for t in results[(CURRENT_OR, CAUTIOUS)][0]:
         replayed.setdefault(t.date, set()).add(t.code)
     check = crosscheck(replayed, actual_signals(args.since, args.until))
 
-    lines = render(results, [d for d, _ in days], check, missing, entries, recomputed, stops)
+    lines = render(results, [d for d, _ in days], check, missing, entries, recomputed, stops,
+                   market=market)
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
