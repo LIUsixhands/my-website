@@ -5510,6 +5510,20 @@ class TestWhatIfMarket(unittest.TestCase):
         self.assertIn("## 手動下單：慢一步用市價追", full)
         self.assertNotIn("手動下單", "\n".join(whatif.render({}, ["2026-10-15"], [], [])))
 
+    def test_the_screen_shows_every_comparison_table(self):
+        """10-15 第一次跑只印了前 40 行，第三張表起全被切掉。"""
+        a = self._trade("09:06", 1.0)
+        a.chase_pct = 0.5
+        lines = whatif.render({(2, whatif.CAUTIOUS): ([a], 0)}, ["2026-10-15"], [], [],
+                              market=whatif.run_market([a], {}))
+        shown = "\n".join(whatif.summary_part(lines))
+        self.assertIn("## 大盤", shown)
+        self.assertIn("## 手動下單", shown)
+        self.assertNotIn("## 出場原因", shown)
+        self.assertNotIn("## 每一筆", shown, "明細太長，留在檔案裡")
+        self.assertEqual(whatif.summary_part(["a", "b"]), ["a", "b"])
+        self.assertIn("summary_part(lines)", inspect.getsource(whatif.main))
+
     def test_main_runs_it_on_the_v10_column(self):
         src = inspect.getsource(whatif.main)
         self.assertIn("markets[d] = market_bars(d, fetch)", src)

@@ -806,6 +806,13 @@ def run_all(days: list[tuple[str, list[dict]]]) -> dict:
     return results
 
 
+def summary_part(lines: list[str]) -> list[str]:
+    """印在畫面上的部分：所有比較表，到「出場原因」之前（後面是每一筆的明細，很長）。
+    10-15 使用者第一次跑，只印前 40 行，第三張表起全被切掉。"""
+    cut = next((i for i, l in enumerate(lines) if l.startswith("## 出場原因")), len(lines))
+    return lines[:cut]
+
+
 def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     yesterday = (ddate.today() - timedelta(days=1)).isoformat()
@@ -856,7 +863,7 @@ def main(argv=None):
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
-    print("\n".join(lines[:40]))
+    print("\n".join(summary_part(lines)))
     print(f"\n→ 全文寫在 {path}")
 
 
