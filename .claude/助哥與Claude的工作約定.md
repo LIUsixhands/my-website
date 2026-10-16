@@ -191,6 +191,14 @@ net-chinese.com.tw   law.moj.gov.tw
 - 無法代操 Netlify 後台 → **只能一步一步帶他點**
 - DNS 查詢會被導向單一解析器，**無法直接問權威伺服器**，沒有繞過傳播時間的捷徑
 
+> ⚠️ **2026-10-16 更新：DNS 查詢可能完全不能用。**
+> 當天的執行環境裡，所有 DNS 查詢都回 NXDOMAIN（連 `google.com`、`tw.` 都是），
+> DNS-over-HTTPS（`dns.google`、`cloudflare-dns.com`）也被代理擋掉。
+> `.claude/scripts/dns_check_sixhands.py` 在這種環境下會**誤判成「網域不存在」**。
+> → **查 DNS 前先用 `google.com` 當對照組**：對照組也失敗，就是環境問題，不是助哥的網域壞了，
+>   不要嚇到助哥。改請助哥用瀏覽器開網站確認，或用 Google Search Console 的「驗證」按鈕當檢查工具。
+> → **不要承諾「生效了我通知您」**，環境不一定查得到。
+
 ---
 
 ## 📂 相關檔案
