@@ -236,7 +236,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
 
 <!-- P1 封面 -->
 <div class="page" style="background:#102a33">
-  <img src="{img('室內_客廳.jpg')}" style="position:absolute;left:0;top:0;width:210mm;height:156mm;object-fit:cover;object-position:center 45%">
+  <img src="{img('外觀_雕塑仰視.jpg')}" style="position:absolute;left:0;top:0;width:210mm;height:156mm;object-fit:cover;object-position:center 15%">
   <div style="position:absolute;left:0;top:116mm;width:210mm;height:40mm;background:linear-gradient(180deg,rgba(16,42,51,0),#102a33)"></div>
   <div style="position:absolute;left:16mm;top:152mm;right:16mm;color:#fff">
     <div style="font-size:8pt;letter-spacing:.5em;color:#E3B66A">PROPERTY SALES REPORT</div>
