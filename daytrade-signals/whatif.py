@@ -119,6 +119,8 @@ class Trade:
     net_pct: float = 0.0
     held_min: int = 0
     chase_pct: float | None = None   # 慢一步用市價追，比進場價多付幾 %（下一根 K 的開盤）
+    limit_room_pct: float | None = None  # 進場時離漲停還有幾 %
+    oversized: bool = False          # 一張的停損風險就超過單筆上限
 
 
 def _gates(wbars, b, trigger: float, or_start: dtime) -> float | None:
@@ -261,6 +263,10 @@ def _walk(p: dict, b, vr: float, plan: dict, batch: bool) -> Trade:
     tr = Trade(date=fired.strftime("%Y-%m-%d"), code=str(s["code"]), name=s.get("name", ""),
                fired=fired, or_high=p["or_high"], entry=plan["entry"], stop=plan["stop"],
                lots=plan["lots"], vol_ratio=round(vr, 2), batch=batch)
+    lu = config.limit_up(s.get("prev_close") or 0)
+    if lu:
+        tr.limit_room_pct = round((lu - plan["entry"]) / plan["entry"] * 100, 3)
+    tr.oversized = bool(plan.get("oversized"))
     chase = oc.chase_price(s["bars"], fired)
     if chase is not None:
         tr.chase_pct = round((chase - plan["entry"]) / plan["entry"] * 100, 3)
@@ -571,6 +577,133 @@ def _trigger_lines(trigger: tuple[list[Trade], int], results: dict) -> list[str]
     return out
 
 
+# ── 研究版出場：只有停損，其餘抱到 13:25 ─────────────────────
+# 10-16 使用者：「往後問題一樣機率很高……上網找找」。查到的開盤突破研究（Zarattini、
+# Barbon、Aziz 2024）出場只有一個停損，其他一律抱到收盤；v10 有六條、常常幾秒就出場
+# （10-16 亞電 5 秒、廣寰科 22 秒），手動跟不上。這一張只換出場，看差多少。
+def simple_exit(bars, entry: float, stop: float, fired: datetime):
+    """(結果, 出場價, 出場時間)。只看停損和 13:25。訊號那一分鐘不判（跟 v10 同一個約定）。
+    一開盤就跳空在停損下面 → 出在那一根的開盤價。沒有之後的 K 棒 → None。"""
+    last = None
+    for t, o, h, l, c, _v in bars:
+        if t < fired + oc.BAR_SPAN:
+            continue
+        if t.time() > oc.FLATTEN_AT:
+            break
+        if l <= stop:
+            return oc.STOP, min(o, stop), t.strftime("%H:%M:%S")
+        last = c
+    if last is None:
+        return None
+    return oc.FLAT, last, oc.FLATTEN_AT.strftime("%H:%M:%S")
+
+
+def resimple(trades: list[Trade], bars_of: dict) -> list[Trade]:
+    """同一批進場，出場換成「停損＋13:25」。bars_of[(日期, 代號)] = 那天的分鐘 K。"""
+    out = []
+    for t in trades:
+        got = simple_exit(bars_of.get((t.date, t.code)) or [], t.entry, t.stop, t.fired)
+        if got is None:
+            continue
+        result, price, at = got
+        n = Trade(date=t.date, code=t.code, name=t.name, fired=t.fired, or_high=t.or_high,
+                  entry=t.entry, stop=t.stop, lots=t.lots, vol_ratio=t.vol_ratio,
+                  batch=t.batch, result=result, exit_price=round(price, 2), exit_at=at,
+                  limit_room_pct=t.limit_room_pct, oversized=t.oversized)
+        pct, r = exits.blended(t.entry, t.stop, t.lots, None, price)
+        _finish(n, t.entry, t.stop, r, pct, at, t.fired)
+        out.append(n)
+    return out
+
+
+def bars_index(days: list[tuple[str, list[dict]]]) -> dict:
+    return {(d, str(s["code"])): s.get("bars") or [] for d, stocks in days for s in stocks}
+
+
+def run_simple(days, results: dict, trigger: tuple) -> dict:
+    idx = bars_index(days)
+    v10 = results.get((CURRENT_OR, CAUTIOUS), ([], 0))[0]
+    trig = trigger[0] if trigger else []
+    return {"v10_six": v10, "v10_simple": resimple(v10, idx),
+            "trig_six": trig, "trig_simple": resimple(trig, idx)}
+
+
+def _simple_lines(simple: dict) -> list[str]:
+    out = [f"## 研究版出場：只有停損，其餘抱到 13:25（區間 {CURRENT_OR} 分鐘）", "",
+           "| 進場 | 出場 | 筆數 | 賺的 | 勝率 | 平均R | 扣成本R | 金額 | 平均持有 |",
+           "|---|---|---|---|---|---|---|---|---|"]
+    rows = (("v10 三關（保守價）", "v10 六條", "v10_six"),
+            ("v10 三關（保守價）", "停損＋13:25", "v10_simple"),
+            ("觸價單（只看價格）", "v10 六條", "trig_six"),
+            ("觸價單（只看價格）", "停損＋13:25（研究版）", "trig_simple"))
+    for entry, exit_, key in rows:
+        st = summarise(simple.get(key, []))
+        if not st["n"]:
+            out.append(f"| {entry} | {exit_} | 0 | — | — | — | — | — | — |")
+            continue
+        out.append(f"| {entry} | {exit_} | {st['n']} | {st['wins']} | {st['rate']}% | "
+                   f"{st['avg_r']:+.2f} | {st['avg_net_r']:+.2f} | {st['amount']:+,} | "
+                   f"{st['avg_min']} 分 |")
+    out += [
+        "",
+        "- **停損＋13:25**：停損照原本的價位；碰到就出，沒碰到就抱到 13:25。沒有先出一半、"
+        "移動停利、跌破開盤價／區間／均價線、量縮。手動做得到：進場後掛好停損（或母子單），"
+        "13:25 前賣掉。",
+        "- 研究版跟原論文還有一個差別：論文挑的是「今天開盤前 5 分鐘量最熱」的股票，這裡用的是"
+        "盤前名單（昨天的量）。",
+        "- 平均持有：v10 常常幾秒到幾分鐘；抱到 13:25 是幾個小時 —— 盤中漲上去再掉回來的，"
+        "這裡會全部吐回去，所以兩邊各有輸贏，看數字。",
+        "",
+    ]
+    return out
+
+
+# ── 過濾條件：離漲停太近、一張就超過風險上限 ─────────────────────
+# 10-16 台虹（進場時已漲 6%、目標＝漲停價、一張風險 9,000 元）、亞電（已漲 8%、
+# 離漲停 1.7%、先出一半只設在 +0.85%，2 秒碰到、5 秒保本出場）。研究：台股接近漲停會
+# 加速（磁吸效應），追進去剩下的空間很小。
+LIMIT_ROOM_PCT = 3.0
+
+
+def run_filters(trades: list[Trade]) -> list[tuple[str, list[Trade]]]:
+    is_near = lambda t: t.limit_room_pct is not None and t.limit_room_pct < LIMIT_ROOM_PCT
+    near = [t for t in trades if is_near(t)]
+    far = [t for t in trades if not is_near(t)]
+    big = [t for t in trades if t.oversized]
+    ok = [t for t in trades if not t.oversized]
+    both = [t for t in far if not t.oversized]
+    g = f"{LIMIT_ROOM_PCT:g}%"
+    return [("全部（v10 現在）", trades),
+            (f"離漲停不到 {g}（會被排除的）", near),
+            (f"離漲停 {g} 以上（排除後剩下的）", far),
+            ("一張就超過風險上限（會被排除的）", big),
+            ("一張沒超過上限（排除後剩下的）", ok),
+            ("兩個都排除後剩下的", both)]
+
+
+def _filter_lines(rows: list[tuple[str, list[Trade]]]) -> list[str]:
+    out = [f"## 過濾條件（v10 突破即買、區間 {CURRENT_OR} 分鐘、保守進場價）", "",
+           "| 分組 | 筆數 | 賺的 | 勝率 | 平均R | 扣成本R | 金額 |", "|---|---|---|---|---|---|---|"]
+    for label, trades in rows:
+        st = summarise(trades)
+        if not st["n"]:
+            out.append(f"| {label} | 0 | — | — | — | — | — |")
+            continue
+        out.append(f"| {label} | {st['n']} | {st['wins']} | {st['rate']}% | {st['avg_r']:+.2f} | "
+                   f"{st['avg_net_r']:+.2f} | {st['amount']:+,} |")
+    out += [
+        "",
+        f"- **離漲停**：進場價到當天漲停價還有幾 %。不到 {LIMIT_ROOM_PCT:g}% 的，目標常被漲停壓住，"
+        "能賺的空間很小（10-16 亞電 1.7%）。",
+        "- **一張就超過風險上限**：一張的停損風險已經超過單筆 4,000 元（10-16 台虹 9,000 元）。"
+        "只有 1 張，也沒辦法先出一半。",
+        "- 看「會被排除的」那幾列：如果它們明顯比較差，排除掉就有用；如果差不多，排除只是少做幾筆。",
+        "- 排除後筆數會變少；筆數太少的那一列不能信。",
+        "",
+    ]
+    return out
+
+
 # ── 大盤 ──────────────────────────────────────────────
 # 跟 broker.MARKET_PROXY 同一檔：kbars 拿得到分鐘 K、跟加權指數走勢幾乎一樣。
 MARKET_PROXY = "0050"
@@ -694,7 +827,8 @@ def crosscheck(replayed: dict[str, set], actual: dict[str, set]) -> list[str]:
 def render(results: dict, days: list[str], check: list[str], missing: list,
            entries: dict | None = None, recomputed: int = 0,
            stops: dict | None = None, market: dict | None = None,
-           trigger: tuple | None = None) -> list[str]:
+           trigger: tuple | None = None, simple: dict | None = None,
+           filters: list | None = None) -> list[str]:
     """results[(區間分鐘, 樂觀/保守)] = (trades, 額度滿了沒發的檔數)。"""
     first, last = (days[0], days[-1]) if days else ("—", "—")
     out = [
@@ -743,6 +877,10 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
         out += _market_lines(market)
     if trigger is not None:
         out += _trigger_lines(trigger, results)
+    if simple is not None:
+        out += _simple_lines(simple)
+    if filters is not None:
+        out += _filter_lines(filters)
     if results.get((CURRENT_OR, CAUTIOUS)):
         out += _chase_lines(results.get((CURRENT_OR, OPTIMISTIC), ([], 0))[0],
                             results[(CURRENT_OR, CAUTIOUS)][0])
@@ -950,13 +1088,15 @@ def main(argv=None):
     stops = run_stops(days, picks)
     market = run_market(results[(CURRENT_OR, CAUTIOUS)][0], markets)
     trigger = run_trigger(days)
+    simple = run_simple(days, results, trigger)
+    filters = run_filters(results[(CURRENT_OR, CAUTIOUS)][0])
     replayed: dict[str, set] = {}
     for t in results[(CURRENT_OR, CAUTIOUS)][0]:
         replayed.setdefault(t.date, set()).add(t.code)
     check = crosscheck(replayed, actual_signals(args.since, args.until))
 
     lines = render(results, [d for d, _ in days], check, missing, entries, recomputed, stops,
-                   market=market, trigger=trigger)
+                   market=market, trigger=trigger, simple=simple, filters=filters)
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")

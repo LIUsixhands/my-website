@@ -5543,7 +5543,7 @@ class TestWhatIfMarket(unittest.TestCase):
         src = inspect.getsource(whatif.main)
         self.assertIn("markets[d] = market_bars(d, fetch)", src)
         self.assertIn("run_market(results[(CURRENT_OR, CAUTIOUS)][0], markets)", src)
-        self.assertIn("market=market, trigger=trigger)", src)
+        self.assertIn("market=market, trigger=trigger,", src)
 
 
 class TestWhatIfPriceOnlyTrigger(unittest.TestCase):
@@ -5609,6 +5609,107 @@ class TestWhatIfPriceOnlyTrigger(unittest.TestCase):
             whatif.render({}, ["2026-10-13"], [], [], trigger=trig))))
         self.assertNotIn("觸價單：只看價格", "\n".join(whatif.render({}, ["2026-10-13"], [], [])))
         self.assertIn("trigger = run_trigger(days)", inspect.getsource(whatif.main))
+
+
+class TestWhatIfResearchExitsAndFilters(unittest.TestCase):
+    """10-16 使用者：「往後問題一樣機率很高……上網找找」。研究版開盤突破（Zarattini、Barbon、
+    Aziz 2024）出場只有停損＋抱到收盤；台股接近漲停會加速（磁吸效應）。兩張新表：
+    只換出場（停損＋13:25），以及排除離漲停太近／一張就超過風險上限的訊號。"""
+
+    D = datetime(2026, 10, 16)
+
+    def _bars(self, spec):
+        return [(self.D.replace(hour=int(t[:2]), minute=int(t[3:])), o, h, l, c, 100.0)
+                for t, o, h, l, c in spec]
+
+    def _trade(self, code="1111", entry=100.0, stop=97.0, r=0.5, net=1.0, room=5.0, big=False,
+               fired="09:05"):
+        t = whatif.Trade(date="2026-10-16", code=code, name="測",
+                         fired=self.D.replace(hour=int(fired[:2]), minute=int(fired[3:])),
+                         or_high=99.0, entry=entry, stop=stop, lots=1, vol_ratio=2.0, batch=True,
+                         result=exits.TRAIL, r_multiple=r, net_r=r - 0.07, net_pct=net,
+                         limit_room_pct=room, oversized=big)
+        return t
+
+    def test_the_simple_exit_is_stop_or_1325(self):
+        fired = self.D.replace(hour=9, minute=5)
+        bars = self._bars([("09:05", 100, 100, 96, 99),     # 訊號那一分鐘：不判
+                           ("09:06", 99, 101, 98, 100.5),
+                           ("09:40", 100.5, 104, 100, 103),
+                           ("13:25", 103, 103.5, 102, 102.5),
+                           ("13:30", 102.5, 102.5, 90, 91)])  # 13:25 之後不算
+        self.assertEqual(whatif.simple_exit(bars, 100.0, 97.0, fired), (oc.FLAT, 102.5, "13:25:00"),
+                         "沒碰到停損 → 抱到 13:25，中途漲上去又掉回來的就吐回去")
+        hit = self._bars([("09:06", 99, 99.5, 96.5, 97.2)])
+        self.assertEqual(whatif.simple_exit(hit, 100.0, 97.0, fired)[:2], (oc.STOP, 97.0))
+        gap = self._bars([("09:06", 96.0, 96.5, 95.0, 95.5)])
+        self.assertEqual(whatif.simple_exit(gap, 100.0, 97.0, fired)[:2], (oc.STOP, 96.0),
+                         "一開就在停損下面 → 出在開盤價，不是停損價")
+        self.assertIsNone(whatif.simple_exit(self._bars([("09:05", 100, 100, 96, 99)]),
+                                             100.0, 97.0, fired))
+
+    def test_the_same_entries_are_re_exited(self):
+        t = self._trade(fired="09:05")
+        bars = self._bars([("09:06", 100, 104, 99.5, 103), ("13:25", 103, 103, 102, 103.0)])
+        (n,) = whatif.resimple([t], {("2026-10-16", "1111"): bars})
+        self.assertEqual((n.entry, n.stop, n.result, n.exit_price), (100.0, 97.0, oc.FLAT, 103.0))
+        self.assertEqual(n.r_multiple, 1.0)
+        self.assertEqual(whatif.resimple([t], {}), [], "沒有 K 棒就不算")
+        self.assertEqual(whatif.bars_index([("2026-10-16", [{"code": 1111, "bars": bars}])]),
+                         {("2026-10-16", "1111"): bars})
+        simple = whatif.run_simple([("2026-10-16", [{"code": "1111", "bars": bars}])],
+                                   {(2, whatif.CAUTIOUS): ([t], 0)}, ([], 0))
+        self.assertEqual([len(simple[k]) for k in ("v10_six", "v10_simple", "trig_six", "trig_simple")],
+                         [1, 1, 0, 0])
+        both = whatif.run_simple([("2026-10-16", [{"code": "1111", "bars": bars}])], {}, ([t], 0))
+        self.assertEqual((both["trig_six"][0].result, both["trig_simple"][0].result),
+                         (exits.TRAIL, oc.FLAT), "觸價單那一組也要換出場")
+        text = "\n".join(whatif._simple_lines(simple))
+        self.assertIn("| v10 三關（保守價） | 停損＋13:25 | 1 | 1 | 100% | +1.00 |", text)
+        self.assertIn("| 觸價單（只看價格） | 停損＋13:25（研究版） | 0 | — |", text)
+        self.assertIn("手動做得到", text)
+
+    def test_the_breakout_side_records_room_to_limit_and_oversize(self):
+        stock = TestWhatIfOpeningRangeLength("test_each_length_gets_the_same_batch_delay_and_window")._stock()
+        tr, = whatif.replay_day([stock], 2)[0]
+        lu = config.limit_up(100.0)
+        self.assertEqual(tr.limit_room_pct, round((lu - tr.entry) / tr.entry * 100, 3))
+        self.assertFalse(tr.oversized)
+        pricey = dict(stock, prev_close=1000.0,
+                      bars=[(b[0], *(x * 10 for x in b[1:5]), b[5]) for b in stock["bars"]])
+        big, = whatif.replay_day([pricey], 2)[0]
+        self.assertTrue(big.oversized, "一張的停損風險超過 4,000 元")
+
+    def test_the_filters(self):
+        near = self._trade(code="1", room=1.7, net=0.1)          # 亞電
+        big = self._trade(code="2", room=4.0, big=True, net=0.8)  # 台虹
+        ok = self._trade(code="3", room=6.0, net=-1.0, r=-0.3)
+        unknown = self._trade(code="4", room=None, net=-0.5, r=-0.2)
+        rows = dict(whatif.run_filters([near, big, ok, unknown]))
+        codes = {k: [t.code for t in v] for k, v in rows.items()}
+        self.assertEqual(codes["全部（v10 現在）"], ["1", "2", "3", "4"])
+        self.assertEqual(codes["離漲停不到 3%（會被排除的）"], ["1"])
+        self.assertEqual(codes["離漲停 3% 以上（排除後剩下的）"], ["2", "3", "4"], "不知道就不排除")
+        self.assertEqual(codes["一張就超過風險上限（會被排除的）"], ["2"])
+        self.assertEqual(codes["一張沒超過上限（排除後剩下的）"], ["1", "3", "4"])
+        self.assertEqual(codes["兩個都排除後剩下的"], ["3", "4"])
+        text = "\n".join(whatif._filter_lines(whatif.run_filters([near, big, ok, unknown])))
+        self.assertIn("| 離漲停不到 3%（會被排除的） | 1 | 1 | 100% |", text)
+        self.assertIn("| 兩個都排除後剩下的 | 2 | 0 | 0% |", text)
+
+    def test_render_and_main(self):
+        t = self._trade()
+        simple = {"v10_six": [t], "v10_simple": [], "trig_six": [], "trig_simple": []}
+        lines = whatif.render({}, ["2026-10-16"], [], [], simple=simple,
+                              filters=whatif.run_filters([t]))
+        shown = "\n".join(whatif.summary_part(lines))
+        self.assertIn("## 研究版出場", shown)
+        self.assertIn("## 過濾條件", shown)
+        self.assertNotIn("研究版出場", "\n".join(whatif.render({}, ["2026-10-16"], [], [])))
+        src = inspect.getsource(whatif.main)
+        self.assertIn("simple = run_simple(days, results, trigger)", src)
+        self.assertIn("filters = run_filters(results[(CURRENT_OR, CAUTIOUS)][0])", src)
+        self.assertIn("simple=simple, filters=filters)", src)
 
 
 class TestWhatIfReadsTheArchivedWatchlists(unittest.TestCase):
