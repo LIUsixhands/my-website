@@ -184,8 +184,8 @@ if LST:
   <div class="cap">「vs 同型成交中位」：三房＋1 比 112–115 中位 {SAME4["net"]:.1f}；四房大坪比 {MED["四房大坪"]:.1f}。* 刊登未載車位坪數，依同型以 2 席 9.29 坪推估。
   座向、屋況依刊登資訊，以現場為準。</div>
   <div class="warn" style="margin-top:3mm">四房大坪（B2，約 125 坪、5 房）是不同產品：總價高、每坪單價較低，不能直接和三房＋1 比單價。B2 在售 2 戶開價換算 {min(r["net"] for r in big):.1f}–{max(r["net"] for r in big):.1f}，比該型近四年成交中位 {MED["四房大坪"]:.1f} 高約 {(min(r["net"] for r in big)/MED["四房大坪"]-1)*100:.0f}–{(max(r["net"] for r in big)/MED["四房大坪"]-1)*100:.0f}%。</div>
-</div>{foot(8)}</div>'''
-PN = 9 if LST else 8
+</div>{foot(9)}</div>'''
+PN = 10 if LST else 9
 
 html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>百達馥麗 銷售報告書</title><style>
 @page {{ size: A4; margin: 0; }}
@@ -341,6 +341,23 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
   </div>
 </div>{foot(3)}</div>
 
+<!-- P4 室內實景 -->
+<div class="page"><div class="pad">
+  <div class="eyebrow">02 · INTERIOR</div>
+  <div class="ttl">室內實景</div>
+  <div class="sub">整戶精裝、空屋，現況即可入住。照片為本戶現況。</div>
+  <div class="photo"><img src="{img('室內_中島客廳全景.jpg')}" style="height:92mm"></div>
+  <div class="cap">從中島望向客廳與多功能空間：客、餐、廚一字排開，大面落地窗採光。</div>
+  <div class="two" style="margin-top:3.5mm">
+    <div><div class="photo"><img src="{img('室內_主臥.jpg')}" style="height:58mm"></div><div class="cap">臥室：大面景觀窗，可遠眺市區。</div></div>
+    <div><div class="photo"><img src="{img('室內_次臥.jpg')}" style="height:58mm"></div><div class="cap">次臥：雙面開窗，系統衣櫃與書桌。</div></div>
+  </div>
+  <div class="two" style="margin-top:3.5mm">
+    <div><div class="photo"><img src="{img('室內_中島廚房.jpg')}" style="height:58mm"></div><div class="cap">大理石中島與吧檯，後方為廚房。</div></div>
+    <div><div class="photo"><img src="{img('室內_客廳.jpg')}" style="height:58mm"></div><div class="cap">客廳：間接照明天花與電視主牆。</div></div>
+  </div>
+</div>{foot(4)}</div>
+
 <!-- P4 區位與社區 -->
 <div class="page"><div class="pad">
   <div class="eyebrow">03 · LOCATION &amp; COMMUNITY</div>
@@ -371,7 +388,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     </div>
   </div>
   <div class="note" style="margin-top:4mm"><b>為什麼是這裡：</b>34 層大樓、地段在勤美與 SOGO 之間，生活機能步行可及。社區 101–115 年實登成交 96 筆，換手穩定，買賣都有行情可以參考。</div>
-</div>{foot(4)}</div>
+</div>{foot(5)}</div>
 
 <!-- P5 社區成交 -->
 <div class="page"><div class="pad">
@@ -387,7 +404,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     {comm_rows}
   </table>
   <div class="cap">列出 110 年後成交，淡橘底為同型三房＋1。車位價未揭露者以本社區坡道平面每席中位 {PK:.0f} 萬估算（標 *）。單位：萬元／坪。</div>
-</div>{foot(5)}</div>
+</div>{foot(6)}</div>
 
 <!-- P6 區域比較 -->
 <div class="page"><div class="pad">
@@ -410,7 +427,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     {cmp_rows}
   </table>
   <div class="cap">淡橘底為百達馥麗。車位價未揭露者以比較組同類別車位中位估算（標 *）。「—」為實登未填社區名。單位：萬元／坪。</div>
-</div>{foot(6)}</div>
+</div>{foot(7)}</div>
 
 <!-- P7 價格分析 -->
 <div class="page"><div class="pad">
@@ -437,11 +454,11 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <li><b>比西區同級高：</b>百達同型比西區同級大樓（{CMP3["net"]:.1f}）高約 {(SAME4["net"]/CMP3["net"]-1)*100:.0f}%，反映 34 層地標、公設與勤美生活圈。</li>
   </ul>
   <div class="warn" style="margin-top:3mm">同型近四年僅 {SAME4["n"]} 筆成交，行情帶寬較寬。以上換算為依實登推估，不是估價師的估價，實際成交以雙方議價為準。</div>
-</div>{foot(7)}</div>
+</div>{foot(8)}</div>
 {lst_page}
 <!-- 購屋試算 -->
 <div class="page"><div class="pad">
-  <div class="eyebrow">{PN-1:02d} · BUYER'S GUIDE</div>
+  <div class="eyebrow">{"08" if LST else "07"} · BUYER'S GUIDE</div>
   <div class="ttl">租金參考與購屋試算</div>
   <div class="kpi">
     <div><div class="v">{ASK:,}</div><div class="u">萬元</div><div class="l">以開價試算</div></div>
