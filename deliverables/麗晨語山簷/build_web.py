@@ -182,6 +182,7 @@ body = f'''<header class="art-head">
       <h3>語山簷 7 樓 C 戶・三房雙平車</h3>
       <p>權狀 {L["坪數"]} 坪（含車位 {L["車位坪"]} 坪）・3房2廳2衛・朝西・坡道平面車位 ×2（B3 獨立、B4 柱邊）・空屋。開價 <strong>{wan(L["總價"])} 萬</strong>。</p>
       <p>扣掉兩個車位（以交屋後每席中位約 {wan(PK["交屋後中位"])} 萬計），房屋單價約 <strong>{L["單價"]:.1f} 萬/坪</strong>，低於社區交屋後中位 {AF["net"]:.1f}；同型 C 戶 13 樓 115/01 成交 {same_c["單價"]:.1f}。北、西、南三面環綠廊，窗外是惠文國小。</p>
+      <figure class="ph" style="margin:18px 0;background:#fff"><img src="../photos/lichen-plan.jpg" alt="7 樓 C 戶格局圖，三房兩廳兩衛" loading="lazy" width="640"><figcaption>本戶格局圖：東側入戶，北、西、南三面環綠廊。</figcaption></figure>
       <figure class="ph" style="margin:18px 0"><img src="../photos/lichen-living.jpg" alt="7 樓 C 戶客廳" loading="lazy" width="900"><figcaption>本戶客廳：整面落地窗通陽台。</figcaption></figure>
       <div class="yt"><iframe src="https://www.youtube.com/embed/UrZ5fMJqZtA" title="麗晨語山簷 影片導覽" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
       <div style="text-align:center"><a href="https://line.me/R/ti/p/@080akczk" class="btn">預約看屋・索取完整報告 →</a></div>

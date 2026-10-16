@@ -319,8 +319,8 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
   <div class="ttl">格局：三房兩衛、三面環綠</div>
   <div class="sub">東側入戶，玄關、餐廳、廚房一線；客廳朝西接陽台，兩間臥室在北、主臥室帶衛浴在南。北、西、南三面都被綠廊包住，每個房間都有對外窗。</div>
   <div class="two" style="gap:4mm">
-    <div style="flex:1.45"><div class="photo" style="background:#fff">{unit}</div>
-      <div class="cap">本戶格局圖，依售屋格局圖重繪。</div></div>
+    <div style="flex:1.45"><div class="photo" style="background:#fff"><img src="{img('格局圖.jpg')}" style="height:112mm;object-fit:contain"></div>
+      <div class="cap">本戶格局圖（北朝上，入口在東側）。示意圖，實際以現況及竣工圖為準。</div></div>
     <div><div class="photo" style="background:#fff">{plan}</div>
       <div class="cap">樓層配置：每層 A、B、C 三戶，出電梯即入戶、零走廊；依建商樓層平面重繪，北朝上。</div>
       <div class="note" style="margin-top:3mm;font-size:7.8pt"><b>權狀外多出的一圈：</b>C 戶外圍有一圈不計入權狀的寬走道（植栽維護通道），沿著住家繞一圈，看得到也走得到。</div></div>
