@@ -5712,6 +5712,76 @@ class TestWhatIfResearchExitsAndFilters(unittest.TestCase):
         self.assertIn("simple=simple, filters=filters)", src)
 
 
+class TestPreOpenTrialMatching(unittest.TestCase):
+    """10-16：整個候選池（盯的 + 沒盯的）的開盤前試撮都記下來（preopen.py）。
+    研究用「今天開盤前 5 分鐘的量」選股；08:45 那個量還不存在，開盤前看得到的只有試撮。
+    歷史試撮查不到，只能從現在開始存。只記錄、不當條件。"""
+
+    POOL = [{"code": "1111", "name": "甲", "prev_close": 100.0},
+            {"code": "2222", "name": "乙", "prev_close": 50.0}]
+
+    def _tick(self, code, hhmmss, price, vol=10, total=10, sim=1):
+        h, m, sec = (int(x) for x in hhmmss.split(":"))
+        return SimpleNamespace(code=code, datetime=datetime(2026, 10, 19, h, m, sec),
+                               close=price, volume=vol, total_volume=total, simtrade=sim)
+
+    def test_it_records_price_path_and_volume_for_the_whole_pool(self):
+        import preopen
+        rec = preopen.PreOpenRecorder(self.POOL, watched=["1111"], date="2026-10-19")
+        self.assertEqual(rec.codes, ["1111", "2222"])
+        for t in [self._tick("1111", "08:50:00", 101.0, 5, 5),
+                  self._tick("1111", "08:55:00", 102.0, 30, 30),
+                  self._tick("1111", "08:58:00", 101.5, 40, 40),
+                  self._tick("2222", "08:52:00", 49.0, 3, 3)]:
+            self.assertTrue(rec.record(t))
+        snap = {r["code"]: r for r in rec.snapshot()["items"]}
+        a = snap["1111"]
+        self.assertEqual((a["first_price"], a["first_at"], a["last_price"], a["last_at"]),
+                         (101.0, "08:50:00", 101.5, "08:58:00"))
+        self.assertEqual((a["ups"], a["downs"], a["n"], a["volume"], a["total_volume"]),
+                         (1, 1, 3, 40.0, 40.0))
+        self.assertEqual(a["gap_pct"], 1.5, "試撮價比昨收高幾 %")
+        self.assertTrue(a["watched"])
+        self.assertFalse(snap["2222"]["watched"], "沒盯的也記")
+        self.assertEqual(snap["2222"]["gap_pct"], -2.0)
+
+    def test_it_ignores_what_is_not_a_pre_open_trial_match(self):
+        import preopen
+        rec = preopen.PreOpenRecorder(self.POOL, date="2026-10-19")
+        self.assertFalse(rec.record(self._tick("1111", "08:59:00", 101.0, sim=0)), "真的成交不是試撮")
+        self.assertFalse(rec.record(self._tick("1111", "09:00:00", 101.0)), "開盤後的不收")
+        self.assertFalse(rec.record(self._tick("1111", "13:26:00", 101.0)), "收盤集合競價也是試撮")
+        self.assertFalse(rec.record(self._tick("9999", "08:59:00", 101.0)), "不在池子裡")
+        self.assertFalse(rec.record(self._tick("1111", "08:59:00", 0)), "沒有價格")
+        none = {r["code"]: r for r in rec.snapshot()["items"]}["1111"]
+        self.assertIsNone(none["gap_pct"], "沒收到試撮是不知道，不是 0")
+        self.assertEqual(none["n"], 0)
+
+    def test_it_saves_once_and_loads_back(self):
+        import preopen
+        rec = preopen.PreOpenRecorder(self.POOL, date="2026-10-19")
+        rec.record(self._tick("1111", "08:55:00", 103.0, 7, 7))
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "preopen.json"
+            self.assertEqual(rec.save(path), path)
+            self.assertIsNone(rec.save(path), "只寫一次")
+            back = preopen.load("2026-10-19", path)
+        self.assertEqual(back["date"], "2026-10-19")
+        self.assertEqual(back["items"][0]["last_price"], 103.0)
+        self.assertEqual(preopen.path_for("2026-10-19").name, "preopen-20261019.json")
+        self.assertIsNone(preopen.load("2026-10-19", Path("/nonexistent/x.json")))
+
+    def test_signals_run_wires_it_in(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("preopen.PreOpenRecorder(list(wl[\"items\"]) + list(wl.get(\"not_watched\")", src)
+        self.assertIn("pre.record(tick)", src)
+        self.assertIn("extra += sorted(set(pre.codes) - set(states) - set(extra))", src,
+                      "沒盯的也要訂閱，不然收不到它們的試撮")
+        self.assertLess(src.index("pre.record(tick)"), src.index("st.record_simtrade(tick)"))
+        self.assertIn("if not pre.saved:\n            _save_preopen()", src, "第一筆真正成交進來就寫")
+        self.assertIn("if not pre.saved and datetime.now().time() >= MARKET_CHECK_AT:", src, "備援")
+
+
 class TestWhatIfReadsTheArchivedWatchlists(unittest.TestCase):
     """股票來源是每天盤前存的名單，不是 outcomes.csv —— 只重跑有發訊號的那幾檔，
     區間一改就量不到「原本沒突破、現在會買進來」的那些（第一版的偏誤）。"""

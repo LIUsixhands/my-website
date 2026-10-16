@@ -2120,16 +2120,34 @@ def run():
                     len(gate.state["signals"]))
 
     quotes = {"n": 0}
+    # 10-16：整個候選池（盯的 + 沒盯的）的開盤前試撮都記下來 —— 只記錄（preopen.py）。
+    import preopen
+    pre = preopen.PreOpenRecorder(list(wl["items"]) + list(wl.get("not_watched") or []),
+                                  watched=states)
+
+    def _save_preopen():
+        try:
+            path = pre.save()
+            if path:
+                log.info("開盤前試撮寫入 %s", path)
+        except Exception as e:                  # 記錄壞掉不可以影響盯盤
+            log.warning("開盤前試撮寫不進去（不影響盯盤）：%s", e)
 
     @broker.api.on_tick_stk_v1()
     def on_tick(exchange, tick):
         if getattr(tick, "simtrade", 0):
             # 試撮不是成交：只記方向，不進區間、均價、量能，也不判出場。
+            try:
+                pre.record(tick)
+            except Exception as e:
+                log.warning("試撮記錄失敗（不影響盯盤）：%s", e)
             st = states.get(tick.code)
             if st:
                 st.record_simtrade(tick)
             return
         quotes["n"] += 1            # 真的成交（不是試撮）—— 09:03 的開盤確認看這個
+        if not pre.saved:
+            _save_preopen()
         st = states.get(tick.code)
         if not st:
             if pick_st is not None and tick.code == pick_st.code:
@@ -2167,6 +2185,8 @@ def run():
 
     carried_codes = {str(c["code"]) for c in carried} - set(states)
     extra = sorted(carried_codes | ({pick_st.code} if pick_st is not None else set()))
+    # 沒盯的那 10 檔只為了記試撮才訂閱；開盤後它們的成交進來也只會走到「不在名單」那條路。
+    extra += sorted(set(pre.codes) - set(states) - set(extra))
     import shioaji as sj  # 只有真的要訂閱行情時才需要
     for code in list(states) + extra:
         broker.api.quote.subscribe(
@@ -2213,6 +2233,9 @@ def run():
             time.sleep(30)
             broker.ensure_session()
             # 表上沒有的休市日：09:03 還沒有任何成交 → 看 0050 今天有沒有 K 棒。
+            # 試撮的備援寫入：開盤後一直沒有成交進來（休市、斷線）也要留下紀錄。
+            if not pre.saved and datetime.now().time() >= MARKET_CHECK_AT:
+                _save_preopen()
             if not market_checked and datetime.now().time() >= MARKET_CHECK_AT:
                 market_checked = True
                 if not quotes["n"]:
