@@ -182,8 +182,8 @@ if LST:
     {rows}
   </table>
   <div class="cap">「vs 同型成交中位」：三房＋1 比 112–115 中位 {SAME4["net"]:.1f}；四房大坪比 {MED["四房大坪"]:.1f}。* 刊登未載車位坪數，依同型以 2 席 9.29 坪推估。
-  B2・11F 開價待補。座向、屋況依刊登資訊，以現場為準。</div>
-  <div class="warn" style="margin-top:3mm">四房大坪（B2，約 125 坪、5 房）是不同產品：總價高、每坪單價較低，不能直接和三房＋1 比單價。B2・30F 開價換算 {big[0]["net"]:.1f}，比該型近四年成交中位 {MED["四房大坪"]:.1f} 高約 {(big[0]["net"]/MED["四房大坪"]-1)*100:.0f}%。</div>
+  座向、屋況依刊登資訊，以現場為準。</div>
+  <div class="warn" style="margin-top:3mm">四房大坪（B2，約 125 坪、5 房）是不同產品：總價高、每坪單價較低，不能直接和三房＋1 比單價。B2 在售 2 戶開價換算 {min(r["net"] for r in big):.1f}–{max(r["net"] for r in big):.1f}，比該型近四年成交中位 {MED["四房大坪"]:.1f} 高約 {(min(r["net"] for r in big)/MED["四房大坪"]-1)*100:.0f}–{(max(r["net"] for r in big)/MED["四房大坪"]-1)*100:.0f}%。</div>
 </div>{foot(8)}</div>'''
 PN = 9 if LST else 8
 
