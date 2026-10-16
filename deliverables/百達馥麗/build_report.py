@@ -90,7 +90,7 @@ cmp_rows = ''
 for r in CMP['明細']:
     cls = ' class="hl"' if r['本社區'] else ''
     est = '' if r['車位價'] else '*'
-    cmp_rows += (f'<tr{cls}><td>{r["日期"]}</td><td>{r["社區"]}</td><td>{r["門牌"]}</td><td class="num">{r["樓層"]}</td><td class="num">{wan(r["總價"])}</td>'
+    cmp_rows += (f'<tr{cls}><td>{r["日期"]}</td><td>{r["社區"]}</td><td>{r["門牌"]}</td><td class="num">{r["屋齡"]}</td><td class="num">{r["樓層"]}</td><td class="num">{wan(r["總價"])}</td>'
                  f'<td class="num">{r["坪數"]:.2f}</td><td>{r["車位"]}・{r["車位類別"].replace("坡道", "")}</td>'
                  f'<td class="num b">{r["不含車"]:.2f}{est}</td><td class="num">{r["含車"]:.2f}</td></tr>')
 EX = next(r for r in CMP['明細'] if r['社區'] == '鄉林君悅' and r['車位價'])
@@ -423,10 +423,10 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <div><div class="v">{(SAME4["net"]/CMP3["net"]-1)*100:+.0f}%</div><div class="u">社區溢價</div><div class="l">百達同型 vs 西區同級</div></div>
   </div>
   <table class="tight">
-    <tr><th>日期</th><th>社區</th><th>門牌</th><th>樓層</th><th>總價（萬）</th><th>總坪數</th><th>車位</th><th>{P_HOUSE}</th><th>{P_ALL}</th></tr>
+    <tr><th>日期</th><th>社區</th><th>門牌</th><th style="white-space:nowrap">屋齡</th><th style="white-space:nowrap">樓層</th><th>總價（萬）</th><th style="white-space:nowrap">總坪數</th><th>車位</th><th>{P_HOUSE}</th><th>{P_ALL}</th></tr>
     {cmp_rows}
   </table>
-  <div class="cap">淡橘底為百達馥麗。車位價未揭露者以比較組同類別車位中位估算（標 *）。「—」為實登未填社區名。單位：萬元／坪。</div>
+  <div class="cap">淡橘底為百達馥麗。車位價未揭露者以比較組同類別車位中位估算（標 *）。「—」為實登未填社區名。屋齡為交易當時（年）。單位：萬元／坪。</div>
 </div>{foot(7)}</div>
 
 <!-- P7 價格分析 -->

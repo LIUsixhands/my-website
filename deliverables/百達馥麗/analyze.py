@@ -93,6 +93,9 @@ out['租賃'] = dict(筆數=len(rent), 近三年整戶=r3, 近三年整戶月租
 # ---------- 比較組：西區 15–20 年 80–100 坪 ----------
 _, cmp_raw = P.load(str(HERE / '實登_比較組_西區大樓_屋齡15-20_80-100坪_112-115.xls'))
 ck, cd = P.clean(cmp_raw)
+import xlrd
+_sh = xlrd.open_workbook(str(HERE / '實登_比較組_西區大樓_屋齡15-20_80-100坪_112-115.xls'), encoding_override='cp950').sheet_by_name('案件列表')
+AGE = {str(_sh.cell_value(r, 0)).strip(): str(_sh.cell_value(r, 9)).strip() for r in range(2, _sh.nrows)}   # 屋齡欄（交易當時）
 crow, cMA, cMV = P.recompute(ck)
 for x in crow:
     x['gross'] = x['tot'] / x['area']
@@ -103,7 +106,7 @@ out['比較組'] = dict(條件='西區・住宅大樓・屋齡15–20年・總�
                   全部=P.headline(crow, window=(112, 115), name='西區比較組'),
                   不含本社區=P.headline(others, window=(112, 115), name='西區比較組（不含百達）'),
                   近三年_不含本社區=P.headline([x for x in others if x['yr'] >= 113], window=(113, 115), name='西區比較組 113–115'),
-                  明細=[dict(日期=x['date'], 社區=x['name'] or '—', 門牌=x['addr'].split('區')[-1], 樓層=x['fl'], 總價=x['tot'],
+                  明細=[dict(日期=x['date'], 社區=x['name'] or '—', 屋齡=AGE.get(x['no'], ''), 門牌=x['addr'].split('區')[-1], 樓層=x['fl'], 總價=x['tot'],
                             坪數=x['area'], 車位=x['npark'], 車位類別='／'.join(dict.fromkeys(x['kinds'])),
                             車位價=round(x['pkv_row'] or 0) or None, 不含車=round(x['val'], 2), 含車=round(x['gross'], 2),
                             本社區=x['self']) for x in sorted(crow, key=lambda x: x['date'], reverse=True)])

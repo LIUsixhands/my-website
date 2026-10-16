@@ -120,11 +120,11 @@ rows, hl = [], []
 for i, r in enumerate(CMP['明細']):
     if r['本社區']: hl.append(i)
     est = '' if r['車位價'] else '*'
-    rows.append([r['日期'], r['社區'], r['門牌'], str(r['樓層']), wan(r['總價']), f'{r["坪數"]:.2f}', f'{r["車位"]}・{r["車位類別"].replace("坡道", "")}',
+    rows.append([r['日期'], r['社區'], r['門牌'], r['屋齡'], str(r['樓層']), wan(r['總價']), f'{r["坪數"]:.2f}', f'{r["車位"]}・{r["車位類別"].replace("坡道", "")}',
                  f'{r["不含車"]:.2f}{est}', f'{r["含車"]:.2f}'])
-add('table', headers=['日期', '社區', '門牌', '樓層', '總價（萬）', '總坪數', '車位', P_HOUSE, P_ALL], rows=rows, hl=hl,
-    widths=[8, 11, 20, 5, 8, 8, 10, 11, 11], num=[3, 4, 5, 7, 8], small=True)
-add('p', text='淡橘底為百達馥麗。車位價未揭露者以比較組同類別車位中位估算（標 *）。「—」為實登未填社區名。單位：萬元／坪。', small=True)
+add('table', headers=['日期', '社區', '門牌', '屋齡', '樓層', '總價（萬）', '總坪數', '車位', P_HOUSE, P_ALL], rows=rows, hl=hl,
+    widths=[9, 11, 18, 5, 5, 8, 7, 10, 11, 11], num=[3, 4, 5, 6, 8, 9], small=True)
+add('p', text='淡橘底為百達馥麗。車位價未揭露者以比較組同類別車位中位估算（標 *）。「—」為實登未填社區名。屋齡為交易當時（年）。單位：萬元／坪。', small=True)
 
 # ---------- 06 價格分析 ----------
 section('06 · PRICE ANALYSIS', '價格分析：開價放進社區行情看',
