@@ -353,7 +353,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <div><div class="photo"><img src="{img('室內_次臥.jpg')}" style="height:58mm"></div><div class="cap">次臥：雙面開窗，系統衣櫃與書桌。</div></div>
   </div>
   <div class="two" style="margin-top:3.5mm">
-    <div><div class="photo"><img src="{img('室內_中島廚房.jpg')}" style="height:58mm"></div><div class="cap">大理石中島與吧檯，後方為廚房。</div></div>
+    <div><div class="photo"><img src="{img('室內_主浴.jpg')}" style="height:58mm"></div><div class="cap">主浴：對外開窗、雙面盆、按摩浴缸與獨立淋浴間。</div></div>
     <div><div class="photo"><img src="{img('室內_廚房.jpg')}" style="height:58mm"></div><div class="cap">廚房：一字型廚具、嵌入式烤箱，附半圓早餐檯。</div></div>
   </div>
 </div>{foot(4)}</div>
