@@ -704,6 +704,133 @@ def _filter_lines(rows: list[tuple[str, list[Trade]]]) -> list[str]:
     return out
 
 
+# ── 今天開盤 5 分鐘最熱（研究的 Stocks in Play）─────────────────────
+# 10-16 使用者看完研究：「用今天開盤前 5 分鐘的量跟過去 14 天同時段比，挑最熱的 20 檔，
+# 這一點感覺不錯」。研究：開盤 5 分鐘的量 ÷ 過去 14 天同時段的平均量，至少 1 倍、取最高的；
+# 5 分鐘開盤區間、碰到區間高就買（觸價單）、停損、抱到收盤。我們一天最多 3 筆，所以取 3 檔。
+# 排名用 09:00–09:05 的量，進場在 09:05 之後 —— 沒有偷看未來。
+IN_PLAY_OR = 5
+IN_PLAY_LOOKBACK = 14
+IN_PLAY_MIN_HISTORY = 5          # 過去少於 5 天的資料就不算（剛上市、資料缺）
+IN_PLAY_MIN_RVOL = 1.0
+IN_PLAY_TOP = 3
+
+
+def trading_days_before(day: str, n: int) -> list[str]:
+    """day 之前的 n 個交易日（舊到新）。週末和休市表上的日子跳過。"""
+    out, d = [], ddate.fromisoformat(day)
+    while len(out) < n:
+        d -= timedelta(days=1)
+        if d.weekday() >= 5 or market_calendar.closed_reason(d.isoformat()):
+            continue
+        out.append(d.isoformat())
+    return out[::-1]
+
+
+def first_minutes_volume(bars, minutes: int = IN_PLAY_OR) -> float | None:
+    """09:00 之後前 N 分鐘的量（K 棒 label 是結束時間：09:01～09:0N 那幾根）。沒有就 None。"""
+    start = _t(config.SIGNAL["or_start"])
+    end = (datetime.combine(ddate(2000, 1, 1), start) + timedelta(minutes=minutes)).time()
+    vols = [b[5] for b in bars if start < b[0].time() <= end]
+    return float(sum(vols)) if vols else None
+
+
+def relative_volume(today_bars, history: list) -> float | None:
+    """今天前 5 分鐘的量 ÷ 過去幾天同時段的平均。歷史不夠就 None（不知道，不是 0）。"""
+    today = first_minutes_volume(today_bars)
+    past = [v for v in (first_minutes_volume(b) for b in history) if v]
+    if today is None or len(past) < IN_PLAY_MIN_HISTORY:
+        return None
+    return today / (sum(past) / len(past))
+
+
+def kbars_to_days(kb) -> dict[str, list]:
+    """一次抓好幾天的 kbars → {日期: [(時間, 開, 高, 低, 收, 量)]}。"""
+    from broker import _bar_time
+    cols = [list(getattr(kb, k, []) or []) for k in ("ts", "Open", "High", "Low", "Close", "Volume")]
+    out: dict[str, list] = {}
+    if not cols[0] or len({len(c) for c in cols}) != 1:
+        return out
+    for raw, o, h, l, c, v in zip(*cols):
+        t = _bar_time(raw)
+        if t is not None:
+            out.setdefault(t.strftime("%Y-%m-%d"), []).append(
+                (t, float(o), float(h), float(l), float(c), float(v)))
+    return {d: sorted(rows, key=lambda r: r[0]) for d, rows in out.items()}
+
+
+def pool_rows(payload: dict) -> list[dict]:
+    """整個候選池：盯的 10 檔 + 沒盯的，照盤前名次。"""
+    items = list(payload.get("items") or [])
+    rest = list(payload.get("not_watched") or [])
+    return ([dict(r, watched=True) for r in items] + [dict(r, watched=False) for r in rest])
+
+
+def in_play_day(stocks: list[dict], histories: dict) -> list[dict]:
+    """這一天最熱的 IN_PLAY_TOP 檔：相對量至少 IN_PLAY_MIN_RVOL 倍，由高到低。"""
+    scored = []
+    for s in stocks:
+        rv = relative_volume(s.get("bars") or [], histories.get(str(s["code"])) or [])
+        if rv is not None and rv >= IN_PLAY_MIN_RVOL:
+            scored.append(dict(s, rvol=round(rv, 2)))
+    scored.sort(key=lambda s: (-s["rvol"], s.get("rank") or 9999))
+    return scored[:IN_PLAY_TOP]
+
+
+def run_in_play(pool_days: list[tuple[str, list[dict], dict]]) -> dict:
+    """pool_days = [(日期, 整個池子帶分鐘 K, {代號: 過去幾天的分鐘 K})]。"""
+    six, capped, chosen, overlap, no_hist = [], 0, 0, 0, 0
+    picked_days = []
+    for d, stocks, hist in pool_days:
+        top = in_play_day(stocks, hist)
+        if not top:
+            no_hist += 1
+            continue
+        chosen += len(top)
+        overlap += sum(1 for s in top if s.get("watched"))
+        t, c = replay_trigger_day(top, IN_PLAY_OR, limit=IN_PLAY_TOP)
+        six += t
+        capped += c
+        picked_days.append((d, top))
+    return {"six": six, "simple": resimple(six, bars_index(picked_days)), "capped": capped,
+            "chosen": chosen, "overlap": overlap, "days": len(pool_days), "empty_days": no_hist}
+
+
+def _in_play_lines(ip: dict, results: dict) -> list[str]:
+    out = ["## 今天開盤 5 分鐘最熱（研究的選股方式）", "",
+           "| 選股 | 進場 | 出場 | 筆數 | 賺的 | 勝率 | 平均R | 扣成本R | 金額 |",
+           "|---|---|---|---|---|---|---|---|---|"]
+    rows = (("v10 現在（昨天量前 10）", "三關、保守價", "v10 六條",
+             results.get((CURRENT_OR, CAUTIOUS), ([], 0))[0]),
+            (f"開盤 {IN_PLAY_OR} 分鐘最熱 {IN_PLAY_TOP} 檔", f"觸價單（{IN_PLAY_OR} 分鐘區間）",
+             "v10 六條", ip.get("six", [])),
+            (f"開盤 {IN_PLAY_OR} 分鐘最熱 {IN_PLAY_TOP} 檔", f"觸價單（{IN_PLAY_OR} 分鐘區間）",
+             "停損＋13:25（研究版）", ip.get("simple", [])))
+    for pick, entry, exit_, trades in rows:
+        st = summarise(trades)
+        if not st["n"]:
+            out.append(f"| {pick} | {entry} | {exit_} | 0 | — | — | — | — | — |")
+            continue
+        out.append(f"| {pick} | {entry} | {exit_} | {st['n']} | {st['wins']} | {st['rate']}% | "
+                   f"{st['avg_r']:+.2f} | {st['avg_net_r']:+.2f} | {st['amount']:+,} |")
+    out += [
+        "",
+        f"- {ip.get('days', 0)} 天裡挑出 {ip.get('chosen', 0)} 檔，其中 {ip.get('overlap', 0)} 檔"
+        "本來就在 v10 盯的 10 檔裡。"
+        + (f"{ip['empty_days']} 天沒有挑出任何一檔（過去的資料不夠，或都沒有比平常熱）。"
+           if ip.get("empty_days") else ""),
+        f"- **最熱**＝今天 09:00–09:{IN_PLAY_OR:02d} 的量 ÷ 過去 {IN_PLAY_LOOKBACK} 個交易日同時段的"
+        f"平均量，至少 {IN_PLAY_MIN_RVOL:g} 倍，從整個候選池 20 檔（盯的 + 沒盯的）裡取最高的 "
+        f"{IN_PLAY_TOP} 檔。",
+        f"- 排名只用 09:{IN_PLAY_OR:02d} 以前的量，進場在那之後 —— 盤中做得到。09:{IN_PLAY_OR:02d} "
+        "排出來之後掛觸價單（多條件單）就好，不用搶快。",
+        "- 跟研究還有差別：研究從 1,000 檔裡挑，這裡只從盤前的 20 檔裡挑；停損用 v10 的，"
+        "不是研究的 ATR。",
+        "",
+    ]
+    return out
+
+
 # ── 大盤 ──────────────────────────────────────────────
 # 跟 broker.MARKET_PROXY 同一檔：kbars 拿得到分鐘 K、跟加權指數走勢幾乎一樣。
 MARKET_PROXY = "0050"
@@ -828,7 +955,7 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
            entries: dict | None = None, recomputed: int = 0,
            stops: dict | None = None, market: dict | None = None,
            trigger: tuple | None = None, simple: dict | None = None,
-           filters: list | None = None) -> list[str]:
+           filters: list | None = None, in_play: dict | None = None) -> list[str]:
     """results[(區間分鐘, 樂觀/保守)] = (trades, 額度滿了沒發的檔數)。"""
     first, last = (days[0], days[-1]) if days else ("—", "—")
     out = [
@@ -881,6 +1008,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
         out += _simple_lines(simple)
     if filters is not None:
         out += _filter_lines(filters)
+    if in_play is not None:
+        out += _in_play_lines(in_play, results)
     if results.get((CURRENT_OR, CAUTIOUS)):
         out += _chase_lines(results.get((CURRENT_OR, OPTIMISTIC), ([], 0))[0],
                             results[(CURRENT_OR, CAUTIOUS)][0])
@@ -1019,6 +1148,45 @@ def market_bars(day: str, fetch):
     return bars
 
 
+def pool_days_for(archived: list[tuple[str, dict]], fetch_range) -> tuple[list, list[str]]:
+    """每一天：整個候選池帶當天分鐘 K，加上每一檔過去 IN_PLAY_LOOKBACK 天的分鐘 K。
+    一檔一次抓一整段（不是一天一次）—— kbars 有流量上限。抓過的照樣存進快取。"""
+    need: dict[str, set] = {}
+    for d, payload in archived:
+        for r in pool_rows(payload):
+            need.setdefault(str(r["code"]), set()).update(
+                [d] + trading_days_before(d, IN_PLAY_LOOKBACK))
+    bars: dict[tuple[str, str], list] = {}
+    missing = []
+    for code, dates in sorted(need.items()):
+        got = {d: load_cached(d, code) for d in dates}
+        if any(v is None for v in got.values()):
+            fetched = fetch_range(code, min(dates), max(dates)) or {}
+            for d in dates:
+                if got[d] is None:
+                    got[d] = fetched.get(d) or []
+                    save_cached(d, code, got[d])
+        for d, b in got.items():
+            bars[(d, code)] = b or []
+    out = []
+    for d, payload in archived:
+        stocks, hist = [], {}
+        for n, r in enumerate(pool_rows(payload), 1):
+            code = str(r["code"])
+            today = bars.get((d, code)) or []
+            if not today:
+                missing.append(f"{d[5:]} {code}")
+                continue
+            stocks.append({"code": code, "name": r.get("name", ""), "rank": n,
+                           "watched": r.get("watched", False),
+                           "prev_close": float(r["prev_close"]),
+                           "amplitude_pct": r.get("avg_amplitude_pct") or r.get("amplitude_pct"),
+                           "bars": today})
+            hist[code] = [bars.get((h, code)) or [] for h in trading_days_before(d, IN_PLAY_LOOKBACK)]
+        out.append((d, stocks, hist))
+    return out, missing
+
+
 def actual_signals(since: str, until: str) -> dict[str, set]:
     out: dict[str, set] = {}
     for r in oc.load_csv():
@@ -1090,13 +1258,31 @@ def main(argv=None):
     trigger = run_trigger(days)
     simple = run_simple(days, results, trigger)
     filters = run_filters(results[(CURRENT_OR, CAUTIOUS)][0])
+
+    def fetch_range(code, start, end):
+        nonlocal broker
+        if broker is None:
+            from broker import Broker
+            broker = Broker()
+            broker.login()
+        time.sleep(config.SCREEN["kbar_sleep_sec"])
+        try:
+            return kbars_to_days(broker.kbars(code, start, end))
+        except Exception as e:
+            log.warning("%s 分鐘 K（%s～%s）取得失敗：%s", code, start, end, e)
+            return {}
+
+    print("開盤 5 分鐘最熱：整個候選池 + 過去 14 天的分鐘 K，第一次要抓一陣子……")
+    pool_days, _pool_missing = pool_days_for(archived, fetch_range)
+    in_play = run_in_play(pool_days)
     replayed: dict[str, set] = {}
     for t in results[(CURRENT_OR, CAUTIOUS)][0]:
         replayed.setdefault(t.date, set()).add(t.code)
     check = crosscheck(replayed, actual_signals(args.since, args.until))
 
     lines = render(results, [d for d, _ in days], check, missing, entries, recomputed, stops,
-                   market=market, trigger=trigger, simple=simple, filters=filters)
+                   market=market, trigger=trigger, simple=simple, filters=filters,
+                   in_play=in_play)
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")

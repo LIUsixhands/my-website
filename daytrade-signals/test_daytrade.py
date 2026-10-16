@@ -5709,7 +5709,187 @@ class TestWhatIfResearchExitsAndFilters(unittest.TestCase):
         src = inspect.getsource(whatif.main)
         self.assertIn("simple = run_simple(days, results, trigger)", src)
         self.assertIn("filters = run_filters(results[(CURRENT_OR, CAUTIOUS)][0])", src)
-        self.assertIn("simple=simple, filters=filters)", src)
+        self.assertIn("simple=simple, filters=filters,", src)
+
+
+class TestWhatIfStocksInPlay(unittest.TestCase):
+    """whatif 第九張表（10-16 使用者：「用今天開盤前 5 分鐘的量跟過去 14 天同時段比，挑最熱的，
+    這一點感覺不錯」）。研究的選股：開盤 5 分鐘的量 ÷ 過去 14 天同時段平均，至少 1 倍、取最高。
+    排名只能用 09:05 以前的量 —— 不可以偷看之後的。"""
+
+    D = datetime(2026, 10, 16)
+
+    def _stock(self, **kw):
+        return TestWhatIfOpeningRangeLength("test_each_length_gets_the_same_batch_delay_and_window")._stock(**kw)
+
+    def _hist(self, vol, days=5, extra=0.0):
+        """過去幾天：09:01～09:05 每分鐘 vol 張（5 分鐘合計 5×vol）；09:06 另有 extra。"""
+        out = []
+        for i in range(days):
+            d = self.D - timedelta(days=i + 1)
+            out.append([(d.replace(hour=9, minute=m), 100.0, 100.0, 100.0, 100.0,
+                         float(vol if m else 999)) for m in range(0, 6)]
+                       + [(d.replace(hour=9, minute=6), 100.0, 100.0, 100.0, 100.0, float(extra))])
+        return out
+
+    def _hot(self, code="1111", rank=1, watched=False):
+        """5 分鐘區間高 102.5（觸發 102.6025 → 102.65 以上）；09:06 衝到 103.5 才碰到。"""
+        tail = [("09:06", 102.4, 103.5, 102.3, 103.2, 100), ("09:07", 103.2, 103.6, 103.0, 103.4, 100)]
+        return dict(self._stock(code=code, rank=rank, tail=tail), watched=watched)
+
+    def test_trading_days_skip_weekends_and_holidays(self):
+        self.assertEqual(whatif.trading_days_before("2026-10-16", 3),
+                         ["2026-10-13", "2026-10-14", "2026-10-15"])
+        self.assertEqual(whatif.trading_days_before("2026-10-13", 3),
+                         ["2026-10-07", "2026-10-08", "2026-10-12"], "10-09 國慶補假、週末都跳過")
+        self.assertEqual(len(whatif.trading_days_before("2026-10-16", 14)), 14)
+        self.assertEqual(whatif.trading_days_before("2026-10-16", 0), [])
+
+    def test_the_first_five_minutes_are_the_bars_labelled_0901_to_0905(self):
+        bars = self._stock()["bars"]                   # 09:00 盤前 50、09:01～09:05 = 100+100+400+100+100
+        self.assertEqual(whatif.first_minutes_volume(bars), 800.0)
+        self.assertEqual(whatif.first_minutes_volume(bars, 2), 200.0)
+        self.assertIsNone(whatif.first_minutes_volume([]))
+        self.assertIsNone(whatif.first_minutes_volume(bars[:1]), "只有盤前那根 → 不知道")
+
+    def test_relative_volume_against_the_same_window(self):
+        bars = self._stock()["bars"]
+        self.assertEqual(whatif.relative_volume(bars, self._hist(40, extra=10_000)), 4.0,
+                         "800 ÷ 平均 200；09:00 盤前那根和 09:06 之後的量都不算")
+        self.assertEqual(whatif.relative_volume(bars, self._hist(40) + [[], []]), 4.0,
+                         "沒有資料的那幾天不拉低平均")
+        self.assertIsNone(whatif.relative_volume(bars, self._hist(40, days=4)),
+                          "過去不到 5 天 → 不知道，不是 0")
+        self.assertIsNone(whatif.relative_volume([], self._hist(40)))
+
+    def test_kbars_to_days_splits_one_fetch_into_days(self):
+        class KB:
+            ts = [1792141260000000000, 1792141320000000000, 1792227660000000000]
+            Open = High = Low = Close = [1, 2, 3]
+            Volume = [10, 20, 30]
+        from broker import _bar_time
+        got = whatif.kbars_to_days(KB)
+        days = sorted({_bar_time(t).strftime("%Y-%m-%d") for t in KB.ts})
+        self.assertEqual(sorted(got), days)
+        self.assertEqual(sum(len(v) for v in got.values()), 3)
+        self.assertEqual([b[5] for v in got.values() for b in v], [10.0, 20.0, 30.0])
+
+        class Broken(KB):
+            Volume = [10]
+        self.assertEqual(whatif.kbars_to_days(Broken), {}, "欄位不齊 → 不要猜")
+        self.assertEqual(whatif.kbars_to_days(object()), {})
+
+    def test_the_pool_is_watched_plus_not_watched(self):
+        rows = whatif.pool_rows({"items": [{"code": "1"}], "not_watched": [{"code": "2"}]})
+        self.assertEqual([(r["code"], r["watched"]) for r in rows], [("1", True), ("2", False)])
+        self.assertEqual(whatif.pool_rows({}), [])
+
+    def test_the_hottest_three_at_least_as_hot_as_usual(self):
+        stocks = [self._hot(code=c, rank=r) for c, r in (("1", 1), ("2", 2), ("3", 3), ("4", 4), ("5", 5))]
+        hist = {"1": self._hist(400), "2": self._hist(40), "3": self._hist(80), "4": self._hist(100),
+                "5": self._hist(20, days=3)}
+        top = whatif.in_play_day(stocks, hist)
+        self.assertEqual([(s["code"], s["rvol"]) for s in top], [("2", 4.0), ("3", 2.0), ("4", 1.6)],
+                         "1 比平常冷（0.4 倍）不要；5 歷史不夠不要；取最高 3 檔")
+        tie = whatif.in_play_day([self._hot(code="9", rank=9), self._hot(code="8", rank=2)],
+                                 {"9": self._hist(40), "8": self._hist(40)})
+        self.assertEqual([s["code"] for s in tie], ["8", "9"], "一樣熱 → 盤前名次前面的先")
+        self.assertEqual(whatif.in_play_day(stocks[:1], {"1": self._hist(160)})[0]["rvol"], 1.0,
+                         "剛好 1 倍算")
+
+    def test_run_in_play_trades_with_the_five_minute_trigger(self):
+        a, b = self._hot(code="1", rank=1, watched=True), self._hot(code="2", rank=12)
+        cold = self._hot(code="3", rank=3)
+        day1 = ("2026-10-13", [a, b, cold], {"1": self._hist(40), "2": self._hist(80), "3": self._hist(400)})
+        day2 = ("2026-10-15", [cold], {"3": self._hist(400)})
+        ip = whatif.run_in_play([day1, day2])
+        self.assertEqual((ip["days"], ip["chosen"], ip["overlap"], ip["empty_days"]), (2, 2, 1, 1))
+        self.assertEqual([t.code for t in ip["six"]], ["1", "2"])
+        t = ip["six"][0]
+        self.assertEqual(t.or_high, 102.5, "區間是 09:01～09:05，不是 v10 的 2 分鐘")
+        self.assertEqual(t.entry, config.round_to_tick(102.5 * 1.001, "up"))
+        self.assertEqual(t.fired.strftime("%H:%M"), "09:06", "排名在 09:05 出來，之後才進場")
+        self.assertEqual([x.code for x in ip["simple"]], ["1", "2"])
+        self.assertEqual(ip["simple"][0].result, oc.FLAT, "研究版：沒碰停損就抱到最後")
+        back = self._hot(code="1", watched=True)
+        back["bars"] += self._stock(tail=[("09:08", 103.4, 103.4, 101.8, 102.0, 100),
+                                          ("09:09", 102.0, 104.5, 102.0, 104.0, 100)])["bars"][-2:]
+        ip2 = whatif.run_in_play([("2026-10-13", [back], {"1": self._hist(40)})])
+        self.assertNotEqual(ip2["six"][0].result, oc.FLAT, "v10：09:08 收回區間就出場")
+        self.assertEqual((ip2["simple"][0].result, ip2["simple"][0].exit_price), (oc.FLAT, 104.0),
+                         "研究版：同一筆進場，跌回區間也不出")
+        self.assertEqual(whatif.run_in_play([]), {"six": [], "simple": [], "capped": 0, "chosen": 0,
+                                                  "overlap": 0, "days": 0, "empty_days": 0})
+
+    def test_only_three_a_day(self):
+        hot = [self._hot(code=str(c), rank=c) for c in range(1, 6)]
+        hist = {str(c): self._hist(40) for c in range(1, 6)}
+        ip = whatif.run_in_play([("2026-10-16", hot, hist)])
+        self.assertEqual((ip["chosen"], len(ip["six"])), (3, 3))
+
+    def test_the_table(self):
+        tr = TestWhatIfResearchExitsAndFilters("test_render_and_main")._trade
+        ip = {"six": [tr(code="1")], "simple": [], "capped": 0, "chosen": 4, "overlap": 1,
+              "days": 3, "empty_days": 1}
+        text = "\n".join(whatif._in_play_lines(ip, {(2, whatif.CAUTIOUS): ([tr(r=-0.5, net=-1.0)], 0)}))
+        self.assertIn("## 今天開盤 5 分鐘最熱", text)
+        self.assertIn("| v10 現在（昨天量前 10） | 三關、保守價 | v10 六條 | 1 | 0 | 0% | -0.50 | -0.57 | -1,000 |", text)
+        self.assertIn("| 開盤 5 分鐘最熱 3 檔 | 觸價單（5 分鐘區間） | v10 六條 | 1 | 1 | 100% | +0.50 | +0.43 | +1,000 |", text)
+        self.assertIn("| 開盤 5 分鐘最熱 3 檔 | 觸價單（5 分鐘區間） | 停損＋13:25（研究版） | 0 | — |", text)
+        self.assertIn("3 天裡挑出 4 檔，其中 1 檔本來就在 v10 盯的 10 檔裡。1 天沒有挑出", text)
+        self.assertIn("09:00–09:05 的量 ÷ 過去 14 個交易日", text)
+        self.assertNotIn("天沒有挑出", "\n".join(whatif._in_play_lines(dict(ip, empty_days=0), {})))
+        lines = whatif.render({}, ["2026-10-16"], [], [], in_play=ip)
+        self.assertIn("## 今天開盤 5 分鐘最熱（研究的選股方式）", "\n".join(whatif.summary_part(lines)))
+        self.assertNotIn("5 分鐘最熱", "\n".join(whatif.render({}, ["2026-10-16"], [], [])))
+
+    def test_one_fetch_per_code_and_the_cache(self):
+        d = "2026-10-16"
+        hist_days = whatif.trading_days_before(d, whatif.IN_PLAY_LOOKBACK)
+        today = self._hot()["bars"]
+        calls, saved = [], {}
+
+        def fetch_range(code, start, end):
+            calls.append((code, start, end))
+            got = {h: self._hist(40, days=1)[0] for h in hist_days}
+            if code != "2222":
+                got[d] = today
+            return got
+
+        def save(dd, c, b):
+            writes.append((dd, c))
+            if b:
+                saved[(dd, c)] = b
+
+        writes = []
+        payload = {"items": [{"code": "1111", "name": "甲", "prev_close": 100.0}],
+                   "not_watched": [{"code": "2222", "name": "乙", "prev_close": 50.0},
+                                   {"code": "3333", "name": "丙", "prev_close": 50.0,
+                                    "avg_amplitude_pct": 6.0}]}
+        with unittest.mock.patch.object(whatif, "load_cached", side_effect=lambda dd, c: saved.get((dd, c))), \
+                unittest.mock.patch.object(whatif, "save_cached", side_effect=save):
+            out, missing = whatif.pool_days_for([(d, payload)], fetch_range)
+            self.assertEqual(calls, [(c, hist_days[0], d) for c in ("1111", "2222", "3333")],
+                             "一檔抓一次整段，不是一天一次")
+            self.assertEqual(missing, ["10-16 2222"], "當天沒有 K 棒 → 列出來、不算")
+            (day, stocks, hist), = out
+            self.assertEqual(day, d)
+            self.assertEqual([(s["code"], s["watched"], s["rank"], s["amplitude_pct"]) for s in stocks],
+                             [("1111", True, 1, None), ("3333", False, 3, 6.0)])
+            self.assertEqual(stocks[0]["bars"], today)
+            self.assertEqual(len(hist["1111"]), whatif.IN_PLAY_LOOKBACK)
+            calls.clear()
+            writes.clear()
+            whatif.pool_days_for([(d, payload)], fetch_range)
+            self.assertEqual(calls, [("2222", hist_days[0], d)], "有快取就不抓；缺的那一天才再抓")
+            self.assertEqual(writes, [(d, "2222")], "已經有快取的日子不覆蓋")
+
+    def test_main_wiring(self):
+        src = inspect.getsource(whatif.main)
+        self.assertIn("pool_days, _pool_missing = pool_days_for(archived, fetch_range)", src)
+        self.assertIn("in_play = run_in_play(pool_days)", src)
+        self.assertIn("in_play=in_play)", src)
+        self.assertIn("kbars_to_days(broker.kbars(code, start, end))", src)
 
 
 class TestPreOpenTrialMatching(unittest.TestCase):
