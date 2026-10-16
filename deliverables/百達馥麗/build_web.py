@@ -1,4 +1,4 @@
-"""百達馥麗 網站行情分析頁：讀 summary.json / transactions.csv → community/baida-fuli.html。
+"""百達馥麗 網站行情分析頁：讀 summary.json / transactions.csv → blog/baida-fuli.html。
 市場資訊頁，不放特定物件開價；版型沿用 office/*.html。"""
 import json, statistics as st
 from pathlib import Path
@@ -6,12 +6,12 @@ import pandas as pd
 
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
-OUT = ROOT / 'community' / 'baida-fuli.html'
+OUT = ROOT / 'blog' / 'baida-fuli.html'
 S = json.load(open(HERE / 'summary.json'))
 df = pd.read_csv(HERE / 'transactions.csv').fillna({'備註': ''})
 df['yr'] = df['交易日期'].str[:3].astype(int)
 SAME4, CMP3, R = S['同型_近四年'], S['比較組']['近三年_不含本社區'], S['租賃']
-URL = 'https://sixhands-studio.netlify.app/community/baida-fuli.html'
+URL = 'https://sixhands-studio.netlify.app/blog/baida-fuli.html'
 TITLE = '百達馥麗 實價登錄分析｜西區中興街 興富發 34 層｜同型行情・產品分型・租金'
 DESC = (f'百達馥麗（台中西區中興街287／289號）實登 {S["有效筆數"]} 筆逐筆扣車位重算：三房＋1 同型近四年 {SAME4["net"]:.1f} 萬/坪、'
         f'西區同級大樓 {CMP3["net"]:.1f} 萬/坪、整戶租金約 {R["近三年整戶每坪中位_元"]} 元/坪。')

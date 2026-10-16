@@ -20,9 +20,7 @@ SAME4, SAME6 = S['同型_近四年'], S['同型_近六年']
 CMP = S['比較組']
 CMP3 = CMP['近三年_不含本社區']
 RENT = S['租賃']
-TARGET = 3750                                       # 小登推估：同型中位 39.2 與 19F 高點 43.0 之間，計入整戶精裝
-T_NET = (TARGET - PK) / BASE
-T_GROSS = TARGET / L['總面積']
+ASK = L['開價']                                       # ⛔ 對外報告不放建議成交價（助哥 2026-10-16），試算以開價計
 
 def conv(net): return net * BASE + PK               # 不含車單價 → 本戶總價（88 坪＋1 車位）
 def img(name):
@@ -52,7 +50,7 @@ for v in range(YMIN, YMAX + 1, 5):
 for y in range(101, 116):
     svg.append(f'<text x="{X(y+.5):.1f}" y="{H-B+14}" text-anchor="middle" fill="#7b8794" font-size="9">{y}</text>')
 svg.append(f'<text x="{W-R}" y="{T-10}" text-anchor="end" fill="#7b8794" font-size="9">單位：萬元／坪（{P_HOUSE}）</text>')
-for v, c, lab, dy in [(L['不含車單價'], '#C0392B', f'本戶開價 {L["不含車單價"]:.1f}', -4), (T_NET, '#2E7D4F', f'建議成交參考 {T_NET:.1f}（{TARGET:,} 萬）', 11)]:
+for v, c, lab, dy in [(L['不含車單價'], '#C0392B', f'本戶開價 {L["不含車單價"]:.1f}', -4)]:
     svg.append(f'<line x1="{Lm}" x2="{W-R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="{c}" stroke-width="1.2" stroke-dasharray="3 3"/>'
                f'<text x="{Lm+4}" y="{Y(v)+dy:.1f}" fill="{c}" font-size="9" font-weight="700">{lab}</text>')
 STY = {'三房＋1（約 88 坪）': ('#1F4E5F', 4.2), '四房（約 100–104 坪）': ('#C8963E', 3.2),
@@ -106,9 +104,7 @@ anchors = [
     ('西區同級大樓 近三年中位', f'屋齡 15–20 年、80–100 坪，{CMP3["n"]} 筆（不含本社區）', CMP3['net']),
 ]
 pos_rows = (f'<tr class="hl"><td>本戶開價</td><td>B1・16F・93.16 坪・1 車位</td><td class="num">{L["不含車單價"]:.2f}</td><td class="num">{L["含車單價"]:.2f}</td><td class="num">{wan(L["開價"])}</td></tr>'
-            f'<tr style="font-weight:700"><td style="background:#e4f1e8;color:#2E7D4F">建議成交參考</td><td style="background:#e4f1e8;color:#2E7D4F">同型行情＋整戶精裝、空屋</td>'
-            f'<td class="num" style="background:#e4f1e8;color:#2E7D4F">{T_NET:.2f}</td><td class="num" style="background:#e4f1e8;color:#2E7D4F">{T_GROSS:.2f}</td>'
-            f'<td class="num" style="background:#e4f1e8;color:#2E7D4F">{TARGET:,}</td></tr>')
+            )
 for nm, why, up in anchors:
     pos_rows += f'<tr><td class="b">{nm}</td><td>{why}</td><td class="num">{up:.2f}</td><td class="num">{conv(up)/L["總面積"]:.2f}</td><td class="num">{wan(conv(up))}</td></tr>'
 
@@ -119,14 +115,14 @@ for r in RENT['近三年整戶']:
     rent_rows += (f'<tr{cls}><td>{r["日期"]}</td><td>{r["棟"]}・{r["樓層"]}F{"（本戶）" if cls else ""}</td><td class="num">{r["面積坪"]:.2f}</td>'
                   f'<td class="num">{r["車位"]}</td><td class="num b">{r["月租萬"]:.2f}</td><td class="num">{r["月租萬"]*10000/r["面積坪"]:,.0f}</td></tr>')
 OWN_RENT = next(r for r in RENT['近三年整戶'] if r['棟'] == 'B1' and r['樓層'] == 16)
-YIELD = OWN_RENT['月租萬'] * 12 / TARGET * 100
+YIELD = OWN_RENT['月租萬'] * 12 / ASK * 100
 
 # ---------- 房貸試算 ----------
 RATE, YEARS, LTV = 0.022, 30, 0.8
-loan = TARGET * LTV
+loan = ASK * LTV
 r_m = RATE / 12
 pay = loan * 10000 * r_m / (1 - (1 + r_m) ** (-YEARS * 12))
-down = TARGET - loan
+down = ASK - loan
 
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
 PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands.tw'
@@ -219,7 +215,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
         <div style="font-size:9.3pt;line-height:1.9;margin-top:2mm">
           同型三房＋1 近四年成交中位 <b>{SAME4["net"]:.1f} 萬/坪</b>，最高為正上方 19F 的 <b>{TOP["不含車單價"]:.1f}</b>（113/01）。<br>
           本戶整戶精裝、空屋可立即入住，三面採光、衛浴皆開窗。<br>
-          <span style="color:#E3B66A">合理成交參考約 <b>{TARGET:,} 萬</b>（{P_HOUSE} {T_NET:.1f}），開價 {wan(L["開價"])} 萬。</span>
+          <span style="color:#E3B66A">開價 {wan(L["開價"])} 萬，{P_HOUSE} {L["不含車單價"]:.1f} 萬/坪。</span>
         </div>
       </div>
       <div class="qr" style="width:22mm"><img src="{img('QR_LINE.png')}"><div>加 LINE</div></div>
@@ -373,13 +369,13 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
 <!-- P7 價格分析 -->
 <div class="page"><div class="pad">
   <div class="eyebrow">06 · PRICE ANALYSIS</div>
-  <div class="ttl">價格分析：合理成交約 {TARGET:,} 萬</div>
+  <div class="ttl">價格分析：開價放進社區行情看</div>
   <div class="sub">把各參考點的「{P_HOUSE}」套到本戶（扣車位 {BASE:.2f} 坪＋車位 1 席 {PK:.0f} 萬），換算成「照這個行情，本戶值多少」。</div>
   <div class="kpi">
     <div><div class="v">{wan(L["開價"])}</div><div class="u">萬元</div><div class="l">開價（{P_HOUSE} {L["不含車單價"]:.1f}）</div></div>
-    <div style="border-top-color:#2E7D4F"><div class="v" style="color:#2E7D4F">{TARGET:,}</div><div class="u">萬元</div><div class="l">建議成交參考（{T_NET:.1f}）</div></div>
+    <div><div class="v">{L["含車單價"]:.1f}</div><div class="u">萬/坪</div><div class="l">開價 {P_ALL}</div></div>
     <div><div class="v">{wan(conv(TOP["不含車單價"]))}</div><div class="u">萬元</div><div class="l">照 19F 113/01 行情換算</div></div>
-    <div><div class="v">{(1 - TARGET / L["開價"]) * 100:.1f}%</div><div class="u">約 {L["開價"] - TARGET} 萬</div><div class="l">開價到參考價的空間</div></div>
+    <div><div class="v">{SAME4["net"]:.1f}</div><div class="u">萬/坪</div><div class="l">同型近四年中位（{SAME4["n"]} 筆）</div></div>
   </div>
   <table>
     <tr><th>參考點</th><th>說明</th><th>{P_HOUSE}</th><th>{P_ALL}</th><th>換算本戶（萬）</th></tr>
@@ -388,11 +384,12 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
   <h3 class="h">怎麼解讀</h3>
   <ul>
     <li><b>同型行情 {SAME4["net"]:.1f}–{TOP["不含車單價"]:.1f}：</b>近四年同型三筆落在 38.0（28F）、39.2（9F）、43.0（19F）。換算本戶約 {wan(conv(LAST["不含車單價"]))}–{wan(conv(TOP["不含車單價"]))} 萬。</li>
-    <li><b>精裝與空屋是加分：</b>本戶天花、櫃體、中島、衛浴都已完成，買方省下裝修預算與 3–6 個月工期，合理落在同型區間的中上段。</li>
+    <li><b>開價在同型區間上緣：</b>本戶開價換算 {L["不含車單價"]:.1f}，比同型近四年中位高約 {(L["不含車單價"]/SAME4["net"]-1)*100:.0f}%、與 19F 高點 {TOP["不含車單價"]:.1f} 相近。看屋時把裝修完成度、空屋可入住一併納入比較。</li>
+    <li><b>精裝與空屋：</b>天花、櫃體、中島、衛浴都已完成，買方可省下裝修預算與工期。</li>
     <li><b>樓層不是主要差異：</b>110 年後中樓層（12–22F）中位 {S["樓層帶_110後"][1]["不含車中位"]:.1f}，高樓層（23–34F）{S["樓層帶_110後"][2]["不含車中位"]:.1f}，本社區價格主要看產品與屋況。</li>
     <li><b>比西區同級高：</b>百達同型比西區同級大樓（{CMP3["net"]:.1f}）高約 {(SAME4["net"]/CMP3["net"]-1)*100:.0f}%，反映 34 層地標、公設與勤美生活圈。</li>
   </ul>
-  <div class="warn" style="margin-top:3mm">同型近四年僅 {SAME4["n"]} 筆成交，行情帶寬較寬。建議成交參考為小登依實登推估，不是估價師的估價，也不保證成交價。</div>
+  <div class="warn" style="margin-top:3mm">同型近四年僅 {SAME4["n"]} 筆成交，行情帶寬較寬。以上換算為依實登推估，不是估價師的估價，實際成交以雙方議價為準。</div>
 </div>{foot(7)}</div>
 {lst_page}
 <!-- 購屋試算 -->
@@ -400,7 +397,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
   <div class="eyebrow">{PN-1:02d} · BUYER'S GUIDE</div>
   <div class="ttl">租金參考與購屋試算</div>
   <div class="kpi">
-    <div><div class="v">{TARGET:,}</div><div class="u">萬元</div><div class="l">以建議成交參考價試算</div></div>
+    <div><div class="v">{ASK:,}</div><div class="u">萬元</div><div class="l">以開價試算</div></div>
     <div><div class="v">{wan(down)}</div><div class="u">萬元</div><div class="l">自備款（兩成）</div></div>
     <div><div class="v">{wan(loan)}</div><div class="u">萬元</div><div class="l">貸款（八成）</div></div>
     <div><div class="v">{pay/10000:.1f}</div><div class="u">萬元／月</div><div class="l">本息攤還</div></div>
@@ -411,7 +408,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <tr><th>日期</th><th>棟別</th><th>面積（坪）</th><th>車位</th><th>月租（萬）</th><th>每坪（元／月）</th></tr>
     {rent_rows}
   </table>
-  <div class="cap">已排除分租套房、多人合租等部分出租。本戶 113/06 曾整戶出租 {OWN_RENT["月租萬"]:.1f} 萬／月；以建議成交參考價計，毛租金約 {YIELD:.1f}%（未扣管理費、稅費與空置），本社區以自住為主。</div>
+  <div class="cap">已排除分租套房、多人合租等部分出租。本戶 113/06 曾整戶出租 {OWN_RENT["月租萬"]:.1f} 萬／月；以開價計，毛租金約 {YIELD:.1f}%（未扣管理費、稅費與空置），本社區以自住為主。</div>
   <h3 class="h">看屋重點</h3>
   <ul>
     <li><b>陽台外移／加窗：</b>格局圖標示陽台外移與加窗，請以現況與不動產說明書確認，評估是否屬增建。</li>
