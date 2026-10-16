@@ -26,7 +26,7 @@ PLAN = [
     (2.2, dict(type='image', src='assets/室內_書房.jpg', mode='fill', cx=0.55, cy=0.5, zoom='in'), '多功能空間 可作第四房'),
     (2.8, dict(type='image', src='assets/格局圖.jpg', mode='fit', zoom='in', zoom_amt=0.04), '三面採光・三套衛浴皆開窗'),
     (2.6, dict(type='image', src='assets/棟別圖.png', mode='band', cy=0.5, zoom='in', zoom_amt=0.04), 'B1 棟・位於基地內側'),
-    (2.6, dict(type='image', src='assets/外觀_林蔭街景.jpg', mode='fill', cx=0.2, cy=0.6, zoom='in'), '步行到勤美誠品・廣三SOGO'),
+    (2.6, dict(type='image', src='assets/外觀_林蔭街景.jpg', mode='fill', cx=0.2, cy=0.6, zoom='in'), '步行到勤美・廣三SOGO'),
     (2.2, dict(type='card', big='坡道平面\n車位', sub='B4-146・物業管理'), ''),
     (2.6, dict(type='card', big='開價\n3,980萬', sub='含車位・管理費 8,500 元/月'), ''),
 ]

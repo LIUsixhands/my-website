@@ -319,6 +319,24 @@ def render_endcard(ec, W, H, cfg, logo_path, root=None):
 
 
 # ---------- 字幕 ----------
+def wrap_sub(text, per):
+    """字幕換行：超過 per 字才斷；優先斷在「・」、空白、逗號後，英數字詞（如 SOGO）不拆開。"""
+    out, rest = [], text
+    while len(rest) > per:
+        cut = per
+        for i in range(per, max(per // 2, 1), -1):          # 往前找標點／空白
+            if rest[i - 1] in "・ ，、,":
+                cut = i
+                break
+        else:
+            while 0 < cut < len(rest) and rest[cut - 1].isascii() and rest[cut].isascii() and rest[cut].isalnum():
+                cut -= 1                                     # 不把英數字詞切半
+            cut = cut or per
+        out.append(rest[:cut].rstrip(" ・"))
+        rest = rest[cut:].lstrip(" ")
+    return out + ([rest] if rest else [])
+
+
 def draw_subs(im, text, W, H, cfg, scrim=0.0):
     """白字幕壓在淺色素材（網站截圖、亮色插畫）上會看不見，
     所以先在字後面墊一塊「糊掉的暗版」再寫字。scrim=0 就是舊行為（只描邊）。"""
@@ -328,7 +346,7 @@ def draw_subs(im, text, W, H, cfg, scrim=0.0):
     per = cfg.get("sub_chars") or (13 if H > W else 20)
     size = cfg.get("sub_size") or int(min(W, H) * 0.058)
     f = font(F_BOLD, size)
-    lines = [text[i:i + per] for i in range(0, len(text), per)]
+    lines = wrap_sub(text, per)
     y = int(H * cfg.get("sub_y", 0.63))
 
     if scrim:
