@@ -236,7 +236,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
 
 <!-- P1 封面 -->
 <div class="page" style="background:#102a33">
-  <img src="{img('外觀_林蔭街景.jpg')}" style="position:absolute;left:0;top:0;width:210mm;height:156mm;object-fit:cover;object-position:center 30%">
+  <img src="{img('室內_客廳.jpg')}" style="position:absolute;left:0;top:0;width:210mm;height:156mm;object-fit:cover;object-position:center 45%">
   <div style="position:absolute;left:0;top:116mm;width:210mm;height:40mm;background:linear-gradient(180deg,rgba(16,42,51,0),#102a33)"></div>
   <div style="position:absolute;left:16mm;top:152mm;right:16mm;color:#fff">
     <div style="font-size:8pt;letter-spacing:.5em;color:#E3B66A">PROPERTY SALES REPORT</div>
@@ -312,6 +312,10 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
       <div class="cap" style="margin-top:2mm">依社區棟別圖重繪，非比例尺；北向朝左上。</div>
     </div>
   </div>
+  <div class="two" style="margin-top:4mm">
+    <div><div class="photo"><img src="{img('室內_玄關客廳.jpg')}" style="height:52mm"></div><div class="cap">玄關落塵區與整面收納櫃，進門即見客廳落地窗。</div></div>
+    <div><div class="photo"><img src="{img('室內_中島餐廳.jpg')}" style="height:52mm"></div><div class="cap">餐廳大理石中島、展示櫃，木紋天花。</div></div>
+  </div>
 </div>{foot(2)}</div>
 
 <!-- P3 格局與賣點 -->
@@ -331,6 +335,10 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     </div>
   </div>
   <div class="note" style="margin-top:3mm"><b>室內可用 61.31 坪。</b>主建物 49.90 坪＋陽台等附屬 11.41 坪，佔權狀 {61.31/L["總面積"]*100:.1f}%；扣掉車位後的公設約 26.7 坪，含游泳池、宴會廳、健身房等大型公設。</div>
+  <div class="two" style="margin-top:3.5mm">
+    <div><div class="photo"><img src="{img('室內_書房.jpg')}" style="height:50mm"></div><div class="cap">多功能空間：整面收納牆與升降書桌，可作書房或第四房。</div></div>
+    <div><div class="photo"><img src="{img('室內_陽台景觀.jpg')}" style="height:50mm"></div><div class="cap">陽台景觀：16 樓視野可遠眺市區天際線。</div></div>
+  </div>
 </div>{foot(3)}</div>
 
 <!-- P4 區位與社區 -->
