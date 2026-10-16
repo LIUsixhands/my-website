@@ -136,18 +136,54 @@ SITE = (HERE / '棟別圖.svg').read_text(encoding='utf-8').split('?>')[-1]
 # ---------- 市售（listings.json，有資料才出頁） ----------
 lst_page = ''
 if LST:
+    MED = {p['型'].split('（')[0]: p['近四年不含車中位'] for p in S['產品']}
+    for r in LST:
+        r['net'] = (r['開價'] - PK * r['車位數']) / (r['總面積'] - r['車位面積']) if r['開價'] else None
+    LST.sort(key=lambda r: (r['產品'] != '三房＋1', r['net'] is None, r['net'] or 0))
     rows = ''
     for r in LST:
-        net = (r['開價'] - r.get('車位價', PK * r.get('車位數', 1))) / (r['總面積'] - r.get('車位面積', 5.16 * r.get('車位數', 1)))
-        rows += (f'<tr{" class=\"hl\"" if r.get("本戶") else ""}><td>{r["棟別樓層"]}</td><td>{r.get("格局", "")}</td><td class="num">{r["總面積"]:.2f}</td>'
-                 f'<td class="num">{r.get("車位數", 1)}</td><td class="num">{wan(r["開價"])}</td><td class="num b">{net:.2f}</td>'
-                 f'<td class="num">{r["開價"]/r["總面積"]:.2f}</td><td>{r.get("屋況", "")}</td></tr>')
+        med = MED[r['產品']]
+        cls = ' class="me"' if r.get('本戶') else ''
+        est = '*' if r.get('車位推估') else ''
+        rows += (f'<tr{cls}><td class="b">{r["棟別樓層"]}{"（本戶）" if r.get("本戶") else ""}</td><td style="white-space:nowrap">{r["產品"]}</td><td>{r["格局"]}</td>'
+                 f'<td class="num">{r["總面積"]:.2f}</td><td class="num">{r["主建物"]+r["附屬"]:.2f}</td><td class="num">{r["車位數"]}{est}</td>'
+                 f'<td class="num">{wan(r["開價"]) if r["開價"] else "待補"}</td><td class="num b">{f2(r["net"])}{est if r["net"] else ""}</td>'
+                 f'<td class="num">{f2(r["開價"]/r["總面積"]) if r["開價"] else "—"}</td>'
+                 f'<td class="num">{f"{(r["net"]/med-1)*100:+.0f}%" if r["net"] else "—"}</td><td>{r["屋況"] or "—"}</td></tr>')
+    # 同型開價 vs 成交：橫條
+    same_l = [r for r in LST if r['產品'] == '三房＋1' and r['net']]
+    W, H, Lm = 560, 44 + 26 * len(same_l), 92
+    VMAX = 60
+    def XB(v): return Lm + v / VMAX * (W - Lm - 20)
+    svg = svg_open(W, H)
+    for i, r in enumerate(same_l):
+        y = 22 + i * 26; me = r.get('本戶')
+        svg.append(f'<text x="{Lm-8}" y="{y+13}" text-anchor="end" font-size="10" fill="{"#C0392B" if me else "#33414c"}" font-weight="{700 if me else 400}">{r["棟別樓層"]}{"（本戶）" if me else ""}</text>'
+                   f'<rect x="{Lm}" y="{y}" width="{XB(r["net"])-Lm:.1f}" height="18" rx="3" fill="{"#C0392B" if me else "#9fb3bf"}"/>'
+                   f'<text x="{XB(r["net"])+5:.1f}" y="{y+13}" font-size="10" font-weight="700" fill="{"#C0392B" if me else "#33414c"}">{r["net"]:.1f}</text>')
+    for v, c, lab, ty, anc in [(SAME4['net'], '#1F4E5F', f'同型成交中位 {SAME4["net"]:.1f}', 10, 'end'), (TOP['不含車單價'], '#C8963E', f'19F 成交高點 {TOP["不含車單價"]:.1f}', H - 3, 'start')]:
+        svg.append(f'<line x1="{XB(v):.1f}" x2="{XB(v):.1f}" y1="16" y2="{H-14}" stroke="{c}" stroke-width="1.4" stroke-dasharray="4 3"/>'
+                   f'<text x="{XB(v) + (-3 if anc == "end" else 3):.1f}" y="{ty}" text-anchor="{anc}" font-size="9" fill="{c}" font-weight="700">{lab}</text>')
+    svg.append('</svg>')
+    chart_lst = ''.join(svg)
+    others = [r for r in same_l if not r.get('本戶')]
+    big = [r for r in LST if r['產品'] != '三房＋1']
     lst_page = f'''
 <div class="page"><div class="pad">
-  <div class="eyebrow">08 · ON THE MARKET</div>
-  <div class="ttl">社區市售比較</div>
-  <div class="sub">同社區目前刊登中的物件（開價為刊登價，非成交價）。車位價未揭露者以本社區坡道平面每席 {PK:.0f} 萬換算。</div>
-  <table><tr><th>棟別樓層</th><th>格局</th><th>坪數</th><th>車位</th><th>開價（萬）</th><th>{P_HOUSE}</th><th>{P_ALL}</th><th>屋況</th></tr>{rows}</table>
+  <div class="eyebrow">07 · ON THE MARKET</div>
+  <div class="ttl">社區市售比較：同型開價本戶最低</div>
+  <div class="sub">同社區目前刊登中的 {len(LST)} 戶（開價為刊登價，非成交價；查詢 2026-10-16）。坪數、車位逐戶與實價登錄核對門牌；車位一律以本社區坡道平面每席 {PK:.0f} 萬扣除後比較。</div>
+  <h3 class="h">三房＋1 同型：{P_HOUSE}</h3>
+  {chart_lst}
+  <div class="note" style="margin:3mm 0">同型在售 {len(others)} 戶開價換算 {min(r["net"] for r in others):.1f}–{max(r["net"] for r in others):.1f} 萬/坪，<b>本戶 {L["不含車單價"]:.1f} 為最低</b>，也最接近同型成交區間（{LAST["不含車單價"]:.1f}–{TOP["不含車單價"]:.1f}）。
+  2F 附露臺花園、裝潢等級不同，單價不宜直接比較。</div>
+  <table class="tight">
+    <tr><th>棟別樓層</th><th>產品</th><th>格局</th><th>總坪數</th><th>主建＋附屬</th><th>車位</th><th>開價（萬）</th><th>{P_HOUSE}</th><th>{P_ALL}</th><th>vs 同型成交中位</th><th>屋況</th></tr>
+    {rows}
+  </table>
+  <div class="cap">「vs 同型成交中位」：三房＋1 比 112–115 中位 {SAME4["net"]:.1f}；四房大坪比 {MED["四房大坪"]:.1f}。* 刊登未載車位坪數，依同型以 2 席 9.29 坪推估。
+  B2・11F 開價待補。座向、屋況依刊登資訊，以現場為準。</div>
+  <div class="warn" style="margin-top:3mm">四房大坪（B2，約 125 坪、5 房）是不同產品：總價高、每坪單價較低，不能直接和三房＋1 比單價。B2・30F 開價換算 {big[0]["net"]:.1f}，比該型近四年成交中位 {MED["四房大坪"]:.1f} 高約 {(big[0]["net"]/MED["四房大坪"]-1)*100:.0f}%。</div>
 </div>{foot(8)}</div>'''
 PN = 9 if LST else 8
 
@@ -214,7 +250,8 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
         <div style="font-size:7.6pt;color:#E3B66A;letter-spacing:.3em">核心結論</div>
         <div style="font-size:9.3pt;line-height:1.9;margin-top:2mm">
           同型三房＋1 近四年成交中位 <b>{SAME4["net"]:.1f} 萬/坪</b>，最高為正上方 19F 的 <b>{TOP["不含車單價"]:.1f}</b>（113/01）。<br>
-          本戶整戶精裝、空屋可立即入住，三面採光、衛浴皆開窗。<br>
+          同社區在售的同型三房＋1 共 5 戶，本戶開價換算每坪最低。<br>
+          整戶精裝、空屋可立即入住，三面採光、衛浴皆開窗。<br>
           <span style="color:#E3B66A">開價 {wan(L["開價"])} 萬，{P_HOUSE} {L["不含車單價"]:.1f} 萬/坪。</span>
         </div>
       </div>
@@ -386,6 +423,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <li><b>同型行情 {SAME4["net"]:.1f}–{TOP["不含車單價"]:.1f}：</b>近四年同型三筆落在 38.0（28F）、39.2（9F）、43.0（19F）。換算本戶約 {wan(conv(LAST["不含車單價"]))}–{wan(conv(TOP["不含車單價"]))} 萬。</li>
     <li><b>開價在同型區間上緣：</b>本戶開價換算 {L["不含車單價"]:.1f}，比同型近四年中位高約 {(L["不含車單價"]/SAME4["net"]-1)*100:.0f}%、與 19F 高點 {TOP["不含車單價"]:.1f} 相近。看屋時把裝修完成度、空屋可入住一併納入比較。</li>
     <li><b>精裝與空屋：</b>天花、櫃體、中島、衛浴都已完成，買方可省下裝修預算與工期。</li>
+    <li><b>同型在售本戶最低：</b>社區同型另有 4 戶在售，開價換算 44.0–56.9；本戶 {L["不含車單價"]:.1f} 最低（見下一頁）。</li>
     <li><b>樓層不是主要差異：</b>110 年後中樓層（12–22F）中位 {S["樓層帶_110後"][1]["不含車中位"]:.1f}，高樓層（23–34F）{S["樓層帶_110後"][2]["不含車中位"]:.1f}，本社區價格主要看產品與屋況。</li>
     <li><b>比西區同級高：</b>百達同型比西區同級大樓（{CMP3["net"]:.1f}）高約 {(SAME4["net"]/CMP3["net"]-1)*100:.0f}%，反映 34 層地標、公設與勤美生活圈。</li>
   </ul>
