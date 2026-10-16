@@ -243,7 +243,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <div style="width:46mm;height:2px;background:#E3B66A;margin:5mm 0 6mm"></div>
     <div class="serif" style="font-size:11pt;color:#E3B66A;letter-spacing:.2em">臺中市西區 · 勤美草悟道生活圈 · 興富發 34 層地標</div>
     <h1 style="font-size:40pt;line-height:1.2;margin-top:2mm">百達馥麗</h1>
-    <div class="serif" style="font-size:15pt;margin-top:2mm">買方銷售報告書 · 16 樓 三房＋1 · 坐北朝南</div>
+    <div class="serif" style="font-size:15pt;margin-top:2mm">買方銷售報告書 · 16 樓 三房＋1 · 朝東南邊間</div>
     <div style="font-size:8.8pt;color:#b9cad3;margin-top:4mm;line-height:1.9">臺中市西區中興街287號16樓之1（B1 棟）<br>開價 {wan(L["開價"])} 萬　·　權狀 {L["總面積"]} 坪（含坡道平面車位）　·　3+1房2廳3衛　·　空屋精裝</div>
     <div style="margin-top:7mm;border-top:1px solid #3b5b66;padding-top:5mm;display:flex;gap:8mm;align-items:flex-end">
       <div style="flex:1">
@@ -269,7 +269,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <div><div class="v">{wan(L["開價"])}</div><div class="u">萬元</div><div class="l">開價（含 1 車位）</div></div>
     <div><div class="v">{L["總面積"]}</div><div class="u">坪</div><div class="l">權狀總坪數（含車位）</div></div>
     <div><div class="v">61.31</div><div class="u">坪</div><div class="l">主建物＋附屬（室內可用）</div></div>
-    <div><div class="v">16<span style="font-size:10pt">／34F</span></div><div class="u">樓層</div><div class="l">中高樓層・坐北朝南</div></div>
+    <div><div class="v">16<span style="font-size:10pt">／34F</span></div><div class="u">樓層</div><div class="l">中高樓層・朝東南</div></div>
     <div><div class="v">8,500</div><div class="u">元／月</div><div class="l">管理費（物業管理）</div></div>
   </div>
   <div class="two">
@@ -282,7 +282,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
         <tr><td>坪數</td><td>主建物 49.90＋附屬 11.41（陽台 10.49、雨遮 0.92）＋共同使用 31.85（含車位 5.16）＝{L["總面積"]} 坪</td></tr>
         <tr><td>土地</td><td>4.24 坪</td></tr>
         <tr><td>車位</td><td>坡道平面 1 席・B4-146（5.16 坪）</td></tr>
-        <tr><td>座向</td><td>坐北朝南・邊間・三面採光</td></tr>
+        <tr><td>座向</td><td>朝東南（落地窗朝西南）・邊間・三面採光</td></tr>
         <tr><td>現況</td><td>空屋・整戶精裝</td></tr>
         <tr><td>管理費</td><td>8,500 元／月・物業管理</td></tr>
         <tr><td>建築完成</td><td>民國 99 年 2 月（屋齡約 16 年）</td></tr>
@@ -327,7 +327,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <div class="cap">※ 示意圖，實際格局與尺寸以現場丈量為準。陽台外移／加窗部分以現況與不動產說明書為準。</div></div>
     <div>
       <div class="feat"><div class="no">01</div><div><h3>高樓層景觀</h3><p>16 樓視野越過周邊街廓，可眺望廣三 SOGO 與七期天際線。</p></div></div>
-      <div class="feat"><div class="no">02</div><div><h3>邊間・三面採光</h3><p>位於邊間，客廳、多功能空間、主臥分佔三個面，白天自然光充足，南向日照穩定。</p></div></div>
+      <div class="feat"><div class="no">02</div><div><h3>邊間・三面採光</h3><p>位於邊間，客廳、多功能空間、主臥分佔三個面，東南與西南都有開窗，白天自然光充足。</p></div></div>
       <div class="feat"><div class="no">03</div><div><h3>三套衛浴皆開窗</h3><p>主浴有窗、雙面盆、按摩浴缸與獨立淋浴間；三套衛浴都有對外窗，通風好、不易潮濕。</p></div></div>
       <div class="feat"><div class="no">04</div><div><h3>整戶精裝・空屋</h3><p>間接照明天花、大理石中島、整面收納牆與書房系統櫃都已完成，交屋即可入住。</p></div></div>
       <div class="feat"><div class="no">05</div><div><h3>3+1 彈性空間</h3><p>多功能空間可作書房、遊戲室或第四房；主臥附更衣間，客餐廳一字排開、動線開闊。</p></div></div>
