@@ -214,8 +214,9 @@ def fit_font(d, text, path, size, max_w):
     return f
 
 
-def render_endcard(ec, W, H, cfg, logo_path):
-    """尾卡：流式排版（先量總高再置中），16:9 / 9:16 都不會壓在一起。"""
+def render_endcard(ec, W, H, cfg, logo_path, root=None):
+    """尾卡：流式排版（先量總高再置中），16:9 / 9:16 都不會壓在一起。
+    ec["qrs"] = [{"src": "QR.png", "label": "加 LINE"}, ...] 會在 CTA 下方並排放 QR（白底、附標籤）。"""
     im = Image.new("RGB", (W, H), tuple(ec.get("bg", cfg.get("card_bg", [12, 12, 14]))))
     d = ImageDraw.Draw(im)
     accent = tuple(cfg.get("accent", [214, 40, 40]))
@@ -246,8 +247,20 @@ def render_endcard(ec, W, H, cfg, logo_path):
     brand_txt = "Sixhands Studio AI數字員工"
     logo_block = (lg.height + int(S * 0.012) + tw(d, brand_txt, f_b)[1]) if lg else 0
 
+    # QR（可選）：白底方塊並排
+    qrs = []
+    for q in ec.get("qrs", []):
+        qp = pathlib.Path(q["src"])
+        if root is not None and not qp.is_absolute():
+            qp = pathlib.Path(root) / qp
+        qrs.append((Image.open(qp).convert("RGB"), q.get("label", "")))
+    qs = int(S * (0.30 if H > W else 0.20)) if qrs else 0
+    qpad = int(qs * 0.06)
+    f_q = font(F_BOLD, int(S * 0.034))
+    qr_block = (int(S * 0.06) + qs + qpad * 2 + int(S * 0.015) + tw(d, "加", f_q)[1]) if qrs else 0
+
     # 量總高
-    block = 0
+    block = qr_block
     if title:
         block += tw(d, title, f_t)[1] + int(S * 0.022) + rule_h + int(S * 0.045)
     for l in lines:
@@ -260,7 +273,8 @@ def render_endcard(ec, W, H, cfg, logo_path):
 
     if title:
         w, h = tw(d, title, f_t)
-        d.text(((W - w) // 2, y), title, font=f_t, fill=(255, 255, 255))
+        top = d.textbbox((0, 0), title, font=f_t)[1]          # 字形上緣偏移，扣掉才不會讓底線壓到字
+        d.text(((W - w) // 2, y - top), title, font=f_t, fill=(255, 255, 255))
         y += h + int(S * 0.022)
         d.rectangle([(W // 2 - int(S * 0.085), y), (W // 2 + int(S * 0.085), y + rule_h)],
                     fill=accent)
@@ -277,8 +291,22 @@ def render_endcard(ec, W, H, cfg, logo_path):
         bx0 = (W - w) // 2 - pad
         d.rounded_rectangle([(bx0, y), (bx0 + w + pad * 2, y + h + pad)],
                             radius=int(S * 0.018), fill=accent)
-        d.text(((W - w) // 2, y + pad // 2), cta, font=f_c, fill=(255, 255, 255))
+        d.text(((W - w) // 2, y + pad // 2 - d.textbbox((0, 0), cta, font=f_c)[1]), cta, font=f_c, fill=(255, 255, 255))
         y += h + pad
+
+    if qrs:
+        y += int(S * 0.06)
+        gap = int(S * 0.08)
+        box = qs + qpad * 2
+        x = (W - (box * len(qrs) + gap * (len(qrs) - 1))) // 2
+        for img, label in qrs:
+            d.rounded_rectangle([(x, y), (x + box, y + box)], radius=int(S * 0.012), fill=(255, 255, 255))
+            im.paste(img.resize((qs, qs), Image.NEAREST), (x + qpad, y + qpad))
+            if label:
+                lw_, _ = tw(d, label, f_q)
+                d.text((x + (box - lw_) // 2, y + box + int(S * 0.015)), label, font=f_q, fill=(255, 255, 255))
+            x += box + gap
+        y += qr_block - int(S * 0.06)
 
     # 品牌 logo（客戶自用商業片可在 mv.json 設 "brand": false 關掉）
     if lg:
@@ -372,7 +400,7 @@ def main():
 
     ec = cfg.get("endcard")
     ec_from = float(ec["t0"]) if ec and "t0" in ec else None
-    ec_img = render_endcard(ec, W, H, cfg, logo) if ec else None
+    ec_img = render_endcard(ec, W, H, cfg, logo, root) if ec else None
 
     out = root / "out"
     out.mkdir(exist_ok=True)
