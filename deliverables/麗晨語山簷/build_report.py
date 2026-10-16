@@ -14,8 +14,6 @@ SAME_C = next(r for r in TX if r['戶型'] == 'C' and r['波段'] == '交屋後'
 NEAR_A = next(r for r in TX if r['日期'] == '115/06/26')                         # 8F之1
 SELF = next(r for r in TX if r['戶型'] == 'C' and r['樓層'] == 7)
 C_PRE_WAVE = [r for r in TX if r['戶型'] == 'C' and r['日期'][:6] in ('110/08', '110/09', '110/10')]
-TARGET = 4450
-T_UP = (TARGET - L['車位估']) / L['房屋坪']
 YT = 'https://www.youtube.com/shorts/UrZ5fMJqZtA'
 
 def img(name):
@@ -140,7 +138,7 @@ for y in range(111, 116):
 svg.append(f'<rect x="{X(113+6.5/12):.1f}" y="{T}" width="1" height="{H-T-B}" fill="#9aa7b2"/>'
            f'<text x="{X(113+6.5/12)+4:.1f}" y="{T+10}" fill="#7b8794" font-size="8.6">113/07 使照・交屋</text>')
 svg.append(f'<text x="{W-R}" y="{T-10}" text-anchor="end" fill="#7b8794" font-size="9">單位：萬元／坪（房屋單價，已扣車位）</text>')
-for v, c, lab, dy in [(L['單價'], '#C0392B', f'本戶開價 {L["單價"]:.1f}', -4), (T_UP, '#2E7D4F', f'建議成交參考 {T_UP:.1f}（{TARGET:,} 萬）', 11)]:
+for v, c, lab, dy in [(L['單價'], '#C0392B', f'本戶開價 {L["單價"]:.1f}', -4)]:
     svg.append(f'<line x1="{Lm}" x2="{W-R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="{c}" stroke-width="1.2" stroke-dasharray="3 3"/>'
                f'<text x="{Lm+4}" y="{Y(v)+dy:.1f}" fill="{c}" font-size="9" font-weight="700">{lab}</text>')
 STY = {'A': ('#C8963E', 'A 戶 70 坪・4 房'), 'B': ('#9aa7b2', 'B 戶 63 坪・3 房'), 'C': ('#1F4E5F', 'C 戶 55 坪・3 房（同本戶）')}
@@ -184,18 +182,17 @@ anchors = [
     ('近三年中位（113–115）', f'{H3["n"]} 筆，含 113/05 預售末段 2 筆', H3['net']),
 ]
 pos_rows = (f'<tr class="hl"><td>本戶開價</td><td>7F・C 戶・房屋 {L["房屋坪"]} 坪＋雙坡道平面</td><td class="num">{L["單價"]:.2f}</td><td class="num">{wan(L["總價"])}</td></tr>'
-            f'<tr style="font-weight:700"><td style="background:#e4f1e8;color:#2E7D4F">建議成交參考</td><td style="background:#e4f1e8;color:#2E7D4F">同型 13F 再依樓層差修正</td>'
-            f'<td class="num" style="background:#e4f1e8;color:#2E7D4F">{T_UP:.2f}</td><td class="num" style="background:#e4f1e8;color:#2E7D4F">{TARGET:,}</td></tr>')
+            )
 for nm, why, up in anchors:
     pos_rows += f'<tr><td class="b">{nm}</td><td>{why}</td><td class="num">{up:.2f}</td><td class="num">{wan(house(up))}</td></tr>'
 lo_f, hi_f = C_PRE_WAVE[0], C_PRE_WAVE[-1]
 c_wave = sorted(C_PRE_WAVE, key=lambda r: r['樓層'])
 
 RATE, YEARS, LTV = 0.022, 30, 0.8
-loan = TARGET * LTV
+loan = L['總價'] * LTV
 r_m = RATE / 12
 pay = loan * 10000 * r_m / (1 - (1 + r_m) ** (-YEARS * 12))
-down = TARGET - loan
+down = L['總價'] - loan
 
 html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>麗晨語山簷 銷售報告書</title><style>
 @page {{ size: A4; margin: 0; }}
@@ -261,7 +258,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
         <div style="font-size:9.3pt;line-height:1.9;margin-top:2mm">
           扣除兩個車位後，本戶房屋單價約 <b>{L["單價"]:.1f} 萬/坪</b>，低於社區 115 年交屋後成交中位 {AF["net"]:.1f}。<br>
           同型 C 戶 13F 在 115/01 成交房屋單價 {SAME_C["單價"]:.1f} 萬/坪，是最直接的比價依據。<br>
-          <span style="color:#E3B66A">合理成交參考約 <b>{TARGET:,} 萬</b>（房屋 {T_UP:.1f} 萬/坪＋雙車位）。</span>
+          <span style="color:#E3B66A">三房雙平車 {wan(L["總價"])} 萬，是全社區總價門檻最低的產品。</span>
         </div>
       </div>
       <div class="qr" style="width:21mm"><img src="{img('QR_影片.png')}"><div>看影片</div></div>
@@ -407,11 +404,11 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
 <!-- P7 價格分析 -->
 <div class="page"><div class="pad">
   <div class="eyebrow">06 · PRICE ANALYSIS</div>
-  <div class="ttl">價格分析：合理成交約 {TARGET:,} 萬</div>
+  <div class="ttl">價格分析：開價放進社區行情看</div>
   <div class="sub">把各參考點的房屋單價乘上本戶房屋 {L["房屋坪"]} 坪，再加上兩個車位（以交屋後每席中位 {wan(PK["交屋後中位"])} 萬計，共 {wan(L["車位估"])} 萬），換算成「照這個行情，本戶值多少」。</div>
   <div class="kpi">
     <div><div class="v">{wan(L["總價"])}</div><div class="u">萬元</div><div class="l">開價（房屋 {L["單價"]:.1f} 萬/坪）</div></div>
-    <div style="border-top-color:#2E7D4F"><div class="v" style="color:#2E7D4F">{TARGET:,}</div><div class="u">萬元</div><div class="l">建議成交參考（{T_UP:.1f} 萬/坪）</div></div>
+    <div><div class="v">{L["含車單價"]:.1f}</div><div class="u">萬/坪</div><div class="l">總價÷總坪數（車位一起算）</div></div>
     <div><div class="v">{SAME_C["單價"]:.1f}</div><div class="u">萬/坪</div><div class="l">同型 C 戶 13F 115/01</div></div>
     <div><div class="v">{AF["net"]:.1f}</div><div class="u">萬/坪</div><div class="l">115 年交屋後中位</div></div>
   </div>
@@ -419,11 +416,11 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <tr><th>參考點</th><th>說明</th><th>房屋單價（萬/坪）</th><th>換算本戶總價（萬）</th></tr>
     {pos_rows}
   </table>
-  <h3 class="h">為什麼是 {TARGET:,} 萬</h3>
+  <h3 class="h">怎麼看這個開價</h3>
   <div class="feat"><div class="no">01</div><div><h3>同型 C 戶剛成交 {SAME_C["單價"]:.1f} 萬/坪</h3><p>13F 之 3 在 115/01 成交，房屋坪數和本戶完全一樣（55.96 坪），是最直接的比價依據。照這個單價，本戶連兩個車位約 {wan(house(SAME_C["單價"]))} 萬。</p></div></div>
-  <div class="feat"><div class="no">02</div><div><h3>7 樓比 13 樓略低一些</h3><p>同一批 C 戶預售（110/08–10）從 {c_wave[0]["樓層"]}F {c_wave[0]["單價"]:.1f} 到 {c_wave[-1]["樓層"]}F {c_wave[-1]["單價"]:.1f}，每高一層約多 1%。交屋後的 A 戶 8F 與 12–14F 只差約 2%。本戶 7F 取同型 13F 再打 1–2 折扣，約 {T_UP:.1f} 萬/坪。</p></div></div>
+  <div class="feat"><div class="no">02</div><div><h3>7 樓比 13 樓略低一些</h3><p>同一批 C 戶預售（110/08–10）從 {c_wave[0]["樓層"]}F {c_wave[0]["單價"]:.1f} 到 {c_wave[-1]["樓層"]}F {c_wave[-1]["單價"]:.1f}，每高一層約多 1%。交屋後的 A 戶 8F 與 12–14F 只差約 2%。本戶在 7F，比 13F 低 6 層，看價時要把樓層差算進去。</p></div></div>
   <div class="feat"><div class="no">03</div><div><h3>開價已經低於社區交屋後中位</h3><p>交屋後 {AF["n"]} 筆房屋單價中位 {AF["net"]:.1f}，本戶開價換算 {L["單價"]:.1f}。三房雙車位 {wan(L["總價"])} 萬，比同社區四房 A 戶 115 年成交（5,300–6,360 萬）低一個級距，是進入這個社區門檻最低的產品。</p></div></div>
-  <div class="warn">提醒：社區交屋後成交只有 {AF["n"]} 筆（其中 C 戶 1 筆），樣本少、行情帶較寬。B4 車位為柱邊車位，實際價值以現場停車條件為準。建議成交參考價為依實登推估，不代表屋主同意的售價，實際以雙方議價為準。</div>
+  <div class="warn">提醒：社區交屋後成交只有 {AF["n"]} 筆（其中 C 戶 1 筆），樣本少、行情帶較寬。B4 車位為柱邊車位，實際價值以現場停車條件為準。以上換算為依實登推估，實際成交以雙方議價為準。</div>
 </div>{foot(7)}</div>
 
 <!-- P8 購屋試算 -->
@@ -431,7 +428,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
   <div class="eyebrow">07 · BUYER'S GUIDE</div>
   <div class="ttl">購屋試算與看屋重點</div>
   <div class="kpi">
-    <div><div class="v">{TARGET:,}</div><div class="u">萬元</div><div class="l">以建議成交參考價試算</div></div>
+    <div><div class="v">{wan(L["總價"])}</div><div class="u">萬元</div><div class="l">以開價試算</div></div>
     <div><div class="v">{wan(down)}</div><div class="u">萬元</div><div class="l">自備款（兩成）</div></div>
     <div><div class="v">{wan(loan)}</div><div class="u">萬元</div><div class="l">貸款（八成）</div></div>
     <div><div class="v">{pay/10000:.1f}</div><div class="u">萬元／月</div><div class="l">本息攤還</div></div>
