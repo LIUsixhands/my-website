@@ -47,7 +47,7 @@ cfg = {
     'subs': subs, 'shots': shots,
     'endcard': {'t0': round(body, 2), 'title': '百達馥麗 16F',
                 'lines': ['台中市西區中興街', '3+1房・93.16坪（含車位）', '助哥 0925-313-570', 'LINE @080akczk',
-                          'sixhands.tw', '永慶不動產 七期河南市政店'],
+                          'sixhands.tw', '永慶不動產 七期河南市政店｜', '百富國際開發有限公司｜', '中市地價二字第1070032073號'],
                 'cta': '預約看屋',
                 'qrs': [{'src': 'assets/QR_LINE.png', 'label': '加 LINE'}, {'src': 'assets/QR_網站.png', 'label': 'sixhands.tw'}]},
 }
