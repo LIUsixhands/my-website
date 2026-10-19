@@ -51,6 +51,7 @@ _MARKET_OPEN = unittest.mock.patch.object(market_calendar, "closed_today", lambd
 # 選股推首選前會等到 08:45。測試剛好在 08:00–08:45 跑的話會真的睡上幾分鐘 ——
 # 等待本身在 TestPremarketPick 裡用注入的時鐘測。
 import premarket
+import followup
 _NO_WAIT = unittest.mock.patch.object(premarket, "wait_until", lambda *a, **k: 0.0)
 
 
@@ -4375,7 +4376,8 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
     # 會寫進個人交易紀錄或金鑰的檔案，一個都不能漏
     MUST_IGNORE = (".env", "state.json", "watchlist.json", "outcomes.csv",
                    "candidates.csv", "candidates_outcomes.csv", "journal/*.md",
-                   "journal/watchlist-*.json", "logs/")
+                   "journal/watchlist-*.json", "journal/preopen-*.json", "picks.csv",
+                   "pick_followup.csv", "logs/")
 
     def setUp(self):
         if not self.IGNORE.exists():
@@ -4393,6 +4395,7 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
         written = {oc.OUTCOME_FILE.name, signals.CANDIDATE_FILE.name}
         import review                                  # noqa: F401  （已匯入，取名用）
         written.add("candidates_outcomes.csv")
+        written.add(followup.FILE.name)
         for name in written:
             with self.subTest(path=name):
                 self.assertIn(name, self.lines,
@@ -8477,6 +8480,171 @@ class TestPremarketPick(unittest.TestCase):
 
     def test_picks_csv_is_not_committed(self):
         self.assertIn("picks.csv", (Path(__file__).parent / ".gitignore").read_text(encoding="utf-8"))
+
+
+class TestPickFollowUp(unittest.TestCase):
+    """10-19 律勝連三天鎖漲停（10-15 首選、買不到）。使用者：「起漲前線型真的很漂亮」。
+    事後看當然漂亮 —— 每一筆首選（買得到、買不到）都記之後 5 天怎麼走，11-09 才知道
+    「買不到的是不是常常續漲」，再決定要不要另外做一套波段規則。只記錄，不改 v10。"""
+
+    def _bars(self, day, o, h, l, c):
+        d = datetime.fromisoformat(day)
+        return [(d.replace(hour=9, minute=1), o, max(o, c), min(o, c), o, 100.0),
+                (d.replace(hour=11), o, h, l, (o + c) / 2, 100.0),
+                (d.replace(hour=13, minute=30), o, c, c, c, 100.0)]     # 最後一根開盤 ≠ 收盤
+
+    def _pick(self, code="3354", prev=34.55):
+        return {"code": code, "name": "律勝", "prev_close": prev}
+
+    def _lusheng(self):
+        """10-15 開盤鎖漲停 38.00，之後兩根漲停、再拉回。"""
+        return {"2026-10-15": self._bars("2026-10-15", 38.0, 38.0, 38.0, 38.0),
+                "2026-10-16": self._bars("2026-10-16", 41.8, 41.8, 41.8, 41.8),
+                "2026-10-19": self._bars("2026-10-19", 44.0, 45.95, 43.0, 45.95),
+                "2026-10-20": self._bars("2026-10-20", 46.0, 47.0, 40.0, 41.0),
+                "2026-10-21": self._bars("2026-10-21", 41.0, 42.0, 39.9, 40.0),
+                "2026-10-22": self._bars("2026-10-22", 40.0, 40.5, 38.5, 39.0)}
+
+    def test_trading_days_after_skip_weekends_and_holidays(self):
+        self.assertEqual(followup.trading_days_after("2026-10-15", 3),
+                         ["2026-10-16", "2026-10-19", "2026-10-20"])
+        self.assertEqual(followup.trading_days_after("2026-10-07", 2), ["2026-10-08", "2026-10-12"],
+                         "10-09 國慶補假")
+        self.assertEqual(followup.trading_days_after("2026-10-15", 0), [])
+
+    def test_today_counts_only_after_the_close(self):
+        self.assertEqual(followup.last_done_day(datetime(2026, 10, 19, 14, 0)), "2026-10-19")
+        self.assertEqual(followup.last_done_day(datetime(2026, 10, 19, 13, 35)), "2026-10-19")
+        self.assertEqual(followup.last_done_day(datetime(2026, 10, 19, 11, 8)), "2026-10-18",
+                         "盤中看的時候，今天還沒走完")
+
+    def test_daily_bar_from_minutes(self):
+        self.assertEqual(followup.daily(self._bars("2026-10-19", 44.0, 45.95, 43.0, 45.95)),
+                         (44.0, 45.95, 43.0, 45.95))
+        self.assertIsNone(followup.daily([]))
+        self.assertIsNone(followup.daily(None))
+
+    def test_a_locked_pick_is_followed_from_its_open(self):
+        row = followup.build_row("2026-10-15", self._pick(), self._lusheng(), "2026-10-23")
+        self.assertEqual((row["open0"], row["close0"], row["locked"]), (38.0, 38.0, 1),
+                         "開盤就鎖漲停 → 標起來（買不到）")
+        self.assertEqual([row[f"d{i}_pct"] for i in range(1, 6)],
+                         [10.0, 20.92, 7.89, 5.26, 2.63])
+        self.assertEqual((row["high_pct"], row["low_pct"], row["days"]), (23.68, 1.32, 5))
+        self.assertEqual((row["code"], row["name"], row["prev_close"]), ("3354", "律勝", 34.55))
+
+    def test_a_buyable_pick_is_not_marked_locked(self):
+        bars = {"2026-10-15": self._bars("2026-10-15", 35.0, 36.0, 34.0, 35.5)}
+        row = followup.build_row("2026-10-15", self._pick(), bars, "2026-10-15")
+        self.assertEqual(row["locked"], 0)
+        self.assertEqual((row["days"], row["high_pct"], row["low_pct"], row.get("d1_pct")),
+                         (0, None, None, None), "還沒走到第 1 天 → 全部空著，不是 0")
+        bars["2026-10-16"] = self._bars("2026-10-16", 35.4, 35.7, 35.1, 35.6)
+        row = followup.build_row("2026-10-15", self._pick(), bars, "2026-10-16")
+        self.assertEqual((row["high_pct"], row["low_pct"]), (2.0, 0.29),
+                         "最高最低只看之後那幾天，不含首選當天（當天 36 元不算）")
+        self.assertIsNone(followup.build_row("2026-10-15", self._pick(), {}, "2026-10-23"),
+                          "當天沒有 K 棒 → 不寫")
+
+    def test_unfinished_days_stay_empty(self):
+        row = followup.build_row("2026-10-15", self._pick(), self._lusheng(), "2026-10-19")
+        self.assertEqual(row["days"], 2)
+        self.assertEqual((row["d1_pct"], row["d2_pct"]), (10.0, 20.92))
+        self.assertNotIn("d3_pct", row, "10-20 還沒到")
+        self.assertEqual(row["high_pct"], 20.92, "最高只算走完的那幾天")
+        gap = dict(self._lusheng())
+        del gap["2026-10-16"]
+        self.assertEqual(followup.build_row("2026-10-15", self._pick(), gap, "2026-10-23")["days"], 0,
+                         "中間缺一天 → 後面先空著，不要接錯天")
+
+    def test_update_refetches_until_five_days_then_stops(self):
+        calls = []
+        data = self._lusheng()
+
+        def fetch(code, start, end):
+            calls.append((code, start, end))
+            return {d: b for d, b in data.items() if start <= d <= end}
+
+        picks = [("2026-10-15", self._pick()), ("2026-10-26", self._pick(code="9999"))]
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "f.csv"
+            rows = followup.update(fetch, picks, "2026-10-19", path)
+            self.assertEqual(calls, [("3354", "2026-10-15", "2026-10-19")],
+                             "還沒到的日子不抓；只抓到走完的那一天")
+            self.assertEqual([(r["date"], r["days"]) for r in rows], [("2026-10-15", 2)])
+            calls.clear()
+            rows = followup.update(fetch, picks, "2026-10-22", path)
+            self.assertEqual(calls, [("3354", "2026-10-15", "2026-10-22")], "還沒走完 → 再抓")
+            self.assertEqual(rows[0]["days"], 5)
+            calls.clear()
+            followup.update(fetch, picks, "2026-10-30", path)
+            self.assertEqual(calls, [("9999", "2026-10-26", "2026-10-30")],
+                             "走完 5 天的不再抓（存檔讀回來是字串也要認得）")
+            saved = followup.load(path)
+            self.assertEqual([r["date"] for r in saved], ["2026-10-15"],
+                             "9999 那天沒有 K 棒 → 不寫")
+            self.assertEqual(saved[0]["d5_pct"], "2.63")
+            self.assertEqual(saved[0]["locked"], "1")
+
+    def test_a_failed_fetch_keeps_the_old_row_and_the_others(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "f.csv"
+            followup.update(lambda c, s, e: self._lusheng(), [("2026-10-15", self._pick())],
+                            "2026-10-19", path)
+
+            def broken(code, start, end):
+                if code == "3354":
+                    raise RuntimeError("流量上限")
+                return {"2026-10-20": self._bars("2026-10-20", 10.0, 11.0, 9.5, 10.5)}
+
+            with self.assertLogs("followup", level="WARNING"):
+                rows = followup.update(broken, [("2026-10-15", self._pick()),
+                                                ("2026-10-20", self._pick(code="1111", prev=10.0))],
+                                       "2026-10-20", path)
+        self.assertEqual([(r["date"], str(r["days"])) for r in rows],
+                         [("2026-10-15", "2"), ("2026-10-20", "0")])
+
+    def test_a_different_pick_on_the_same_day_is_refetched(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "f.csv"
+            followup.update(lambda c, s, e: self._lusheng(), [("2026-10-15", self._pick())],
+                            "2026-10-23", path)
+            calls = []
+            followup.update(lambda c, s, e: calls.append(c) or self._lusheng(),
+                            [("2026-10-15", self._pick(code="2222"))], "2026-10-23", path)
+            self.assertEqual(calls, ["2222"], "screener 重跑換了首選 → 照新的那一檔重算")
+            self.assertEqual(followup.load(path)[0]["code"], "2222")
+
+    def test_picks_come_from_the_journal_archives(self):
+        with tempfile.TemporaryDirectory() as d:
+            j = Path(d)
+            (j / "watchlist-20261015.json").write_text(json.dumps(
+                {"date": "2026-10-15", "items": [], "pick": self._pick()}), encoding="utf-8")
+            (j / "watchlist-20261013.json").write_text(json.dumps(
+                {"date": "2026-10-13", "items": []}), encoding="utf-8")
+            (j / "watchlist-20261009.json").write_text(json.dumps(
+                {"date": "2026-10-09", "pick": self._pick()}), encoding="utf-8")
+            (j / "watchlist-20261016.json").write_text("壞掉", encoding="utf-8")
+            with unittest.mock.patch.object(config, "JOURNAL_DIR", j), \
+                    self.assertLogs("followup", level="WARNING"):
+                got = followup.picks_from_journal()
+        self.assertEqual([(d, p["code"]) for d, p in got], [("2026-10-15", "3354")],
+                         "沒有首選（10-14 以前）和休市日都不算")
+
+    def test_the_table(self):
+        rows = [followup.build_row("2026-10-15", self._pick(), self._lusheng(), "2026-10-19")]
+        text = "\n".join(followup.table(rows))
+        self.assertIn("10-15  🔒3354 律勝", text)
+        self.assertIn("+10.0%  +20.9%  　—", text)
+        self.assertIn("不是買賣建議", text)
+        self.assertIn("還沒有首選的紀錄", "\n".join(followup.table([])))
+
+    def test_review_updates_it_after_the_close_without_risking_the_report(self):
+        src = inspect.getsource(review.run)
+        self.assertIn("followup.run(broker)", src)
+        self.assertIn("首選後續走勢更新失敗（不影響日報）", src)
+        self.assertLess(src.index("followup.run(broker)"), src.index("write_journal(lines)"))
+        self.assertEqual(followup.FILE.name, "pick_followup.csv")
 
 
 class TestTheBatchIsRepricedWhenItGoesOut(unittest.TestCase):

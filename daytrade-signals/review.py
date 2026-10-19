@@ -632,6 +632,13 @@ def run(args) -> None:
         except Exception as e:                   # 候選壞掉不可以讓日報產不出來
             log.warning("候選回推失敗（不影響日報）：%s", e)
     pick_lines = pick_section(broker, state)
+    if broker is not None:
+        # 首選之後 5 天怎麼走（只記錄，不進日報）。壞掉不可以讓日報產不出來。
+        try:
+            import followup
+            followup.run(broker)
+        except Exception as e:
+            log.warning("首選後續走勢更新失敗（不影響日報）：%s", e)
     lines = render(signals, trades, state, pnl, note, outcomes, carried_out)
     if pick_lines:
         lines += ["", "## 盤前首選（分開記錄）", ""] + [l for l in pick_lines
