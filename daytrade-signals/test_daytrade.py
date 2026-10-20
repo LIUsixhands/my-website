@@ -5891,8 +5891,215 @@ class TestWhatIfStocksInPlay(unittest.TestCase):
         src = inspect.getsource(whatif.main)
         self.assertIn("pool_days, _pool_missing = pool_days_for(archived, fetch_range)", src)
         self.assertIn("in_play = run_in_play(pool_days)", src)
-        self.assertIn("in_play=in_play)", src)
+        self.assertIn("in_play=in_play,", src)
         self.assertIn("kbars_to_days(broker.kbars(code, start, end))", src)
+
+
+class TestWhatIfMovingAverageExit(unittest.TestCase):
+    """10-20 使用者：「盤前那一檔開盤後能否繼續監看，用 5MA 及 20MA 告知盤中強弱，讓我繼續抱
+    或出場」。做成規則才驗證得了：停損照舊，其餘換成 5 分 K 的均線出場；5 分 K 收完才判、
+    下一分鐘開盤價出（收到通知再賣得到）。"""
+
+    D = datetime(2026, 10, 13)
+
+    def _m(self, hhmm, o, h, l, c, v=100.0, day=None):
+        d = day or self.D
+        return (d.replace(hour=int(hhmm[:2]), minute=int(hhmm[3:])), o, h, l, c, v)
+
+    def _minutes(self, start, n, price, day=None):
+        t = datetime.combine((day or self.D).date(), dtime(int(start[:2]), int(start[3:])))
+        return [(t + timedelta(minutes=i), price, price, price, price, 100.0) for i in range(n)]
+
+    def _seed(self, price=100.0):
+        """前一天 12:00～13:40 一路 price —— 20MA 一開盤就是 price。"""
+        return self._minutes("12:01", 100, price, day=self.D - timedelta(days=1))
+
+    def test_five_minute_bars(self):
+        bars = [self._m("09:00", 99, 99, 99, 99)] + self._minutes("09:01", 10, 100.0)
+        bars[5] = self._m("09:05", 100, 100, 100, 101.5)
+        got = whatif.five_minute_closes(bars)
+        self.assertEqual([(t.strftime("%H:%M"), c) for t, c in got], [("09:05", 101.5), ("09:10", 100.0)],
+                         "09:00 那根併進 09:05；收盤是那 5 分鐘最後一根的收盤")
+        self.assertEqual(whatif.five_minute_closes([self._m("09:07", 1, 1, 1, 7)])[0][0].strftime("%H:%M"),
+                         "09:10")
+        self.assertEqual(whatif._ma([1, 2, 3, 4], 2), 3.5)
+        self.assertIsNone(whatif._ma([1, 2], 3))
+
+    def test_a_close_below_20ma_exits_at_the_next_minute(self):
+        fired = self.D.replace(hour=9, second=1)
+        bars = self._minutes("09:00", 15, 102.0) + self._minutes("09:15", 5, 101.0)
+        bars[-1] = self._m("09:19", 101, 101, 99.4, 99.5)      # 09:20 那根 5 分 K 收 99.5
+        bars.append(self._m("09:20", 99.5, 99.6, 99.3, 99.5))  # 09:20 收完才是那一根的收盤
+        bars += [self._m("09:21", 99.2, 99.3, 99.0, 99.1), self._m("09:22", 99, 99, 98, 98)]
+        got = whatif.ma_exit(bars, 101.0, 97.0, fired, self._seed(100.0), whatif.MA_BELOW)
+        self.assertEqual(got, (whatif.MA_RESULT, 99.2, "09:21:00"),
+                         "09:20 那根 5 分 K 收在 20MA 下面 → 下一分鐘 09:21 的開盤價出")
+
+    def test_the_stop_still_wins_and_no_seed_means_only_the_stop(self):
+        fired = self.D.replace(hour=9, second=1)
+        bars = self._minutes("09:00", 10, 102.0) + [self._m("09:10", 102, 102, 96.5, 97)]
+        self.assertEqual(whatif.ma_exit(bars, 101.0, 97.0, fired, self._seed(100.0))[:2],
+                         (oc.STOP, 97.0), "停損照舊：碰到就出，不等 5 分 K 收完")
+        flat = self._minutes("09:00", 30, 100.0) + self._minutes("13:20", 10, 95.0)
+        self.assertEqual(whatif.ma_exit(flat, 101.0, 90.0, fired, [], whatif.MA_BELOW),
+                         (oc.FLAT, 95.0, "13:25:00"),
+                         "沒有前一天的 K 棒 → 20MA 湊不滿 20 根之前只看停損；13:25 平倉")
+        self.assertIsNone(whatif.ma_exit(self._minutes("09:00", 1, 100.0), 100.0, 97.0, fired))
+
+    def test_only_5_minute_bars_after_the_entry_count_and_touching_is_not_breaking(self):
+        fired = self.D.replace(hour=9, minute=5)
+        bars = self._minutes("09:00", 6, 99.0) + self._minutes("09:06", 20, 102.0)
+        self.assertEqual(whatif.ma_exit(bars, 102.0, 97.0, fired, self._seed(100.0))[0], oc.FLAT,
+                         "09:05 那根 5 分 K 在進場前就收在 20MA 下面 → 不算（進場前的事）")
+        flat = self._minutes("09:00", 30, 100.0)
+        self.assertEqual(whatif.ma_exit(flat, 100.0, 97.0, self.D.replace(hour=9, second=1),
+                                        self._seed(100.0))[0], oc.FLAT, "剛好等於 20MA 不算跌破")
+
+    def test_a_hit_at_1325_exits_on_that_close(self):
+        fired = self.D.replace(hour=13, minute=1)
+        bars = self._minutes("13:01", 25, 101.0)
+        bars[-1] = self._m("13:25", 101, 101, 99, 99.0)
+        self.assertEqual(whatif.ma_exit(bars, 101.0, 97.0, fired, self._seed(100.0), whatif.MA_BELOW),
+                         (whatif.MA_RESULT, 99.0, "13:25:00"))
+
+    def test_the_cross_needs_5ma_to_come_from_above(self):
+        fired = self.D.replace(hour=9, second=1)
+        down = self._minutes("09:00", 40, 99.0) + self._minutes("09:40", 10, 98.0)
+        self.assertEqual(whatif.ma_exit(down, 99.0, 90.0, fired, self._seed(100.0), whatif.MA_CROSS)[0],
+                         oc.FLAT, "一開始 5MA 就在 20MA 下面 → 沒有「穿過去」這件事")
+        self.assertEqual(whatif.ma_exit(down, 99.0, 90.0, fired, self._seed(100.0), whatif.MA_BELOW)[0],
+                         whatif.MA_RESULT, "收盤在 20MA 下面那一條會出")
+        up_then_down = self._minutes("09:00", 60, 103.0) + self._minutes("10:00", 60, 97.0)
+        got = whatif.ma_exit(up_then_down, 103.0, 90.0, fired, self._seed(100.0), whatif.MA_CROSS)
+        self.assertEqual(got[0], whatif.MA_RESULT)
+        self.assertGreater(got[2], "10:05:00", "先站上去、再穿下來才出")
+        self.assertLess(got[2], "11:00:00")
+
+    def test_reexit_and_run_ma(self):
+        t = TestWhatIfResearchExitsAndFilters("test_render_and_main")._trade(fired="09:05")
+        t.date, t.fired = "2026-10-13", self.D.replace(hour=9, minute=5)
+        bars = self._minutes("09:05", 10, 100.5) + [self._m("09:15", 100, 100, 96, 96.5)]
+        (n,) = whatif.reexit([t], {("2026-10-13", "1111"): bars},
+                             lambda b, tr: whatif.ma_exit(b, tr.entry, tr.stop, tr.fired))
+        self.assertEqual((n.result, n.exit_price, n.r_multiple), (oc.STOP, 97.0, -1.0))
+        self.assertEqual(whatif.reexit([t], {}, lambda b, tr: None), [])
+        stock = {"code": "1111", "bars": bars}
+        pool = [("2026-10-13", [stock], {"1111": [[], self._seed(100.0)]})]
+        self.assertEqual(whatif.prev_day_index(pool)[("2026-10-13", "1111")], self._seed(100.0))
+        ma = whatif.run_ma([("2026-10-13", [stock])], {(2, whatif.CAUTIOUS): ([t], 0)}, [], pool)
+        self.assertEqual([len(ma[("v10", k)]) for k in ("six", whatif.MA_BELOW, whatif.MA_CROSS)],
+                         [1, 1, 1])
+        self.assertEqual((ma["seeded"], ma["total"]), (1, 1))
+        self.assertEqual(ma[("pick", "six")], [])
+        text = "\n".join(whatif._ma_lines(ma))
+        self.assertIn("## 均線出場（5 分 K、停損照舊）", text)
+        self.assertIn("| v10 三關（保守價） | 停損＋5 分 K 收盤跌破 20MA | 1 | 0 | 0% | -1.00 |", text)
+        self.assertIn("| 盤前首選（開盤價） | v10 六條（現在） | 0 | — |", text)
+        self.assertIn("1/1 筆有前一天的資料", text)
+
+    def test_run_ma_uses_the_picks(self):
+        s = TestWhatIfOpeningRangeLength("test_each_length_gets_the_same_batch_delay_and_window")._stock()
+        pick = {"code": "1111", "name": "測", "prev_close": 100.0, "amplitude_pct": 5.0}
+        ma = whatif.run_ma([], {}, [("2026-10-13", pick, s["bars"])], [])
+        self.assertEqual(len(ma[("pick", "six")]), 1)
+        self.assertEqual(len(ma[("pick", whatif.MA_BELOW)]), 1, "首選用自己的那一天 K 棒")
+
+
+class TestWhatIfManualOrders(unittest.TestCase):
+    """10-20 使用者：「還是買不到，其他買到的也會虧」→「請以手動的方式來設計程式，需要改的是
+    開盤後的」。手動版：09:05 前掛好多條件單（成交價 ≥ 突破價 且 今天總量 ≥ 昨天量的 X%），
+    出場只用 App 設得了的（停損單、移動出場單、13:25）。這張表決定 X。"""
+
+    D = datetime(2026, 10, 13)
+
+    def _stock(self, **kw):
+        return TestWhatIfOpeningRangeLength("test_each_length_gets_the_same_batch_delay_and_window")._stock(**kw)
+
+    def _m(self, hhmm, o, h, l, c):
+        return (self.D.replace(hour=int(hhmm[:2]), minute=int(hhmm[3:])), o, h, l, c, 100.0)
+
+    def test_the_exit_is_stop_then_trailing_after_half_then_1325(self):
+        fired = self.D.replace(hour=9, minute=6)
+        stop = [self._m("09:07", 100, 100, 96, 96.5)]
+        self.assertEqual(whatif.manual_exit(stop, 100.0, 97.0, 102.0, fired)[:2], (oc.STOP, 97.0))
+        trail = [self._m("09:07", 100, 103, 100, 103), self._m("09:08", 103, 103.5, 102.5, 103),
+                 self._m("09:09", 103, 103, 101.0, 101.5)]
+        self.assertEqual(whatif.manual_exit(trail, 100.0, 97.0, 102.0, fired),
+                         (whatif.TRAIL, round(103.5 * 0.985, 4), "09:09:00"),
+                         "漲到 102（先出一半的價位）才開始；從最高 103.5 回落 1.5%")
+        not_armed = [self._m("09:07", 100, 101.5, 99, 100), self._m("13:25", 100, 100, 99, 99.5),
+                     self._m("13:30", 99, 99, 90, 90)]
+        self.assertEqual(whatif.manual_exit(not_armed, 100.0, 97.0, 102.0, fired),
+                         (oc.FLAT, 99.5, "13:25:00"), "沒漲到 102 → 不會被移動出場洗掉")
+        floor = [self._m("09:07", 100, 101.2, 100, 101), self._m("09:08", 101, 101, 99.5, 99.8)]
+        self.assertEqual(whatif.manual_exit(floor, 100.0, 97.0, 101.0, fired)[:2], (whatif.TRAIL, 100.0),
+                         "回落 1.5% 低於成本 → 出在成本")
+        exact = [self._m("09:07", 190, 200, 190, 199), self._m("09:08", 199, 199, 197, 198)]
+        self.assertEqual(whatif.manual_exit(exact, 190.0, 180.0, 195.0, fired)[:2], (whatif.TRAIL, 197.0),
+                         "剛好碰到回落 1.5% 的價位就出")
+        same_bar = [self._m("09:07", 100, 103, 100.5, 101)]
+        self.assertEqual(whatif.manual_exit(same_bar, 100.0, 97.0, 102.0, fired)[0], oc.FLAT,
+                         "同一根先漲到再跌：用前面的最高點判，不偷看")
+        self.assertIsNone(whatif.manual_exit([], 100.0, 97.0, 102.0, fired))
+
+    def test_orders_are_live_only_after_0905_and_need_the_volume(self):
+        s = self._stock()                                # 09:03 就突破，但 09:05 才掛好
+        (t,), capped = whatif.manual_day([s], {"1111": 10_000}, 0)
+        self.assertEqual(t.fired.strftime("%H:%M"), "09:06")
+        self.assertEqual(t.entry, config.round_to_tick(max(101.0 * 1.001, 102.0), "up"),
+                         "一掛好就已經在突破價之上 → 那一分鐘的開盤價")
+        self.assertEqual(capped, 0)
+        (t,), _ = whatif.manual_day([s], {"1111": 10_000}, 10)
+        self.assertEqual(t.fired.strftime("%H:%M"), "09:07",
+                         "09:06 累計 950 張還不到昨天 10,000 的 10% → 09:07 才夠")
+        self.assertEqual(whatif.manual_day([s], {"1111": 10_000}, 20), ([], 0), "量一直不夠 → 不買")
+        self.assertEqual(whatif.manual_day([s], {}, 10), ([], 0), "不知道昨天的量 → 設不了門檻")
+        self.assertEqual(len(whatif.manual_day([s], {}, 0)[0]), 1, "不設門檻就不需要昨天的量")
+
+    def test_first_filled_up_to_three_and_top_only(self):
+        stocks = [self._stock(code=str(c), rank=c) for c in range(1, 6)]
+        stocks[0]["bars"] = stocks[0]["bars"][:6] + [self._m("09:06", 100, 100.5, 99, 100),
+                                                    self._m("09:07", 100, 102.0, 100, 101.8)]
+        sent, capped = whatif.manual_day(stocks, {}, 0)
+        self.assertEqual([t.code for t in sent], ["2", "3", "4"], "先成交先算，第 1 名 09:07 才碰到")
+        self.assertEqual(capped, 2)
+        top, capped = whatif.manual_day(stocks, {}, 0, top_only=True)
+        self.assertEqual([t.code for t in top], ["2", "3", "1"], "只掛前 3 名：第 4、5 名不算")
+        self.assertEqual(capped, 0)
+
+    def test_prev_volumes_run_and_table(self):
+        s = self._stock()
+        pool = [("2026-10-13", [s], {"1111": [[], [self._m("13:00", 1, 1, 1, 1)] * 3], "2222": []})]
+        self.assertEqual(whatif.prev_volumes(pool), {"2026-10-13": {"1111": 300.0}})
+        manual = whatif.run_manual([("2026-10-13", [s])], pool)
+        self.assertEqual(sorted(manual), [(t, p) for t in (False, True) for p in whatif.VOL_GRID])
+        self.assertEqual(len(manual[(False, 0)][0]), 1)
+        self.assertEqual(len(manual[(False, 20)][0]), 1, "昨天量很小 → 門檻一下就到")
+        results = {(2, whatif.CAUTIOUS): ([manual[(False, 0)][0][0]], 0)}
+        text = "\n".join(whatif._manual_lines(manual, results))
+        self.assertIn("## 手動版：多條件單（觸價＋總量）", text)
+        self.assertIn(f"| {whatif.MANUAL_ALL} | 不設（只看價格） | 1 |", text)
+        self.assertIn(f"| {whatif.MANUAL_TOP} | 20% | 1 |", text)
+        self.assertIn("| （對照）v10 那一分鐘收盤價 | — | 1 |", text)
+        self.assertNotIn("剛好買在突破價 | — |", text, "沒有資料的對照列不印")
+        self.assertIn("移動出場單能不能設", text)
+        empty = "\n".join(whatif._manual_lines({}, {}))
+        self.assertIn("| 0 | — | — | — | — | — | 0 |", empty)
+
+    def test_render_and_main(self):
+        ma = {("v10", "six"): [], "seeded": 0, "total": 0}
+        lines = whatif.render({}, ["2026-10-13"], [], [], manual={}, ma=ma)
+        shown = "\n".join(whatif.summary_part(lines))
+        self.assertIn("## 手動版：多條件單", shown)
+        self.assertIn("## 均線出場", shown)
+        self.assertLess(shown.index("## 手動版"), shown.index("## 均線出場"))
+        plain = "\n".join(whatif.render({}, ["2026-10-13"], [], []))
+        self.assertNotIn("## 手動版", plain)
+        self.assertNotIn("## 均線出場", plain)
+        src = inspect.getsource(whatif.main)
+        self.assertIn("manual = run_manual(days, pool_days)", src)
+        self.assertIn("ma = run_ma(days, results, picks, pool_days)", src)
+        self.assertIn("in_play=in_play, manual=manual, ma=ma)", src)
 
 
 class TestPreOpenTrialMatching(unittest.TestCase):

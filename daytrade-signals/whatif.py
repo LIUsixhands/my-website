@@ -831,6 +831,298 @@ def _in_play_lines(ip: dict, results: dict) -> list[str]:
     return out
 
 
+# ── 均線出場（5 分 K）────────────────────────────────────
+# 10-20 使用者：「盤前那一檔，開盤後能否繼續監看，用 5MA 及 20MA 告知盤中強弱，讓我
+# 繼續抱或出場」。不做「你自己判斷」—— 做成明確的規則才驗證得了：停損照舊，其餘換成
+# 5 分 K 的均線出場。5 分 K 收完才判、下一分鐘的開盤價出場：收到通知再手動賣得到。
+# 均線要接著昨天的 K 棒算（看盤軟體也是這樣），不然 20MA 要到 10:40 才有。
+MA_FAST = 5
+MA_SLOW = 20
+MA_BAR_MIN = 5
+MA_BELOW = "停損＋5 分 K 收盤跌破 20MA"
+MA_CROSS = "停損＋5MA 往下穿過 20MA"
+MA_RESULT = "均線出場"
+
+
+def five_minute_closes(bars, minutes: int = MA_BAR_MIN) -> list[tuple[datetime, float]]:
+    """1 分 K → 5 分 K 的 (收完的時間, 收盤)。label 是結束時間：09:01～09:05 是一根，
+    09:00 那根（開盤集合競價）併進 09:05。"""
+    out: dict[datetime, float] = {}
+    for b in bars:
+        t = b[0]
+        m = t.hour * 60 + t.minute
+        end = -(-m // minutes) * minutes
+        if t.time() <= dtime(9, 0):
+            end = 9 * 60 + minutes
+        key = t.replace(hour=end // 60, minute=end % 60, second=0, microsecond=0)
+        out[key] = b[4]
+    return sorted(out.items())
+
+
+def _ma(values: list[float], n: int) -> float | None:
+    return sum(values[-n:]) / n if len(values) >= n else None
+
+
+def ma_exit(bars, entry: float, stop: float, fired: datetime, seed=(), mode: str = MA_BELOW):
+    """(結果, 出場價, 出場時間)。停損照舊（盤中碰到就出，券商停損單）；均線條件在
+    5 分 K 收完時判，成立就用下一根 1 分 K 的開盤價出（收到通知再賣）。13:25 平倉。
+    seed = 前一個交易日的 1 分 K，讓均線一開盤就有值。沒有之後的 K 棒 → None。"""
+    prev = [c for _t, c in five_minute_closes(seed or [])]
+    today = [b for b in bars if b[0].time() <= oc.FLATTEN_AT]
+    buckets = dict(five_minute_closes(today))
+    closes = list(prev)
+    pending = False
+    last = None
+    started = False
+    prev_fast = prev_slow = None
+    for i, (t, o, h, l, c, _v) in enumerate(today):
+        if t >= fired + oc.BAR_SPAN:
+            started = True
+            if pending:
+                return MA_RESULT, o, t.strftime("%H:%M:%S")
+            if l <= stop:
+                return oc.STOP, min(o, stop), t.strftime("%H:%M:%S")
+            last = c
+        if t in buckets:
+            closes.append(buckets[t])
+            fast, slow = _ma(closes, MA_FAST), _ma(closes, MA_SLOW)
+            if started and t > fired and slow is not None:
+                if mode == MA_BELOW:
+                    hit = buckets[t] < slow
+                else:
+                    hit = (fast is not None and prev_fast is not None and prev_slow is not None
+                           and fast < slow and prev_fast >= prev_slow)
+                if hit:
+                    if t.time() >= oc.FLATTEN_AT:
+                        return MA_RESULT, c, t.strftime("%H:%M:%S")
+                    pending = True
+            prev_fast, prev_slow = fast, slow
+    if last is None:
+        return None
+    return oc.FLAT, last, oc.FLATTEN_AT.strftime("%H:%M:%S")
+
+
+def reexit(trades: list[Trade], bars_of: dict, exit_fn) -> list[Trade]:
+    """同一批進場，出場換成 exit_fn(那天的分鐘 K, 那一筆) → (結果, 出場價, 出場時間)。"""
+    out = []
+    for t in trades:
+        got = exit_fn(bars_of.get((t.date, t.code)) or [], t)
+        if got is None:
+            continue
+        result, price, at = got
+        n = Trade(date=t.date, code=t.code, name=t.name, fired=t.fired, or_high=t.or_high,
+                  entry=t.entry, stop=t.stop, lots=t.lots, vol_ratio=t.vol_ratio,
+                  batch=t.batch, result=result, exit_price=round(price, 2), exit_at=at,
+                  limit_room_pct=t.limit_room_pct, oversized=t.oversized)
+        pct, r = exits.blended(t.entry, t.stop, t.lots, None, price)
+        _finish(n, t.entry, t.stop, r, pct, at, t.fired)
+        out.append(n)
+    return out
+
+
+def prev_day_index(pool_days) -> dict:
+    """{(日期, 代號): 前一個交易日的分鐘 K}，從「開盤 5 分鐘最熱」抓過的歷史拿。"""
+    return {(d, code): (h[-1] if h else []) for d, _s, hist in pool_days
+            for code, h in hist.items()}
+
+
+def run_ma(days, results: dict, picks, pool_days) -> dict:
+    idx = bars_index(days)
+    seeds = prev_day_index(pool_days)
+    pick_trades = [t for t in (pick_trade(d, p, b) for d, p, b in picks) if t]
+    pick_bars = {(d, str(p["code"])): b for d, p, b in picks}
+    v10 = results.get((CURRENT_OR, CAUTIOUS), ([], 0))[0]
+
+    def with_mode(mode):
+        return lambda bars, t: ma_exit(bars, t.entry, t.stop, t.fired,
+                                       seeds.get((t.date, t.code)) or [], mode)
+    out = {}
+    for label, trades, bars_of in (("v10", v10, idx), ("pick", pick_trades, pick_bars)):
+        out[(label, "six")] = trades
+        for mode in (MA_BELOW, MA_CROSS):
+            out[(label, mode)] = reexit(trades, bars_of, with_mode(mode))
+    out["seeded"] = sum(1 for t in v10 + pick_trades if seeds.get((t.date, t.code)))
+    out["total"] = len(v10) + len(pick_trades)
+    return out
+
+
+def _row(label: str, exit_: str, trades: list[Trade]) -> str:
+    st = summarise(trades)
+    if not st["n"]:
+        return f"| {label} | {exit_} | 0 | — | — | — | — | — | — |"
+    return (f"| {label} | {exit_} | {st['n']} | {st['wins']} | {st['rate']}% | "
+            f"{st['avg_r']:+.2f} | {st['avg_net_r']:+.2f} | {st['amount']:+,} | {st['avg_min']} 分 |")
+
+
+def _ma_lines(ma: dict) -> list[str]:
+    out = ["## 均線出場（5 分 K、停損照舊）", "",
+           "| 進場 | 出場 | 筆數 | 賺的 | 勝率 | 平均R | 扣成本R | 金額 | 平均持有 |",
+           "|---|---|---|---|---|---|---|---|---|"]
+    for key, label in (("pick", "盤前首選（開盤價）"), ("v10", "v10 三關（保守價）")):
+        out.append(_row(label, "v10 六條（現在）", ma.get((key, "six"), [])))
+        for mode in (MA_BELOW, MA_CROSS):
+            out.append(_row(label, mode, ma.get((key, mode), [])))
+    out += [
+        "",
+        "- 5 分 K 收完才判；成立的話用**下一分鐘的開盤價**出 —— 收到通知再手動賣，來得及。",
+        "- 停損照舊（券商停損單，碰到就出）；13:25 還沒出就平倉。沒有先出一半、移動停利、"
+        "跌破開盤價／區間／均價線、量縮。",
+        f"- 均線接著前一個交易日的 K 棒算（{ma.get('seeded', 0)}/{ma.get('total', 0)} 筆有前一天的資料；"
+        "沒有的，20MA 要到 10:40 左右才有，之前只看停損）。",
+        "- **5MA 往下穿過 20MA** 只在「穿過去那一根」出；進場時 5MA 已經在 20MA 下面的，"
+        "要等它先站上去再跌破才出。",
+        "- 首選筆數很少，主要看 v10 那幾列：同一批進場，只換出場。",
+        "",
+    ]
+    return out
+
+
+# ── 手動版：多條件單（觸價＋總量）─────────────────────────
+# 10-20 使用者：「還是買不到，其他買到的也會虧」→「請以手動的方式來設計程式，需要改的
+# 是開盤後的」。手動版：09:05 前把多條件單掛好（成交價 ≥ 突破價 且 今天總量 ≥ N），
+# 不跟價格賽跑。出場只用 App 設得了的：停損單、移動出場單（漲到先出一半的價位才開始，
+# 從最高點回落 1.5%、不低於成本）、13:25 自己平倉。N 用這一張決定。
+VOL_GRID = (0, 5, 10, 15, 20)      # 今天總量 ≥ 昨天全天量的幾 %
+MANUAL_ALL = "盯的 10 檔都掛，先成交先算，滿 3 檔取消其他"
+MANUAL_TOP = "只掛盤前排名前 3 檔"
+MANUAL_ACTIVE_AFTER = dtime(9, 5)  # 09:05 推掛單清單，之後才算掛好
+TRAIL = "移動出場"
+
+
+def manual_exit(bars, entry: float, stop: float, half_at: float, fired: datetime):
+    """(結果, 出場價, 出場時間)。停損單＋移動出場單＋13:25。移動出場在漲到 half_at
+    之後才開始：從最高點回落 exit_trail_pct %，不低於成本。同一根先判停損、再判移動
+    （用前面幾根的最高點，保守）。沒有之後的 K 棒 → None。"""
+    trail = config.SIGNAL["exit_trail_pct"] / 100
+    peak, armed, last = entry, False, None
+    for t, o, h, l, c, _v in bars:
+        if t < fired + oc.BAR_SPAN:
+            continue
+        if t.time() > oc.FLATTEN_AT:
+            break
+        if l <= stop:
+            return oc.STOP, min(o, stop), t.strftime("%H:%M:%S")
+        if armed:
+            level = max(entry, peak * (1 - trail))
+            if l <= level:
+                return TRAIL, min(o, level), t.strftime("%H:%M:%S")
+        peak = max(peak, h)
+        armed = armed or peak >= half_at
+        last = c
+    if last is None:
+        return None
+    return oc.FLAT, last, oc.FLATTEN_AT.strftime("%H:%M:%S")
+
+
+def manual_day(stocks: list[dict], prev_volume: dict, vol_pct: float, top_only: bool = False,
+               limit: int | None = None) -> tuple[list[Trade], int]:
+    """一天。每檔一張多條件單：成交價 ≥ 突破價（區間高 + 緩衝）且今天總量 ≥ 昨天全天量
+    × vol_pct %。09:05 之後第一根兩個都成立的 K 成交（開盤已經跳過突破價就是開盤價）。
+    先成交先算、滿 3 檔不再算。回傳 (成交的, 因為滿了沒算的)。"""
+    cfg = config.SIGNAL
+    limit = config.RISK["max_signals_per_day"] if limit is None else limit
+    or_end, _batch, win_end = schedule(CURRENT_OR)
+    pool = sorted(stocks, key=lambda s: s.get("rank") or 9999)
+    if top_only:
+        pool = pool[:limit]
+    hits = []
+    for s in pool:
+        bars = s.get("bars") or []
+        rng = opening_range(bars, CURRENT_OR)
+        need = prev_volume.get(str(s["code"]))
+        if not rng or (vol_pct and not need):
+            continue
+        trigger = rng[0] * (1 + cfg["breakout_buffer_pct"] / 100)
+        cum = 0.0
+        for b in bars:
+            cum += b[5]
+            if not (MANUAL_ACTIVE_AFTER < b[0].time() <= win_end):
+                continue
+            if b[2] >= trigger and cum >= (need or 0) * vol_pct / 100:
+                hits.append((b, s, rng[0], trigger))
+                break
+    hits.sort(key=lambda x: (x[0][0], x[1].get("rank") or 9999, str(x[1]["code"])))
+    sent, capped = [], 0
+    for b, s, or_high, trigger in hits:
+        if len(sent) >= limit:
+            capped += 1
+            continue
+        entry = config.round_to_tick(max(trigger, b[1]), "up")
+        plan = _plan(s, or_high, s["bars"][0][1], entry, b[0].time())
+        if plan is None:
+            continue
+        tr = Trade(date=b[0].strftime("%Y-%m-%d"), code=str(s["code"]), name=s.get("name", ""),
+                   fired=b[0], or_high=or_high, entry=plan["entry"], stop=plan["stop"],
+                   lots=plan["lots"], vol_ratio=0.0, batch=False)
+        got = manual_exit(s["bars"], plan["entry"], plan["stop"],
+                          plan.get("half_at") or float("inf"), b[0])
+        if got is None:
+            tr.result, tr.exit_price = oc.FLAT, plan["entry"]
+        else:
+            tr.result, price, tr.exit_at = got
+            tr.exit_price = round(price, 2)
+            pct, r = exits.blended(plan["entry"], plan["stop"], plan["lots"], None, price)
+            _finish(tr, plan["entry"], plan["stop"], r, pct, tr.exit_at, b[0])
+        sent.append(tr)
+    return sent, capped
+
+
+def prev_volumes(pool_days) -> dict:
+    """{日期: {代號: 前一個交易日的全天量}}（跟今天的總量同一個單位：分鐘 K 的量）。"""
+    out = {}
+    for d, _s, hist in pool_days:
+        out[d] = {code: sum(b[5] for b in h[-1]) for code, h in hist.items() if h and h[-1]}
+    return out
+
+
+def run_manual(days, pool_days) -> dict:
+    vols = prev_volumes(pool_days)
+    out = {}
+    for top in (False, True):
+        for pct in VOL_GRID:
+            trades, capped = [], 0
+            for d, stocks in days:
+                t, c = manual_day(stocks, vols.get(d, {}), pct, top_only=top)
+                trades += t
+                capped += c
+            out[(top, pct)] = (trades, capped)
+    return out
+
+
+def _manual_lines(manual: dict, results: dict) -> list[str]:
+    out = ["## 手動版：多條件單（觸價＋總量）、停損＋移動出場＋13:25", "",
+           "| 掛哪幾檔 | 總量門檻（昨天全天量的） | 筆數 | 賺的 | 勝率 | 平均R | 扣成本R | 金額 | 滿了沒算 |",
+           "|---|---|---|---|---|---|---|---|---|"]
+    for top, label in ((False, MANUAL_ALL), (True, MANUAL_TOP)):
+        for pct in VOL_GRID:
+            trades, capped = manual.get((top, pct), ([], 0))
+            st = summarise(trades)
+            name = "不設（只看價格）" if pct == 0 else f"{pct}%"
+            if not st["n"]:
+                out.append(f"| {label} | {name} | 0 | — | — | — | — | — | {capped} |")
+                continue
+            out.append(f"| {label} | {name} | {st['n']} | {st['wins']} | {st['rate']}% | "
+                       f"{st['avg_r']:+.2f} | {st['avg_net_r']:+.2f} | {st['amount']:+,} | {capped} |")
+    for mode, label in ((OPTIMISTIC, "（對照）v10 剛好買在突破價"), (CAUTIOUS, "（對照）v10 那一分鐘收盤價")):
+        st = summarise(results.get((CURRENT_OR, mode), ([], 0))[0])
+        if st["n"]:
+            out.append(f"| {label} | — | {st['n']} | {st['wins']} | {st['rate']}% | "
+                       f"{st['avg_r']:+.2f} | {st['avg_net_r']:+.2f} | {st['amount']:+,} | — |")
+    out += [
+        "",
+        "- **多條件單**：成交價 ≥ 突破價（09:00–09:02 最高 +0.1%）**而且**今天累計總量 ≥ 昨天全天量的 X %，"
+        "兩個都成立才買。09:05 之後才算掛好（推掛單清單、你設好單要時間），09:30 截止。",
+        "- 成交價：碰到的那一分鐘開盤已經在突破價之上就是開盤價，不然是突破價。沒算送單後再跳一兩檔，"
+        "所以還是**偏樂觀**一點。",
+        "- 出場：停損單＋移動出場單（漲到「先出一半」的價位才開始，從最高點回落 1.5%、不低於成本）"
+        "＋13:25 自己平倉。沒有先出一半、跌破均價線那些。",
+        "- **永豐的移動出場單能不能設「漲到某個價才開始」還沒確認**；不能的話要改成手動在那個價位設。",
+        "- 一次比 10 列，總有一列剛好好看 —— 選的是**下一輪要驗證的**門檻，不是直接拿來下單。",
+        "",
+    ]
+    return out
+
+
 # ── 大盤 ──────────────────────────────────────────────
 # 跟 broker.MARKET_PROXY 同一檔：kbars 拿得到分鐘 K、跟加權指數走勢幾乎一樣。
 MARKET_PROXY = "0050"
@@ -955,7 +1247,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
            entries: dict | None = None, recomputed: int = 0,
            stops: dict | None = None, market: dict | None = None,
            trigger: tuple | None = None, simple: dict | None = None,
-           filters: list | None = None, in_play: dict | None = None) -> list[str]:
+           filters: list | None = None, in_play: dict | None = None,
+           ma: dict | None = None, manual: dict | None = None) -> list[str]:
     """results[(區間分鐘, 樂觀/保守)] = (trades, 額度滿了沒發的檔數)。"""
     first, last = (days[0], days[-1]) if days else ("—", "—")
     out = [
@@ -1010,6 +1303,10 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
         out += _filter_lines(filters)
     if in_play is not None:
         out += _in_play_lines(in_play, results)
+    if manual is not None:
+        out += _manual_lines(manual, results)
+    if ma is not None:
+        out += _ma_lines(ma)
     if results.get((CURRENT_OR, CAUTIOUS)):
         out += _chase_lines(results.get((CURRENT_OR, OPTIMISTIC), ([], 0))[0],
                             results[(CURRENT_OR, CAUTIOUS)][0])
@@ -1275,6 +1572,8 @@ def main(argv=None):
     print("開盤 5 分鐘最熱：整個候選池 + 過去 14 天的分鐘 K，第一次要抓一陣子……")
     pool_days, _pool_missing = pool_days_for(archived, fetch_range)
     in_play = run_in_play(pool_days)
+    manual = run_manual(days, pool_days)
+    ma = run_ma(days, results, picks, pool_days)
     replayed: dict[str, set] = {}
     for t in results[(CURRENT_OR, CAUTIOUS)][0]:
         replayed.setdefault(t.date, set()).add(t.code)
@@ -1282,7 +1581,7 @@ def main(argv=None):
 
     lines = render(results, [d for d, _ in days], check, missing, entries, recomputed, stops,
                    market=market, trigger=trigger, simple=simple, filters=filters,
-                   in_play=in_play)
+                   in_play=in_play, manual=manual, ma=ma)
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
