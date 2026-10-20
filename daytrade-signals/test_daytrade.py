@@ -5957,6 +5957,24 @@ class TestWhatIfMovingAverageExit(unittest.TestCase):
         self.assertEqual(whatif.ma_exit(flat, 100.0, 97.0, self.D.replace(hour=9, second=1),
                                         self._seed(100.0))[0], oc.FLAT, "剛好等於 20MA 不算跌破")
 
+    def test_the_video_version_needs_two_bars_below_20ma(self):
+        fired = self.D.replace(hour=9, second=1)
+        once = self._minutes("09:00", 15, 102.0) + self._minutes("09:15", 5, 99.0) + \
+            self._minutes("09:20", 30, 102.0)
+        self.assertEqual(whatif.ma_exit(once, 101.0, 90.0, fired, self._seed(100.0), whatif.MA_FAIL)[0],
+                         oc.FLAT, "跌破一根、下一根就站回去 → 不出")
+        self.assertEqual(whatif.ma_exit(once, 101.0, 90.0, fired, self._seed(100.0), whatif.MA_BELOW)[0],
+                         whatif.MA_RESULT, "單純跌破那一條會出")
+        twice = self._minutes("09:00", 16, 102.0) + self._minutes("09:16", 9, 99.0) + \
+            [self._m("09:25", 98.5, 98.6, 98.4, 98.5), self._m("09:26", 98.4, 98.5, 98.0, 98.2)]
+        self.assertEqual(whatif.ma_exit(twice, 101.0, 90.0, fired, self._seed(100.0), whatif.MA_FAIL),
+                         (whatif.MA_RESULT, 98.4, "09:26:00"),
+                         "09:20、09:25 兩根都收在下面 → 09:25 收完、下一分鐘出")
+        back = self._minutes("09:00", 15, 102.0) + self._minutes("09:15", 5, 99.0) + \
+            self._minutes("09:20", 5, 102.0) + self._minutes("09:25", 5, 99.0) + self._minutes("09:30", 30, 102.0)
+        self.assertEqual(whatif.ma_exit(back, 101.0, 90.0, fired, self._seed(100.0), whatif.MA_FAIL)[0],
+                         oc.FLAT, "跌破、站回、再跌破、再站回 → 每次都重算，不出")
+
     def test_a_hit_at_1325_exits_on_that_close(self):
         fired = self.D.replace(hour=13, minute=1)
         bars = self._minutes("13:01", 25, 101.0)
@@ -5989,8 +6007,7 @@ class TestWhatIfMovingAverageExit(unittest.TestCase):
         pool = [("2026-10-13", [stock], {"1111": [[], self._seed(100.0)]})]
         self.assertEqual(whatif.prev_day_index(pool)[("2026-10-13", "1111")], self._seed(100.0))
         ma = whatif.run_ma([("2026-10-13", [stock])], {(2, whatif.CAUTIOUS): ([t], 0)}, [], pool)
-        self.assertEqual([len(ma[("v10", k)]) for k in ("six", whatif.MA_BELOW, whatif.MA_CROSS)],
-                         [1, 1, 1])
+        self.assertEqual([len(ma[("v10", k)]) for k in ("six",) + whatif.MA_MODES], [1, 1, 1, 1])
         self.assertEqual((ma["seeded"], ma["total"]), (1, 1))
         self.assertEqual(ma[("pick", "six")], [])
         text = "\n".join(whatif._ma_lines(ma))
@@ -5998,6 +6015,8 @@ class TestWhatIfMovingAverageExit(unittest.TestCase):
         self.assertIn("| v10 三關（保守價） | 停損＋5 分 K 收盤跌破 20MA | 1 | 0 | 0% | -1.00 |", text)
         self.assertIn("| 盤前首選（開盤價） | v10 六條（現在） | 0 | — |", text)
         self.assertIn("1/1 筆有前一天的資料", text)
+        self.assertIn("| v10 三關（保守價） | 停損＋跌破 20MA、下一根站不回來 | 1 |", text)
+        self.assertIn("| 盤前首選（開盤價） | 停損＋跌破 20MA、下一根站不回來 | 0 |", text)
 
     def test_run_ma_uses_the_picks(self):
         s = TestWhatIfOpeningRangeLength("test_each_length_gets_the_same_batch_delay_and_window")._stock()

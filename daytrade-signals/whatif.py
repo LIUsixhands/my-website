@@ -842,6 +842,9 @@ MA_SLOW = 20
 MA_BAR_MIN = 5
 MA_BELOW = "停損＋5 分 K 收盤跌破 20MA"
 MA_CROSS = "停損＋5MA 往下穿過 20MA"
+# 10-20 使用者傳的影片：「不看交叉、不看數值」「跌破 20MA、反彈卻站不回來 → 今天不要再硬做」。
+MA_FAIL = "停損＋跌破 20MA、下一根站不回來"
+MA_MODES = (MA_BELOW, MA_CROSS, MA_FAIL)
 MA_RESULT = premarket.MA_RESULT
 
 
@@ -869,6 +872,7 @@ def ma_exit(bars, entry: float, stop: float, fired: datetime, seed=(), mode: str
     last = None
     started = False
     prev_fast = prev_slow = None
+    broke = False                     # 影片版：上一根 5 分 K 收在 20MA 下面
     for i, (t, o, h, l, c, _v) in enumerate(today):
         if t >= fired + oc.BAR_SPAN:
             started = True
@@ -883,6 +887,9 @@ def ma_exit(bars, entry: float, stop: float, fired: datetime, seed=(), mode: str
             if started and t > fired and slow is not None:
                 if mode == MA_BELOW:
                     hit = buckets[t] < slow
+                elif mode == MA_FAIL:
+                    below = buckets[t] < slow
+                    hit, broke = below and broke, below
                 else:
                     hit = (fast is not None and prev_fast is not None and prev_slow is not None
                            and fast < slow and prev_fast >= prev_slow)
@@ -933,7 +940,7 @@ def run_ma(days, results: dict, picks, pool_days) -> dict:
     out = {}
     for label, trades, bars_of in (("v10", v10, idx), ("pick", pick_trades, pick_bars)):
         out[(label, "six")] = trades
-        for mode in (MA_BELOW, MA_CROSS):
+        for mode in MA_MODES:
             out[(label, mode)] = reexit(trades, bars_of, with_mode(mode))
     out["seeded"] = sum(1 for t in v10 + pick_trades if seeds.get((t.date, t.code)))
     out["total"] = len(v10) + len(pick_trades)
@@ -954,7 +961,7 @@ def _ma_lines(ma: dict) -> list[str]:
            "|---|---|---|---|---|---|---|---|---|"]
     for key, label in (("pick", "盤前首選（開盤價）"), ("v10", "v10 三關（保守價）")):
         out.append(_row(label, "v10 六條（現在）", ma.get((key, "six"), [])))
-        for mode in (MA_BELOW, MA_CROSS):
+        for mode in MA_MODES:
             out.append(_row(label, mode, ma.get((key, mode), [])))
     out += [
         "",
@@ -963,6 +970,8 @@ def _ma_lines(ma: dict) -> list[str]:
         "跌破開盤價／區間／均價線、量縮。",
         f"- 均線接著前一個交易日的 K 棒算（{ma.get('seeded', 0)}/{ma.get('total', 0)} 筆有前一天的資料；"
         "沒有的，20MA 要到 10:40 左右才有，之前只看停損）。",
+        "- **跌破 20MA、下一根站不回來**（10-20 使用者傳的影片：不看交叉，看跌破後站不站得回來）："
+        "一根 5 分 K 收在 20MA 下面，下一根還是收在下面才出；中間站回去就重算。",
         "- **5MA 往下穿過 20MA** 只在「穿過去那一根」出；進場時 5MA 已經在 20MA 下面的，"
         "要等它先站上去再跌破才出。",
         "- 首選筆數很少，主要看 v10 那幾列：同一批進場，只換出場。",
