@@ -22,3 +22,17 @@
 
 [build]
   ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':(exclude).claude'"
+
+# 舊網域 → 新網域（2026-10 網域遷移）
+# 只比對舊主機名；不影響 sixhands.tw 本身與 deploy-preview-*--sixhands-studio.netlify.app
+[[redirects]]
+  from = "https://sixhands-studio.netlify.app/*"
+  to = "https://sixhands.tw/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "http://sixhands-studio.netlify.app/*"
+  to = "https://sixhands.tw/:splat"
+  status = 301
+  force = true

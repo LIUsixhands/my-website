@@ -18,13 +18,13 @@
 先送你 3 樣：
 
 🎯 每日運勢轉盤（今日開運）
-👉 https://sixhands-studio.netlify.app/fortune-wheel.html
+👉 https://sixhands.tw/fortune-wheel.html
 
 🏠 七期房地產．不賣房子賣判斷
-👉 https://sixhands-studio.netlify.app/qiqi-realestate.html
+👉 https://sixhands.tw/qiqi-realestate.html
 
 🗂️ 助哥全部作品
-👉 https://sixhands-studio.netlify.app/
+👉 https://sixhands.tw/
 
 想找房 / 估價 / 委託，直接回我一句「我想聊聊」，
 2 小時內專人回覆你 💪
@@ -39,11 +39,11 @@
 
 | 格子 | 顯示文字 | 動作類型 | 連結 |
 |:--|:--|:--|:--|
-| 左上 | 🎡 運勢轉盤 | 連結 | https://sixhands-studio.netlify.app/fortune-wheel.html |
+| 左上 | 🎡 運勢轉盤 | 連結 | https://sixhands.tw/fortune-wheel.html |
 | 中上 | 🏠 找房 | 文字：「我要找房」| （設「文字」動作，觸發你回覆）|
 | 右上 | 💰 賣房估價 | 文字：「我要賣房」| （設「文字」動作）|
-| 左下 | 📊 七期行情 | 連結 | https://sixhands-studio.netlify.app/qiqi-realestate.html |
-| 中下 | 🗂️ 所有作品 | 連結 | https://sixhands-studio.netlify.app/ |
+| 左下 | 📊 七期行情 | 連結 | https://sixhands.tw/qiqi-realestate.html |
+| 中下 | 🗂️ 所有作品 | 連結 | https://sixhands.tw/ |
 | 右下 | 💬 聯絡助哥 | 文字：「我想聊聊」| （設「文字」動作）|
 
 > 圖文選單需要一張 **2500×1686**（或 2500×843）的底圖，切成 6 格。
@@ -57,7 +57,7 @@
 
 | 關鍵字 | 自動回覆內容 |
 |:--|:--|
-| 猜房價 / 遊戲 | 「來測測你的購屋判斷力！🎯\nhttps://sixhands-studio.netlify.app/fortune-wheel.html」|
+| 猜房價 / 遊戲 | 「來測測你的購屋判斷力！🎯\nhttps://sixhands.tw/fortune-wheel.html」|
 | 找房 / 我要找房 | 「好的！請留『想找的區段＋預算＋幾房』，我 2 小時內幫你抓物件方向 🏠」|
 | 賣房 / 估價 / 我要賣房 | 「幫您免費評估！請留『地址＋坪數＋樓層』，助哥用實登數據幫您抓合理售價 💰」|
 | 行情 / 七期 | 「七期各社區行情我都有！想問哪一棟？回我社區名，幫你查近年成交 📊」|
@@ -77,7 +77,7 @@
 
 轉出你的今日開運小語，帶著好心情出門 ✨
 
-免費玩 👉 https://sixhands-studio.netlify.app/fortune-wheel.html
+免費玩 👉 https://sixhands.tw/fortune-wheel.html
 
 （玩完想知道某一戶到底該出多少？回我一句「我想聊聊」）
 ```

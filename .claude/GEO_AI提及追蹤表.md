@@ -60,3 +60,7 @@ ChatGPT（開搜尋）／Gemini／Perplexity／Google 搜尋的 AI 摘要
 - 營業時間對齊 Google 商家檔案（19:00 打烊）
 - sameAs 加入 YouTube `@sixhandshouse`
 - 5 篇文章加「常見問題」區塊＋FAQPage 結構化資料（服務費、斡旋金、七期土地、商辦投報、七期房價）——對應追蹤題 Q3–Q8
+- 2026-10-20 網域遷移：全站 canonical／og:url／JSON-LD／sitemap 改為 `sixhands.tw`，netlify.toml 加舊網域 301 轉址
+- 2026-10-20 移除首頁結構化資料中的門市地址（助哥決定不保留；與商家檔案「服務型商家、無門市」一致）
+- 2026-10-20 全站加電話 0925-313-570 可點按鈕（首頁、手機底部列、商辦九案、土地頁、文章 CTA）
+- 2026-10-20 sameAs 加入 IG `liu_white1766`；FB 兩條為 /share/ 短網址，待助哥提供真實網址再補
