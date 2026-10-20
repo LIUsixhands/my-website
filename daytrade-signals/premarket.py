@@ -26,7 +26,7 @@
 """
 import csv
 import logging
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timedelta
 
 import config
 
@@ -37,6 +37,13 @@ ENTRY_AT = dtime(9, 0)          # 開盤價買進
 RSI_SWEET = 60.0                # 日線 RSI 最好的位置（50～70 的中間）
 LABEL = "盤前首選"
 PICKS_FILE = config.BASE_DIR / "picks.csv"
+
+# 10-20 均線版（分開記錄）：使用者問首選開盤後能不能用 5MA／20MA 告知強弱。whatif 7 天：
+# 首選換成「5MA 往下穿過 20MA 才出」平均 +1.22R（現在的六條 +0.31R，6 筆）；v10 突破
+# 換了反而變差，所以只用在首選。停損照舊；5 分 K 收完才判；原本的出場照舊、另外記一份。
+MA_LABEL = "均線版"
+MA_RESULT = "均線出場"
+MA_FAST, MA_SLOW, MA_BAR_MIN = 5, 20, 5
 
 FACTORS = (
     ("量比", "volume_ratio"),
@@ -231,6 +238,95 @@ def format_locked(pick: dict, price: float) -> str:
             f"開盤 {price:.2f} 已經漲停，買不到 —— 今天首選不進場。")
 
 
+def five_min_end(label: datetime, minutes: int = MA_BAR_MIN) -> datetime:
+    """1 分 K（label = 結束時間）屬於哪一根 5 分 K：09:01～09:05 → 09:05。09:00 那根
+    （開盤集合競價）併進 09:05。"""
+    m = label.hour * 60 + label.minute
+    end = -(-m // minutes) * minutes
+    if label.time() <= ENTRY_AT:
+        end = ENTRY_AT.hour * 60 + ENTRY_AT.minute + minutes
+    return label.replace(hour=end // 60, minute=end % 60, second=0, microsecond=0)
+
+
+def tick_bucket(now: datetime) -> datetime:
+    """一筆成交屬於哪一根 5 分 K：09:05:00 那一筆落在 09:06 那根 1 分 K → 09:10。"""
+    return five_min_end(now.replace(second=0, microsecond=0) + timedelta(minutes=1))
+
+
+def _ma(values: list, n: int) -> float | None:
+    return sum(values[-n:]) / n if len(values) >= n else None
+
+
+class FiveMinuteMA:
+    """盤中一筆一筆餵價格，5 分 K 收完時算 5MA／20MA。seed = 之前已經收完的 5 分 K 收盤
+    （前一天 + 今天程式開起來以前的），均線一開盤就有值。"""
+
+    def __init__(self, seed=()):
+        self.closes = [float(c) for c in seed]
+        self.end: datetime | None = None
+        self.last: float | None = None            # 這一根到目前的最後一筆
+        self.price: float | None = None           # 最後一筆成交（收完一根也不清掉）
+        self.prev = (_ma(self.closes, MA_FAST), _ma(self.closes, MA_SLOW))
+
+    def on_price(self, price: float, now: datetime):
+        """回傳剛收完那一根 (結束時間, 收盤, 5MA, 20MA, 往下穿過)；沒收完回 None。"""
+        end = tick_bucket(now)
+        done = None
+        if self.end is not None and end > self.end:
+            done = self._close()
+        if self.end is None or end > self.end:
+            self.end = end
+        self.last = self.price = float(price)
+        return done
+
+    def on_clock(self, now: datetime, grace: int = 30):
+        """成交很少的時候，時間過了也要把那一根收掉（主迴圈 30 秒叫一次）。"""
+        if self.end is None or self.last is None or now < self.end + timedelta(seconds=grace):
+            return None
+        done = self._close()
+        self.end, self.last = None, None
+        return done
+
+    def _close(self):
+        self.closes.append(self.last)
+        fast, slow = _ma(self.closes, MA_FAST), _ma(self.closes, MA_SLOW)
+        pf, ps = self.prev
+        cross = None not in (fast, slow, pf, ps) and fast < slow and pf >= ps
+        self.prev = (fast, slow)
+        return self.end, self.last, fast, slow, cross
+
+
+def ma_seed(broker, code: str, now: datetime | None = None) -> list[float]:
+    """前一個交易日 + 今天到現在已經收完的 5 分 K 收盤。抓不到就空的（20MA 要到 10:40
+    左右才有，之前只看停損）—— 不可以影響盯盤。"""
+    import outcome as oc
+    import whatif
+    now = now or datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    try:
+        prev = whatif.trading_days_before(today, 1)[0]
+        bars = oc.day_bars_ohlcv(broker, code, prev)
+        if now.time() > ENTRY_AT:
+            bars += oc.day_bars_ohlcv(broker, code, today)
+    except Exception as e:
+        log.warning("%s 均線版的歷史 K 棒抓不到（20MA 要晚一點才有）：%s", code, e)
+        return []
+    return [c for t, c in whatif.five_minute_closes(bars) if t <= now]
+
+
+def format_ma_exit(sig: dict, done, price: float, now: datetime) -> str:
+    label = f"{sig['code']} {sig.get('name', '')}".strip()
+    entry = float(sig["entry"])
+    _end, close, fast, slow, _cross = done
+    return "\n".join([
+        f"📉 {label}・{MA_LABEL}｜{now:%H:%M:%S}",
+        f"5 分 K 收 {close:.2f}：5MA {fast:.2f} 往下穿過 20MA {slow:.2f}",
+        f"{MA_LABEL}出場 {price:.2f}（進場 {entry:.2f}，{(price - entry) / entry * 100:+.2f}%）",
+        "────────────────",
+        "原本的首選出場照舊、分開記錄。驗證期不下單。",
+    ])
+
+
 class PickWatch:
     """盤中盯首選：開盤第一筆成交進場，之後照 v10 出場。
 
@@ -238,7 +334,7 @@ class PickWatch:
     盤中重開：state 裡已經進場、還沒結束的，接著追；已經結束的不再追。
     """
 
-    def __init__(self, pick: dict | None, state: dict, notify, save=None):
+    def __init__(self, pick: dict | None, state: dict, notify, save=None, ma_seed=()):
         import signals
         self.pick = pick
         self.state = state
@@ -255,6 +351,7 @@ class PickWatch:
         sig = self.rec.get("sig")
         if sig and not self.rec.get("live_result"):
             self.tracker.track(sig)
+        self.ma = FiveMinuteMA(ma_seed)
 
     @property
     def code(self) -> str | None:
@@ -284,14 +381,53 @@ class PickWatch:
             self.save()
             # 進場那一刻（訊號那一分鐘）不判出場，跟 v10 同一個約定
             self.tracker.track(sig, now=now)
-            msgs.append(format_entry(sig))
+            self.ma.on_price(st.last_price, now)
+            msgs.append(format_entry(sig) + f"\n{MA_LABEL}（另外記錄）：停損照舊，5 分 K 的"
+                        " 5MA 往下穿過 20MA 才出，穿過時通知。")
             return msgs
         msgs += self.tracker.on_price(st.code, st.last_price, now=now, vwap=st.vwap,
                                       total_volume=st.total_volume)
+        msgs += self._ma_step(self.ma.on_price(st.last_price, now), st.last_price, now)
         return msgs
 
+    def _ma_step(self, done, price: float, now: datetime) -> list[str]:
+        """均線版：停損照舊（碰到就記，不另外推 —— 首選本身的停損已經推了）；5 分 K
+        收完、5MA 往下穿過 20MA 就出，用當下的價格（下一根的第一筆）。"""
+        sig = self.rec.get("sig")
+        if not sig or self.rec.get("ma_result") or not price:
+            return []
+        if price <= float(sig["stop"]):
+            self._ma_done("停損", float(sig["stop"]), now)
+            return []
+        fired = datetime.combine(now.date(), datetime.strptime(sig["time"], "%H:%M:%S").time())
+        if done and done[4] and done[0] > fired:
+            self._ma_done(MA_RESULT, price, now)
+            return [format_ma_exit(sig, done, price, now)]
+        return []
+
+    def _ma_done(self, result: str, price: float, now: datetime) -> None:
+        self.rec.update(ma_result=result, ma_exit=round(float(price), 2),
+                        ma_at=now.strftime("%H:%M:%S"))
+        self.save()
+
+    def on_clock(self, now: datetime | None = None) -> list[str]:
+        """主迴圈 30 秒一次：成交很少時把該收的 5 分 K 收掉。"""
+        now = now or datetime.now()
+        last = self.ma.last
+        done = self.ma.on_clock(now)
+        return self._ma_step(done, last, now) if done else []
+
     def flatten(self) -> list[str]:
-        return self.tracker.flatten()
+        msgs = self.tracker.flatten()
+        sig = self.rec.get("sig")
+        if sig and not self.rec.get("ma_result") and self.ma.price:
+            import outcome as oc
+            now = datetime.now()
+            self._ma_done(oc.FLAT, self.ma.price, now)
+            label = f"{sig['code']} {sig.get('name', '')}".strip()
+            msgs.append(f"🕐 {label}・{MA_LABEL}｜{oc.FLAT} {self.ma.price:.2f}"
+                        "（5MA 沒有往下穿過 20MA）")
+        return msgs
 
     def _resolved(self, o, price, verdict):
         self.rec.update(live_result=verdict, live_exit=round(float(price), 2),
@@ -309,7 +445,8 @@ PICK_FIELDS = ("date", "code", "name", "entry", "stop", "target", "lots", "half_
                "gross_pct", "net_pct", "net_amount", "total", "rank_volume",
                "rank_amplitude", "rank_rsi", "rank_close_pos", "volume_ratio",
                "amplitude", "daily_rsi", "close_pos", "watched", "source",
-               "mfe_pct", "mae_pct")
+               "mfe_pct", "mae_pct", "ma_result", "ma_exit", "ma_exit_at", "ma_r",
+               "ma_net_r", "ma_net_amount", "ma_source")
 
 
 # 盤中進場是開盤後第一筆成交（09:00:0x）。回推時用 09:00:01：walk_v10「進場那一分鐘
@@ -376,7 +513,41 @@ def resolve(broker, pick: dict, rec: dict | None, date: str) -> dict | None:
         "gross_pct": round(pct, 3), "net_pct": round(pct - cost, 3),
         "net_amount": round((pct - cost) / 100 * entry * 1000 * lots),
         **_pick_fields(pick), "source": source, "mfe_pct": mfe, "mae_pct": mae,
+        **ma_fields(broker, pick, rec, sig, full, date, fired),
     }
+
+
+def ma_fields(broker, pick: dict, rec: dict, sig: dict, full: list, date: str,
+              fired: datetime) -> dict:
+    """均線版的結局。盤中有判過的以盤中為準；沒有就用分鐘 K 回推（跟 whatif 同一個走法，
+    均線接著前一個交易日算）。壞掉就空著 —— 不可以讓首選那一列寫不出來。"""
+    import exits
+    try:
+        if rec.get("ma_result") and rec.get("ma_exit") is not None:
+            result, price, at, source = (rec["ma_result"], float(rec["ma_exit"]),
+                                         rec.get("ma_at", ""), "盤中")
+        else:
+            import outcome as oc
+            import whatif
+            prev = whatif.trading_days_before(date, 1)[0]
+            seed = oc.day_bars_ohlcv(broker, pick["code"], prev) if broker is not None else []
+            got = whatif.ma_exit(full, float(sig["entry"]), float(sig["stop"]), fired, seed,
+                                 whatif.MA_CROSS)
+            if got is None:
+                return {}
+            (result, price, at), source = got, "分鐘 K"
+    except Exception as e:
+        log.warning("%s 均線版回推失敗（首選照常記）：%s", pick.get("code"), e)
+        return {}
+    entry, stop, lots = float(sig["entry"]), float(sig["stop"]), int(sig["lots"])
+    pct, r = exits.blended(entry, stop, lots, None, price)
+    cost = config.round_trip_cost_pct()
+    risk = entry - stop
+    return {"ma_result": result, "ma_exit": round(price, 2), "ma_exit_at": at,
+            "ma_r": round(r, 2),
+            "ma_net_r": round(r - cost / 100 * entry / risk, 2) if risk > 0 else round(r, 2),
+            "ma_net_amount": round((pct - cost) / 100 * entry * 1000 * lots),
+            "ma_source": source}
 
 
 def _pick_fields(pick: dict) -> dict:
@@ -443,6 +614,9 @@ def report_lines(today: dict | None, pick: dict | None, history: list[dict],
         lines.append(f"{mark} {label}　{today['result']}")
         lines.append(f"　{float(today['r_multiple']):+.2f}R　"
                      f"{float(today['net_amount']):+,.0f} 元")
+        if _num(today.get("ma_r")) is not None:
+            lines.append(f"　{MA_LABEL} {float(today['ma_r']):+.2f}R　"
+                         f"{float(today['ma_net_amount']):+,.0f} 元")
     rows = [r for r in history if _num(r.get("net_pct")) is not None]
     if rows:
         n = len(rows)
@@ -453,6 +627,12 @@ def report_lines(today: dict | None, pick: dict | None, history: list[dict],
         lines += [f"首選累計 {n} 筆｜勝率 {wins / n * 100:.1f}%",
                   f"平均 {avg_r:+.2f}R（扣成本 {avg_net:+.2f}R）",
                   f"首選累計損益 {amount:+,.0f} 元"]
+    ma_rows = [r for r in history if _num(r.get("ma_net_r")) is not None]
+    if ma_rows:
+        n = len(ma_rows)
+        lines += [f"{MA_LABEL}累計 {n} 筆｜平均 {sum(float(r['ma_r']) for r in ma_rows) / n:+.2f}R"
+                  f"（扣成本 {sum(float(r['ma_net_r']) for r in ma_rows) / n:+.2f}R）",
+                  f"{MA_LABEL}累計損益 {sum(float(r['ma_net_amount']) for r in ma_rows):+,.0f} 元"]
     locked = sum(1 for r in history if _num(r.get("net_pct")) is None and "買不到" in (r.get("result") or ""))
     if locked:
         lines.append(f"另有 {locked} 天開盤漲停買不到")

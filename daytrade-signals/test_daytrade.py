@@ -52,6 +52,7 @@ _MARKET_OPEN = unittest.mock.patch.object(market_calendar, "closed_today", lambd
 # 等待本身在 TestPremarketPick 裡用注入的時鐘測。
 import premarket
 import followup
+import manual
 _NO_WAIT = unittest.mock.patch.object(premarket, "wait_until", lambda *a, **k: 0.0)
 
 
@@ -4377,7 +4378,7 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
     MUST_IGNORE = (".env", "state.json", "watchlist.json", "outcomes.csv",
                    "candidates.csv", "candidates_outcomes.csv", "journal/*.md",
                    "journal/watchlist-*.json", "journal/preopen-*.json", "picks.csv",
-                   "pick_followup.csv", "logs/")
+                   "pick_followup.csv", "manual.csv", "logs/")
 
     def setUp(self):
         if not self.IGNORE.exists():
@@ -4396,6 +4397,7 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
         import review                                  # noqa: F401  （已匯入，取名用）
         written.add("candidates_outcomes.csv")
         written.add(followup.FILE.name)
+        written.add(manual.FILE.name)
         for name in written:
             with self.subTest(path=name):
                 self.assertIn(name, self.lines,
@@ -6100,6 +6102,373 @@ class TestWhatIfManualOrders(unittest.TestCase):
         self.assertIn("manual = run_manual(days, pool_days)", src)
         self.assertIn("ma = run_ma(days, results, picks, pool_days)", src)
         self.assertIn("in_play=in_play, manual=manual, ma=ma)", src)
+
+
+class TestPickMovingAverageVersion(unittest.TestCase):
+    """10-20 使用者：「盤前那一檔開盤後能否繼續監看，用 5MA 及 20MA 告知盤中強弱」→ 均線版：
+    首選另外記一份「停損照舊、5 分 K 的 5MA 往下穿過 20MA 才出」，穿過時推通知。原本的
+    首選出場照舊。whatif 7 天：首選 +1.22R vs 現在 +0.31R（6 筆）；v10 突破換了反而變差。"""
+
+    PICK = {"code": "1111", "name": "測試", "prev_close": 98.0, "amplitude_pct": 5.0,
+            "features": {}, "ranks": {}, "total": 4}
+    D = datetime(2026, 10, 14)
+
+    def _st(self, price):
+        st = SymbolState("1111", 98.0, "測試")
+        st.last_price, st.day_open, st.vwap, st.total_volume = price, 100.0, 99.0, 1000
+        return st
+
+    def at(self, h, m, s=0):
+        return self.D.replace(hour=h, minute=m, second=s)
+
+    def test_which_5_minute_bar(self):
+        self.assertEqual(premarket.five_min_end(self.at(9, 1)), self.at(9, 5))
+        self.assertEqual(premarket.five_min_end(self.at(9, 5)), self.at(9, 5))
+        self.assertEqual(premarket.five_min_end(self.at(9, 6)), self.at(9, 10))
+        self.assertEqual(premarket.five_min_end(self.at(9, 0)), self.at(9, 5), "09:00 那根併進 09:05")
+        self.assertEqual(premarket.five_min_end(self.at(13, 30)), self.at(13, 30))
+        self.assertEqual(premarket.tick_bucket(self.at(9, 0, 3)), self.at(9, 5))
+        self.assertEqual(premarket.tick_bucket(self.at(9, 4, 59)), self.at(9, 5))
+        self.assertEqual(premarket.tick_bucket(self.at(9, 5, 0)), self.at(9, 10),
+                         "09:05:00 那一筆落在 09:06 那根 1 分 K")
+
+    def test_the_tracker_closes_a_bar_when_the_next_one_starts(self):
+        ma = premarket.FiveMinuteMA([100.0] * 20)
+        self.assertEqual(ma.prev, (100.0, 100.0))
+        self.assertIsNone(ma.on_price(100.0, self.at(9, 0, 3)))
+        self.assertIsNone(ma.on_price(99.0, self.at(9, 4, 50)), "同一根還沒收完")
+        end, close, fast, slow, cross = ma.on_price(99.5, self.at(9, 5, 2))
+        self.assertEqual((end, close), (self.at(9, 5), 99.0), "收盤是那一根最後一筆")
+        self.assertAlmostEqual(fast, 99.8)
+        self.assertAlmostEqual(slow, 99.95)
+        self.assertTrue(cross, "原本 5MA 不低於 20MA → 現在低於 = 往下穿過")
+        done = ma.on_price(98.0, self.at(9, 10, 1))
+        self.assertFalse(done[4], "已經在下面了，不是「穿過」")
+        self.assertIsNone(premarket.FiveMinuteMA([100.0] * 19).on_price(1, self.at(9, 0, 3)))
+        short = premarket.FiveMinuteMA([100.0] * 19)
+        short.on_price(90.0, self.at(9, 0, 3))
+        self.assertFalse(short.on_price(90.0, self.at(9, 5, 1))[4], "上一根還沒有 20MA → 不算穿過")
+        self.assertEqual(premarket.FiveMinuteMA().prev, (None, None))
+        late = premarket.FiveMinuteMA([100.0] * 20)
+        late.on_price(100.0, self.at(9, 6))
+        late.on_price(100.0, self.at(9, 4, 59))           # 晚到的舊成交
+        self.assertEqual(late.on_price(100.0, self.at(9, 10, 1))[0], self.at(9, 10),
+                         "晚到的舊成交不可以把時間拉回去")
+
+    def test_the_clock_closes_a_quiet_bar(self):
+        ma = premarket.FiveMinuteMA([100.0] * 20)
+        self.assertIsNone(ma.on_clock(self.at(9, 6)), "還沒有任何成交")
+        ma.on_price(99.0, self.at(9, 3))
+        self.assertIsNone(ma.on_clock(self.at(9, 5, 20)), "收完 30 秒內還在等")
+        end, close, *_ = ma.on_clock(self.at(9, 5, 30))
+        self.assertEqual((end, close), (self.at(9, 5), 99.0))
+        self.assertEqual((ma.end, ma.last, ma.price), (None, None, 99.0), "最後成交價留著（13:25 平倉要用）")
+        self.assertIsNone(ma.on_price(98.0, self.at(9, 6)), "下一筆開始新的一根，不重複收")
+        self.assertEqual(len(ma.closes), 21)
+
+    def _watch(self, state=None, sent=None, seed=(100.0,) * 20):
+        state = {} if state is None else state
+        return premarket.PickWatch(self.PICK, state, (sent or []).append, ma_seed=seed), state
+
+    def test_a_cross_exits_the_ma_version_once_and_says_so(self):
+        w, state = self._watch()
+        entry_msgs = w.on_tick(self._st(100.0), now=self.at(9, 0, 2))
+        self.assertIn("均線版（另外記錄）", entry_msgs[0])
+        w.on_tick(self._st(99.0), now=self.at(9, 4, 50))
+        msgs = w.on_tick(self._st(99.2), now=self.at(9, 5, 3))
+        ma = [m for m in msgs if "均線版" in m]
+        self.assertEqual(len(ma), 1)
+        self.assertIn("5MA 99.80 往下穿過 20MA 99.95", ma[0])
+        w.on_tick(self._st(96.0), now=self.at(9, 6, 0))
+        self.assertEqual(state["pick"]["ma_result"], premarket.MA_RESULT, "出過了，停損不會蓋掉")
+        self.assertIn("均線版出場 99.20（進場 100.00，-0.80%）", ma[0])
+        self.assertNotIn("**", ma[0])
+        self.assertEqual((state["pick"]["ma_result"], state["pick"]["ma_exit"], state["pick"]["ma_at"]),
+                         (premarket.MA_RESULT, 99.2, "09:05:03"))
+        w.on_tick(self._st(100.5), now=self.at(9, 10, 2))
+        again = w.on_tick(self._st(99.0), now=self.at(9, 15, 2))
+        self.assertFalse([m for m in again if "均線版" in m], "出過了就不再推")
+        self.assertFalse([m for m in w.flatten() if "均線版" in m], "13:25 不會再推均線版")
+
+    def test_the_stop_is_recorded_quietly_and_bars_before_the_entry_do_not_count(self):
+        w, state = self._watch()
+        w.on_tick(self._st(100.0), now=self.at(9, 0, 2))
+        self.assertFalse([m for m in w.on_tick(self._st(97.0), now=self.at(9, 1, 0)) if "均線版" in m])
+        self.assertEqual(state["pick"]["ma_result"], "停損", "剛好碰到停損價就算")
+        self.assertEqual(state["pick"]["ma_exit"], 97.0, "記停損價")
+        w2, state2 = self._watch()
+        w2.on_tick(self._st(100.0), now=self.at(9, 0, 2))
+        self.assertEqual(w2._ma_step((self.at(9, 0), 99.0, 1.0, 2.0, True), 99.0, self.at(9, 0, 3)), [],
+                         "進場之前就收完的那一根不算")
+        self.assertNotIn("ma_result", state2["pick"])
+        self.assertEqual(w2.on_clock(self.at(9, 1)), [], "還沒收完")
+
+    def test_the_entry_tick_is_part_of_the_first_bar(self):
+        w, state = self._watch()
+        w.on_tick(self._st(99.0), now=self.at(9, 0, 2))       # 開盤 100、第一筆成交 99
+        msgs = w.on_tick(self._st(99.5), now=self.at(9, 5, 3))
+        self.assertTrue([m for m in msgs if "均線版" in m], "09:05 那根收 99（進場那一筆）")
+
+    def test_a_quiet_stock_crosses_on_the_clock(self):
+        w, state = self._watch()
+        w.on_tick(self._st(100.0), now=self.at(9, 0, 2))
+        w.on_tick(self._st(99.0), now=self.at(9, 4, 0))
+        msgs = w.on_clock(self.at(9, 5, 40))
+        self.assertEqual(len(msgs), 1)
+        self.assertEqual(state["pick"]["ma_exit"], 99.0)
+        w2, state2 = self._watch(seed=())
+        w2.on_tick(self._st(100.0), now=self.at(9, 0, 2))
+        w2.on_tick(self._st(101.0), now=self.at(13, 20, 0))
+        w2.on_clock(self.at(13, 25, 40))
+        self.assertTrue([m for m in w2.flatten() if "收盤平倉 101.00" in m],
+                        "那一根被時間收掉了，13:25 照樣用最後成交價平倉")
+
+    def test_skipped_or_no_pick_never_tracks(self):
+        state, sent = {}, []
+        w = premarket.PickWatch(dict(self.PICK, prev_close=91.0), state, sent.append,
+                                ma_seed=[100.0] * 20)
+        w.on_tick(self._st(100.0), now=self.at(9, 0, 2))
+        self.assertEqual(w.on_tick(self._st(90.0), now=self.at(9, 5, 2)), [])
+        self.assertEqual(w.flatten(), [])
+        self.assertNotIn("ma_result", state["pick"])
+        none = premarket.PickWatch(None, {}, sent.append)
+        self.assertEqual(none.on_clock(self.at(9, 6)), [])
+
+    def test_the_seed_is_yesterday_plus_today_so_far(self):
+        y = [(datetime(2026, 10, 13, 13, 0) + timedelta(minutes=i), 1, 1, 1, 100.0 + i, 1)
+             for i in range(1, 31)]
+        t = [(self.at(9, 0) + timedelta(minutes=i), 1, 1, 1, 50.0 + i, 1) for i in range(0, 8)]
+        calls = []
+
+        def bars(broker, code, day):
+            calls.append(day)
+            return list(y) if day == "2026-10-13" else list(t)
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", side_effect=bars):
+            before = premarket.ma_seed(object(), "1111", now=self.at(8, 50))
+            self.assertEqual(calls, ["2026-10-13"], "開盤前只抓前一天")
+            self.assertEqual(before, [105.0, 110.0, 115.0, 120.0, 125.0, 130.0])
+            calls.clear()
+            during = premarket.ma_seed(object(), "1111", now=self.at(9, 7))
+            self.assertEqual(calls, ["2026-10-13", "2026-10-14"])
+            self.assertEqual(during[-1], 55.0, "今天只放收完的（09:05），09:10 那根還沒收完")
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", side_effect=RuntimeError("流量")), \
+                self.assertLogs("premarket", level="WARNING"):
+            self.assertEqual(premarket.ma_seed(object(), "1111", now=self.at(8, 50)), [])
+
+    def test_resolve_records_the_ma_version(self):
+        sig = dict(premarket.plan(self.PICK, 100.0), time="09:00:02")
+        rec = {"code": "1111", "sig": sig, "live_result": exits.BELOW_OPEN, "live_exit": 99.5,
+               "live_at": "09:02:00", "ma_result": premarket.MA_RESULT, "ma_exit": 103.0,
+               "ma_at": "10:15:00"}
+        row = premarket.resolve(None, self.PICK, rec, "2026-10-14")
+        self.assertEqual((row["ma_result"], row["ma_exit"], row["ma_exit_at"], row["ma_source"]),
+                         (premarket.MA_RESULT, 103.0, "10:15:00", "盤中"))
+        self.assertEqual(row["ma_r"], 1.0)
+        self.assertLess(row["ma_net_r"], 1.0)
+        self.assertGreater(row["ma_net_amount"], 0)
+        bars = [(self.at(9, 0) + timedelta(minutes=i), 100, 100, 100, 100.0, 10) for i in range(0, 30)]
+        bars[3] = (self.at(9, 3), 100, 100, 96, 96.5, 10)
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", return_value=bars):
+            replayed = premarket.resolve(object(), self.PICK, {"code": "1111"}, "2026-10-14")
+        self.assertEqual((replayed["ma_result"], replayed["ma_exit"], replayed["ma_source"]),
+                         (oc.STOP, 97.0, "分鐘 K"))
+        no_bars = dict(rec)
+        del no_bars["ma_result"]
+        self.assertNotIn("ma_r", premarket.resolve(None, self.PICK, no_bars, "2026-10-14") or {})
+        with unittest.mock.patch("whatif.ma_exit", side_effect=RuntimeError("壞")), \
+                self.assertLogs("premarket", level="WARNING"):
+            self.assertEqual(premarket.ma_fields(None, self.PICK, {}, sig, bars, "2026-10-14",
+                                                 self.at(9, 0, 2)), {})
+
+    def test_the_report_and_the_csv(self):
+        today = {"result": exits.TRAIL, "r_multiple": 0.5, "net_amount": 1000, "net_pct": 1.0,
+                 "net_r": 0.4, "ma_r": 1.25, "ma_net_r": 1.18, "ma_net_amount": 3000}
+        history = [today, dict(today, ma_r=-1.0, ma_net_r=-1.07, ma_net_amount=-3100),
+                   {"result": "開盤漲停，買不到", "ma_r": ""}]
+        text = "\n".join(premarket.report_lines(today, self.PICK, history))
+        self.assertIn("　均線版 +1.25R　+3,000 元", text)
+        self.assertIn("均線版累計 2 筆｜平均 +0.12R（扣成本 +0.05R）", text)
+        self.assertIn("均線版累計損益 -100 元", text)
+        plain = "\n".join(premarket.report_lines({k: v for k, v in today.items() if not k.startswith("ma")},
+                                                  self.PICK, [today]))
+        self.assertNotIn("　均線版 +", plain, "今天沒有均線版 → 今天那一行不印")
+        self.assertIn("均線版累計 1 筆｜平均 +1.25R", plain, "累計照印")
+        self.assertNotIn("　均線版 +", "\n".join(premarket.report_lines(
+            {"result": exits.TRAIL, "r_multiple": 0.5, "net_amount": 1000}, self.PICK, [])))
+        for f in ("ma_result", "ma_exit", "ma_exit_at", "ma_r", "ma_net_r", "ma_net_amount", "ma_source"):
+            self.assertIn(f, premarket.PICK_FIELDS)
+
+    def test_the_monitor_wires_it(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn('ma_seed=premarket.ma_seed(broker, pick["code"]) if pick else ()', src)
+        self.assertIn("pick_watch.on_clock()", src)
+
+
+class TestManualVersion(unittest.TestCase):
+    """10-20 使用者：「還是買不到，其他買到的也會虧」→「請以手動的方式來設計程式，需要改的是開盤
+    後的」→ 手動版（跟 v10 同時跑、分開記錄）：09:05 推盤前排名前 3 名的掛單清單（快速單
+    成交價 ≥ 觸價就買、停損單、移動出場），收盤後用分鐘 K 回推。whatif：前 3 名 +0.18R。"""
+
+    D = datetime(2026, 10, 20)
+
+    def _state(self, code="1111", rank=1, or_high=101.0, last=101.0, prev=100.0, locked=True):
+        st = SymbolState(code, prev, f"測{code}")
+        st.rank, st.amplitude_pct, st.day_open, st.last_price = rank, 5.0, 100.5, last
+        if locked:
+            st.or_high, st.or_low, st.or_locked = or_high, 99.5, True
+        return st
+
+    def _m(self, hhmm, o, h, l, c):
+        return (self.D.replace(hour=int(hhmm[:2]), minute=int(hhmm[3:])), o, h, l, c, 100.0)
+
+    def test_an_order_uses_the_v10_breakout_price_and_plan(self):
+        now = self.D.replace(hour=9, minute=5)
+        st = self._state()
+        o = manual.order_for(st, now)
+        self.assertEqual(o["trigger"], config.round_to_tick(101.0 * 1.001, "up"))
+        plan = signals._price_plan(st, o["trigger"], now.time())
+        self.assertEqual((o["stop"], o["half_at"], o["lots"]), (plan["stop"], plan["half_at"], plan["lots"]))
+        self.assertEqual((o["code"], o["rank"], o["prev_close"], o["last"]), ("1111", 1, 100.0, 101.0))
+        self.assertEqual(manual.order_for(self._state(locked=False), now)["missing"], "開盤區間還沒有資料")
+        self.assertIn("漲停", manual.order_for(self._state(or_high=109.9, prev=100.0), now)["missing"])
+
+    def test_the_top_three_by_premarket_rank(self):
+        states = {c: self._state(code=c, rank=r) for c, r in
+                  (("5", 5), ("2", 2), ("0", 0), ("1", 1), ("3", 3))}
+        orders = manual.build_orders(states, self.D.replace(hour=9, minute=5))
+        self.assertEqual([o["code"] for o in orders], ["1", "2", "3"], "名次 0（不知道）排最後")
+
+    def test_the_message(self):
+        now = self.D.replace(hour=9, minute=5)
+        ok = manual.order_for(self._state(last=102.0), now)
+        big = dict(manual.order_for(self._state(code="2222", last=100.0), now), oversized=True,
+                   risk_per_lot=6000)
+        miss = manual.order_for(self._state(code="3333", locked=False), now)
+        text = manual.format_orders([ok, big, miss], now)
+        self.assertIn("🧾 手動版掛單清單｜09:05", text)
+        self.assertIn(f"快速單：成交價 ≥ {ok['trigger']:.2f} 買 {ok['lots']} 張", text)
+        self.assertIn(f"停損單：{ok['stop']:.2f}", text)
+        self.assertIn(f"移動出場：漲到 {ok['half_at']:.2f} 後，從最高點回落 1.5% 出", text)
+        self.assertIn("現價 102.00 已經在觸價之上，掛上去會馬上成交", text)
+        self.assertEqual(text.count("已經在觸價之上"), 1)
+        self.assertIn("⚠️ 一張風險 6,000 元，超過上限 4,000 元", text)
+        self.assertIn("3. 3333 測3333\n不掛：開盤區間還沒有資料", text)
+        self.assertIn("09:30 還沒成交的刪單；13:25 還沒出的全部賣掉。", text)
+        self.assertNotIn("**", text)
+
+    def _order(self, trigger=101.5, stop=98.5, half_at=103.0, lots=1, prev=100.0):
+        return {"code": "1111", "name": "測", "rank": 1, "trigger": trigger, "stop": stop,
+                "half_at": half_at, "lots": lots, "prev_close": prev}
+
+    def test_the_fill_is_after_0905_and_before_0930(self):
+        early = [self._m("09:03", 101, 102, 101, 102), self._m("09:05", 102, 102, 101, 101.8),
+                 self._m("09:06", 101.8, 102.5, 101.6, 102)]
+        self.assertEqual(manual.fill_bar(early, 101.5)[0].strftime("%H:%M"), "09:06")
+        late = [self._m("09:31", 101, 102, 101, 102)]
+        self.assertIsNone(manual.fill_bar(late, 101.5))
+        self.assertEqual(manual.fill_bar([self._m("09:30", 101, 101.5, 101, 101)], 101.5)[0].minute, 30)
+
+    def test_replaying_one_order(self):
+        bars = [self._m("09:06", 101.0, 101.6, 100.9, 101.5), self._m("09:07", 101.5, 103.5, 101.5, 103.2),
+                self._m("09:08", 103.2, 103.2, 101.8, 102.0)]
+        row = manual.replay_order(self._order(), bars, "2026-10-20", "盤中清單")
+        self.assertEqual((row["entry"], row["filled_at"]), (101.5, "09:06:00"))
+        self.assertEqual((row["result"], row["exit_price"], row["exit_at"]),
+                         (manual.TRAIL, round(103.5 * 0.985, 2), "09:08:00"))
+        self.assertGreater(row["net_amount"], 0)
+        self.assertEqual(row["source"], "盤中清單")
+        gap = [self._m("09:06", 102.5, 103, 102.4, 102.8)]
+        self.assertEqual(manual.replay_order(self._order(), gap, "2026-10-20", "x")["entry"], 102.5,
+                         "一開就在觸價之上 → 開盤價")
+        stop = bars[:1] + [self._m("09:07", 101, 101, 98, 98.2)]
+        r = manual.replay_order(self._order(), stop, "2026-10-20", "x")
+        self.assertEqual((r["result"], r["exit_price"], r["r_multiple"]), (oc.STOP, 98.5, -1.0))
+        self.assertEqual(manual.replay_order(self._order(trigger=110), bars, "2026-10-20", "x")["result"],
+                         manual.NOT_FILLED)
+        self.assertNotIn("net_pct", manual.replay_order(self._order(trigger=110), bars, "d", "x"))
+        locked = [self._m("09:06", 110.0, 110.0, 110.0, 110.0)]
+        self.assertEqual(manual.replay_order(self._order(), locked, "d", "x")["result"], manual.LOCKED)
+        opened = [self._m("09:06", 110.0, 110.0, 109.0, 109.5), self._m("09:07", 109.5, 110, 109, 109.5)]
+        self.assertEqual(manual.replay_order(self._order(), opened, "d", "x")["entry"], 110.0,
+                         "漲停打開過（有成交在漲停以下）→ 買得到")
+        self.assertEqual(manual.replay_order(self._order(), bars[:1], "d", "x")["result"], manual.NOT_FILLED,
+                         "成交之後沒有 K 棒 → 當沒成交（不知道結局）")
+        self.assertIsNone(manual.replay_order(self._order(), [], "d", "x"), "沒資料不寫")
+        self.assertIsNone(manual.replay_order({"code": "1", "missing": "x"}, bars, "d", "x"))
+
+    def test_orders_from_bars_and_resolve(self):
+        s = TestWhatIfOpeningRangeLength("test_each_length_gets_the_same_batch_delay_and_window")._stock()
+        items = [{"code": "1111", "name": "測", "prev_close": 100.0, "amplitude_pct": 5.0}]
+        (o,) = manual.orders_from_bars(items, {"1111": s["bars"]})
+        self.assertEqual(o["trigger"], config.round_to_tick(101.0 * 1.001, "up"))
+        self.assertEqual(manual.orders_from_bars(items, {})[0]["missing"], "開盤區間還沒有資料")
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", return_value=s["bars"]):
+            rows = manual.resolve(object(), None, items, "2026-10-13")
+            self.assertEqual([(r["code"], r["source"]) for r in rows], [("1111", "分鐘 K 重算")])
+            saved = {"orders": [dict(o, trigger=200.0)]}
+            (r,) = manual.resolve(object(), saved, items, "2026-10-13")
+            self.assertEqual((r["source"], r["result"]), ("盤中清單", manual.NOT_FILLED),
+                             "盤中推過的照那一份（觸價 200 沒碰到）")
+
+    def test_the_csv_and_the_report(self):
+        win = {"date": "2026-10-20", "code": "1111", "name": "台積電股份", "rank": 2,
+               "result": manual.TRAIL, "r_multiple": 0.52, "net_r": 0.45, "net_pct": 1.2,
+               "net_amount": 1500}
+        miss = {"date": "2026-10-20", "code": "2222", "name": "乙", "rank": 1,
+                "result": manual.NOT_FILLED}
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "m.csv"
+            manual.append([win, miss], path)
+            manual.append([dict(win, date="2026-10-19")], path)
+            manual.append([], path)
+            rows = manual.load(path)
+            self.assertEqual([(r["date"], r["code"]) for r in rows],
+                             [("2026-10-19", "1111"), ("2026-10-20", "2222"), ("2026-10-20", "1111")],
+                             "依日期、名次排")
+            manual.append([dict(win, r_multiple=-1.0, net_r=-1.07, net_pct=-1.2, net_amount=-1500)], path)
+            self.assertEqual([r["r_multiple"] for r in manual.load(path)], ["0.52", "-1.0"],
+                             "同一天重跑整天蓋掉")
+            history = manual.load(path)
+        self.assertEqual(manual.load(Path("/nonexistent/m.csv")), [])
+        lines = manual.report_lines([win, miss], history + [miss])
+        self.assertIn("1111 台積電　移動出場 +0.52R", lines)
+        self.assertIn("2222 乙　沒成交", lines)
+        for l in lines[2:4]:
+            self.assertLessEqual(len(l), 20, l)
+        text = "\n".join(lines)
+        self.assertIn("手動版累計 2 筆｜勝率 50.0%", text)
+        self.assertIn("平均 -0.24R（扣成本 -0.31R）", text)
+        self.assertIn("另有 1 張單子沒成交", text)
+        self.assertEqual(manual.report_lines([], []), [])
+
+    def test_review_and_the_monitor_wire_it(self):
+        src = inspect.getsource(review.run)
+        self.assertIn("manual_lines = manual_section(broker, state)", src)
+        self.assertIn('lines += ["", "## 手動版（分開記錄）", ""]', src)
+        mon = inspect.getsource(signals.run)
+        self.assertIn("manual.build_orders(states, datetime.now())", mon)
+        self.assertIn('gate.state["manual"] = {"orders": orders,', mon)
+        self.assertIn("if not manual_sent and manual.PUSH_AT <= now_t < manual.CANCEL_AT:", mon)
+        self.assertIn('manual_sent = bool(gate.state.get("manual"))', mon)
+        self.assertIn("手動版掛單清單失敗（不影響盯盤）", mon)
+
+    def test_manual_section(self):
+        with tempfile.TemporaryDirectory() as d:
+            wl = Path(d) / "w.json"
+            wl.write_text(json.dumps({"date": "2000-01-01", "items": []}), encoding="utf-8")
+            with unittest.mock.patch.object(config, "WATCHLIST_FILE", wl):
+                old = [{"date": "2026-10-19", "code": "1", "result": manual.NOT_FILLED}]
+                with unittest.mock.patch.object(manual, "load", return_value=old):
+                    self.assertEqual(review.manual_section(None, {}), [], "不是今天的名單")
+                wl.write_text(json.dumps({"date": datetime.now().strftime("%Y-%m-%d"), "items": []}),
+                              encoding="utf-8")
+                with unittest.mock.patch.object(manual, "load", return_value=[]):
+                    self.assertEqual(review.manual_section(None, {}), [])
+                with unittest.mock.patch.object(manual, "resolve", side_effect=RuntimeError("壞")), \
+                        self.assertLogs("review", level="WARNING"):
+                    self.assertEqual(review.manual_section(object(), {}), [])
+            with unittest.mock.patch.object(config, "WATCHLIST_FILE", Path(d) / "none.json"):
+                self.assertEqual(review.manual_section(None, {}), [])
 
 
 class TestPreOpenTrialMatching(unittest.TestCase):
@@ -8538,8 +8907,10 @@ class TestPremarketPick(unittest.TestCase):
         w.on_tick(self._st(100.5), now=datetime(2026, 10, 14, 9, 0, 2))
         w.on_tick(self._st(101.0), now=datetime(2026, 10, 14, 9, 0, 30))
         msgs = w.flatten()
-        self.assertEqual(len(msgs), 1)
+        self.assertEqual(len(msgs), 2, "首選本身一則 + 均線版一則")
         self.assertEqual(state["pick"]["live_result"], oc.FLAT)
+        self.assertEqual((state["pick"]["ma_result"], state["pick"]["ma_exit"]), (oc.FLAT, 101.0))
+        self.assertIn("均線版｜收盤平倉 101.00", msgs[1])
 
     # ── 收盤後 ──
     def test_resolve_prefers_the_live_result(self):
@@ -8683,7 +9054,7 @@ class TestPremarketPick(unittest.TestCase):
     def test_review_writes_the_pick_section(self):
         src = inspect.getsource(review.run)
         self.assertIn("pick_section(broker, state)", src)
-        self.assertIn("push_summary(signals, outcomes, carried_out, pick_lines)", src)
+        self.assertIn("push_summary(signals, outcomes, carried_out, pick_lines + manual_lines)", src)
 
     def test_picks_csv_is_not_committed(self):
         self.assertIn("picks.csv", (Path(__file__).parent / ".gitignore").read_text(encoding="utf-8"))

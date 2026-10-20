@@ -599,6 +599,28 @@ def pick_section(broker, state: dict | None) -> list[str]:
     return premarket.report_lines(row, pick, history, skipped=rec.get("skipped", ""))
 
 
+def manual_section(broker, state: dict | None) -> list[str]:
+    """手動版：回推今天的單子、寫進 manual.csv、回傳日報那一段。壞掉不可以讓日報產不出來。"""
+    import manual
+    try:
+        wl = json.loads(config.WATCHLIST_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    today = datetime.now().strftime("%Y-%m-%d")
+    if wl.get("date") != today:
+        return []
+    rows = []
+    try:
+        if broker is not None:
+            rows = manual.resolve(broker, (state or {}).get("manual"), wl.get("items") or [], today)
+            manual.append(rows)
+        history = manual.load()
+    except Exception as e:
+        log.warning("手動版回推失敗（不影響日報）：%s", e)
+        history = []
+    return manual.report_lines(rows, history)
+
+
 def run(args) -> None:
     import outcome as oc
     # 休市日沒有日報可出（10-09 國慶補假：早上已經推過「今天休市」）。
@@ -632,6 +654,7 @@ def run(args) -> None:
         except Exception as e:                   # 候選壞掉不可以讓日報產不出來
             log.warning("候選回推失敗（不影響日報）：%s", e)
     pick_lines = pick_section(broker, state)
+    manual_lines = manual_section(broker, state)
     if broker is not None:
         # 首選之後 5 天怎麼走（只記錄，不進日報）。壞掉不可以讓日報產不出來。
         try:
@@ -643,11 +666,14 @@ def run(args) -> None:
     if pick_lines:
         lines += ["", "## 盤前首選（分開記錄）", ""] + [l for l in pick_lines
                                                   if not l.startswith("────")]
+    if manual_lines:
+        lines += ["", "## 手動版（分開記錄）", ""] + [l for l in manual_lines
+                                                if not l.startswith("────")]
     path = write_journal(lines)
     print("\n".join(lines))
     print(f"\n→ 已寫入 {path}")
     if not args.no_push:
-        push_summary(signals, outcomes, carried_out, pick_lines)
+        push_summary(signals, outcomes, carried_out, pick_lines + manual_lines)
 
 
 def main(argv=None):

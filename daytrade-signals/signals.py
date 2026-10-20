@@ -2095,7 +2095,12 @@ def run():
         with signal_lock:
             gate.save()
 
-    pick_watch = premarket.PickWatch(pick, gate.state, notify, save=_save_pick)
+    # 10-20 均線版：首選另外記一份「5MA 往下穿過 20MA 才出」。均線接著前一天的 K 棒算。
+    pick_watch = premarket.PickWatch(pick, gate.state, notify, save=_save_pick,
+                                     ma_seed=premarket.ma_seed(broker, pick["code"]) if pick else ())
+    # 10-20 手動版：09:05 推盤前排名前 3 名的掛單清單（分開記錄，收盤後回推）。
+    import manual
+    manual_sent = bool(gate.state.get("manual"))
     pick_st = None
     if pick and pick["code"] not in states:
         pick_st = SymbolState(pick["code"], float(pick["prev_close"]), pick.get("name", ""))
@@ -2254,6 +2259,20 @@ def run():
             if exit_at is not None and datetime.now().time() >= exit_at:
                 for msg in tracker.time_exit():
                     notify(msg)
+            for msg in pick_watch.on_clock():
+                notify(msg)
+            now_t = datetime.now().time()
+            if not manual_sent and manual.PUSH_AT <= now_t < manual.CANCEL_AT:
+                manual_sent = True
+                try:
+                    orders = manual.build_orders(states, datetime.now())
+                    with signal_lock:
+                        gate.state["manual"] = {"orders": orders,
+                                                "at": datetime.now().strftime("%H:%M:%S")}
+                        gate.save()
+                    notify(manual.format_orders(orders, datetime.now()))
+                except Exception as e:          # 手動版壞掉不可以影響盯盤
+                    log.warning("手動版掛單清單失敗（不影響盯盤）：%s", e)
             # 13:25 還沒走完停損或目標的，一律平倉並告知結果。
             # 與 outcome.py 的收盤回推用同一個時間，兩邊才比得起來。
             if not flattened and datetime.now().time() >= outcome.FLATTEN_AT:

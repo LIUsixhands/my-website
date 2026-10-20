@@ -14,6 +14,8 @@ candidates_outcomes.csv
 picks.csv
 # 首選之後 5 天的走勢（followup.py）：同一類個人紀錄
 pick_followup.csv
+# 手動版的回推結果（manual.py）：同一類個人紀錄
+manual.csv
 
 # 交易日誌含個人損益與持股，不進版控。
 # 要給 Claude 做跨日稽核時，直接把本機的 journal/ 目錄丟給它。

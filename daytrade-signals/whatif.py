@@ -50,6 +50,7 @@ from datetime import date as ddate, datetime, time as dtime, timedelta
 
 import config
 import exits
+import manual
 import market_calendar
 import outcome as oc
 import premarket
@@ -841,26 +842,19 @@ MA_SLOW = 20
 MA_BAR_MIN = 5
 MA_BELOW = "停損＋5 分 K 收盤跌破 20MA"
 MA_CROSS = "停損＋5MA 往下穿過 20MA"
-MA_RESULT = "均線出場"
+MA_RESULT = premarket.MA_RESULT
 
 
 def five_minute_closes(bars, minutes: int = MA_BAR_MIN) -> list[tuple[datetime, float]]:
     """1 分 K → 5 分 K 的 (收完的時間, 收盤)。label 是結束時間：09:01～09:05 是一根，
-    09:00 那根（開盤集合競價）併進 09:05。"""
+    09:00 那根（開盤集合競價）併進 09:05。盤中均線版用同一個切法（premarket）。"""
     out: dict[datetime, float] = {}
     for b in bars:
-        t = b[0]
-        m = t.hour * 60 + t.minute
-        end = -(-m // minutes) * minutes
-        if t.time() <= dtime(9, 0):
-            end = 9 * 60 + minutes
-        key = t.replace(hour=end // 60, minute=end % 60, second=0, microsecond=0)
-        out[key] = b[4]
+        out[premarket.five_min_end(b[0], minutes)] = b[4]
     return sorted(out.items())
 
 
-def _ma(values: list[float], n: int) -> float | None:
-    return sum(values[-n:]) / n if len(values) >= n else None
+_ma = premarket._ma
 
 
 def ma_exit(bars, entry: float, stop: float, fired: datetime, seed=(), mode: str = MA_BELOW):
@@ -986,32 +980,12 @@ VOL_GRID = (0, 5, 10, 15, 20)      # 今天總量 ≥ 昨天全天量的幾 %
 MANUAL_ALL = "盯的 10 檔都掛，先成交先算，滿 3 檔取消其他"
 MANUAL_TOP = "只掛盤前排名前 3 檔"
 MANUAL_ACTIVE_AFTER = dtime(9, 5)  # 09:05 推掛單清單，之後才算掛好
-TRAIL = "移動出場"
+TRAIL = manual.TRAIL
 
 
 def manual_exit(bars, entry: float, stop: float, half_at: float, fired: datetime):
-    """(結果, 出場價, 出場時間)。停損單＋移動出場單＋13:25。移動出場在漲到 half_at
-    之後才開始：從最高點回落 exit_trail_pct %，不低於成本。同一根先判停損、再判移動
-    （用前面幾根的最高點，保守）。沒有之後的 K 棒 → None。"""
-    trail = config.SIGNAL["exit_trail_pct"] / 100
-    peak, armed, last = entry, False, None
-    for t, o, h, l, c, _v in bars:
-        if t < fired + oc.BAR_SPAN:
-            continue
-        if t.time() > oc.FLATTEN_AT:
-            break
-        if l <= stop:
-            return oc.STOP, min(o, stop), t.strftime("%H:%M:%S")
-        if armed:
-            level = max(entry, peak * (1 - trail))
-            if l <= level:
-                return TRAIL, min(o, level), t.strftime("%H:%M:%S")
-        peak = max(peak, h)
-        armed = armed or peak >= half_at
-        last = c
-    if last is None:
-        return None
-    return oc.FLAT, last, oc.FLATTEN_AT.strftime("%H:%M:%S")
+    """停損單＋移動出場單＋13:25 —— 跟盤中手動版同一個函式（manual.exit_walk）。"""
+    return manual.exit_walk(bars, entry, stop, half_at, fired)
 
 
 def manual_day(stocks: list[dict], prev_volume: dict, vol_pct: float, top_only: bool = False,
