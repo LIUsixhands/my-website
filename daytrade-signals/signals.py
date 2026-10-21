@@ -2096,8 +2096,11 @@ def run():
             gate.save()
 
     # 10-20 均線版：首選另外記一份「5MA 往下穿過 20MA 才出」。均線接著前一天的 K 棒算。
+    import pickpulse
     pick_watch = premarket.PickWatch(pick, gate.state, notify, save=_save_pick,
-                                     ma_seed=premarket.ma_seed(broker, pick["code"]) if pick else ())
+                                     ma_seed=premarket.ma_seed(broker, pick["code"]) if pick else (),
+                                     market=lambda: pickpulse.market_change(broker),
+                                     pulse_store=pickpulse.save_history)
     # 10-20 手動版：09:05 推盤前排名前 3 名的掛單清單（分開記錄，收盤後回推）。
     import manual
     manual_sent = bool(gate.state.get("manual"))

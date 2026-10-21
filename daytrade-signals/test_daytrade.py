@@ -53,6 +53,7 @@ _MARKET_OPEN = unittest.mock.patch.object(market_calendar, "closed_today", lambd
 import premarket
 import followup
 import manual
+import pickpulse
 _NO_WAIT = unittest.mock.patch.object(premarket, "wait_until", lambda *a, **k: 0.0)
 
 
@@ -6195,7 +6196,7 @@ class TestPickMovingAverageVersion(unittest.TestCase):
         self.assertIn("均線版（另外記錄）", entry_msgs[0])
         w.on_tick(self._st(99.0), now=self.at(9, 4, 50))
         msgs = w.on_tick(self._st(99.2), now=self.at(9, 5, 3))
-        ma = [m for m in msgs if "均線版" in m]
+        ma = [m for m in msgs if "均線版｜" in m]
         self.assertEqual(len(ma), 1)
         self.assertIn("5MA 99.80 往下穿過 20MA 99.95", ma[0])
         w.on_tick(self._st(96.0), now=self.at(9, 6, 0))
@@ -6206,20 +6207,20 @@ class TestPickMovingAverageVersion(unittest.TestCase):
                          (premarket.MA_RESULT, 99.2, "09:05:03"))
         w.on_tick(self._st(100.5), now=self.at(9, 10, 2))
         again = w.on_tick(self._st(99.0), now=self.at(9, 15, 2))
-        self.assertFalse([m for m in again if "均線版" in m], "出過了就不再推")
-        self.assertFalse([m for m in w.flatten() if "均線版" in m], "13:25 不會再推均線版")
+        self.assertFalse([m for m in again if "均線版｜" in m], "出過了就不再推")
+        self.assertFalse([m for m in w.flatten() if "均線版｜" in m], "13:25 不會再推均線版")
 
     def test_the_stop_is_announced_and_bars_before_the_entry_do_not_count(self):
         """10-21 中釉：首選本身 09:01 就跌破開盤價出場了，均線版 09:23 停損卻沒有任何通知。"""
         w, state = self._watch()
         w.on_tick(self._st(100.0), now=self.at(9, 0, 2))
-        ma = [m for m in w.on_tick(self._st(97.0), now=self.at(9, 23, 7)) if "均線版" in m]
+        ma = [m for m in w.on_tick(self._st(97.0), now=self.at(9, 23, 7)) if "均線版｜" in m]
         self.assertEqual(len(ma), 1, "均線版停損一定要推")
         self.assertIn("🛑 1111 測試・盤前首選・均線版｜09:23:07", ma[0])
         self.assertIn("碰到停損 97.00（進場 100.00，-3.00%）", ma[0])
         self.assertNotIn("**", ma[0])
         self.assertEqual(state["pick"]["ma_result"], "停損", "剛好碰到停損價就算")
-        self.assertFalse([m for m in w.on_tick(self._st(96.0), now=self.at(9, 24)) if "均線版" in m],
+        self.assertFalse([m for m in w.on_tick(self._st(96.0), now=self.at(9, 24)) if "均線版｜" in m],
                          "只推一次")
         self.assertEqual(state["pick"]["ma_exit"], 97.0, "記停損價")
         w2, state2 = self._watch()
@@ -6233,14 +6234,14 @@ class TestPickMovingAverageVersion(unittest.TestCase):
         w, state = self._watch()
         w.on_tick(self._st(99.0), now=self.at(9, 0, 2))       # 開盤 100、第一筆成交 99
         msgs = w.on_tick(self._st(99.5), now=self.at(9, 5, 3))
-        self.assertTrue([m for m in msgs if "均線版" in m], "09:05 那根收 99（進場那一筆）")
+        self.assertTrue([m for m in msgs if "均線版｜" in m], "09:05 那根收 99（進場那一筆）")
 
     def test_a_quiet_stock_crosses_on_the_clock(self):
         w, state = self._watch()
         w.on_tick(self._st(100.0), now=self.at(9, 0, 2))
         w.on_tick(self._st(99.0), now=self.at(9, 4, 0))
         msgs = w.on_clock(self.at(9, 5, 40))
-        self.assertEqual(len(msgs), 1)
+        self.assertEqual(len([m for m in msgs if "均線版｜" in m]), 1)
         self.assertEqual(state["pick"]["ma_exit"], 99.0)
         w2, state2 = self._watch(seed=())
         w2.on_tick(self._st(100.0), now=self.at(9, 0, 2))
@@ -6328,6 +6329,217 @@ class TestPickMovingAverageVersion(unittest.TestCase):
         src = inspect.getsource(signals.run)
         self.assertIn('ma_seed=premarket.ma_seed(broker, pick["code"]) if pick else ()', src)
         self.assertIn("pick_watch.on_clock()", src)
+
+
+class TestPickStrengthPulse(unittest.TestCase):
+    """10-21 使用者：「盤前那一檔，9:00 推播後，我想繼續推播，直到 13 點 10 分」→「強弱續抱及出場，
+    我自己判斷，但你要給我判斷指標」→ 六項各 1～10 分、平均分取名稱 →「可否依強弱程度給我訊號」
+    → 變兩級以上才推、60 分鐘補一則、13:10 總結。只給數字，不講該抱該賣。"""
+
+    D = datetime(2026, 10, 21)
+    SIG = {"code": "1111", "name": "測試・盤前首選", "entry": 100.0, "stop": 97.0, "time": "09:00:02"}
+
+    def at(self, h, m, s=0):
+        return self.D.replace(hour=h, minute=m, second=s)
+
+    def _st(self, price=100.5, vwap=100.0, total=1000, buy=600, sell=400, high=101.0, low=99.5):
+        st = SymbolState("1111", 98.0, "測試")
+        st.last_price, st.vwap, st.total_volume = price, vwap, total
+        st.aggressive_buy, st.aggressive_sell = buy, sell
+        st.day_high, st.day_low, st.day_open = high, low, 100.0
+        return st
+
+    def _pulse(self, market=0.0, store=None):
+        p = pickpulse.Pulse(market=lambda: market, date="2026-10-21", store=store)
+        p.start(dict(self.SIG), None, self.at(9, 0, 2))
+        return p
+
+    def test_the_names(self):
+        cases = [(9.0, 8, "強勢"), (8.5, 8, "強勢"), (8.4, 7, "偏強"), (7.5, 7, "偏強"), (7.0, 6, "稍強"),
+                 (6.5, 6, "稍強"), (6.0, 5, "中性偏強"), (5.0, 4, "中性"), (4.5, 4, "中性"),
+                 (4.4, 3, "中性偏弱"), (3.0, 2, "稍弱"), (2.0, 1, "偏弱"), (1.5, 1, "偏弱"), (1.4, 0, "弱勢")]
+        for score, n, name in cases:
+            with self.subTest(score=score):
+                self.assertEqual(pickpulse.level(score), (n, name))
+
+    def test_points(self):
+        self.assertEqual([pickpulse.lin(d, 1, 1) for d in (-2, -1, -0.5, 0, 0.5, 1, 3)],
+                         [1.0, 1.0, 3.0, 5.0, 7.5, 10.0, 10.0])
+        self.assertEqual(pickpulse.lin(0.25, 0.5, 0.5), 7.5)
+        items = pickpulse.score_items(101.0, 100.0, 100.0, 100.0, 1.0, 1, 60.0, -0.25)
+        self.assertEqual({k: v[1] for k, v in items.items()},
+                         {"vwap": 10.0, "ma20": 10.0, "ma_gap": 5.0, "volume": 7.5, "buy": 7.5,
+                          "market": 3.0})
+        self.assertEqual(items["vwap"][0], "均價線 100.00：高 1.0%")
+        self.assertEqual(items["ma_gap"][0], "5MA 比 20MA 高 0.0%")
+        self.assertEqual(items["volume"][0], "量 1.0 倍、近 30 分鐘上漲")
+        self.assertEqual(items["buy"][0], "外盤 60%")
+        self.assertEqual(items["market"][0], "大盤（以 0050 代表）-0.2%")
+        self.assertEqual(pickpulse.average(items), round((10 + 10 + 5 + 7.5 + 7.5 + 3) / 6, 1))
+        down = pickpulse.score_items(99.0, 100.0, 99.0, 100.0, 3.0, -1, 20.0, 0.1)
+        self.assertEqual((down["volume"][1], down["volume"][0]), (1.0, "量 3.0 倍、近 30 分鐘下跌"),
+                         "下跌又爆量 → 1 分（量比最多算 2 倍）")
+        self.assertEqual(down["vwap"][0], "均價線 100.00：低 1.0%")
+        flat = pickpulse.score_items(100.0, 0, None, None, None, None, None, None)
+        self.assertEqual({k: v[1] for k, v in flat.items()}, dict.fromkeys(pickpulse.ITEMS))
+        self.assertEqual(flat["market"][0], "大盤：資料抓不到")
+        self.assertIsNone(pickpulse.average(flat))
+        self.assertEqual(pickpulse.score_items(100.0, 100.0, 100.0, 100.0, 2.0, 0, 50.0, 0)["volume"],
+                         ("量 2.0 倍、近 30 分鐘持平", 5.0))
+
+    def test_start_change_quiet_and_end(self):
+        saved = []
+        p = self._pulse(store=lambda d, c, h: saved.append((d, c, len(h))))
+        status = "首選本身：持有中｜均線版：持有中"
+        (m,) = p.on_bar(self._st(), (self.at(9, 5), 100.5, 100.2, 100.0, False), self.at(9, 5, 3), status)
+        self.assertIn("🌅 1111 測試・首選強弱｜09:05", m)
+        self.assertIn("開始：稍強（7.0 分）", m)
+        self.assertIn("現價 100.50｜進場 100.00（+0.50%）", m)
+        self.assertIn("今天最高 101.00，已回落 -0.5%", m)
+        self.assertIn("① 均價線 100.00：高 0.5%　8 分", m)
+        self.assertIn("平均 7.0 分：稍強（六項一樣重，未驗證）", m)
+        self.assertIn("停損 97.00（還差 -3.5%）", m)
+        self.assertTrue(m.endswith(status))
+        self.assertNotIn("**", m)
+        self.assertEqual(saved, [("2026-10-21", "1111", 1)])
+        self.assertEqual(p.on_bar(self._st(price=100.4), (self.at(9, 10), 100.4, 100.2, 100.0, False),
+                                  self.at(9, 10, 3)), [], "只差一級 → 不推")
+        one = self._pulse()
+        one.on_bar(self._st(), (self.at(9, 5), 100.5, 100.2, 100.0, False), self.at(9, 5, 3))
+        lv0 = one.pushed["lv"]
+        got = one.on_bar(self._st(price=100.1), (self.at(9, 20), 100.1, 100.2, 100.0, False),
+                         self.at(9, 20, 3))
+        self.assertEqual(abs(pickpulse.level(one.history[-1]["score"])[0] - lv0), 1)
+        self.assertEqual(got, [], "過了 10 分鐘、但只差一級 → 還是不推")
+        weak = self._st(price=99.8, buy=400, sell=600)
+        p.market = lambda: -0.2
+        (c,) = p.on_bar(weak, (self.at(9, 15), 99.8, 99.9, 100.0, False), self.at(9, 15, 3))
+        self.assertIn("🌅 1111 測試・首選強弱變化｜09:15", c)
+        self.assertIn("稍強 → 中性偏弱 ↓（7.0 → 3.6 分）", c)
+        back = self._st(price=100.6)
+        p.market = lambda: 0.0
+        self.assertEqual(p.on_bar(back, (self.at(9, 20), 100.6, 100.2, 100.0, False), self.at(9, 20, 3)), [],
+                         "變兩級以上，但離上一則不到 10 分鐘 → 先不推")
+        (u,) = p.on_bar(back, (self.at(9, 25), 100.6, 100.2, 100.0, False), self.at(9, 25, 3))
+        self.assertIn("中性偏弱 → 稍強 ↑", u, "跟上一則推的比，不是跟上一根比")
+        quiet = None
+        for k in range(1, 13):
+            t = self.at(9, 25, 3) + timedelta(minutes=5 * k)
+            got = p.on_bar(back, (t.replace(second=0), 100.6, 100.2, 100.0, False), t)
+            if got:
+                quiet = (t, got[0])
+                break
+        self.assertEqual(quiet[0], self.at(10, 25, 3), "60 分鐘沒推 → 補一則")
+        self.assertIn("目前：稍強", quiet[1])
+        self.assertIn("60 分鐘沒有明顯變化", quiet[1])
+        self.assertEqual(p.on_bar(back, (self.at(13, 15), 100.6, 100.2, 100.0, False), self.at(13, 15, 3)), [],
+                         "13:10 之後不再打分")
+        self.assertEqual(len(p.history), 17)
+        self.assertEqual(p.history[0]["at"], "09:05")
+        self.assertEqual(set(p.history[0]) - {"at", "price", "score", "label"}, set(pickpulse.ITEMS))
+
+    def test_the_30_minute_window(self):
+        p = self._pulse()
+        st = self._st(total=5000, buy=3000, sell=2000)
+        p.on_bar(st, (self.at(9, 50), 100.5, 100.2, 100.0, False), self.at(9, 50, 3))
+        later = self._st(price=100.2, total=6000, buy=3100, sell=2900)
+        p.on_bar(later, (self.at(10, 20), 100.2, 100.2, 100.0, False), self.at(10, 20, 3))
+        h = p.history[-1]
+        since = (self.at(10, 20) - self.at(9, 0, 2)).total_seconds() / 60
+        ratio = round(1000 / (6000 / since * 30), 2)
+        self.assertEqual(h["volume"], min(10, max(1, 5 - 2.5 * min(ratio, 2))), "跟 09:50 比：跌、量縮")
+        self.assertEqual(h["buy"], pickpulse.lin(100 / 1000 * 100 - 50, 20, 20), "外盤 100／1000")
+
+    def test_nothing_before_the_entry_and_failures_stay_quiet(self):
+        p = pickpulse.Pulse()
+        self.assertEqual(p.on_bar(self._st(), (self.at(9, 5), 1, 1, 1, False), self.at(9, 5)), [])
+        self.assertEqual(p.summary(self._st(), self.at(13, 10)), [])
+        bad = self._pulse()
+        bad.market = lambda: (_ for _ in ()).throw(RuntimeError("kbars"))
+        with self.assertLogs("pickpulse", level="WARNING"):
+            (m,) = bad.on_bar(self._st(), (self.at(9, 5), 100.5, 100.2, 100.0, False), self.at(9, 5, 3))
+        self.assertIn("⑥ 大盤：資料抓不到", m)
+        broken = self._pulse(store=lambda *a: (_ for _ in ()).throw(OSError("disk")))
+        with self.assertLogs("pickpulse", level="WARNING"):
+            self.assertEqual(len(broken.on_bar(self._st(), (self.at(9, 5), 100.5, 100.2, 100.0, False),
+                                               self.at(9, 5, 3))), 1)
+        empty = self._pulse(market=None)
+        self.assertEqual(empty.on_bar(self._st(vwap=0, total=0, buy=0, sell=0),
+                                      (self.at(9, 5), 100.0, None, None, False), self.at(9, 5, 3)), [],
+                         "連一項都算不出來 → 不推")
+        below = self._pulse()
+        (m,) = below.on_bar(self._st(price=96.5), (self.at(9, 5), 96.5, 99, 100, False), self.at(9, 5, 3))
+        self.assertIn("停損 97.00（已經跌破）", m)
+
+    def test_the_1310_summary(self):
+        p = self._pulse()
+        for t, price in ((self.at(9, 5), 100.5), (self.at(9, 30), 99.0), (self.at(9, 35), 99.2),
+                         (self.at(10, 0), 100.8)):
+            p.on_bar(self._st(price=price), (t, price, 100.2, 100.0, False), t)
+        (m,) = p.summary(self._st(price=100.3), self.at(13, 10), "首選本身：已出場｜均線版：持有中")
+        self.assertIn("🌅 1111 測試・首選今日總結｜13:10", m)
+        self.assertIn("開 100.00｜高 101.00｜低 99.50", m)
+        self.assertIn("09:05 ", m)
+        self.assertIn("09:30 ", m)
+        self.assertIn("10:00 ", m)
+        self.assertNotIn("09:35 ", m, "每 30 分鐘一筆（加上第一筆）")
+        self.assertIn("13:25 還沒出場的會全部平倉。", m)
+        self.assertEqual(p.summary(self._st(), self.at(13, 11)), [], "只推一次")
+
+    def test_store_and_market(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "j" / "pulse.json"
+            pickpulse.save_history("2026-10-21", "1111", [{"at": "09:05", "score": 7.0}], path)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["history"][0]["score"], 7.0)
+        self.assertEqual(pickpulse.path_for("2026-10-21").name, "pulse-20261021.json")
+        bars = [(self.at(9, 1), 100.0, 1, 1, 100.2, 1), (self.at(10, 0), 1, 1, 1, 100.5, 1)]
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", return_value=bars):
+            self.assertEqual(pickpulse.market_change(object(), "2026-10-21"), 0.5)
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", return_value=[]):
+            self.assertIsNone(pickpulse.market_change(object(), "2026-10-21"))
+
+    def test_the_watch_feeds_it(self):
+        state, saved = {}, []
+        pick = {"code": "1111", "name": "測試", "prev_close": 98.0, "amplitude_pct": 5.0,
+                "features": {}, "ranks": {}, "total": 4}
+        w = premarket.PickWatch(pick, state, print, ma_seed=[100.0] * 20, market=lambda: 0.0,
+                                pulse_store=lambda d, c, h: saved.append(len(h)))
+        w.on_tick(self._st(100.0), now=self.at(9, 0, 2))
+        msgs = w.on_tick(self._st(100.5), now=self.at(9, 5, 3))
+        pulse = [m for m in msgs if "首選強弱" in m]
+        self.assertEqual(len(pulse), 1)
+        self.assertTrue(pulse[0].endswith("首選本身：持有中｜均線版：持有中"))
+        self.assertEqual(saved, [1])
+        state["pick"].update(live_result="跌破開盤價", live_at="09:01:00")
+        self.assertEqual(w._status(), "首選本身：已出場（09:01 跌破開盤價）｜均線版：持有中")
+        with unittest.mock.patch.object(w.pulse, "on_bar", side_effect=RuntimeError("壞")), \
+                self.assertLogs("premarket", level="WARNING"):
+            w.on_tick(self._st(100.6), now=self.at(9, 10, 3))
+        w.on_clock(self.at(9, 15, 40))                      # 成交很少：時間到就收那一根
+        self.assertEqual(w.on_clock(self.at(13, 9)), [])
+        (summary,) = [m for m in w.on_clock(self.at(13, 10, 5)) if "今日總結" in m]
+        self.assertIn("首選本身：已出場", summary)
+        self.assertEqual([m for m in w.on_clock(self.at(13, 10, 35)) if "今日總結" in m], [])
+        with unittest.mock.patch.object(w.pulse, "summary", side_effect=RuntimeError("壞")), \
+                self.assertLogs("premarket", level="WARNING"):
+            self.assertEqual(w.on_clock(self.at(13, 11)), [])
+
+    def test_a_restart_resumes_and_no_pick_is_quiet(self):
+        pick = {"code": "1111", "name": "測試", "prev_close": 98.0, "amplitude_pct": 5.0}
+        state = {"pick": {"code": "1111", "sig": dict(premarket.plan(pick, 100.0), time="09:00:02")}}
+        w = premarket.PickWatch(pick, state, print, ma_seed=[100.0] * 20)
+        self.assertEqual(w.pulse.sig["code"], "1111", "重開也接著算")
+        self.assertEqual(len(w.pulse.samples), 1)
+        none = premarket.PickWatch(None, {}, print)
+        self.assertEqual(none.on_clock(self.at(13, 10)), [])
+        self.assertEqual(none._pulse_step((self.at(9, 5), 1, 1, 1, False), self.at(9, 5)), [])
+
+    def test_the_monitor_wires_it(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("market=lambda: pickpulse.market_change(broker)", src)
+        self.assertIn("pulse_store=pickpulse.save_history", src)
+        self.assertIn("journal/pulse-*.json",
+                      (Path(__file__).parent / ".gitignore").read_text(encoding="utf-8"))
 
 
 class TestManualVersion(unittest.TestCase):

@@ -348,7 +348,9 @@ class PickWatch:
     盤中重開：state 裡已經進場、還沒結束的，接著追；已經結束的不再追。
     """
 
-    def __init__(self, pick: dict | None, state: dict, notify, save=None, ma_seed=()):
+    def __init__(self, pick: dict | None, state: dict, notify, save=None, ma_seed=(),
+                 market=None, pulse_store=None):
+        import pickpulse
         import signals
         self.pick = pick
         self.state = state
@@ -366,6 +368,13 @@ class PickWatch:
         if sig and not self.rec.get("live_result"):
             self.tracker.track(sig)
         self.ma = FiveMinuteMA(ma_seed)
+        # 10-21 強弱監看（pickpulse）：09:05～13:10，強弱變兩級以上才推、60 分鐘補一則、13:10 總結
+        self.pulse = pickpulse.Pulse(market=market, store=pulse_store)
+        self.st = None
+        if sig:                                  # 盤中重開：從進場那一刻接著算
+            fired = datetime.combine(datetime.now().date(),
+                                     datetime.strptime(sig["time"], "%H:%M:%S").time())
+            self.pulse.start(sig, None, fired)
 
     @property
     def code(self) -> str | None:
@@ -396,13 +405,37 @@ class PickWatch:
             # 進場那一刻（訊號那一分鐘）不判出場，跟 v10 同一個約定
             self.tracker.track(sig, now=now)
             self.ma.on_price(st.last_price, now)
+            self.pulse.start(sig, st, now)
+            self.st = st
             msgs.append(format_entry(sig) + f"\n{MA_LABEL}（另外記錄）：停損照舊，5 分 K 的"
                         " 5MA 往下穿過 20MA 才出，穿過時通知。")
             return msgs
+        self.st = st
         msgs += self.tracker.on_price(st.code, st.last_price, now=now, vwap=st.vwap,
                                       total_volume=st.total_volume)
-        msgs += self._ma_step(self.ma.on_price(st.last_price, now), st.last_price, now)
+        done = self.ma.on_price(st.last_price, now)
+        msgs += self._ma_step(done, st.last_price, now)
+        msgs += self._pulse_step(done, now)
         return msgs
+
+    def _status(self) -> str:
+        """「首選本身：…｜均線版：…」—— 強弱訊息最後一行。"""
+        r = self.rec
+        own = (f"已出場（{str(r.get('live_at', ''))[:5]} {r['live_result']}）"
+               if r.get("live_result") else "持有中")
+        ma = (f"已出場（{str(r.get('ma_at', ''))[:5]} {r['ma_result']}）"
+              if r.get("ma_result") else "持有中")
+        return f"首選本身：{own}｜{MA_LABEL}：{ma}"
+
+    def _pulse_step(self, done, now: datetime) -> list[str]:
+        """強弱監看：壞掉不可以影響盯盤。"""
+        if not done or self.st is None or not self.rec.get("sig"):
+            return []
+        try:
+            return self.pulse.on_bar(self.st, done, now, self._status())
+        except Exception as e:
+            log.warning("首選強弱監看失敗（不影響盯盤）：%s", e)
+            return []
 
     def _ma_step(self, done, price: float, now: datetime) -> list[str]:
         """均線版：停損照舊（碰到就出、推一則 —— 首選本身可能早就出場了，10-21 中釉
@@ -430,7 +463,14 @@ class PickWatch:
         now = now or datetime.now()
         last = self.ma.last
         done = self.ma.on_clock(now)
-        return self._ma_step(done, last, now) if done else []
+        msgs = (self._ma_step(done, last, now) + self._pulse_step(done, now)) if done else []
+        import pickpulse
+        if now.time() >= pickpulse.END_AT and self.rec.get("sig") and self.st is not None:
+            try:
+                msgs += self.pulse.summary(self.st, now, self._status())
+            except Exception as e:
+                log.warning("首選強弱總結失敗（不影響盯盤）：%s", e)
+        return msgs
 
     def flatten(self) -> list[str]:
         msgs = self.tracker.flatten()
