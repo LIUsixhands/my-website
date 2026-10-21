@@ -327,6 +327,20 @@ def format_ma_exit(sig: dict, done, price: float, now: datetime) -> str:
     ])
 
 
+def format_ma_stop(sig: dict, now: datetime) -> str:
+    """均線版碰到停損。首選本身常常早就出場了（10-21 中釉 09:01 跌破開盤價就出），
+    那時候沒有別的訊息會講這件事 —— 一定要自己推一則。"""
+    label = f"{sig['code']} {sig.get('name', '')}".strip()
+    entry, stop = float(sig["entry"]), float(sig["stop"])
+    return "\n".join([
+        f"🛑 {label}・{MA_LABEL}｜{now:%H:%M:%S}",
+        f"碰到停損 {stop:.2f}（進場 {entry:.2f}，{(stop - entry) / entry * 100:+.2f}%）",
+        "5MA 還沒往下穿過 20MA，但停損照舊。",
+        "────────────────",
+        "原本的首選出場照舊、分開記錄。驗證期不下單。",
+    ])
+
+
 class PickWatch:
     """盤中盯首選：開盤第一筆成交進場，之後照 v10 出場。
 
@@ -391,14 +405,15 @@ class PickWatch:
         return msgs
 
     def _ma_step(self, done, price: float, now: datetime) -> list[str]:
-        """均線版：停損照舊（碰到就記，不另外推 —— 首選本身的停損已經推了）；5 分 K
-        收完、5MA 往下穿過 20MA 就出，用當下的價格（下一根的第一筆）。"""
+        """均線版：停損照舊（碰到就出、推一則 —— 首選本身可能早就出場了，10-21 中釉
+        均線版 09:23 停損卻沒有任何通知）；5 分 K 收完、5MA 往下穿過 20MA 就出，用當下的
+        價格（下一根的第一筆）。"""
         sig = self.rec.get("sig")
         if not sig or self.rec.get("ma_result") or not price:
             return []
         if price <= float(sig["stop"]):
             self._ma_done("停損", float(sig["stop"]), now)
-            return []
+            return [format_ma_stop(sig, now)]
         fired = datetime.combine(now.date(), datetime.strptime(sig["time"], "%H:%M:%S").time())
         if done and done[4] and done[0] > fired:
             self._ma_done(MA_RESULT, price, now)

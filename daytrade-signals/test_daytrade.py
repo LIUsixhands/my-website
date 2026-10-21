@@ -6209,11 +6209,18 @@ class TestPickMovingAverageVersion(unittest.TestCase):
         self.assertFalse([m for m in again if "均線版" in m], "出過了就不再推")
         self.assertFalse([m for m in w.flatten() if "均線版" in m], "13:25 不會再推均線版")
 
-    def test_the_stop_is_recorded_quietly_and_bars_before_the_entry_do_not_count(self):
+    def test_the_stop_is_announced_and_bars_before_the_entry_do_not_count(self):
+        """10-21 中釉：首選本身 09:01 就跌破開盤價出場了，均線版 09:23 停損卻沒有任何通知。"""
         w, state = self._watch()
         w.on_tick(self._st(100.0), now=self.at(9, 0, 2))
-        self.assertFalse([m for m in w.on_tick(self._st(97.0), now=self.at(9, 1, 0)) if "均線版" in m])
+        ma = [m for m in w.on_tick(self._st(97.0), now=self.at(9, 23, 7)) if "均線版" in m]
+        self.assertEqual(len(ma), 1, "均線版停損一定要推")
+        self.assertIn("🛑 1111 測試・盤前首選・均線版｜09:23:07", ma[0])
+        self.assertIn("碰到停損 97.00（進場 100.00，-3.00%）", ma[0])
+        self.assertNotIn("**", ma[0])
         self.assertEqual(state["pick"]["ma_result"], "停損", "剛好碰到停損價就算")
+        self.assertFalse([m for m in w.on_tick(self._st(96.0), now=self.at(9, 24)) if "均線版" in m],
+                         "只推一次")
         self.assertEqual(state["pick"]["ma_exit"], 97.0, "記停損價")
         w2, state2 = self._watch()
         w2.on_tick(self._st(100.0), now=self.at(9, 0, 2))
