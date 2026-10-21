@@ -6120,7 +6120,7 @@ class TestWhatIfManualOrders(unittest.TestCase):
         src = inspect.getsource(whatif.main)
         self.assertIn("manual = run_manual(days, pool_days)", src)
         self.assertIn("ma = run_ma(days, results, picks, pool_days)", src)
-        self.assertIn("in_play=in_play, manual=manual, ma=ma)", src)
+        self.assertIn("in_play=in_play, manual=manual, ma=ma, v1=v1)", src)
 
 
 class TestPickMovingAverageVersion(unittest.TestCase):
@@ -6488,6 +6488,100 @@ class TestManualVersion(unittest.TestCase):
                     self.assertEqual(review.manual_section(object(), {}), [])
             with unittest.mock.patch.object(config, "WATCHLIST_FILE", Path(d) / "none.json"):
                 self.assertEqual(review.manual_section(None, {}), [])
+
+
+class TestWhatIfFirstVersion(unittest.TestCase):
+    """10-21 使用者：「之前因為設了時間點，感覺失準，感覺第一版比較好」。outcomes.csv 早期 25 筆
+    +0.37R vs v10 +0.09R，但時期不同。把第一版（區間 15 分、突破就發到 12:30、停損 1.5%、
+    目標 1.5R）放到同一批日子重跑。"""
+
+    D = datetime(2026, 10, 13)
+
+    def _m(self, hhmm, o, h, l, c, v=100.0):
+        return (self.D.replace(hour=int(hhmm[:2]), minute=int(hhmm[3:])), o, h, l, c, v)
+
+    def _stock(self, code="1111", rank=1, breakout="09:16", tail=None, prev=49.0):
+        bars = [self._m("09:00", 50.0, 50.0, 50.0, 50.0, 50)]
+        t = self.D.replace(hour=9, minute=1)
+        while t.strftime("%H:%M") < breakout:
+            bars.append((t, 50.2, 50.5, 50.0, 50.3, 100.0))
+            t += timedelta(minutes=1)
+        bars.append((t, 50.3, 51.0, 50.3, 50.9, 400.0))
+        bars += tail if tail is not None else [
+            (t + timedelta(minutes=1), 50.9, 51.0, 50.8, 50.9, 100.0)]
+        return {"code": code, "name": f"測{code}", "rank": rank, "prev_close": prev,
+                "amplitude_pct": None, "bars": bars}
+
+    def test_the_exit_is_stop_or_target_or_1325(self):
+        fired = self.D.replace(hour=9, minute=16)
+        self.assertEqual(whatif.v1_exit([self._m("09:17", 50, 50, 49.0, 49.2)], 50.0, 49.3, 51.1, fired),
+                         (oc.STOP, 49.3, "09:17:00"))
+        self.assertEqual(whatif.v1_exit([self._m("09:17", 50, 51.2, 50, 51.1)], 50.0, 49.3, 51.1, fired),
+                         (oc.TARGET, 51.1, "09:17:00"))
+        self.assertEqual(whatif.v1_exit([self._m("09:17", 50, 51.1, 50, 51.0)], 50.0, 49.3, 51.1, fired)[0],
+                         oc.TARGET, "剛好碰到目標價就算")
+        self.assertEqual(whatif.v1_exit([self._m("09:17", 51.5, 52, 51.4, 51.8)], 50.0, 49.3, 51.1, fired)[:2],
+                         (oc.TARGET, 51.5), "一開就跳過目標 → 開盤價")
+        self.assertEqual(whatif.v1_exit([self._m("09:17", 50, 51.5, 49.0, 50)], 50.0, 49.3, 51.1, fired)[0],
+                         oc.STOP, "同一根兩個都碰到 → 算停損（保守）")
+        flat = [self._m("09:16", 50, 52, 48, 50), self._m("13:25", 50, 50.5, 49.9, 50.4),
+                self._m("13:30", 50.4, 55, 40, 41)]
+        self.assertEqual(whatif.v1_exit(flat, 50.0, 49.3, 51.1, fired), (oc.FLAT, 50.4, "13:25:00"),
+                         "訊號那一分鐘不判；13:25 之後不算")
+        self.assertIsNone(whatif.v1_exit([self._m("09:16", 50, 52, 48, 50)], 50.0, 49.3, 51.1, fired))
+
+    def test_the_plan(self):
+        p = whatif.v1_plan(50.9)
+        self.assertEqual(p["stop"], config.round_to_tick(50.9 * 0.985, "up"))
+        self.assertEqual(p["target"], config.round_to_tick(50.9 + (50.9 - p["stop"]) * 1.5, "up"))
+        self.assertEqual(p["lots"], int(config.RISK["per_trade_risk"] // round((50.9 - p["stop"]) * 1000, 2)))
+        self.assertEqual(whatif.v1_plan(1000.0)["lots"], 1, "一張就超過也至少 1 張")
+
+    def test_a_breakout_after_0915_fires_without_a_batch(self):
+        (t,), capped = whatif.replay_v1_day([self._stock()])
+        self.assertEqual((t.fired.strftime("%H:%M"), t.or_high, capped), ("09:16", 50.5, 0))
+        self.assertEqual(t.entry, config.round_to_tick(max(50.5 * 1.001, 50.9), "up"), "那一分鐘收盤價")
+        (o,), _ = whatif.replay_v1_day([self._stock()], optimistic=True)
+        self.assertEqual(o.entry, config.round_to_tick(50.5 * 1.001, "up"), "剛好買在突破價")
+        self.assertEqual(t.stop, whatif.v1_plan(t.entry)["stop"])
+        self.assertEqual(t.result, oc.FLAT)
+        late = self._stock(breakout="12:31")
+        self.assertEqual(whatif.replay_v1_day([late]), ([], 0), "12:30 之後的突破不發")
+        edge = self._stock(breakout="12:30")
+        self.assertEqual(len(whatif.replay_v1_day([edge])[0]), 1)
+        quiet = self._stock()
+        quiet["bars"][16] = (quiet["bars"][16][0], 50.3, 51.0, 50.3, 50.9, 100.0)
+        self.assertEqual(whatif.replay_v1_day([quiet])[0], [], "量能不到 1.8 倍不發")
+
+    def test_first_come_first_served_up_to_five_and_once_per_stock(self):
+        stocks = [self._stock(code=str(c), rank=7 - c, breakout=f"09:{16 + c:02d}") for c in range(6, 0, -1)]
+        sent, capped = whatif.replay_v1_day(stocks)
+        self.assertEqual([t.code for t in sent], ["1", "2", "3", "4", "5"])
+        self.assertEqual(capped, 1)
+        twice = self._stock(tail=[self._m("09:17", 50.9, 51.0, 50.8, 50.9),
+                                  self._m("09:18", 50.9, 51.5, 50.9, 51.4, 900.0)])
+        self.assertEqual(len(whatif.replay_v1_day([twice])[0]), 1, "同一檔一天一次")
+        locked = self._stock(prev=46.3)                  # 漲停 50.9
+        self.assertEqual(whatif.replay_v1_day([locked])[0], [], "進場價在漲停 → 買不到")
+
+    def test_run_and_table(self):
+        days = [("2026-10-13", [self._stock(tail=[self._m("09:17", 51.0, 52.6, 51.0, 52.5)])])]
+        v1 = whatif.run_v1(days)
+        self.assertEqual(sorted(v1), sorted([whatif.CAUTIOUS, whatif.OPTIMISTIC]))
+        (t,), _ = v1[whatif.CAUTIOUS]
+        self.assertEqual(t.result, oc.TARGET)
+        text = "\n".join(whatif._v1_lines(v1, {(2, whatif.CAUTIOUS): ([t], 0)}))
+        self.assertIn("## 第一版重跑（同一批日子）", text)
+        self.assertIn(f"| 第一版 | 那一分鐘收盤價 | 1 | 1 | 100% | +{t.r_multiple:.2f} |", text)
+        self.assertIn(f"{t.net_pct:+.2f}% |", text)
+        self.assertIn("| v10 現在 | 剛好買在突破價 | 0 | — |", text)
+        self.assertIn("第一版出場原因（收盤價進場）：目標 1", text)
+        self.assertIn("母子單", text)
+        self.assertIn("第一版出場原因（收盤價進場）：—", "\n".join(whatif._v1_lines({}, {})))
+        lines = whatif.render({}, ["2026-10-13"], [], [], v1=v1)
+        self.assertIn("## 第一版重跑", "\n".join(whatif.summary_part(lines)))
+        self.assertNotIn("## 第一版重跑", "\n".join(whatif.render({}, ["2026-10-13"], [], [])))
+        self.assertIn("v1 = run_v1(days)", inspect.getsource(whatif.main))
 
 
 class TestPreOpenTrialMatching(unittest.TestCase):

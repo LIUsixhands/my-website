@@ -1106,6 +1106,142 @@ def _manual_lines(manual: dict, results: dict) -> list[str]:
     return out
 
 
+# ── 第一版重跑（同一批日子）──────────────────────────────
+# 10-21 使用者：「之前因為設了時間點，感覺失準，感覺第一版比較好」。outcomes.csv：早期（未標版本，
+# 主要是第一版）25 筆 +0.37R、v10 21 筆 +0.09R —— 但時期不同（9 月 vs 10 月）。這一張把第一版
+# 的規則放到 v10 這幾天重跑，同樣的日子、同樣的名單，分得出是「規則」還是「行情」。
+# 第一版（9-20 的 config）：區間 09:00–09:15、突破 +0.1%、站上均價線、量能 1.8 倍，12:30 前
+# 突破就發（沒有批次），一天最多 5 個、同一檔一次；停損進場價 -1.5%、目標 1.5R；碰到就出，
+# 不然 13:25 平倉。張數照現在的單筆風險 4,000 元算（金額才跟 v10 比得起來）。
+V1_OR = 15
+V1_WINDOW_END = dtime(12, 30)
+V1_STOP_PCT = 1.5
+V1_RR = 1.5
+V1_LIMIT = 5
+
+
+def v1_exit(bars, entry: float, stop: float, target: float, fired: datetime):
+    """(結果, 出場價, 出場時間)。停損、目標碰到就出（同一根兩個都碰到算停損，保守）；
+    一開就跳過去用開盤價。13:25 平倉。訊號那一分鐘不判。沒有之後的 K 棒 → None。"""
+    last = None
+    for t, o, h, l, c, _v in bars:
+        if t < fired + oc.BAR_SPAN:
+            continue
+        if t.time() > oc.FLATTEN_AT:
+            break
+        if l <= stop:
+            return oc.STOP, min(o, stop), t.strftime("%H:%M:%S")
+        if h >= target:
+            return oc.TARGET, max(o, target), t.strftime("%H:%M:%S")
+        last = c
+    if last is None:
+        return None
+    return oc.FLAT, last, oc.FLATTEN_AT.strftime("%H:%M:%S")
+
+
+def v1_plan(entry: float) -> dict | None:
+    stop = config.round_to_tick(entry * (1 - V1_STOP_PCT / 100), "up")
+    if stop >= entry:
+        return None
+    target = config.round_to_tick(entry + (entry - stop) * V1_RR, "up")
+    risk_per_lot = round((entry - stop) * 1000, 2)
+    return {"entry": entry, "stop": stop, "target": target,
+            "lots": max(1, int(config.RISK["per_trade_risk"] // risk_per_lot))}
+
+
+def replay_v1_day(stocks: list[dict], optimistic: bool = False) -> tuple[list[Trade], int]:
+    """一天。每檔第一次三關都過（09:15 之後、12:30 以前）就發，照時間先後，最多 5 個。"""
+    cfg = config.SIGNAL
+    or_start = _t(cfg["or_start"])
+    or_end, _batch, _win = schedule(V1_OR)
+    hits = []
+    for s in stocks:
+        bars = s.get("bars") or []
+        rng = opening_range(bars, V1_OR)
+        if not rng:
+            continue
+        wbars = _wn(bars)
+        trigger = rng[0] * (1 + cfg["breakout_buffer_pct"] / 100)
+        for b in wbars:
+            if not (or_end < b[0].time() <= V1_WINDOW_END):
+                continue
+            vr = _gates(wbars, b, trigger, or_start)
+            if vr is not None:
+                hits.append((b, vr, s, rng[0], trigger))
+                break
+    hits.sort(key=lambda x: (x[0][0], x[2].get("rank") or 9999, str(x[2]["code"])))
+    sent, capped = [], 0
+    for b, vr, s, or_high, trigger in hits:
+        if len(sent) >= V1_LIMIT:
+            capped += 1
+            continue
+        entry = config.round_to_tick(trigger if optimistic else max(trigger, b[3]), "up")
+        lu = config.limit_up(s.get("prev_close") or 0)
+        plan = v1_plan(entry)
+        if plan is None or (lu and entry >= lu):
+            continue
+        tr = Trade(date=b[0].strftime("%Y-%m-%d"), code=str(s["code"]), name=s.get("name", ""),
+                   fired=b[0], or_high=or_high, entry=entry, stop=plan["stop"],
+                   lots=plan["lots"], vol_ratio=round(vr, 2), batch=False)
+        got = v1_exit(s["bars"], entry, plan["stop"], plan["target"], b[0])
+        if got is None:
+            tr.result, tr.exit_price = oc.FLAT, entry
+        else:
+            tr.result, price, tr.exit_at = got
+            tr.exit_price = round(price, 2)
+            pct, r = exits.blended(entry, plan["stop"], plan["lots"], None, price)
+            _finish(tr, entry, plan["stop"], r, pct, tr.exit_at, b[0])
+        sent.append(tr)
+    return sent, capped
+
+
+def run_v1(days) -> dict:
+    out = {}
+    for mode, optimistic in ((CAUTIOUS, False), (OPTIMISTIC, True)):
+        trades, capped = [], 0
+        for _d, stocks in days:
+            t, c = replay_v1_day(stocks, optimistic)
+            trades += t
+            capped += c
+        out[mode] = (trades, capped)
+    return out
+
+
+def _v1_lines(v1: dict, results: dict) -> list[str]:
+    out = ["## 第一版重跑（同一批日子）", "",
+           "| 規則 | 進場價 | 筆數 | 賺的 | 勝率 | 平均R | 扣成本R | 平均％ | 金額 | 平均持有 |",
+           "|---|---|---|---|---|---|---|---|---|---|"]
+    rows = (("v10 現在", "那一分鐘收盤價", results.get((CURRENT_OR, CAUTIOUS), ([], 0))[0]),
+            ("v10 現在", "剛好買在突破價", results.get((CURRENT_OR, OPTIMISTIC), ([], 0))[0]),
+            ("第一版", "那一分鐘收盤價", v1.get(CAUTIOUS, ([], 0))[0]),
+            ("第一版", "剛好買在突破價", v1.get(OPTIMISTIC, ([], 0))[0]))
+    for rule, entry, trades in rows:
+        st = summarise(trades)
+        if not st["n"]:
+            out.append(f"| {rule} | {entry} | 0 | — | — | — | — | — | — | — |")
+            continue
+        avg_pct = sum(t.net_pct for t in trades) / len(trades)
+        out.append(f"| {rule} | {entry} | {st['n']} | {st['wins']} | {st['rate']}% | "
+                   f"{st['avg_r']:+.2f} | {st['avg_net_r']:+.2f} | {avg_pct:+.2f}% | "
+                   f"{st['amount']:+,} | {st['avg_min']} 分 |")
+    reasons = summarise(v1.get(CAUTIOUS, ([], 0))[0]).get("reasons", {})
+    out += [
+        "",
+        "- **第一版**：區間 09:00–09:15；突破 +0.1%、站上均價線、量能 1.8 倍；09:15 之後突破就發"
+        "（沒有 09:05 批次），12:30 截止，一天最多 5 個、同一檔一次。停損進場價 -1.5%、目標 1.5R"
+        "（約 +2.25%），碰到就出，不然 13:25 平倉。",
+        "- 停損寬度不一樣（第一版 1.5%、v10 約 3%），同樣漲 1.5%，第一版是 +1R、v10 是 +0.5R —— "
+        "**看「平均％」比較公平**（扣過來回成本）。",
+        "- 張數照現在的單筆風險 4,000 元算，金額跟 v10 比得起來（第一版當時是 2,000 元）。",
+        "- 量能倍數用 v10 的算法近似（第一版當時是 5 分鐘速率比），會有一點出入。",
+        "- 第一版停損、目標都是固定價位：進場後在 App 掛一張**母子單**就好，手動做得到。",
+        "- 第一版出場原因（收盤價進場）："
+        + ("、".join(f"{k} {v}" for k, v in sorted(reasons.items(), key=lambda kv: -kv[1])) or "—"),
+        "",
+    ]
+    return out
+
+
 # ── 大盤 ──────────────────────────────────────────────
 # 跟 broker.MARKET_PROXY 同一檔：kbars 拿得到分鐘 K、跟加權指數走勢幾乎一樣。
 MARKET_PROXY = "0050"
@@ -1231,7 +1367,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
            stops: dict | None = None, market: dict | None = None,
            trigger: tuple | None = None, simple: dict | None = None,
            filters: list | None = None, in_play: dict | None = None,
-           ma: dict | None = None, manual: dict | None = None) -> list[str]:
+           ma: dict | None = None, manual: dict | None = None,
+           v1: dict | None = None) -> list[str]:
     """results[(區間分鐘, 樂觀/保守)] = (trades, 額度滿了沒發的檔數)。"""
     first, last = (days[0], days[-1]) if days else ("—", "—")
     out = [
@@ -1286,6 +1423,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
         out += _filter_lines(filters)
     if in_play is not None:
         out += _in_play_lines(in_play, results)
+    if v1 is not None:
+        out += _v1_lines(v1, results)
     if manual is not None:
         out += _manual_lines(manual, results)
     if ma is not None:
@@ -1538,6 +1677,7 @@ def main(argv=None):
     trigger = run_trigger(days)
     simple = run_simple(days, results, trigger)
     filters = run_filters(results[(CURRENT_OR, CAUTIOUS)][0])
+    v1 = run_v1(days)
 
     def fetch_range(code, start, end):
         nonlocal broker
@@ -1564,7 +1704,7 @@ def main(argv=None):
 
     lines = render(results, [d for d, _ in days], check, missing, entries, recomputed, stops,
                    market=market, trigger=trigger, simple=simple, filters=filters,
-                   in_play=in_play, manual=manual, ma=ma)
+                   in_play=in_play, manual=manual, ma=ma, v1=v1)
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
