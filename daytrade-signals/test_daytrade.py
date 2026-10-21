@@ -6316,6 +6316,11 @@ class TestPickMovingAverageVersion(unittest.TestCase):
         self.assertIn("　均線版 +1.25R　+3,000 元", text)
         self.assertIn("均線版累計 2 筆｜平均 +0.12R（扣成本 +0.05R）", text)
         self.assertIn("均線版累計損益 -100 元", text)
+        self.assertIn("首選驗證進度 2／30 筆", text, "10-21 使用者：首選驗證延長到 30 筆")
+        done = "\n".join(premarket.report_lines(today, self.PICK, [today] * 30))
+        self.assertIn("首選驗證 30 筆已滿，可以檢討了", done)
+        self.assertNotIn("驗證進度", done)
+        self.assertIn("首選驗證進度 29／30 筆", "\n".join(premarket.report_lines(today, self.PICK, [today] * 29)))
         plain = "\n".join(premarket.report_lines({k: v for k, v in today.items() if not k.startswith("ma")},
                                                   self.PICK, [today]))
         self.assertNotIn("　均線版 +", plain, "今天沒有均線版 → 今天那一行不印")

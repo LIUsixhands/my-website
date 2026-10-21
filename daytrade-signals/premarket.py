@@ -42,6 +42,9 @@ PICKS_FILE = config.BASE_DIR / "picks.csv"
 # 首選換成「5MA 往下穿過 20MA 才出」平均 +1.22R（現在的六條 +0.31R，6 筆）；v10 突破
 # 換了反而變差，所以只用在首選。停損照舊；5 分 K 收完才判；原本的出場照舊、另外記一份。
 MA_LABEL = "均線版"
+# 10-21 使用者：「以後可能會以盤前這一檔為主，玩一檔就好」→「首選驗證延長到 30 筆」。
+# 日報每天寫進度；滿 30 筆（買得到、有結局的）才檢討要不要用真錢。
+PICK_TARGET_TRADES = 30
 MA_RESULT = "均線出場"
 MA_FAST, MA_SLOW, MA_BAR_MIN = 5, 20, 5
 
@@ -681,7 +684,9 @@ def report_lines(today: dict | None, pick: dict | None, history: list[dict],
         amount = sum(float(r["net_amount"]) for r in rows)
         lines += [f"首選累計 {n} 筆｜勝率 {wins / n * 100:.1f}%",
                   f"平均 {avg_r:+.2f}R（扣成本 {avg_net:+.2f}R）",
-                  f"首選累計損益 {amount:+,.0f} 元"]
+                  f"首選累計損益 {amount:+,.0f} 元",
+                  (f"首選驗證進度 {n}／{PICK_TARGET_TRADES} 筆" if n < PICK_TARGET_TRADES
+                   else f"首選驗證 {PICK_TARGET_TRADES} 筆已滿，可以檢討了")]
     ma_rows = [r for r in history if _num(r.get("ma_net_r")) is not None]
     if ma_rows:
         n = len(ma_rows)
