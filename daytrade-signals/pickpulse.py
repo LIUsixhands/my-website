@@ -182,7 +182,9 @@ class Pulse:
                     f"目前：{name}（{score:.1f} 分），{HEARTBEAT_MIN} 分鐘沒有明顯變化"]
         lines = head + ["────────────────",
                         f"現價 {price:.2f}｜進場 {entry:.2f}（{(price - entry) / entry * 100:+.2f}%）"]
-        if st.day_high:
+        if st.day_high and price >= st.day_high:
+            lines.append(f"現價就是今天最高（{st.day_high:.2f}）")
+        elif st.day_high:
             lines.append(f"今天最高 {st.day_high:.2f}，已回落 {(price - st.day_high) / st.day_high * 100:+.1f}%")
         lines.append("────────────────")
         for n, k in enumerate(ITEMS):

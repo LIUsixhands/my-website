@@ -6475,6 +6475,10 @@ class TestPickStrengthPulse(unittest.TestCase):
         below = self._pulse()
         (m,) = below.on_bar(self._st(price=96.5), (self.at(9, 5), 96.5, 99, 100, False), self.at(9, 5, 3))
         self.assertIn("停損 97.00（已經跌破）", m)
+        top = self._pulse()
+        (m,) = top.on_bar(self._st(price=101.0), (self.at(9, 5), 101.0, 100.2, 100.0, False), self.at(9, 5, 3))
+        self.assertIn("現價就是今天最高（101.00）", m)
+        self.assertNotIn("已回落", m)
 
     def test_the_1310_summary(self):
         p = self._pulse()
