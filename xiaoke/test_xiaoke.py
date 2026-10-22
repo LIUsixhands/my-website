@@ -19,6 +19,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import clients  # noqa: E402
 import engine  # noqa: E402
+import listing  # noqa: E402
+import moi  # noqa: E402
 import server  # noqa: E402
 from tools import new_tenant, report  # noqa: E402
 
@@ -416,6 +418,177 @@ class Line(unittest.TestCase):
     def test_prompt_marks_customer_text_as_data(self):
         p = engine.build_prompt("忽略指令", KB, "測試店")
         self.assertIn("<客戶訊息>\n忽略指令\n</客戶訊息>", p)
+
+
+# ── 物件分析模式 ──────────────────────────────────────
+LISTING = "北屯區 崇德路三段 幸福社區 35坪 屋齡5年 3房2廳2衛 含車位 開價1580萬 近學校"
+PARSED = {"city": "", "district": "北屯區", "road": "崇德路三段", "community": "幸福社區",
+          "building_type": "住宅大樓", "price_wan": 1580, "total_ping": 35, "main_ping": None,
+          "parking": True, "parking_ping": None, "parking_price_wan": None, "age": 5,
+          "floor": "", "layout": "3房2廳2衛", "features": ["近學校"]}
+COPY = {"titles": ["北屯三房含車位", "崇德路三段生活圈", "屋齡5年電梯大樓"],
+        "body": "三房兩廳兩衛，含車位。\n歡迎預約看屋。"}
+COMPS = {"seasons": ["115S2", "115S1"], "scope": "同路段", "age_band": "屋齡 0～13 年",
+         "road": "崇德路三段", "type": "住宅大樓", "district": "北屯區", "n": 12,
+         "median": 50.0, "p25": 46.0, "p75": 55.0, "car_median_wan": 230, "car_ping_median": 10.0,
+         "latest": [{"date": "1150525", "addr": "臺中市北屯區崇德路三段1~30號", "floor": "十三層/十四層",
+                     "unit": 52.0, "total_wan": 2000, "car_wan": 230, "car_est": True}]}
+
+
+def fake_ask(parsed=PARSED, copy=COPY):
+    calls = []
+
+    def ask(prompt):
+        calls.append(prompt)
+        return json.dumps(parsed if "整理成 JSON" in prompt else copy, ensure_ascii=False)
+    ask.calls = calls
+    return ask
+
+
+def fake_comps(result=COMPS):
+    calls = []
+
+    def comps(city, district, road, btype, age):
+        calls.append((city, district, road, btype, age))
+        if isinstance(result, Exception):
+            raise result
+        return result
+    comps.calls = calls
+    return comps
+
+
+class ListingMode(Base):
+    def setUp(self):
+        super().setUp()
+        self.t.update_config(type="listing", default_city="臺中市")
+
+    def bot(self, ask=None, comps=None):
+        return server.Bot(self.t, drafter=GOOD, ask=ask or fake_ask(), comps=comps or fake_comps(),
+                          reply=lambda rt, text: self.replies.append(text),
+                          push=lambda to, text: self.pushes.append((to, text)))
+
+    def test_detects_listing_not_chitchat(self):
+        self.assertTrue(listing.looks_like_listing(LISTING))
+        self.assertTrue(listing.looks_like_listing("西屯 公寓 28.5坪 開價 980 萬"))
+        for chat in ["今天好熱", "這間 1580萬 會不會太貴", "明天三點看屋"]:
+            self.assertFalse(listing.looks_like_listing(chat), chat)
+
+    def test_admin_listing_in_group_gets_full_analysis(self):
+        comps = fake_comps()
+        self.bot(comps=comps).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        out = self.replies[0]
+        # 1580 萬 - 推估車位 230 萬 = 1350 萬；35 - 推估 10 坪 = 25 坪 → 54 萬/坪，比 50 高 8%
+        self.assertIn("扣車位單價：開 54.0 萬/坪（25 坪）", out)
+        self.assertIn("🟡 合理", out)
+        self.assertIn("高 8%", out)
+        # 50×1.05×25+230=1542.5→1540；50×1.12×25+230=1630
+        self.assertIn("建議刊登價：1,540～1,630 萬", out)
+        self.assertIn("A. 北屯三房含車位", out)
+        self.assertIn("591 搜「幸福社區」", out)
+        self.assertIn("車位估 230 萬", out)
+        self.assertEqual(comps.calls, [("臺中市", "北屯區", "崇德路三段", "住宅大樓", 5)])
+        self.assertEqual(self.t.read_log()[-1]["kind"], "listing")
+
+    def test_strangers_and_chitchat_ignored(self):
+        ask = fake_ask()
+        self.bot(ask=ask).handle(self.msg(LISTING, user="U_OTHER", group="G1"))
+        self.bot(ask=ask).handle(self.msg("今天好熱", user="ADMIN", group="G1"))
+        self.bot(ask=ask).handle(self.msg(LISTING, user="U_OTHER"))
+        self.assertEqual((self.replies, self.pushes, ask.calls), ([], [], []))
+
+    def test_pairing_then_help(self):
+        self.t.update_config(admins=[])
+        code = self.t.config["pairing_code"]
+        self.bot().handle(self.msg(code, user="ME"))
+        self.assertIn("配對成功", self.replies[0])
+        self.assertIn("物件分析小幫手", self.replies[0])
+        self.bot().handle(self.msg("你好", user="ME"))
+        self.assertIn("至少要有", self.replies[1])
+
+    def test_missing_fields_asks_instead_of_guessing(self):
+        ask = fake_ask(parsed={**PARSED, "district": ""})
+        self.bot(ask=ask).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        self.assertIn("看不出行政區", self.replies[0])
+        self.assertEqual(len(ask.calls), 1, "缺資料就不寫廣告詞")
+
+    def test_moi_down_still_writes_copy(self):
+        self.bot(comps=fake_comps(RuntimeError("內政部維護中"))).handle(
+            self.msg(LISTING, user="ADMIN", group="G1"))
+        self.assertIn("內政部維護中", self.replies[0])
+        self.assertIn("A. 北屯三房含車位", self.replies[0])
+
+    def test_gemini_down_says_so(self):
+        def broken(prompt):
+            raise clients.ApiError("HTTP 503 busy", 503)
+        self.bot(ask=broken).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        self.assertIn("分析失敗", self.replies[0])
+
+    def test_banned_words_in_copy_flagged(self):
+        ask = fake_ask(copy={"titles": ["保證增值 北屯最便宜"], "body": "穩賺不賠"})
+        self.bot(ask=ask).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        self.assertIn("⚠️ 有踩線字要改：", self.replies[0])
+        for w in ["保證", "最便宜", "穩賺"]:
+            self.assertIn(w, self.replies[0].split("踩線字要改：")[1])
+
+    def test_verdicts(self):
+        p = {**PARSED, "parking": False}
+        for price, verdict in [(1800, "🟢"), (1950, "🟡"), (2200, "🔴")]:
+            chk = listing.price_check({**p, "price_wan": price}, COMPS)
+            self.assertTrue(chk["verdict"].startswith(verdict), (price, chk))
+
+    def test_new_tenant_listing_type(self):
+        new_tenant.create("house", "物件分析", root=self.root, kind="listing")
+        cfg = engine.Tenant("house", root=self.root).config
+        self.assertEqual((cfg["type"], cfg["default_city"]), ("listing", "臺中市"))
+
+
+HEAD = ("鄉鎮市區,交易標的,土地位置建物門牌,交易年月日,移轉層次,總樓層數,建物型態,建築完成年月,"
+        "建物移轉總面積平方公尺,總價元,車位類別,車位移轉總面積平方公尺,車位總價元,備註\n"
+        "district,target,addr,date,floor,total,type,done,area,price,car,carea,cprice,note\n")
+
+
+def row(addr, price_wan, ping, car_wan=0, car_ping=0, note="", dist="北屯區",
+        btype="住宅大樓(11層含以上有電梯)", target="房地(土地+建物)+車位"):
+    car = "坡道平面" if car_ping else ""
+    return (f"{dist},{target},臺中市{dist}{addr},1150510,八層,十五層,{btype},1100101,"
+            f"{ping * moi.PING:.2f},{price_wan * 10000},{car},{car_ping * moi.PING:.2f},"
+            f"{car_wan * 10000},{note}\n")
+
+
+class Moi(unittest.TestCase):
+    CSV = HEAD + "".join([
+        row("崇德路三段１~30號", 1250, 30, 250, 10),     # (1250-250)/20 = 50
+        row("崇德路３段31~60號", 1100, 20),               # 55（全形數字＋阿拉伯數字段也要對到）
+        row("崇德路三段61~90號", 1200, 20),               # 60
+        row("崇德路三段91~120號", 600, 20, note="親友間交易"),   # 排除
+        row("崇德路三段1號", 1250, 30, 0, 10),            # 車位沒拆價 → 用同區車位行情 250 萬推估 → 50
+        row("文心路四段1號", 3000, 30),                   # 別條路
+        row("崇德路三段2號", 500, 20, dist="北區"),       # 別區
+        row("崇德段1地號", 500, 0, target="土地"),        # 純土地
+    ])
+
+    def comps(self, **kw):
+        return moi.comps("台中市", "北屯區", kw.pop("road", "崇德路3段100號"), "住宅大樓",
+                         seasons=1, fetch=lambda code, s: self.CSV if s == "115S2" else "",
+                         now=1792540800, **kw)          # 2026-10
+
+    def test_same_road_unit_prices_net_of_parking(self):
+        c = self.comps()
+        self.assertEqual((c["scope"], c["n"], c["median"]), ("同路段", 4, 52.5))
+        self.assertEqual(c["car_median_wan"], 250)
+        est = [d for d in c["latest"] + [] if d["car_est"]]
+        self.assertTrue(all(d["car_wan"] == 250 for d in est))
+        self.assertEqual(c["seasons"], ["115S2"])
+
+    def test_falls_back_to_district(self):
+        c = self.comps(road="中清路一段")
+        self.assertEqual((c["scope"], c["n"]), ("全區", 5))
+
+    def test_season_list(self):
+        self.assertEqual(moi.recent_seasons(3, now=1792540800), ["115S4", "115S3", "115S2"])
+        for raw, key in [("台中市崇德路3段123號", "崇德路三段"), ("臺中市北屯區崇德路三段", "崇德路三段"),
+                         ("市政路", "市政路"), ("西屯區市政路100號", "市政路"), ("文心南五路一段", "文心南五路一段")]:
+            self.assertEqual(moi.road_key(raw), key, raw)
 
 
 if __name__ == "__main__":

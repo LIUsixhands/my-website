@@ -80,7 +80,8 @@ def line_get_webhook(token: str) -> dict:
 
 
 # ── Gemini ────────────────────────────────────────────
-def gemini_draft(text: str, knowledge: str, brand: str) -> dict:
+def gemini_json(prompt: str, temperature: float = 0.2) -> str:
+    """送 prompt 給 Gemini，要求回 JSON，回傳原始文字（呼叫端自己解析）。"""
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
         raise ApiError("沒有設定 GEMINI_API_KEY（寫在 .env）")
@@ -89,11 +90,11 @@ def gemini_draft(text: str, knowledge: str, brand: str) -> dict:
     model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").strip()
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {
-        "contents": [{"role": "user", "parts": [{"text": build_prompt(text, knowledge, brand)}]}],
-        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"},
     }
     # 金鑰放標頭不放網址：網址會被印進錯誤訊息與 log
-    # 503「模型忙碌」、429 限流通常幾秒就好（實機遇過 503），重試兩次再放棄轉真人
+    # 503「模型忙碌」、429 限流通常幾秒就好（實機遇過 503），重試兩次再放棄
     for attempt in range(3):
         try:
             out = _request("POST", url, body=body, timeout=30, headers={"x-goog-api-key": key})
@@ -103,10 +104,13 @@ def gemini_draft(text: str, knowledge: str, brand: str) -> dict:
                 raise
             time.sleep(RETRY_WAIT * (attempt + 1))
     try:
-        raw = out["candidates"][0]["content"]["parts"][0]["text"]
+        return out["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError, TypeError):
         raise ApiError(f"Gemini 沒有回內容：{str(out)[:200]}") from None
-    return parse_draft(raw)
+
+
+def gemini_draft(text: str, knowledge: str, brand: str) -> dict:
+    return parse_draft(gemini_json(build_prompt(text, knowledge, brand)))
 
 
 def parse_draft(raw: str) -> dict:

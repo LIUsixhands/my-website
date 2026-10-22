@@ -112,6 +112,38 @@ python tools\report.py sixhands 7    # 指定租戶近 7 天
 - **疑似注入 > 0** → 有人在玩 AI，看 `tenants\<代號>\log.jsonl`
 - **推播失敗 > 0** → 當月訊息額度用完（審核模式的草稿與轉人工通知都走推播，會吃額度）
 
+## 八、物件分析模式（房仲用：群組貼物件 → 行情＋591 廣告詞）
+
+同一支小客程式，開一個 `--type listing` 的租戶就好，**建議另開一個 LINE 官方帳號**（不跟客服搶話、不吃同一份額度）。
+
+```powershell
+python tools\new_tenant.py house --name "物件分析" --type listing      # 預設臺中市，別的縣市加 --city 新北市
+notepad tenants\house\config.json                                    # 填 channel_secret、channel_access_token
+powershell -ExecutionPolicy Bypass -File windows\restart.ps1
+```
+
+1. LINE Developers → 這個 Channel → Messaging API：**Allow bot to join group chats 打開**；
+   官方帳號後台回應設定照第五節（Webhook 開、自動回應關）
+2. 你跟助理各自 1 對 1 傳配對碼給官方帳號（`--check` 會印出來）。**只有配對過的人貼物件它才回**，
+   群組裡別人講話、陌生人加好友一律不理，Gemini 額度不會被別人用掉
+3. 把官方帳號邀進你的群組
+4. 在群組貼物件（至少要有行政區、權狀坪數、開價），例：
+   `北屯區 崇德路三段 XX社區 35坪 屋齡5年 3房2廳 含車位 開價1580萬`
+
+它會回：
+
+| 項目 | 怎麼算 |
+|:--|:--|
+| 開價 vs 實價登錄 | 程式抓內政部實價登錄近 4 季，同路段（不夠就全區）、同建物型態、屋齡 ±8 年；**扣掉車位**後算單價中位數。成交時車位沒拆價的，用同區坡道平面車位中位價推估。親友交易、瑕疵、增建等特殊交易不算 |
+| 判斷 | 開價單價 ÷ 成交中位數：≤1.05 🟢 有競爭力、≤1.15 🟡 合理、>1.15 🔴 偏高 |
+| 建議刊登價 | 成交中位數 × 1.05～1.12 × 扣車位坪數 ＋ 車位價 |
+| 591 競品 | 591 擋程式抓取，請自己搜社區名比對 |
+| 591 廣告詞 | Gemini 寫 3 個標題＋內文，只用你貼的資訊，踩線字（保證、必漲、最便宜…）會標出來 |
+
+- **數字都是程式算的，AI 只負責整理欄位跟寫文案**，不會自己編行情
+- 第一次查某個縣市要下載實價登錄（每季幾 MB），會慢十幾秒，之後存在 `cache\moi\` 秒回
+- 回太久 reply token 會過期改用推播，吃當月推播額度
+
 ## 排錯（依序查）
 
 1. 工作排程器 →「工作排程器程式庫」找 `XiaokeLineBot`，看「上次執行結果」
@@ -133,6 +165,7 @@ python tools\report.py sixhands 7    # 指定租戶近 7 天
 | 檔案 | 作用 |
 |:--|:--|
 | `server.py` | 主程式：收 webhook、開通道、註冊 webhook |
+| `listing.py`、`moi.py` | 物件分析模式：整理物件欄位、實價登錄行情、591 廣告詞 |
 | `engine.py` | 判斷核心：注入、個資、強制轉人工、禁字、管理員指令（不碰網路，可離線測試） |
 | `clients.py` | LINE 與 Gemini API |
 | `tools/new_tenant.py` | 開新客服 |
