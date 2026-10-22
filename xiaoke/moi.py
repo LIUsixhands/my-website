@@ -191,19 +191,20 @@ def comps(city: str, district: str, road: str = "", btype: str = "", age: float 
     code = CITY_CODES.get(city)
     if not code:
         raise ValueError(f"不支援的縣市：{city}")
-    used, rows = [], []
+    used, rows, last_err = [], [], ""
     for s in recent_seasons(seasons + 2, now):
         if len(used) == seasons:
             break
         try:
             text = fetch(code, s)
-        except OSError:
+        except OSError as e:                     # 斷線、憑證、逾時：記下來，全部失敗時要讓人看得到原因
+            last_err = f"{type(e).__name__}: {e}"[:200]
             continue
         if text:
             used.append(s)
             rows += parse(text)
     if not used:
-        raise RuntimeError("實價登錄抓不到資料（內政部網站可能在維護）")
+        raise RuntimeError("實價登錄抓不到資料：" + (last_err or "內政部網站可能在維護"))
 
     dist, rk, tk = norm(district), road_key(road) if road else "", type_key(btype)
     rows = [r for r in rows if not dist or r.get("鄉鎮市區") == dist]

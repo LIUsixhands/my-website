@@ -584,6 +584,12 @@ class Moi(unittest.TestCase):
         c = self.comps(road="中清路一段")
         self.assertEqual((c["scope"], c["n"]), ("全區", 5))
 
+    def test_download_error_is_shown(self):
+        def boom(code, s):
+            raise OSError("CERTIFICATE_VERIFY_FAILED")
+        with self.assertRaisesRegex(RuntimeError, "CERTIFICATE_VERIFY_FAILED"):
+            moi.comps("臺中市", "北屯區", fetch=boom, now=1792540800)
+
     def test_season_list(self):
         self.assertEqual(moi.recent_seasons(3, now=1792540800), ["115S4", "115S3", "115S2"])
         for raw, key in [("台中市崇德路3段123號", "崇德路三段"), ("臺中市北屯區崇德路三段", "崇德路三段"),
