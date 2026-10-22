@@ -670,6 +670,12 @@ class ListingMode(Base):
         self.assertTrue(listing.is_structured(SHENGMEI, q))
         self.assertEqual(listing.floor_of({"floor": ""}, SHENGMEI), 14)
 
+    def test_district_from_address_not_marketing_copy(self):
+        t = "南屯市區找不到這麼便宜的兩房了！\n地址：台中市南屯區三和街166號11樓之11\n建坪：27.15坪\n售價：1398萬"
+        q = listing.quick_parse(t)
+        self.assertEqual((q["district"], q["address"]), ("南屯區", "三和街166號"))
+        self.assertEqual(listing.quick_parse("北屯學區首選 北屯區 崇德路三段 35坪 1580萬")["district"], "北屯區")
+
     def test_district_regex_ignores_symbols(self):
         for raw, want in [("《北屯區｜勝美上境", "北屯區"), ("台中北屯區", "北屯區"), ("西區五權三街", "西區")]:
             self.assertEqual(listing.DISTRICT_RE.search(raw).group(1), want, raw)

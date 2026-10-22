@@ -106,15 +106,17 @@ def quick_parse(text: str) -> dict:
     t = moi.norm(text)
     addr = moi._strip_area(_grab(ADDR_RE.pattern, t))
     area = t
-    for w in list(moi.CITY_CODES) + ["社區", "學區", "園區", "重劃區"]:
+    for w in list(moi.CITY_CODES) + NOT_DISTRICT:
         area = area.replace(w, " ")
+    # 「臺中市南屯區」緊接在縣市後面的最可靠；文案裡的「南屯市區」「北屯學區」不算
+    city_district = _grab(r"[市縣]\s*(" + DISTRICT_RE.pattern[1:-1] + ")", t)
     car_line = _grab(r"車位\s*[：:]\s*([^\n]*)", t) or _grab(r"車位\s*([^\n]*)", t)   # 先找「車位：」那行
     built = re.search(r"(?:建築完成|完工|完成日期)[^\d\n]*(\d{2,3})\s*[年/.-]\s*(\d{1,2})?", t)
     has_car = bool(re.search(r"車位|雙車|車庫", t)) and not re.match(r"\s*(無|沒有|0)", car_line)
     n_car = 2 if "雙車" in t else len([x for x in re.split(r"[、,，/及和]", car_line) if x.strip()]) or 1
     return {
         "city": next((c for c in moi.CITY_CODES if c in t), ""),
-        "district": _grab(DISTRICT_RE.pattern, area),
+        "district": city_district or _grab(DISTRICT_RE.pattern, area),
         "community": title_community(t),
         "road": moi.road_key(addr) if addr else moi.norm(
             _grab(r"區\s*([^\s區]+?(?:路|街|大道)(?:[一二三四五六七八九十\d]+段)?)", t)),
@@ -406,6 +408,8 @@ def book_command(text: str, book: Book) -> str | None:
 
 # ── 行情查詢：不用開價，問某社區／路段最近成交 ─────────
 MARKET_HINT = re.compile(r"行情|成交")
+NOT_DISTRICT = ["市區", "社區", "學區", "園區", "重劃區", "山區", "郊區", "校區", "特區", "精華區",
+                "蛋黃區", "蛋白區", "生活區", "商業區", "住宅區", "工業區", "風景區", "商圈"]
 DISTRICT_RE = re.compile(r"([\u4e00-\u9fff]{2}區|[東西南北中]區)")   # 北屯區、西區；不吃《》｜這類符號
 MARKET_NOISE = re.compile(r"請問|幫我|查一下|查|最近|有沒有|有|的|嗎|呢|成交|行情|價格|多少|[?？!！。，,]")
 
@@ -425,7 +429,7 @@ def market(text: str, cfg: dict, comps_fn=moi.comps, book: Book | None = None) -
         district, address = v["district"], v["address"]
     else:
         body = MARKET_NOISE.sub(" ", t)
-        for w in list(moi.CITY_CODES) + ["社區", "學區", "園區", "重劃區"]:
+        for w in list(moi.CITY_CODES) + NOT_DISTRICT:
             body = body.replace(w, " ")
         m = DISTRICT_RE.search(body)
         district = m.group(1).strip() if m else ""
