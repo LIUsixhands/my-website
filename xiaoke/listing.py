@@ -225,12 +225,17 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps) -> str:
             "跟上面的建議刊登價比，低於大部分競品的先刊。"]
 
     out += ["", "✍️ 3. 591 廣告詞"]
-    try:
-        ad = write_copy(p, text, ask)
-    except Exception as e:
-        ad = {"titles": [], "body": "", "banned": [], "error": str(e)}
+    ad = {"titles": [], "body": "", "banned": [], "error": "Gemini 回的格式看不懂"}
+    for _ in range(2):                           # Gemini 偶爾塞車或回空的，再試一次
+        try:
+            ad = write_copy(p, text, ask)
+        except Exception as e:
+            ad = {"titles": [], "body": "", "banned": [], "error": f"{type(e).__name__}: {e}"[:150]}
+        if ad["titles"] or ad["body"]:
+            break
+        ad.setdefault("error", "Gemini 回的格式看不懂")
     if not ad["titles"] and not ad["body"]:
-        out.append("⚠️ 廣告詞這次沒產生出來，再貼一次試試。")
+        out.append(f"⚠️ 廣告詞這次沒產生出來，再貼一次試試。（{ad['error']}）")
     else:
         out += [f"{'ABC'[i]}. {t}" for i, t in enumerate(ad["titles"])]
         out += ["", ad["body"]]

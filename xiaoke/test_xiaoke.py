@@ -523,6 +523,26 @@ class ListingMode(Base):
         self.bot(ask=broken).handle(self.msg(LISTING, user="ADMIN", group="G1"))
         self.assertIn("分析失敗", self.replies[0])
 
+    def test_copy_retries_then_shows_reason(self):
+        tries = []
+
+        def flaky(prompt):
+            if "整理成 JSON" in prompt:
+                return json.dumps(PARSED, ensure_ascii=False)
+            tries.append(1)
+            if len(tries) == 1:
+                raise clients.ApiError("連不上 gemini: timed out")
+            return json.dumps(COPY, ensure_ascii=False)
+        self.bot(ask=flaky).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        self.assertIn("A. 北屯三房含車位", self.replies[0])
+
+        def dead(prompt):
+            if "整理成 JSON" in prompt:
+                return json.dumps(PARSED, ensure_ascii=False)
+            raise clients.ApiError("HTTP 429 quota")
+        self.bot(ask=dead).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        self.assertIn("HTTP 429 quota", self.replies[1])
+
     def test_banned_words_in_copy_flagged(self):
         ask = fake_ask(copy={"titles": ["保證增值 北屯最便宜"], "body": "穩賺不賠"})
         self.bot(ask=ask).handle(self.msg(LISTING, user="ADMIN", group="G1"))
