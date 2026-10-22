@@ -6677,11 +6677,59 @@ class TestPulseScoreCheck(unittest.TestCase):
         self.assertNotIn("**" + "首選", text)
         self.assertIn("沒有資料", "\n".join(pulsecheck.lines({"days": [], "samples": []})))
 
+    def test_the_research_candidates(self):
+        """10-22 使用者：「請想辦法可當預測，上網查」→ 短線反轉、量價反轉、同一時段延續。"""
+        bars = self.day()
+        rows = pulsecheck.score_day(bars, self.seed())
+        r = next(x for x in rows if x["at"] == self.at(10, 0))
+        self.assertAlmostEqual(r["ret30"], (100.60 - 100.30) / 100.30 * 100, places=6,
+                               msg="近 30 分鐘：跟 09:30 那一筆比（跟 ④ 同一個基準）")
+        first = rows[0]
+        self.assertAlmostEqual(first["ret30"], (100.05 - 100.0) / 100.0 * 100, places=6,
+                               msg="開盤不到 30 分鐘 → 跟 09:00 開盤價比")
+        self.assertAlmostEqual(r["from_high"], (100.60 - 100.62) / 100.62 * 100, places=6,
+                               msg="到 10:00 為止的最高（含那一根的高）")
+        self.assertIsNone(r["same_slot"], "沒給前幾天 → 不猜")
+        prev = [self.day(step=0.02, d=self.D - timedelta(days=k)) for k in (7, 6, 5, 4, 3, 2, 1)]
+        self.assertAlmostEqual(pulsecheck.slot_return(prev[-1], dtime(10, 0)),
+                               (100.0 + 0.02 * 90 - 100.0 - 0.02 * 60) / (100.0 + 0.02 * 60) * 100, places=6)
+        self.assertAlmostEqual(pulsecheck.slot_return(prev[-1], dtime(13, 5)),
+                               (0.02 * 265 - 0.02 * 245) / (100.0 + 0.02 * 245) * 100, places=6,
+                               msg="之後 30 分鐘超過 13:25 → 用 13:25")
+        self.assertIsNone(pulsecheck.slot_return([], dtime(10, 0)))
+        prev[0] = self.day(step=-0.5, d=self.D - timedelta(days=7))
+        with_hist = pulsecheck.score_day(bars, self.seed(), history=prev)
+        r2 = next(x for x in with_hist if x["at"] == self.at(10, 0))
+        self.assertAlmostEqual(r2["same_slot"], pulsecheck.slot_return(prev[-1], dtime(10, 0)), places=6,
+                               msg="只看最近 5 天（最舊那兩天不算）；5 天都一樣")
+        self.assertIsNone(pulsecheck.same_slot(prev[-2:], dtime(10, 0)), "不到 3 天 → None")
+        self.assertIsNotNone(pulsecheck.same_slot(prev[-3:] + [[]], dtime(10, 0)), "沒資料的那天跳過")
+        self.assertEqual(r2["score"], r["score"], "加了前幾天不影響分數")
+
+        rows = [{"date": "d", "code": "1", "fwd": f, "x": v}
+                for v, f in ((1, -1.0), (2, -0.5), (3, 0.0), (4, 0.1), (5, 0.4), (6, 1.0), (None, 9.0))]
+        lo, hi, gap = pulsecheck.thirds(rows, "x")
+        self.assertEqual([r["x"] for r in lo], [1, 2], "最低的 1/3")
+        self.assertEqual([r["x"] for r in hi], [6], "最高的 1/3（同分不算進去）")
+        self.assertAlmostEqual(gap, 1.0 - (-0.75))
+        self.assertEqual(pulsecheck.thirds(rows[:2], "x"), ([], [], None), "不到 3 筆 → 不算")
+
+        samples = [dict(x, date=d, code="1") for d, x in
+                   (("2026-10-20", rows_i) for rows_i in pulsecheck.score_day(bars, self.seed(), history=prev))]
+        text = "\n".join(pulsecheck.lines({"days": ["2026-10-20"], "samples": samples}))
+        self.assertIn("其他候選指標", text)
+        self.assertIn("| 近 30 分鐘漲跌（短線反轉） |", text)
+        self.assertIn("| 同一時段、過去 5 天的平均漲跌 |", text)
+        self.assertIn("前半、後半都是負的也有用", text)
+
     def test_run_over_the_pool_and_whatif_shows_it(self):
         bars = self.day()
         pool_days = [("2026-10-21", [{"code": "1111", "bars": bars}, {"code": "2222", "bars": []}], {})]
+        hist = [self.day(d=self.D - timedelta(days=k)) for k in (3, 2, 1)]
+        pool_days = [("2026-10-21", pool_days[0][1], {"1111": hist})]
         got = pulsecheck.run(pool_days, {"2026-10-21": self.day(step=0.005)},
                              {("2026-10-21", "1111"): self.seed()})
+        self.assertIsNotNone(got["samples"][0]["same_slot"], "前幾天的分鐘 K 照代號接上")
         self.assertEqual(got["days"], ["2026-10-21"])
         self.assertEqual({r["code"] for r in got["samples"]}, {"1111"})
         self.assertTrue(all(r["date"] == "2026-10-21" for r in got["samples"]))
