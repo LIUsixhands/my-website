@@ -6353,7 +6353,7 @@ class TestPickStrengthPulse(unittest.TestCase):
     def _st(self, price=100.5, vwap=100.0, total=1000, buy=600, sell=400, high=101.0, low=99.5):
         st = SymbolState("1111", 98.0, "測試")
         st.last_price, st.vwap, st.total_volume = price, vwap, total
-        st.aggressive_buy, st.aggressive_sell = buy, sell
+        st.day_buy, st.day_sell = buy, sell
         st.day_high, st.day_low, st.day_open = high, low, 100.0
         return st
 
@@ -6763,7 +6763,7 @@ class TestPulseScoreCheck(unittest.TestCase):
         hot = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, 1, None, 0.0)
         self.assertGreaterEqual(hot["volume"][1], 6.5)
         msg = p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), "")
-        self.assertIn("📊 ④ 漲又爆量：過去 9 天 1387 次類似情況，之後 30 分鐘平均 -0.36%（30% 漲）", msg)
+        self.assertIn("📊 ④ 8 分：過去 9 天 ④ ≥ 6.5 的 1387 次，之後 30 分鐘平均 -0.36%（30% 漲）", msg)
         self.assertLess(msg.index("📊"), msg.index("平均 7.0 分"))
         cold = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, -1, None, 0.0)
         self.assertNotIn("📊", p._message("start", state, cold, 5.0, "中性", None, self.at(9, 30), ""))
@@ -7316,6 +7316,20 @@ class TestInsideOutsideVolume(unittest.TestCase):
         st = self._state([(1, 30), (1, 20), (2, 10)])
         self.assertEqual((st.aggressive_buy, st.aggressive_sell), (50, 10))
         self.assertAlmostEqual(st.bid_ask_ratio(), 5.0)
+
+    def test_the_whole_day_count_keeps_going_after_the_range_locks(self):
+        """10-22 模擬：首選強弱 ⑤ 用的內外盤，開盤區間鎖了就停 → 09:35 以後一直「資料不足」。
+        整天的另外記；訊號用的那兩個照舊只算開盤區間。"""
+        st = self._state([(1, 30), (2, 10)])
+        st.or_locked = True
+        st.update(self._tick(1, 7, 47, at="10:00:00"), now=1_000_100.0)
+        st.update(self._tick(2, 3, 50, at="10:00:10"), now=1_000_110.0)
+        st.update(self._tick(0, 5, 55, at="10:00:20"), now=1_000_120.0)
+        self.assertEqual((st.aggressive_buy, st.aggressive_sell), (30, 10), "訊號用的不動")
+        self.assertEqual((st.day_buy, st.day_sell), (37, 13), "整天的繼續算；判不出方向的不算")
+        src = inspect.getsource(pickpulse.Pulse.on_bar)
+        self.assertIn("st.day_buy - base[3], st.day_sell - base[4]", src)
+        self.assertNotIn("aggressive_", src)
 
     def test_heavy_volume_on_the_inside_is_not_strength(self):
         """量一樣大，但方向相反 —— 量能倍數看不出這個差別，這一欄看得出。"""

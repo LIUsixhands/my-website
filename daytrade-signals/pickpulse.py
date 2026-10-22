@@ -139,7 +139,7 @@ class Pulse:
         ratio = round(vol / avg, 2) if avg else None
         move = price - base[1]
         direction = (move > 0) - (move < 0)
-        buys, sells = st.aggressive_buy - base[3], st.aggressive_sell - base[4]
+        buys, sells = st.day_buy - base[3], st.day_sell - base[4]
         buy_pct = buys / (buys + sells) * 100 if buys + sells > 0 else None
         try:
             market = self.market()
@@ -148,7 +148,7 @@ class Pulse:
             market = None
         items = score_items(price, st.vwap or None, ma5, ma20, ratio, direction, buy_pct, market)
         score = average(items)
-        self.samples.append((end, price, st.total_volume, st.aggressive_buy, st.aggressive_sell))
+        self.samples.append((end, price, st.total_volume, st.day_buy, st.day_sell))
         if score is None:
             return []
         lv, name = level(score)
@@ -195,7 +195,8 @@ class Pulse:
         vol = items["volume"][1]
         if self.stats and vol is not None and vol >= self.stats["min_score"]:
             s = self.stats
-            lines.append(f"📊 ④ 漲又爆量：過去 {s['days']} 天 {s['n']} 次類似情況，"
+            # 10-22 模擬：量只有 0.7 倍也會到 7 分（上漲就加分），寫「爆量」不對 —— 照實寫分數。
+            lines.append(f"📊 ④ {round(vol)} 分：過去 {s['days']} 天 ④ ≥ {s['min_score']:g} 的 {s['n']} 次，"
                          f"之後 30 分鐘平均 {s['avg']:+.2f}%（{s['up']}% 漲）")
         lines += ["────────────────", f"平均 {score:.1f} 分：{name}（六項一樣重，未驗證）"]
         lines.append(f"停損 {stop:.2f}（還差 {(stop - price) / price * 100:+.1f}%）" if price > stop

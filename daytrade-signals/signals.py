@@ -311,6 +311,10 @@ class SymbolState:
     avg_volume_lots: float | None = None
     aggressive_buy: int = 0                   # 外盤成交張數
     aggressive_sell: int = 0                  # 內盤成交張數
+    # 10-22：整天的內外盤（首選強弱 ⑤ 用）。上面那兩個開盤區間鎖了就停，⑤ 09:35 以後就一直
+    # 「資料不足」。訊號用的那兩個不動。
+    day_buy: int = 0
+    day_sell: int = 0
     unclassified: int = 0                     # 判不出方向的張數 —— 要知道有多少沒算到
     # 開盤前的試撮（模擬撮合）價格往哪裡走。使用者 10-08 貼了一篇「試撮價持續
     # 上移代表買方力道在開盤前就傾斜」，選「只記錄、不當條件」—— 20 天後拿數字
@@ -394,11 +398,14 @@ class SymbolState:
             self.day_open = op
         elif not self.day_open and _t(config.SIGNAL["or_start"]) <= ts < _t(config.SIGNAL["or_end"]):
             self.day_open = float(tick.close)
+        lots = int(getattr(tick, "volume", 0) or 0)
+        kind = int(getattr(tick, "tick_type", 0) or 0)
+        if lots > 0:
+            self.day_buy += lots if kind == 1 else 0
+            self.day_sell += lots if kind == 2 else 0
         # 內外盤只在開盤區間內累計 —— 訊號要用的是「發訊號之前買盤有多強」，
         # 把整天的成交混進來，那一欄在 09:05 當下根本還不存在。
         if not self.or_locked:
-            lots = int(getattr(tick, "volume", 0) or 0)
-            kind = int(getattr(tick, "tick_type", 0) or 0)
             if lots > 0:
                 if kind == 1:
                     self.aggressive_buy += lots
