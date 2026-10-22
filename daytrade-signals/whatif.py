@@ -1701,6 +1701,10 @@ def main(argv=None):
     manual = run_manual(days, pool_days)
     ma = run_ma(days, results, picks, pool_days)
     pulse = pulsecheck.run(pool_days, markets, prev_day_index(pool_days))
+    try:
+        pulsecheck.save_samples(pulse["samples"])          # 盤中 ④ 那一行的統計用
+    except Exception as e:
+        log.warning("強弱樣本寫不進去（不影響報表）：%s", e)
     replayed: dict[str, set] = {}
     for t in results[(CURRENT_OR, CAUTIOUS)][0]:
         replayed.setdefault(t.date, set()).add(t.code)

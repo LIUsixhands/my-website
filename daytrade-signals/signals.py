@@ -2097,10 +2097,17 @@ def run():
 
     # 10-20 均線版：首選另外記一份「5MA 往下穿過 20MA 才出」。均線接著前一天的 K 棒算。
     import pickpulse
+    # 10-22「邊用邊統計」：④ 漲又爆量之後怎麼走，用累積的樣本算（讀不到就不顯示那一行）。
+    try:
+        import pulsecheck
+        pulse_stats = pulsecheck.volume_stats(None)
+    except Exception as e:
+        log.warning("強弱統計讀不到（不影響盯盤）：%s", e)
+        pulse_stats = None
     pick_watch = premarket.PickWatch(pick, gate.state, notify, save=_save_pick,
                                      ma_seed=premarket.ma_seed(broker, pick["code"]) if pick else (),
                                      market=lambda: pickpulse.market_change(broker),
-                                     pulse_store=pickpulse.save_history)
+                                     pulse_store=pickpulse.save_history, pulse_stats=pulse_stats)
     # 10-20 手動版：09:05 推盤前排名前 3 名的掛單清單（分開記錄，收盤後回推）。
     import manual
     manual_sent = bool(gate.state.get("manual"))

@@ -4382,7 +4382,7 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
                    "candidates.csv", "candidates_outcomes.csv", "journal/*.md",
                    "journal/watchlist-*.json", "journal/preopen-*.json", "picks.csv",
                    "pick_followup.csv", "manual.csv", "logs/", "journal/book-*.json",
-                   "journal/book-*.tmp")
+                   "journal/book-*.tmp", "journal/pulse-samples.csv")
 
     def setUp(self):
         if not self.IGNORE.exists():
@@ -6723,6 +6723,83 @@ class TestPulseScoreCheck(unittest.TestCase):
         self.assertIn("| 近 30 分鐘漲跌（短線反轉） |", text)
         self.assertIn("| 同一時段、過去 5 天的平均漲跌 |", text)
         self.assertIn("前半、後半都是負的也有用", text)
+
+    def test_use_it_while_counting(self):
+        """10-22 使用者：「邊用邊統計」—— ④ 高分之後 30 分鐘的統計，盤中訊息加一行，每天收盤後更新。"""
+        def row(d, code, h, m, vol, fwd):
+            return {"date": d, "code": code, "at": self.at(h, m), "score": 5.0, "vwap": 5.0, "ma20": None,
+                    "ma_gap": 5.0, "volume": vol, "market": None, "ret30": 0.1, "from_high": -0.2,
+                    "same_slot": None, "fwd": fwd}
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "j" / "samples.csv"
+            pulsecheck.save_samples([row("2026-10-20", "1", 9, 5, 7.0, -0.5), row("2026-10-21", "1", 9, 5, 2.0, 0.3)],
+                                    path)
+            pulsecheck.save_samples([row("2026-10-21", "2", 9, 10, 6.5, -0.1)], path)
+            got = pulsecheck.load_samples(path)
+            self.assertEqual([(r["date"], r["code"]) for r in got], [("2026-10-20", "1"), ("2026-10-21", "2")],
+                             "同一天重算 → 那一天的舊樣本換掉，別天的留著")
+            self.assertEqual(got[0]["at"], "09:05")
+            self.assertEqual(got[0]["volume"], 7.0)
+            self.assertIsNone(got[0]["ma20"], "空的讀回來是 None，不是 0")
+            pulsecheck.save_samples([], path)
+            self.assertEqual(len(pulsecheck.load_samples(path)), 2, "沒有新樣本 → 不動")
+            self.assertEqual(pulsecheck.load_samples(Path(d) / "none.csv"), [])
+
+            many = [row(f"2026-10-{12 + k % 3:02d}", str(k), 9, 5, 6.5 if k % 2 else 9.0, -0.4 if k % 4 else 0.2)
+                    for k in range(100)] + [row("2026-10-12", "x", 9, 5, 6.4, 5.0),
+                                            row("2026-10-12", "y", 9, 5, None, 5.0),
+                                            row("2026-10-12", "z", 9, 5, 9.0, None)]
+            st = pulsecheck.volume_stats(many)
+            self.assertEqual(st, {"days": 3, "n": 100, "avg": round((75 * -0.4 + 25 * 0.2) / 100, 2), "up": 25,
+                                  "min_score": 6.5}, "6.5 算高分、6.4 不算；沒分數、沒結果的不算")
+            self.assertIsNone(pulsecheck.volume_stats(many[1:]), "不到 100 筆 → 不顯示")
+            pulsecheck.save_samples(many, path)
+            self.assertEqual(pulsecheck.volume_stats(None, path)["n"], 102, "None → 讀累積檔（前面存的那兩筆高分也算）")
+
+        st = {"days": 9, "n": 1387, "avg": -0.36, "up": 30, "min_score": 6.5}
+        p = pickpulse.Pulse(sig={"code": "1111", "name": "測試", "entry": 100.0, "stop": 97.0},
+                            date="2026-10-23", stats=st)
+        state = SimpleNamespace(last_price=100.5, day_high=101.0)
+        hot = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, 1, None, 0.0)
+        self.assertGreaterEqual(hot["volume"][1], 6.5)
+        msg = p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), "")
+        self.assertIn("📊 ④ 漲又爆量：過去 9 天 1387 次類似情況，之後 30 分鐘平均 -0.36%（30% 漲）", msg)
+        self.assertLess(msg.index("📊"), msg.index("平均 7.0 分"))
+        cold = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, -1, None, 0.0)
+        self.assertNotIn("📊", p._message("start", state, cold, 5.0, "中性", None, self.at(9, 30), ""))
+        p.stats = None
+        self.assertNotIn("📊", p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), ""),
+                         "還沒有統計 → 不顯示")
+
+    def test_the_daily_update_and_the_wiring(self):
+        bars = self.day()
+        archive = [("2026-10-21", {"items": [{"code": "1111"}]})]
+        pool = [("2026-10-21", [{"code": "1111", "bars": bars}], {"1111": [self.seed()]})]
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "s.csv"
+            with unittest.mock.patch.object(whatif, "archived_days", return_value=[]):
+                self.assertIsNone(pulsecheck.daily(object(), "2026-10-21", path))
+            self.assertFalse(path.exists())
+            with unittest.mock.patch.object(whatif, "archived_days", return_value=archive) as ad, \
+                    unittest.mock.patch.object(whatif, "pool_days_for", return_value=(pool, [])), \
+                    unittest.mock.patch.object(whatif, "market_bars", return_value=self.day(step=0.005)):
+                got = pulsecheck.daily(object(), "2026-10-21", path)
+            ad.assert_called_once_with("2026-10-21", "2026-10-21")
+            self.assertEqual(len(pulsecheck.load_samples(path)), len(got["samples"]))
+            self.assertIsNotNone(pulsecheck.load_samples(path)[0]["market"])
+        src = inspect.getsource(signals.run)
+        self.assertIn("pulse_stats = pulsecheck.volume_stats(None)", src)
+        self.assertIn("pulse_store=pickpulse.save_history, pulse_stats=pulse_stats)", src)
+        self.assertIn("self.pulse = pickpulse.Pulse(market=market, store=pulse_store, stats=pulse_stats)",
+                      inspect.getsource(premarket.PickWatch.__init__))
+        rsrc = inspect.getsource(review.run)
+        self.assertIn("pulsecheck.daily(broker)", rsrc)
+        self.assertIn('pulsecheck.save_samples(pulse["samples"])', inspect.getsource(whatif.main))
+        for fn, call in ((signals.run, "volume_stats"), (review.run, "daily"), (whatif.main, "save_samples")):
+            tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+            tries = [n for n in ast.walk(tree) if isinstance(n, ast.Try) and n.handlers
+                     and call in ast.unparse(ast.Module(body=n.body, type_ignores=[]))]
+            self.assertTrue(tries, f"{call} 包在 try 裡：統計壞掉不可以影響盯盤／日報／報表")
 
     def test_run_over_the_pool_and_whatif_shows_it(self):
         bars = self.day()

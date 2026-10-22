@@ -27,6 +27,8 @@ journal/watchlist-*.json
 journal/preopen-*.json
 # 首選強弱監看的打分紀錄（pickpulse.py）
 journal/pulse-*.json
+# 強弱統計的累積樣本（pulsecheck.py）：看得出你每天盯哪些股票。
+journal/pulse-samples.csv
 # 五檔掛單紀錄（bookrec.py）：一樣看得出你每天盯哪些股票。
 journal/book-*.json
 journal/book-*.tmp

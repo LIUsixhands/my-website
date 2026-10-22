@@ -101,9 +101,10 @@ class Pulse:
     """首選的強弱監看。PickWatch 每根 5 分 K 收完叫 on_bar，主迴圈叫 on_clock（13:10 總結）。"""
 
     def __init__(self, sig: dict | None = None, market=None, date: str | None = None,
-                 store=None):
+                 store=None, stats: dict | None = None):
         self.sig = sig
         self.market = market or (lambda: None)
+        self.stats = stats           # pulsecheck.volume_stats()：④ 高分之後 30 分鐘的統計
         self.store = store           # store(date, code, history)：盤中才給（測試不寫檔）
         self.date = date or datetime.now().strftime("%Y-%m-%d")
         self.samples = []            # (時間, 價格, 總量, 外盤, 內盤)
@@ -191,6 +192,11 @@ class Pulse:
         for n, k in enumerate(ITEMS):
             text, s = items[k]
             lines.append(f"{'①②③④⑤⑥'[n]} {text}" + (f"　{round(s)} 分" if s is not None else ""))
+        vol = items["volume"][1]
+        if self.stats and vol is not None and vol >= self.stats["min_score"]:
+            s = self.stats
+            lines.append(f"📊 ④ 漲又爆量：過去 {s['days']} 天 {s['n']} 次類似情況，"
+                         f"之後 30 分鐘平均 {s['avg']:+.2f}%（{s['up']}% 漲）")
         lines += ["────────────────", f"平均 {score:.1f} 分：{name}（六項一樣重，未驗證）"]
         lines.append(f"停損 {stop:.2f}（還差 {(stop - price) / price * 100:+.1f}%）" if price > stop
                      else f"停損 {stop:.2f}（已經跌破）")

@@ -662,6 +662,12 @@ def run(args) -> None:
             followup.run(broker)
         except Exception as e:
             log.warning("首選後續走勢更新失敗（不影響日報）：%s", e)
+        # 10-22「邊用邊統計」：今天候選池每根 5 分 K 回頭打分，加進累積檔（盤中 ④ 那一行用）。
+        try:
+            import pulsecheck
+            pulsecheck.daily(broker)
+        except Exception as e:
+            log.warning("強弱統計更新失敗（不影響日報）：%s", e)
     lines = render(signals, trades, state, pnl, note, outcomes, carried_out)
     if pick_lines:
         lines += ["", "## 盤前首選（分開記錄）", ""] + [l for l in pick_lines

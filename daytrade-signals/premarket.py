@@ -352,7 +352,7 @@ class PickWatch:
     """
 
     def __init__(self, pick: dict | None, state: dict, notify, save=None, ma_seed=(),
-                 market=None, pulse_store=None):
+                 market=None, pulse_store=None, pulse_stats=None):
         import pickpulse
         import signals
         self.pick = pick
@@ -372,7 +372,7 @@ class PickWatch:
             self.tracker.track(sig)
         self.ma = FiveMinuteMA(ma_seed)
         # 10-21 強弱監看（pickpulse）：09:05～13:10，強弱變兩級以上才推、60 分鐘補一則、13:10 總結
-        self.pulse = pickpulse.Pulse(market=market, store=pulse_store)
+        self.pulse = pickpulse.Pulse(market=market, store=pulse_store, stats=pulse_stats)
         self.st = None
         if sig:                                  # 盤中重開：從進場那一刻接著算
             fired = datetime.combine(datetime.now().date(),

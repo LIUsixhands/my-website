@@ -12,6 +12,8 @@
 
 不改任何規則，只是量。
 """
+import csv
+import logging
 from datetime import datetime, timedelta
 
 import config
@@ -38,6 +40,15 @@ EXTRA_NAMES = {"ret30": "近 30 分鐘漲跌（短線反轉）", "from_high": "�
                "same_slot": "同一時段、過去 5 天的平均漲跌"}
 SLOT_DAYS = 5                      # 同一時段看過去幾天
 SLOT_MIN_DAYS = 3                  # 至少要有幾天才算
+
+# 10-22 使用者：「邊用邊統計」。9 天裡唯一前後一致的是 ④ 量（反向）：漲又爆量之後 30 分鐘
+# 平均 −0.36%。盤中強弱訊息在 ④ 拿高分時加一行「過去類似情況之後怎麼走」，數字每天收盤後
+# 用累積的樣本重算（review.py 14:00 加今天的候選池；whatif.py 跑的時候整段重寫）。
+SAMPLES_FILE = config.JOURNAL_DIR / "pulse-samples.csv"
+SAMPLE_FIELDS = ("date", "code", "at", *KEYS, *EXTRA, "fwd")
+STATS_MIN_N = 100                  # 樣本不到這麼多筆就不顯示
+
+log = logging.getLogger("pulsecheck")
 
 
 def _price_at(bars, at: datetime):
@@ -137,6 +148,74 @@ def run(pool_days, markets: dict, seeds: dict) -> dict:
                                  markets.get(d) or [], history=(hist or {}).get(code) or []):
                 samples.append(dict(row, date=d, code=str(s["code"])))
     return {"days": days, "samples": samples}
+
+
+def save_samples(samples, path=None) -> None:
+    """寫進累積檔。同一天重算會蓋掉那一天的舊樣本。"""
+    if not samples:
+        return
+    path = path or SAMPLES_FILE
+    days = {r["date"] for r in samples}
+    keep = [r for r in load_samples(path) if r["date"] not in days]
+    new = [dict(r, at=r["at"].strftime("%H:%M") if isinstance(r["at"], datetime) else r["at"])
+           for r in samples]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8-sig", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=SAMPLE_FIELDS, extrasaction="ignore")
+        w.writeheader()
+        for r in sorted(keep + new, key=lambda r: (r["date"], r["code"], r["at"])):
+            w.writerow({k: ("" if r.get(k) is None else r.get(k)) for k in SAMPLE_FIELDS})
+
+
+def load_samples(path=None) -> list[dict]:
+    path = path or SAMPLES_FILE
+    if not path.exists():
+        return []
+    out = []
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        for r in csv.DictReader(fh):
+            row = {"date": r["date"], "code": r["code"], "at": r["at"]}
+            for k in (*KEYS, *EXTRA, "fwd"):
+                v = r.get(k)
+                row[k] = float(v) if v not in (None, "") else None
+            out.append(row)
+    return out
+
+
+def volume_stats(samples, path=None) -> dict | None:
+    """④ 量拿高分（≥HIGH）之後 30 分鐘：{天數, 筆數, 平均 %, 上漲比例 %, 門檻}。
+    樣本不到 STATS_MIN_N 筆就 None（不顯示）。samples=None → 讀累積檔。"""
+    rows = load_samples(path) if samples is None else samples
+    hi = [r for r in rows if r.get("volume") is not None and r["volume"] >= HIGH
+          and r.get("fwd") is not None]
+    if len(hi) < STATS_MIN_N:
+        return None
+    return {"days": len({r["date"] for r in rows}), "n": len(hi), "avg": round(_avg(hi), 2),
+            "up": round(sum(1 for r in hi if r["fwd"] > 0) / len(hi) * 100), "min_score": HIGH}
+
+
+def daily(broker, date: str | None = None, path=None) -> dict | None:
+    """review.py 收盤後叫：今天的候選池回頭打分，加進累積檔。今天沒有名單存檔 → None。"""
+    import time
+    import whatif
+    date = date or datetime.now().strftime("%Y-%m-%d")
+    archived = whatif.archived_days(date, date)
+    if not archived:
+        return None
+
+    def fetch_range(code, start, end):
+        time.sleep(config.SCREEN["kbar_sleep_sec"])
+        try:
+            return whatif.kbars_to_days(broker.kbars(code, start, end))
+        except Exception as e:
+            log.warning("%s 分鐘 K（%s～%s）取得失敗：%s", code, start, end, e)
+            return {}
+
+    pool_days, _missing = whatif.pool_days_for(archived, fetch_range)
+    markets = {date: whatif.market_bars(date, lambda c, d: oc.day_bars_ohlcv(broker, c, d))}
+    got = run(pool_days, markets, whatif.prev_day_index(pool_days))
+    save_samples(got["samples"], path)
+    return got
 
 
 def _avg(rows):
