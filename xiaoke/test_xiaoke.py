@@ -361,6 +361,15 @@ class Line(unittest.TestCase):
             with self.assertRaises(clients.ApiError):
                 clients.gemini_draft("q", "kb", "店")
             self.assertEqual(len(calls), 1, "金鑰錯誤不必重試")
+            calls.clear()
+
+            def quota(*a, **k):
+                calls.append(1)
+                raise clients.ApiError("HTTP 429 quota", 429)
+            clients._request = quota
+            with self.assertRaises(clients.ApiError):
+                clients.gemini_draft("q", "kb", "店")
+            self.assertEqual(len(calls), 2, "429 只再試一次，免得把額度用光")
         finally:
             clients._request, clients.RETRY_WAIT = old_req, old_wait
 
@@ -543,7 +552,7 @@ class ListingMode(Base):
         # Gemini 掛了：欄位改用規則讀，行情照算，只有廣告詞失敗
         self.assertIn("AI 忙線，欄位用規則讀的", out)
         self.assertIn("建議刊登價：1,540～1,630 萬", out)
-        self.assertIn("HTTP 503 busy", out.split("591 廣告詞")[1])
+        self.assertIn("Gemini 伺服器忙線", out.split("591 廣告詞")[1])
         self.assertEqual(comps.calls[0][1:3], ("北屯區", "崇德路三段"))
 
     def test_copy_retries_then_shows_reason(self):
@@ -564,7 +573,7 @@ class ListingMode(Base):
                 return json.dumps(PARSED, ensure_ascii=False)
             raise clients.ApiError("HTTP 429 quota")
         self.bot(ask=dead).handle(self.msg(LISTING, user="ADMIN", group="G1"))
-        self.assertIn("HTTP 429 quota", self.replies[1])
+        self.assertIn("Gemini 免費額度暫時用完", self.replies[1])
 
     def test_banned_words_in_copy_flagged(self):
         ask = fake_ask(copy={"titles": ["保證增值 北屯最便宜"], "body": "穩賺不賠"})
@@ -613,6 +622,22 @@ class ListingMode(Base):
         self.assertEqual((q["parking"], q["parking_count"]), (True, 2))
         self.assertEqual(q["city"], "臺中市")
         self.assertFalse(listing.quick_parse("北屯區 公寓 30坪 開價900萬 車位：無")["parking"])
+
+    def test_structured_post_skips_ai_parse(self):
+        ask = fake_ask()
+        self.bot(ask=ask, comps=fake_comps()).handle(self.msg(BAOHONG, user="ADMIN", group="G1"))
+        self.assertEqual(len(ask.calls), 1, "公司格式只花一次 Gemini（寫廣告詞）")
+        self.assertIn("591 售屋廣告", ask.calls[0])
+        self.assertNotIn("AI 忙線", self.replies[0])
+
+    def test_quota_429_not_retried_twice(self):
+        tries = []
+
+        def quota(prompt):
+            tries.append(1)
+            raise clients.ApiError("HTTP 429 quota", 429)
+        self.bot(ask=quota, comps=fake_comps()).handle(self.msg(BAOHONG, user="ADMIN", group="G1"))
+        self.assertEqual(len(tries), 1, "額度用完不要再試")
 
     def test_wide_spread_flagged(self):
         wide = {**COMPS, "p25": 27.1, "p75": 43.9, "median": 40.0}

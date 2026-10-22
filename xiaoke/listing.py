@@ -127,13 +127,34 @@ def quick_parse(text: str) -> dict:
     }
 
 
+def ai_reason(e: Exception) -> str:
+    """把 Gemini 的錯誤翻成人話。"""
+    msg = str(e)
+    if "429" in msg:
+        return "Gemini 免費額度暫時用完：一分鐘內太多次，或今天的額度到了（每天台灣時間下午 3～4 點重置）"
+    if "503" in msg or "500" in msg:
+        return "Gemini 伺服器忙線，過幾分鐘再貼一次"
+    if "timed out" in msg:
+        return "Gemini 回太慢（逾時），再貼一次"
+    return f"{type(e).__name__}: {msg}"[:100]
+
+
+def is_structured(text: str, q: dict) -> bool:
+    """公司格式的物件（「開價：」「建坪：」「地址：」逐行寫）規則就讀得完整，不必花一次 Gemini 額度。"""
+    labels = len(re.findall(r"(?:開價|售價|建坪|權狀|地址|屋齡|格局|車位)\s*[：:]", moi.norm(text)))
+    return labels >= 3 and bool(q["price_wan"] and q["total_ping"] and q["district"])
+
+
 def parse_listing(text: str, ask: Ask) -> dict:
     q = quick_parse(text)
-    try:
-        d = _json(ask(parse_prompt(text)))
-        ai_error = "" if d else "AI 回的格式看不懂"
-    except Exception as e:                       # Gemini 503／額度：改用規則讀，行情照算
-        d, ai_error = {}, f"{type(e).__name__}: {e}"[:80]
+    if is_structured(text, q):
+        d, ai_error = {}, ""
+    else:
+        try:
+            d = _json(ask(parse_prompt(text)))
+            ai_error = "" if d else "AI 回的格式看不懂"
+        except Exception as e:                   # Gemini 503／額度：改用規則讀，行情照算
+            d, ai_error = {}, ai_reason(e)
     for k, v in q.items():                       # AI 漏掉的欄位用規則補
         if d.get(k) in (None, "", 0) and v not in (None, "", 0):
             d[k] = v
@@ -530,7 +551,9 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps, book: Book | Non
         try:
             ad = write_copy(p, text, ask)
         except Exception as e:
-            ad = {"titles": [], "body": "", "banned": [], "error": f"{type(e).__name__}: {e}"[:150]}
+            ad = {"titles": [], "body": "", "banned": [], "error": ai_reason(e)}
+            if "額度" in ad["error"]:
+                break                            # 額度用完再試也沒用
         if ad["titles"] or ad["body"]:
             break
         ad.setdefault("error", "Gemini 回的格式看不懂")

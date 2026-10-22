@@ -102,7 +102,9 @@ def gemini_json(prompt: str, temperature: float = 0.2) -> str:
             out = _request("POST", url, body=body, timeout=30, headers={"x-goog-api-key": key})
             break
         except ApiError as e:
-            if e.status not in (429, 500, 503) or attempt == GEMINI_TRIES - 1:
+            # 429 多半是額度用完，一直重試只會更快用光：只再試一次
+            if e.status not in (429, 500, 503) or attempt == GEMINI_TRIES - 1 \
+                    or (e.status == 429 and attempt >= 1):
                 raise
             time.sleep(RETRY_WAIT * 1.5 * 2 ** attempt)
     try:
