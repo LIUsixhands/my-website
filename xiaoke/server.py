@@ -48,7 +48,17 @@ LISTING_HELP = """物件分析小幫手用法：
 3. 591 標題＋內文
 
 至少要有：行政區、權狀坪數、開價。例：
-北屯區 崇德路三段 XX社區 35坪 屋齡5年 3房2廳 含車位 開價1580萬"""
+北屯區 崇德路三段 XX社區 35坪 屋齡5年 3房2廳 含車位 開價1580萬
+（有寫「地址：…號」會找同棟成交，最準）
+
+查行情（不用開價）：
+行情 北屯區 崇德路三段
+行情 寶鴻大白
+
+教我認社區（1 對 1 傳）：
+社區 寶鴻大白 = 西區 五權三街55巷3號
+「社區」看清單、「社區 刪 名稱」刪除
+貼過的物件有社區名＋地址，我會自動記住"""
 
 
 def setup_logging() -> None:
@@ -200,17 +210,28 @@ class Bot:
             return
         if user not in self.t.config.get("admins", []):
             return
-        if not listing.looks_like_listing(text):
+        book = listing.Book(self.t.dir / "communities.json")
+        if not in_group:
+            answer = listing.book_command(text, book)
+            if answer:
+                self.reply(rt, target, answer)
+                return
+        if listing.looks_like_listing(text):
+            kind, run = "listing", lambda: listing.analyze(text, self.t.config, self.ask,
+                                                           self.comps, book)
+        elif listing.looks_like_market(text):
+            kind, run = "market", lambda: listing.market(text, self.t.config, self.comps, book)
+        else:
             if not in_group:                     # 群組閒聊不插話；1 對 1 教怎麼用
                 self.reply(rt, target, LISTING_HELP)
             return
         try:
-            answer = listing.analyze(text, self.t.config, self.ask, self.comps)
+            answer = run()
         except Exception as e:                   # Gemini 金鑰／額度問題：要讓人知道，不能沒聲音
             log.exception("[%s] 物件分析失敗", self.t.code)
             answer = f"⚠️ 這件分析失敗，等一下再貼一次。（{str(e)[:120]}）"
         self.reply(rt, target, answer)
-        self.t.log(kind="listing", user=user, group=in_group, text=text[:500], reply=answer)
+        self.t.log(kind=kind, user=user, group=in_group, text=text[:500], reply=answer)
 
     def _handoff(self, rt, target, user, text, reason, in_group, draft="", warn=False,
                  log_it=False):

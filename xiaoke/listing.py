@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Callable
 
 import engine
@@ -205,9 +206,166 @@ def _roc(date: str) -> str:
     return f"{date[:-4]}/{date[-4:-2]}" if len(date) >= 6 else date
 
 
-def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps) -> str:
+# ── 社區對照表：實價登錄沒有社區名，只有門牌 ───────────
+class Book:
+    """社區名 → 行政區＋門牌。存在租戶資料夾的 communities.json。
+    貼過的物件有社區名＋地址會自動記；也可以 1 對 1 打「社區 名稱 = 西區 五權三街55巷3號」。"""
+
+    def __init__(self, path: Path | None):
+        self.path = path
+        try:
+            self.data = json.loads(path.read_text(encoding="utf-8")) if path and path.exists() else {}
+        except ValueError:
+            self.data = {}
+
+    def get(self, name: str) -> dict | None:
+        return self.data.get(name.strip())
+
+    def find_in(self, text: str) -> tuple[str, dict] | None:
+        """訊息裡出現的社區名，挑最長的（「寶鴻大白二期」優先於「寶鴻大白」）。"""
+        hits = [n for n in self.data if n and n in text]
+        return (max(hits, key=len), self.data[max(hits, key=len)]) if hits else None
+
+    def learn(self, name: str, district: str, address: str) -> bool:
+        name, district = name.strip(), moi.norm(district)
+        bk = moi.addr_keys(address)[0]
+        if not (name and district and bk) or self.data.get(name) == {"district": district, "address": bk}:
+            return False
+        self.data[name] = {"district": district, "address": bk}
+        if self.path:
+            engine.atomic_write_json(self.path, self.data)
+        return True
+
+    def forget(self, name: str) -> bool:
+        if self.data.pop(name.strip(), None) is None:
+            return False
+        if self.path:
+            engine.atomic_write_json(self.path, self.data)
+        return True
+
+
+BOOK_CMD = re.compile(r"^社區\s*(?P<name>[^=＝]+?)\s*[=＝]\s*(?P<district>\S{1,4}區)\s*(?P<addr>.+)$")
+
+
+def book_command(text: str, book: Book) -> str | None:
+    """1 對 1 指令：「社區」列出、「社區 名稱 = 西區 門牌」新增、「社區 刪 名稱」刪除。不是指令回 None。"""
+    t = moi.norm(text.strip())
+    if t == "社區":
+        if not book.data:
+            return "還沒有記任何社區。教我：社區 寶鴻大白 = 西區 五權三街55巷3號"
+        return "我認得的社區：\n" + "\n".join(f"・{n}：{v['district']} {v['address']}"
+                                                for n, v in sorted(book.data.items()))
+    m = re.match(r"^社區\s*刪\s*(.+)$", t)
+    if m:
+        return f"🗑 已刪除「{m.group(1)}」" if book.forget(m.group(1)) else f"沒有「{m.group(1)}」這個社區"
+    m = BOOK_CMD.match(t)
+    if m:
+        if not book.learn(m["name"], m["district"], m["addr"]):
+            if book.get(m["name"]):
+                return f"「{m['name']}」本來就記著了"
+            return "門牌要寫到「號」，例：社區 寶鴻大白 = 西區 五權三街55巷3號"
+        v = book.get(m["name"])
+        return f"✅ 記住了：{m['name']} = {v['district']} {v['address']}\n之後在群組打「行情 {m['name']}」就能查"
+    return None
+
+
+# ── 行情查詢：不用開價，問某社區／路段最近成交 ─────────
+MARKET_HINT = re.compile(r"行情|成交")
+DISTRICT_RE = re.compile(r"([^\s區]{1,3}區)")
+MARKET_NOISE = re.compile(r"請問|幫我|查一下|查|最近|有沒有|有|的|嗎|呢|成交|行情|價格|多少|[?？!！。，,]")
+
+
+def looks_like_market(text: str) -> bool:
+    return bool(MARKET_HINT.search(text)) and len(text) <= 60
+
+
+def market(text: str, cfg: dict, comps_fn=moi.comps, book: Book | None = None) -> str:
+    book = book or Book(None)
+    t = moi.norm(text)
+    city = moi.norm(cfg.get("default_city") or "臺中市")
+    name, district, address, road = "", "", "", ""
+    hit = book.find_in(t)
+    if hit:
+        name, v = hit
+        district, address = v["district"], v["address"]
+    else:
+        body = MARKET_NOISE.sub(" ", t)
+        for w in list(moi.CITY_CODES) + ["社區", "學區", "園區", "重劃區"]:
+            body = body.replace(w, " ")
+        m = DISTRICT_RE.search(body)
+        district = m.group(1).strip() if m else ""
+        m = ADDR_RE.search(body)
+        address = m.group(1) if m else ""
+        road = moi.road_key(body[body.find(district) + len(district):] if district else body) \
+            if re.search(r"路|街|大道", body) else ""
+        if not district:
+            guess = MARKET_NOISE.sub(" ", t).strip()
+            if guess and not re.search(r"路|街|大道", guess):
+                return (f"🤔 我還不認識「{guess}」在哪裡。\n"
+                        f"先教我一次（1 對 1 傳給我）：社區 {guess} = 西區 五權三街55巷3號\n"
+                        "或直接問路段：行情 北屯區 崇德路三段")
+            return "🤔 要告訴我哪一區，例：行情 北屯區 崇德路三段"
+    btype = next((k for k in ("大樓", "華廈", "公寓", "透天", "套房") if k in t), "")
+    btype = {"大樓": "住宅大樓", "透天": "透天厝"}.get(btype, btype)
+
+    title = name or " ".join(x for x in (district, address or road) if x)
+    where = f"（{district} {address}）" if name else ""
+    out = [f"📈 行情查詢｜{title}{where}", ""]
+    try:
+        c = comps_fn(city, district, road, btype, None, address=address, elevator=False, limit=5)
+    except Exception as e:
+        return "\n".join(out + [f"⚠️ 實價登錄抓不到資料（{e}）"])
+    if not c.get("n"):
+        return "\n".join(out + ["這個範圍近期沒有可比較的成交（特殊交易、純車位已排除）。"])
+    out += _market_block(c)
+    if c["scope"] in ("同棟", "同巷") and (road or address):   # 同棟之外，再給同路段電梯大樓當背景
+        try:
+            r = comps_fn(city, district, moi.road_key(address or road), btype, None,
+                         address="", elevator=True, limit=0)
+            if r.get("n") and r["scope"] == "同路段":
+                out += ["", f"參考：{r['scope_key']} 電梯大樓近 {len(r['seasons'])} 季 {r['n']} 筆，"
+                            f"中位數 {r['median']} 萬/坪（{r['p25']}～{r['p75']}）"]
+        except Exception:
+            pass
+    if not name and address:
+        out += ["", "💡 想用社區名查，1 對 1 傳：社區 社區名 = " + f"{district} {moi.addr_keys(address)[0]}"]
+    return "\n".join(out)
+
+
+def _market_block(c: dict) -> list[str]:
+    scope = "・".join(x for x in (SCOPE_LABEL[c["scope"]].format(c["scope_key"]), c["type"],
+                                  c.get("age_band", "")) if x)
+    out = [f"範圍：{scope}，近 {len(c['seasons'])} 季 {c['n']} 筆",
+           f"成交中位數：{c['median']} 萬/坪（扣車位）",
+           f"成交區間：{c['p25']}～{c['p75']} 萬/坪"]
+    if c.get("car_median_wan"):
+        out.append(f"車位行情：約 {c['car_median_wan']} 萬/個（同區坡道平面）")
+    warn = low_confidence(c)
+    if warn:
+        out.append(f"⚠️ 參考性低：{warn}")
+    if c["latest"]:
+        out.append("最近成交：")
+        out += [_deal_line(d) for d in c["latest"]]
+    return out
+
+
+def _deal_line(d: dict) -> str:
+    car = f"，車位{'估' if d.get('car_est') else ''} {d['car_wan']} 萬" if d["car_wan"] else ""
+    addr = re.sub(r"^.{2,3}[市縣]", "", d["addr"])
+    return f"・{_roc(d['date'])} {addr} {d['floor']} {d['unit']} 萬/坪（總 {_wan(d['total_wan'])} 萬{car}）"
+
+
+def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps, book: Book | None = None) -> str:
+    book = book or Book(None)
     p = parse_listing(text, ask)
     p["city"] = moi.norm(p["city"] or cfg.get("default_city") or "臺中市")
+    if p["community"]:
+        known = book.get(p["community"])
+        if known and not p["address"]:           # 沒寫地址但認得社區：用記下的門牌找同棟
+            p["address"] = known["address"]
+            p["district"] = p["district"] or known["district"]
+        elif p["district"] and p["address"]:
+            book.learn(p["community"], p["district"], p["address"])
     missing = [n for n, k in (("開價", "price_wan"), ("權狀坪數", "total_ping"),
                               ("行政區", "district")) if not p[k]]
     if missing:
@@ -251,11 +409,7 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps) -> str:
                 out.append(f"⚠️ 參考性低：{warn}，判斷僅供參考，建議再人工看一下。")
         if c["latest"]:
             out.append("最近成交：")
-            for d in c["latest"]:
-                car = (f"，車位{'估' if d.get('car_est') else ''} {d['car_wan']} 萬"
-                       if d["car_wan"] else "")
-                out.append(f"・{_roc(d['date'])} {d['addr'].replace(p['city'], '')} {d['floor']} "
-                           f"{d['unit']} 萬/坪（總 {_wan(d['total_wan'])} 萬{car}）")
+            out += [_deal_line(d) for d in c["latest"]]
 
     out += ["", "🔍 2. 591 競品",
             f"請到 591 搜「{p['community'] or where}」，看在刊幾筆、最低開多少，"

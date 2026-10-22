@@ -598,6 +598,67 @@ class ListingMode(Base):
         self.assertFalse(listing.needs_elevator({**base, "floor": "3/4"}))
         self.assertFalse(listing.needs_elevator({**base, "building_type": "公寓", "parking": True}))
 
+    # ── 行情查詢＋社區對照表 ──
+    def market_comps(self):
+        same = {**COMPS, "scope": "同棟", "scope_key": "五權三街55巷3號", "type": "", "age_band": "",
+                "n": 2, "median": 44.0, "p25": 42.7, "p75": 45.2, "car_median_wan": 195}
+        road = {**COMPS, "scope": "同路段", "scope_key": "五權三街", "type": "電梯大樓",
+                "n": 9, "median": 41.0, "p25": 38.0, "p75": 44.0}
+        calls = []
+
+        def comps(city, district, rd, btype, age, address="", elevator=False, limit=3):
+            calls.append(dict(district=district, road=rd, address=address, elevator=elevator))
+            return same if address else road
+        comps.calls = calls
+        return comps
+
+    def test_teach_community_then_query_in_group(self):
+        self.bot().handle(self.msg("社區 寶鴻大白 = 西區 五權三街55巷3號", user="ADMIN"))
+        self.assertIn("✅ 記住了：寶鴻大白 = 西區 五權三街55巷3號", self.replies[-1])
+        comps = self.market_comps()
+        self.bot(comps=comps).handle(self.msg("寶鴻大白有成交行情嗎？", user="ADMIN", group="G1"))
+        out = self.replies[-1]
+        self.assertIn("📈 行情查詢｜寶鴻大白（西區 五權三街55巷3號）", out)
+        self.assertIn("範圍：同棟 五權三街55巷3號，近 2 季 2 筆", out)
+        self.assertIn("⚠️ 參考性低：同棟成交只有 2 筆", out)
+        self.assertIn("參考：五權三街 電梯大樓近 2 季 9 筆，中位數 41.0", out)
+        self.assertEqual(comps.calls[0], dict(district="西區", road="", address="五權三街55巷3號",
+                                              elevator=False))
+        self.assertEqual(self.t.read_log()[-1]["kind"], "market")
+
+    def test_query_by_road(self):
+        comps = self.market_comps()
+        self.bot(comps=comps).handle(self.msg("行情北屯區崇德路3段", user="ADMIN", group="G1"))
+        self.assertEqual(comps.calls[0]["district"], "北屯區")
+        self.assertEqual(comps.calls[0]["road"], "崇德路三段")
+        self.assertIn("📈 行情查詢｜北屯區 崇德路三段", self.replies[-1])
+
+    def test_unknown_community_asks_to_teach(self):
+        comps = self.market_comps()
+        self.bot(comps=comps).handle(self.msg("幸福社區行情", user="ADMIN", group="G1"))
+        self.assertIn("我還不認識「幸福", self.replies[-1])
+        self.assertEqual(comps.calls, [])
+
+    def test_listing_auto_learns_and_reuses_address(self):
+        parsed = {**PARSED, "community": "寶鴻大白", "district": "西區", "address": "五權三街55巷3號"}
+        self.bot(ask=fake_ask(parsed=parsed)).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        self.bot().handle(self.msg("社區", user="ADMIN"))
+        self.assertIn("・寶鴻大白：西區 五權三街55巷3號", self.replies[-1])
+        comps = fake_comps()                     # 下次只寫社區名沒寫地址，也要用記下的門牌
+        self.bot(ask=fake_ask(parsed={**parsed, "address": "", "district": ""}), comps=comps).handle(
+            self.msg("寶鴻大白 86坪 開價3888萬", user="ADMIN", group="G1"))
+        self.assertEqual(comps.calls[0][1], "西區")
+        self.assertEqual(comps.calls[0][5], "五權三街55巷3號")
+
+    def test_forget_community_and_strangers_cannot_teach(self):
+        self.bot().handle(self.msg("社區 寶鴻大白 = 西區 五權三街55巷3號", user="U_OTHER"))
+        self.assertEqual(self.replies, [])
+        self.bot().handle(self.msg("社區 寶鴻大白 = 西區 五權三街55巷3號", user="ADMIN"))
+        self.bot().handle(self.msg("社區 刪 寶鴻大白", user="ADMIN"))
+        self.assertIn("已刪除", self.replies[-1])
+        self.bot().handle(self.msg("社區 寶鴻大白 = 西區 五權三街", user="ADMIN"))
+        self.assertIn("門牌要寫到「號」", self.replies[-1])
+
     def test_new_tenant_listing_type(self):
         new_tenant.create("house", "物件分析", root=self.root, kind="listing")
         cfg = engine.Tenant("house", root=self.root).config

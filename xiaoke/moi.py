@@ -220,7 +220,8 @@ def pct(xs: list[float], p: float) -> float:
 
 def comps(city: str, district: str, road: str = "", btype: str = "", age: float | None = None,
           address: str = "", elevator: bool = False,
-          seasons: int = 4, same_seasons: int = 8, fetch=download, now: float | None = None) -> dict:
+          seasons: int = 4, same_seasons: int = 8, limit: int = 3,
+          fetch=download, now: float | None = None) -> dict:
     """成交統計，比較對象由近到遠：同棟 → 同巷 → 同路段＋屋齡相近 → 全區＋屋齡相近
     → 同路段 → 全區。同棟／同巷成交少，往回看 same_seasons 季；其他看近 seasons 季。
     btype 沒寫但 elevator=True 時只比電梯大樓／華廈。fetch 可換成假的做離線測試。"""
@@ -295,5 +296,5 @@ def comps(city: str, district: str, road: str = "", btype: str = "", age: float 
         # 物件沒寫車位價時用來推估：跟成交扣車位用同一個數字（同區坡道平面中位價），前後一致。都是「一個車位」
         "car_median_wan": round(car_price / 10000) if car_price else None,
         "car_ping_median": round(statistics.median(car_pings), 1) if car_pings else None,
-        "latest": deals[:3],
+        "latest": deals[:limit],
     }
