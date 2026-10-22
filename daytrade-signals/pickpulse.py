@@ -30,6 +30,7 @@ log = logging.getLogger("pickpulse")
 END_AT = dtime(13, 10)
 WINDOW_MIN = 30          # ④⑤ 看最近幾分鐘
 MIN_GAP_MIN = 10         # 兩則之間至少隔幾分鐘
+FORECAST_GAP_MIN = 5     # 預測變了：隔一根 5 分 K 就推（10-22 使用者：「預測改成 5 分鐘」）
 HEARTBEAT_MIN = 60       # 這麼久沒推就補一則
 STEP_TO_PUSH = 1         # 名稱變幾級才推（10-22 從 2 改 1）
 
@@ -184,13 +185,16 @@ class Pulse:
             if abs(lv - before["lv"]) >= STEP_TO_PUSH and gap >= MIN_GAP_MIN:
                 kind = "change"
             elif verdict and before.get("verdict") and verdict != before["verdict"] \
-                    and gap >= MIN_GAP_MIN:
-                kind = "forecast"            # 10-22：強弱沒變、預測變了也推
+                    and end - before["end"] >= timedelta(minutes=FORECAST_GAP_MIN):
+                # 10-22：強弱沒變、預測變了也推。用 5 分 K 的結束時間比，不用收到報價的時間 ——
+                # 上一則 09:15:08 才進來、這一則 09:20:02 就進來，差 4.9 分鐘也算隔了一根。
+                kind = "forecast"
             elif gap >= HEARTBEAT_MIN:
                 kind = "quiet"
         if kind is None:
             return []
-        self.pushed = {"at": now, "lv": lv, "score": score, "label": name, "verdict": verdict}
+        self.pushed = {"at": now, "end": end, "lv": lv, "score": score, "label": name,
+                       "verdict": verdict}
         return [self._message(kind, st, items, score, name, before, end, status, fc)]
 
     def _message(self, kind, st, items, score, name, before, at, status, fc=None) -> str:

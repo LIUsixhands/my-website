@@ -6811,9 +6811,8 @@ class TestPulseScoreCheck(unittest.TestCase):
         (first,) = bar(9, 5, 5.0)
         self.assertIn("🔮 之後 30 分鐘：中性", first)
         self.assertEqual(bar(9, 10, 5.4), [], "強弱、預測都沒變 → 不推")
-        self.assertEqual(bar(9, 10, 7.0), [], "預測變了，但離上一則不到 10 分鐘 → 先不推")
-        (chg,) = bar(9, 15, 7.0)
-        self.assertIn("🌅 1111 測試・首選預測變化｜09:15", chg)
+        (chg,) = bar(9, 10, 7.0)
+        self.assertIn("🌅 1111 測試・首選預測變化｜09:10", chg, "10-22 使用者：「預測改成 5 分鐘」→ 隔一根就推")
         self.assertIn("之後 30 分鐘：中性 → 偏跌", chg)
         self.assertNotIn("🔮", chg, "標題已經講了預測，不重複")
         self.assertIn("強弱：中性（5.4 分）", chg)
@@ -6821,6 +6820,16 @@ class TestPulseScoreCheck(unittest.TestCase):
         self.assertEqual(p.history[-1]["forecast"], "偏跌", "每一次打分都存預測，之後拿來對答案")
         self.assertEqual(bar(9, 30, 7.0), [], "預測沒變 → 不推")
         self.assertEqual(bar(9, 40, 6.6), [], "④ 6.6 還是高那一組、強弱名稱也沒變 → 不推")
+        with unittest.mock.patch.object(pickpulse, "score_items", side_effect=lambda *a: {
+                "vwap": ("v", 5.0), "ma20": ("m", 5.0), "ma_gap": ("g", 5.0), "volume": ("q", 5.0),
+                "buy": ("b", None), "market": ("k", 5.0)}):
+            st = SimpleNamespace(last_price=100.0, total_volume=100, day_buy=0, day_sell=0, vwap=100.0,
+                                 day_high=100.0)
+            self.assertEqual(len(p.on_bar(st, (self.at(9, 50), 100.0, 100.0, 100.0, False),
+                                          self.at(9, 50) + timedelta(seconds=58))), 1)
+        (back,) = bar(9, 55, 7.0)
+        self.assertIn("中性 → 偏跌", back,
+                      "上一則 09:50:58 才進來、這一則 09:55:03（只差 4 分多）：用 5 分 K 算，隔一根就推")
 
     def test_the_daily_update_and_the_wiring(self):
         bars = self.day()
