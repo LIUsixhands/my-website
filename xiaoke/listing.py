@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.parse
 from pathlib import Path
 from typing import Callable
 
@@ -128,7 +129,7 @@ def price_check(p: dict, c: dict) -> dict:
     if net < 5:
         return {"ok": False, "why": "坪數扣掉車位後太小，請確認權狀坪數"}
     unit = (p["price_wan"] - car_wan) / net
-    med = c["median"]
+    med = c.get("median_adj") or c["median"]    # 有樓層就跟「換算到同樓層」的成交比
     ratio = unit / med
     if ratio <= 1.05:
         verdict = "🟢 有競爭力"
@@ -177,6 +178,61 @@ def write_copy(p: dict, raw: str, ask: Ask) -> dict:
 
 
 # ── 組回覆 ────────────────────────────────────────────
+def floor_of(p: dict, text: str) -> int | None:
+    """物件在幾樓：AI 抓的 floor（「7」「7/10」），抓不到就從原文「3號7樓」「7樓」找。"""
+    m = re.match(r"\s*(\d{1,2})(?!\d)", p["floor"] or "")
+    if not m:
+        t = moi.norm(text)
+        m = re.search(r"號\s*(\d{1,2})\s*樓", t) or re.search(r"(?<!\d)(\d{1,2})\s*樓(?!層|梯)", t)
+    return int(m.group(1)) if m and int(m.group(1)) > 0 else None
+
+
+REGION_591 = {"臺北市": 1, "新北市": 3, "桃園市": 6, "臺中市": 8, "臺南市": 15, "高雄市": 17}
+
+
+def link_591(city: str, keyword: str) -> str:
+    q = {"shType": "list", "keywords": keyword}
+    if city in REGION_591:
+        q["regionid"] = REGION_591[city]
+    return "https://sale.591.com.tw/?" + urllib.parse.urlencode(q)
+
+
+PRICE_RE = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*萬?")
+
+
+def looks_like_compete(text: str) -> bool:
+    return moi.norm(text).strip().startswith("競品")
+
+
+def compete(text: str, last: dict | None) -> str:
+    """「競品 3880 3680 3500」：跟上一件分析的物件比總價名次。"""
+    if not last:
+        return "要先貼一件物件給我分析，再傳「競品 開價1 開價2 …」。"
+    prices = [float(x.replace(",", "")) for x in PRICE_RE.findall(moi.norm(text)[2:])]
+    prices = [x for x in prices if x >= 50]       # 過濾掉「3筆」這種數字
+    if not prices:
+        return "看不到開價，格式：競品 3880 3680 3500（單位萬）"
+    me, lo, hi = last["price"], *last["suggest"]
+    allp = sorted(prices + [me])
+    rank = allp.index(me) + 1
+    cheapest = min(prices)
+    out = [f"🔍 591 競品比較｜{last['name']}",
+           f"競品 {len(prices)} 筆：最低 {_wan(cheapest)}、中位 {_wan(sorted(prices)[len(prices) // 2])}、"
+           f"最高 {_wan(max(prices))} 萬",
+           f"這件開價 {_wan(me)} 萬：便宜到貴排第 {rank}/{len(allp)}"]
+    if me <= cheapest:
+        out.append("🟢 開價已經是最便宜的，可以刊。")
+    elif hi <= cheapest:
+        out.append(f"🟡 開價比競品貴；照建議刊登價 {_wan(lo)}～{_wan(hi)} 萬刊，會是最便宜的，曝光有優勢。")
+    elif lo <= cheapest:
+        out.append(f"🟡 建議刊登價 {_wan(lo)}～{_wan(hi)} 萬的下緣才比最低競品便宜，議價空間要談到底。")
+    else:
+        out.append(f"🔴 就算照建議刊登價 {_wan(lo)}～{_wan(hi)} 萬，也比最低競品 {_wan(cheapest)} 萬貴，"
+                   "這件先不急著刊。")
+    out.append("（只比總價；坪數、樓層、車位不同，請自己再斟酌）")
+    return "\n".join(out)
+
+
 SCOPE_LABEL = {"同棟": "同棟 {}", "同巷": "同巷 {}", "同路段": "{}", "全區": "{}全區"}
 
 
@@ -355,7 +411,9 @@ def _deal_line(d: dict) -> str:
     return f"・{_roc(d['date'])} {addr} {d['floor']} {d['unit']} 萬/坪（總 {_wan(d['total_wan'])} 萬{car}）"
 
 
-def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps, book: Book | None = None) -> str:
+def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps, book: Book | None = None,
+            state: dict | None = None) -> str:
+    """state 有給的話，會填入這件的開價與建議刊登價，給之後的「競品」指令用。"""
     book = book or Book(None)
     p = parse_listing(text, ask)
     p["city"] = moi.norm(p["city"] or cfg.get("default_city") or "臺中市")
@@ -383,7 +441,7 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps, book: Book | Non
     out.append("📊 1. 開價 vs 實價登錄")
     try:
         c = comps_fn(p["city"], p["district"], p["road"], p["building_type"], p["age"],
-                     address=p["address"], elevator=needs_elevator(p))
+                     address=p["address"], elevator=needs_elevator(p), floor=floor_of(p, text))
     except Exception as e:                       # 內政部網站維護、斷線
         c = {"n": 0, "error": str(e)}
     if not c.get("n"):
@@ -399,8 +457,12 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps, book: Book | Non
             diff = (chk["ratio"] - 1) * 100
             out += [f"扣車位單價：開 {chk['unit']} 萬/坪（{chk['net']:g} 坪）",
                     f"成交中位數：{c['median']} 萬/坪（{scope}，近 {len(c['seasons'])} 季 {c['n']} 筆）",
-                    f"成交區間：{c['p25']}～{c['p75']} 萬/坪",
-                    f"判斷：{chk['verdict']}，比成交中位數{'高' if diff >= 0 else '低'} {abs(diff):.0f}%",
+                    f"成交區間：{c['p25']}～{c['p75']} 萬/坪"]
+            if c.get("median_adj"):
+                out.append(f"樓層調整後：中位數 {c['median_adj']} 萬/坪（{c['p25_adj']}～{c['p75_adj']}，"
+                           f"換算成 {c['floor']} 樓，每差一層 ±{moi.FLOOR_RATE * 100:g}%）")
+            out += [f"判斷：{chk['verdict']}，比{'樓層調整後' if c.get('median_adj') else '成交'}中位數"
+                    f"{'高' if diff >= 0 else '低'} {abs(diff):.0f}%",
                     f"建議刊登價：{_wan(chk['suggest'][0])}～{_wan(chk['suggest'][1])} 萬"]
             if chk["notes"]:
                 out.append("（" + "；".join(chk["notes"]) + "）")
@@ -411,9 +473,13 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps, book: Book | Non
             out.append("最近成交：")
             out += [_deal_line(d) for d in c["latest"]]
 
-    out += ["", "🔍 2. 591 競品",
-            f"請到 591 搜「{p['community'] or where}」，看在刊幾筆、最低開多少，"
-            "跟上面的建議刊登價比，低於大部分競品的先刊。"]
+    kw = p["community"] or " ".join(x for x in (p["district"], p["road"]) if x)
+    out += ["", "🔍 2. 591 競品", f"點這裡看在刊物件：{link_591(p['city'], kw)}",
+            "看完回我「競品 開價1 開價2 …」（單位萬，例：競品 3880 3680 3500），我幫你排名次。"]
+    if state is not None and c.get("n"):
+        chk = price_check(p, c)
+        if chk["ok"]:
+            state.update(name=kw, price=p["price_wan"], ping=p["total_ping"], suggest=list(chk["suggest"]))
 
     out += ["", "✍️ 3. 591 廣告詞"]
     ad = {"titles": [], "body": "", "banned": [], "error": "Gemini 回的格式看不懂"}

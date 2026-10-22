@@ -449,12 +449,13 @@ def fake_ask(parsed=PARSED, copy=COPY):
 def fake_comps(result=COMPS):
     calls = []
 
-    def comps(city, district, road, btype, age, address="", elevator=False):
+    def comps(city, district, road, btype, age, address="", elevator=False, floor=None):
         calls.append((city, district, road, btype, age, address, elevator))
+        comps.floors.append(floor)
         if isinstance(result, Exception):
             raise result
         return result
-    comps.calls = calls
+    comps.calls, comps.floors = calls, []
     return comps
 
 
@@ -485,7 +486,7 @@ class ListingMode(Base):
         # 50×1.05×25+230=1542.5→1540；50×1.12×25+230=1630
         self.assertIn("建議刊登價：1,540～1,630 萬", out)
         self.assertIn("A. 北屯三房含車位", out)
-        self.assertIn("591 搜「幸福社區」", out)
+        self.assertIn("keywords=%E5%B9%B8%E7%A6%8F%E7%A4%BE%E5%8D%80", out)   # 幸福社區
         self.assertIn("車位估 230 萬", out)
         self.assertEqual(comps.calls, [("臺中市", "北屯區", "崇德路三段", "住宅大樓", 5, "", False)])
         self.assertNotIn("參考性低", out)
@@ -659,6 +660,34 @@ class ListingMode(Base):
         self.bot().handle(self.msg("社區 寶鴻大白 = 西區 五權三街", user="ADMIN"))
         self.assertIn("門牌要寫到「號」", self.replies[-1])
 
+    def test_floor_adjusted_verdict(self):
+        adj = {**COMPS, "floor": 7, "median_adj": 54.0, "p25_adj": 50.0, "p75_adj": 58.0}
+        comps = fake_comps(adj)
+        self.bot(ask=fake_ask(parsed={**PARSED, "floor": "7/14"}), comps=comps).handle(
+            self.msg(LISTING, user="ADMIN", group="G1"))
+        out = self.replies[0]
+        self.assertEqual(comps.floors, [7])
+        self.assertIn("樓層調整後：中位數 54.0 萬/坪（50.0～58.0，換算成 7 樓，每差一層 ±0.7%）", out)
+        # 開 54.0 跟調整後 54.0 比 → 0%，綠燈
+        self.assertIn("🟢 有競爭力，比樓層調整後中位數高 0%", out)
+
+    def test_591_link_then_compete(self):
+        self.bot().handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        self.assertIn("https://sale.591.com.tw/?shType=list&keywords=", self.replies[0])
+        self.assertIn("regionid=8", self.replies[0])
+        # 建議刊登價 1,540～1,630；競品最低 1,600 → 只有下緣比較便宜
+        self.bot().handle(self.msg("競品 1680 1,600萬 1750", user="ADMIN", group="G1"))
+        out = self.replies[1]
+        self.assertIn("🔍 591 競品比較｜幸福社區", out)
+        self.assertIn("競品 3 筆：最低 1,600、中位 1,680、最高 1,750 萬", out)
+        self.assertIn("這件開價 1,580 萬：便宜到貴排第 1/4", out)
+        self.assertIn("🟢 開價已經是最便宜的", out)
+        self.bot().handle(self.msg("競品 1500 1450", user="ADMIN", group="G1"))
+        self.assertIn("🔴", self.replies[2])
+        # 別的群組沒分析過，不能拿這個群組的物件比
+        self.bot().handle(self.msg("競品 1500", user="ADMIN", group="G2"))
+        self.assertIn("要先貼一件物件", self.replies[3])
+
     def test_new_tenant_listing_type(self):
         new_tenant.create("house", "物件分析", root=self.root, kind="listing")
         cfg = engine.Tenant("house", root=self.root).config
@@ -738,6 +767,16 @@ class Moi(unittest.TestCase):
         c = moi.comps("臺中市", "北屯區", "五權三街", "住宅大樓", address="五權三街55巷5號",
                       seasons=1, fetch=lambda code, s: csv if s == "115S2" else "", now=1792540800)
         self.assertEqual((c["scope"], c["n"]), ("同棟", 2))
+
+    def test_floor_parse_and_adjust(self):
+        self.assertEqual([moi.cn_floor(x) for x in ["二層", "十層", "十一層", "二十一層", "全", "地下一層"]],
+                         [2, 10, 11, 21, None, None])
+        self.assertAlmostEqual(moi.floor_adjust(40.0, 2, 7), 41.4)      # +5 層 → +3.5%
+        self.assertAlmostEqual(moi.floor_adjust(40.0, 30, 5), 36.0)     # 差 25 層也只調 -10%
+        self.assertEqual(moi.floor_adjust(40.0, None, 5), 40.0)
+        c = self.comps(floor=15)                 # 樣本都是 8 樓 → +7 層 = +4.9%
+        self.assertEqual(c["floor"], 15)
+        self.assertEqual(c["median_adj"], round(c["median"] * 1.049, 1))
 
     def test_addr_keys(self):
         self.assertEqual(moi.addr_keys("五權三街55巷3號7樓"), ("五權三街55巷3號", "五權三街55巷"))

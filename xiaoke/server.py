@@ -51,6 +51,8 @@ LISTING_HELP = """物件分析小幫手用法：
 北屯區 崇德路三段 XX社區 35坪 屋齡5年 3房2廳 含車位 開價1580萬
 （有寫「地址：…號」會找同棟成交，最準）
 
+看完 591 回「競品 3880 3680 3500」（各家開價，單位萬），我幫你排名次
+
 查行情（不用開價）：
 行情 北屯區 崇德路三段
 行情 寶鴻大白
@@ -216,9 +218,17 @@ class Bot:
             if answer:
                 self.reply(rt, target, answer)
                 return
-        if listing.looks_like_listing(text):
+        last_file = self.t.dir / "last_listing.json"
+        try:
+            last_all = json.loads(last_file.read_text(encoding="utf-8")) if last_file.exists() else {}
+        except ValueError:
+            last_all = {}
+        state: dict = {}
+        if listing.looks_like_compete(text):    # 每個群組記自己最後分析的那件
+            kind, run = "compete", lambda: listing.compete(text, last_all.get(target))
+        elif listing.looks_like_listing(text):
             kind, run = "listing", lambda: listing.analyze(text, self.t.config, self.ask,
-                                                           self.comps, book)
+                                                           self.comps, book, state)
         elif listing.looks_like_market(text):
             kind, run = "market", lambda: listing.market(text, self.t.config, self.comps, book)
         else:
@@ -230,6 +240,8 @@ class Bot:
         except Exception as e:                   # Gemini 金鑰／額度問題：要讓人知道，不能沒聲音
             log.exception("[%s] 物件分析失敗", self.t.code)
             answer = f"⚠️ 這件分析失敗，等一下再貼一次。（{str(e)[:120]}）"
+        if state:
+            engine.atomic_write_json(last_file, {**last_all, target: state})
         self.reply(rt, target, answer)
         self.t.log(kind=kind, user=user, group=in_group, text=text[:500], reply=answer)
 

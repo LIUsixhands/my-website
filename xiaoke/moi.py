@@ -133,6 +133,32 @@ def car_estimates(rows: list[dict]) -> dict[str, float]:
     return {k: statistics.median(v) for k, v in by.items()}
 
 
+CN_NUM = {c: i for i, c in enumerate("零一二三四五六七八九")}
+
+
+def cn_floor(s: str) -> int | None:
+    """「十一層」→11、「二十一層」→21、「三層,四層」→3、「全」「地下一層」→None（透天、地下室不調樓層）。"""
+    m = re.match(r"\s*([一二三四五六七八九十]+)層", s or "")
+    if not m or (s or "").startswith("地下"):
+        return None
+    t = m.group(1)
+    if "十" not in t:
+        return CN_NUM[t[-1]] if len(t) == 1 else None
+    tens, _, ones = t.partition("十")
+    return (CN_NUM[tens] if tens else 1) * 10 + (CN_NUM[ones] if ones else 0)
+
+
+FLOOR_RATE = 0.007                  # 樓層差每層 0.7%（估價常用的簡化值，不是精算）
+FLOOR_CAP = 0.10                    # 最多調 ±10%
+
+
+def floor_adjust(unit: float, deal_floor: int | None, floor: int) -> float:
+    if not deal_floor:
+        return unit
+    k = max(-FLOOR_CAP, min(FLOOR_CAP, FLOOR_RATE * (floor - deal_floor)))
+    return unit * (1 + k)
+
+
 def to_deal(r: dict, car_est: dict[str, float] | None = None) -> dict | None:
     """一筆成交 → 扣掉車位後的單價（萬/坪）。不能拿來比的回 None。
     車位沒拆價的用 car_est 推估；連推估都沒有就不拿來比。"""
@@ -162,6 +188,7 @@ def to_deal(r: dict, car_est: dict[str, float] | None = None) -> dict | None:
         "district": r.get("鄉鎮市區", ""),
         "type": r.get("建物型態", ""),
         "floor": f"{r.get('移轉層次', '')}/{r.get('總樓層數', '')}",
+        "floor_n": cn_floor(r.get("移轉層次", "")),
         "age": roc_age(r.get("建築完成年月", "")),
         "total_wan": round(total / 10000),
         "ping": round(area / PING, 1),
@@ -220,7 +247,7 @@ def pct(xs: list[float], p: float) -> float:
 
 def comps(city: str, district: str, road: str = "", btype: str = "", age: float | None = None,
           address: str = "", elevator: bool = False,
-          seasons: int = 4, same_seasons: int = 8, limit: int = 3,
+          floor: int | None = None, seasons: int = 4, same_seasons: int = 8, limit: int = 3,
           fetch=download, now: float | None = None) -> dict:
     """成交統計，比較對象由近到遠：同棟 → 同巷 → 同路段＋屋齡相近 → 全區＋屋齡相近
     → 同路段 → 全區。同棟／同巷成交少，往回看 same_seasons 季；其他看近 seasons 季。
@@ -283,6 +310,9 @@ def comps(city: str, district: str, road: str = "", btype: str = "", age: float 
         deals, scope, key, age_band = [], "全區", dist, ""
     span = len(used) if scope in ("同棟", "同巷") else len(recent)
     units = [d["unit"] for d in deals]
+    # 物件有樓層、而且是電梯大樓類：把每筆成交換算成「如果在這個樓層」的單價
+    adj = [floor_adjust(d["unit"], d["floor_n"], floor) for d in deals] \
+        if floor and not tk.startswith(("透天", "公寓")) and any(d["floor_n"] for d in deals) else []
     car_price = car_est.get("坡道平面") or car_est.get("")
     car_pings = [d["car_ping"] / d["cars"] for d in deals if d["car_ping"] > 0]
     deals.sort(key=lambda d: d["date"], reverse=True)
@@ -291,6 +321,10 @@ def comps(city: str, district: str, road: str = "", btype: str = "", age: float 
         "road": rk, "type": tk, "district": dist,
         "n": len(units),
         "median": round(statistics.median(units), 1) if units else None,
+        "floor": floor if adj else None,
+        "median_adj": round(statistics.median(adj), 1) if adj else None,
+        "p25_adj": pct(adj, .25) if adj else None,
+        "p75_adj": pct(adj, .75) if adj else None,
         "p25": pct(units, .25) if units else None,
         "p75": pct(units, .75) if units else None,
         # 物件沒寫車位價時用來推估：跟成交扣車位用同一個數字（同區坡道平面中位價），前後一致。都是「一個車位」
