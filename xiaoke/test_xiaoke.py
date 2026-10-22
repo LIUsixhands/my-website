@@ -436,6 +436,20 @@ COMPS = {"seasons": ["115S2", "115S1"], "scope": "同路段", "scope_key": "崇�
                      "unit": 52.0, "total_wan": 2000, "car_wan": 230, "car_est": True}]}
 
 
+BAOHONG = """🧀🅰️ 新接一般物件 🅰️🧀
+物件編號：AG1978559
+案名：寶鴻大白再接一間｜質感三房雙車精裝此戶超美必看
+地址：台中市西區五權三街55巷3號7樓
+建坪：86.61坪
+室內：41.81坪
+格局：3/2/4
+屋齡：8年
+車位：B1-34A、35
+開價：3888萬
+🦴承辦：
+Doris -0956921766"""
+
+
 def fake_ask(parsed=PARSED, copy=COPY):
     calls = []
 
@@ -510,7 +524,7 @@ class ListingMode(Base):
 
     def test_missing_fields_asks_instead_of_guessing(self):
         ask = fake_ask(parsed={**PARSED, "district": ""})
-        self.bot(ask=ask).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        self.bot(ask=ask).handle(self.msg("崇德路三段 35坪 開價1580萬", user="ADMIN", group="G1"))
         self.assertIn("看不出行政區", self.replies[0])
         self.assertEqual(len(ask.calls), 1, "缺資料就不寫廣告詞")
 
@@ -523,8 +537,14 @@ class ListingMode(Base):
     def test_gemini_down_says_so(self):
         def broken(prompt):
             raise clients.ApiError("HTTP 503 busy", 503)
-        self.bot(ask=broken).handle(self.msg(LISTING, user="ADMIN", group="G1"))
-        self.assertIn("分析失敗", self.replies[0])
+        comps = fake_comps()
+        self.bot(ask=broken, comps=comps).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        out = self.replies[0]
+        # Gemini 掛了：欄位改用規則讀，行情照算，只有廣告詞失敗
+        self.assertIn("AI 忙線，欄位用規則讀的", out)
+        self.assertIn("建議刊登價：1,540～1,630 萬", out)
+        self.assertIn("HTTP 503 busy", out.split("591 廣告詞")[1])
+        self.assertEqual(comps.calls[0][1:3], ("北屯區", "崇德路三段"))
 
     def test_copy_retries_then_shows_reason(self):
         tries = []
@@ -583,8 +603,16 @@ class ListingMode(Base):
         comps = fake_comps()
         self.bot(ask=fake_ask(parsed={**PARSED, "address": ""}), comps=comps).handle(
             self.msg("地址：台中市西區五權三街55巷3號7樓\n建坪：86坪\n開價：3888萬", user="ADMIN", group="G1"))
-        self.assertEqual(comps.calls[0][5], "臺中市西區五權三街55巷3號")
+        self.assertEqual(comps.calls[0][5], "五權三街55巷3號")
         self.assertEqual(moi.addr_keys(comps.calls[0][5])[0], "五權三街55巷3號")
+
+    def test_quick_parse_structured_post(self):
+        q = listing.quick_parse(BAOHONG)
+        self.assertEqual((q["district"], q["address"], q["road"]), ("西區", "五權三街55巷3號", "五權三街"))
+        self.assertEqual((q["price_wan"], q["total_ping"], q["main_ping"], q["age"]), (3888, 86.61, 41.81, 8))
+        self.assertEqual((q["parking"], q["parking_count"]), (True, 2))
+        self.assertEqual(q["city"], "臺中市")
+        self.assertFalse(listing.quick_parse("北屯區 公寓 30坪 開價900萬 車位：無")["parking"])
 
     def test_wide_spread_flagged(self):
         wide = {**COMPS, "p25": 27.1, "p75": 43.9, "median": 40.0}

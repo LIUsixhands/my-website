@@ -18,6 +18,7 @@ from engine import build_prompt
 LINE_API = "https://api.line.me/v2/bot"
 TIMEOUT = 20
 RETRY_WAIT = 2   # 秒；測試會把它調成 0
+GEMINI_TRIES = 4
 
 
 class ApiError(RuntimeError):
@@ -95,14 +96,15 @@ def gemini_json(prompt: str, temperature: float = 0.2) -> str:
     }
     # 金鑰放標頭不放網址：網址會被印進錯誤訊息與 log
     # 503「模型忙碌」、429 限流通常幾秒就好（實機遇過 503），重試兩次再放棄
-    for attempt in range(3):
+    # 免費方案尖峰常連續 503（實機遇過），等 3、6、12 秒共試 4 次
+    for attempt in range(GEMINI_TRIES):
         try:
             out = _request("POST", url, body=body, timeout=30, headers={"x-goog-api-key": key})
             break
         except ApiError as e:
-            if e.status not in (429, 500, 503) or attempt == 2:
+            if e.status not in (429, 500, 503) or attempt == GEMINI_TRIES - 1:
                 raise
-            time.sleep(RETRY_WAIT * (attempt + 1))
+            time.sleep(RETRY_WAIT * 1.5 * 2 ** attempt)
     try:
         return out["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError, TypeError):

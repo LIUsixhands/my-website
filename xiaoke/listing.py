@@ -95,15 +95,53 @@ def _f(v) -> float | None:
 ADDR_RE = re.compile(r"([^\s：:,，]+?(?:路|街|大道)(?:[一二三四五六七八九十]+段)?(?:\d+巷)?(?:\d+弄)?\d+(?:之\d+)?號)")
 
 
+def _grab(pattern: str, text: str) -> str:
+    m = re.search(pattern, text)
+    return m.group(1) if m else ""
+
+
+def quick_parse(text: str) -> dict:
+    """不靠 AI，用規則讀格式化的物件原文（「開價：3888萬」「建坪：86.61坪」「地址：…」）。
+    Gemini 忙線（503）時行情照樣算得出來；AI 有回時用來補它漏掉的欄位。"""
+    t = moi.norm(text)
+    addr = moi._strip_area(_grab(ADDR_RE.pattern, t))
+    area = t
+    for w in list(moi.CITY_CODES) + ["社區", "學區", "園區", "重劃區"]:
+        area = area.replace(w, " ")
+    car_line = _grab(r"車位[：:\s]*([^\n]*)", t)
+    has_car = bool(re.search(r"車位|雙車|車庫", t)) and not re.match(r"\s*(無|沒有|0)", car_line)
+    n_car = 2 if "雙車" in t else len([x for x in re.split(r"[、,，/及和]", car_line) if x.strip()]) or 1
+    return {
+        "city": next((c for c in moi.CITY_CODES if c in t), ""),
+        "district": _grab(r"([^\s區：:]{1,3}區)", area),
+        "road": moi.road_key(addr) if addr else moi.norm(
+            _grab(r"區\s*([^\s區]+?(?:路|街|大道)(?:[一二三四五六七八九十\d]+段)?)", t)),
+        "address": addr,
+        "price_wan": _f(_grab(r"(?:開價|售價|總價)[：:\s]*([\d,.]+)\s*萬", t) or _grab(r"([\d,.]+)\s*萬", t)),
+        "total_ping": _f(_grab(r"(?:建坪|權狀|總坪數|坪數)[：:\s]*([\d.]+)", t) or _grab(r"([\d.]+)\s*坪", t)),
+        "main_ping": _f(_grab(r"(?:主建物|室內)[：:\s]*([\d.]+)", t)),
+        "age": _f(_grab(r"屋齡[：:\s]*([\d.]+)", t)),
+        "layout": _grab(r"格局[：:\s]*(\S+)", t),
+        "parking": has_car,
+        "parking_count": n_car if has_car else 0,
+    }
+
+
 def parse_listing(text: str, ask: Ask) -> dict:
-    d = _json(ask(parse_prompt(text)))
+    q = quick_parse(text)
+    try:
+        d = _json(ask(parse_prompt(text)))
+        ai_error = "" if d else "AI 回的格式看不懂"
+    except Exception as e:                       # Gemini 503／額度：改用規則讀，行情照算
+        d, ai_error = {}, f"{type(e).__name__}: {e}"[:80]
+    for k, v in q.items():                       # AI 漏掉的欄位用規則補
+        if d.get(k) in (None, "", 0) and v not in (None, "", 0):
+            d[k] = v
+    d["ai_error"] = ai_error
     for k in ("price_wan", "total_ping", "main_ping", "parking_ping", "parking_price_wan", "age"):
         d[k] = _f(d.get(k))
     for k in ("city", "district", "road", "address", "community", "building_type", "floor", "layout"):
         d[k] = str(d.get(k) or "").strip()
-    if not d["address"]:                         # AI 漏抓門牌就自己從原文找，同棟比對靠它
-        m = ADDR_RE.search(moi.norm(text))
-        d["address"] = m.group(1) if m else ""
     d["parking"] = d.get("parking") is True
     cnt = _f(d.get("parking_count"))
     d["parking_count"] = int(cnt) if cnt and d["parking"] else (1 if d["parking"] else 0)
@@ -417,6 +455,9 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps, book: Book | Non
     book = book or Book(None)
     p = parse_listing(text, ask)
     p["city"] = moi.norm(p["city"] or cfg.get("default_city") or "臺中市")
+    if not p["community"]:
+        hit = book.find_in(moi.norm(text))
+        p["community"] = hit[0] if hit else ""
     if p["community"]:
         known = book.get(p["community"])
         if known and not p["address"]:           # 沒寫地址但認得社區：用記下的門牌找同棟
@@ -437,6 +478,8 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps, book: Book | Non
     if p["parking"]:
         spec.append(f"含 {p['parking_count']} 車位" if p["parking_count"] > 1 else "含車位")
     out = [f"🏠 物件分析｜{where}", "｜".join(spec), ""]
+    if p["ai_error"]:
+        out[-1:] = ["（AI 忙線，欄位用規則讀的，請確認上面數字對不對）", ""]
 
     out.append("📊 1. 開價 vs 實價登錄")
     try:
