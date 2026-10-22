@@ -54,6 +54,7 @@ import manual
 import market_calendar
 import outcome as oc
 import premarket
+import pulsecheck
 import whynot
 
 log = logging.getLogger("whatif")
@@ -1368,7 +1369,7 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
            trigger: tuple | None = None, simple: dict | None = None,
            filters: list | None = None, in_play: dict | None = None,
            ma: dict | None = None, manual: dict | None = None,
-           v1: dict | None = None) -> list[str]:
+           v1: dict | None = None, pulse: dict | None = None) -> list[str]:
     """results[(區間分鐘, 樂觀/保守)] = (trades, 額度滿了沒發的檔數)。"""
     first, last = (days[0], days[-1]) if days else ("—", "—")
     out = [
@@ -1429,6 +1430,8 @@ def render(results: dict, days: list[str], check: list[str], missing: list,
         out += _manual_lines(manual, results)
     if ma is not None:
         out += _ma_lines(ma)
+    if pulse is not None:
+        out += pulsecheck.lines(pulse)
     if results.get((CURRENT_OR, CAUTIOUS)):
         out += _chase_lines(results.get((CURRENT_OR, OPTIMISTIC), ([], 0))[0],
                             results[(CURRENT_OR, CAUTIOUS)][0])
@@ -1697,6 +1700,7 @@ def main(argv=None):
     in_play = run_in_play(pool_days)
     manual = run_manual(days, pool_days)
     ma = run_ma(days, results, picks, pool_days)
+    pulse = pulsecheck.run(pool_days, markets, prev_day_index(pool_days))
     replayed: dict[str, set] = {}
     for t in results[(CURRENT_OR, CAUTIOUS)][0]:
         replayed.setdefault(t.date, set()).add(t.code)
@@ -1704,7 +1708,7 @@ def main(argv=None):
 
     lines = render(results, [d for d, _ in days], check, missing, entries, recomputed, stops,
                    market=market, trigger=trigger, simple=simple, filters=filters,
-                   in_play=in_play, manual=manual, ma=ma, v1=v1)
+                   in_play=in_play, manual=manual, ma=ma, v1=v1, pulse=pulse)
     path = config.BASE_DIR / args.out
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")

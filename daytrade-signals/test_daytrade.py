@@ -54,6 +54,7 @@ import premarket
 import followup
 import manual
 import pickpulse
+import pulsecheck
 _NO_WAIT = unittest.mock.patch.object(premarket, "wait_until", lambda *a, **k: 0.0)
 
 
@@ -6121,7 +6122,7 @@ class TestWhatIfManualOrders(unittest.TestCase):
         src = inspect.getsource(whatif.main)
         self.assertIn("manual = run_manual(days, pool_days)", src)
         self.assertIn("ma = run_ma(days, results, picks, pool_days)", src)
-        self.assertIn("in_play=in_play, manual=manual, ma=ma, v1=v1)", src)
+        self.assertIn("in_play=in_play, manual=manual, ma=ma, v1=v1, pulse=pulse)", src)
 
 
 class TestPickMovingAverageVersion(unittest.TestCase):
@@ -6583,6 +6584,113 @@ class TestPickStrengthPulse(unittest.TestCase):
         self.assertIn("pulse_store=pickpulse.save_history", src)
         self.assertIn("journal/pulse-*.json",
                       (Path(__file__).parent / ".gitignore").read_text(encoding="utf-8"))
+
+
+class TestPulseScoreCheck(unittest.TestCase):
+    """10-22 使用者：「中性 → 中性偏弱…可以拿來預測嗎」→「改了可以預測嗎」→ 選 4：先驗證。
+    候選池每一檔、每根 5 分 K 照 pickpulse 的公式回頭打分，看之後 30 分鐘漲跌。"""
+
+    D = datetime(2026, 10, 21)
+
+    def at(self, h, m):
+        return self.D.replace(hour=h, minute=m)
+
+    def day(self, step=0.01, vol=10, start=100.0, d=None):
+        """09:00～13:30 每分鐘一根，價格每分鐘 +step。"""
+        d = d or self.D
+        out, t, p = [], d.replace(hour=9, minute=0), start
+        while t.time() <= dtime(13, 30):
+            out.append((t, p, p + 0.02, p - 0.02, p, vol))
+            t += timedelta(minutes=1)
+            p = round(p + step, 4)
+        return out
+
+    def seed(self):
+        prev = self.D - timedelta(days=1)
+        return [(prev.replace(hour=12, minute=0) + timedelta(minutes=i), 100.0, 100.0, 100.0, 100.0, 5)
+                for i in range(100)]
+
+    def test_a_rising_day_scores_high_and_looks_ahead_30_minutes(self):
+        rows = pulsecheck.score_day(self.day(), self.seed())
+        self.assertEqual(rows[0]["at"], self.at(9, 5), "09:00 那根併進 09:05，第一個分數在 09:05")
+        self.assertEqual(rows[-1]["at"], self.at(13, 5), "13:10 那根盤中也不打分")
+        self.assertEqual(len(rows), 49)
+        first = rows[0]
+        self.assertAlmostEqual(first["fwd"], (100.35 - 100.05) / 100.05 * 100, places=6,
+                               msg="09:05 收 100.05，09:35 收 100.35")
+        self.assertAlmostEqual(rows[-1]["fwd"], (100.0 + 0.01 * 265 - 100.0 - 0.01 * 245)
+                               / (100.0 + 0.01 * 245) * 100, places=6,
+                               msg="13:05 之後 30 分鐘超過 13:25 → 用 13:25 的價格")
+        self.assertIsNone(first["market"], "沒有 0050 → 不猜")
+        self.assertNotIn("buy", first, "外盤比算不出來，不放")
+        ten = next(r for r in rows if r["at"] == self.at(10, 0))
+        self.assertAlmostEqual(ten["volume"], 5 + 2.5 * round((610 - 310) / (610 / 60 * 30), 2), places=6,
+                               msg="09:30 那一筆當基準：(610−310) ÷ (610÷60×30)，跟盤中一樣取到小數兩位")
+        ma20 = (8 * 100.0 + sum(100.0 + 0.05 * k for k in range(1, 13))) / 20
+        self.assertAlmostEqual(ten["ma20"], 5 + 5 * (100.60 - ma20) / ma20 * 100, places=6,
+                               msg="20MA 接著前一天的 5 分 K 算：前一天 8 根 + 今天 12 根")
+        self.assertGreaterEqual(min(r["score"] for r in rows[5:]), 6.5, "一路漲 → 稍強以上")
+        self.assertTrue(all(r["fwd"] > 0 for r in rows))
+        self.assertEqual(pulsecheck.score_day([], self.seed()), [])
+
+    def test_it_uses_the_same_formula_as_the_live_pulse(self):
+        bars, mbars = self.day(step=-0.01), self.day(step=0.005)
+        (r,) = [x for x in pulsecheck.score_day(bars, self.seed(), mbars) if x["at"] == self.at(9, 30)]
+        upto = [b for b in bars if b[0] <= self.at(9, 30)]
+        price, vol = upto[-1][4], sum(b[5] for b in upto)
+        closes = [100.0] * 100 + [c for _t, c in pulsecheck.premarket_closes(upto)]
+        items = pickpulse.score_items(
+            price, whynot.vwap_upto(pulsecheck.whynot_bars(upto), self.at(9, 30)),
+            sum(closes[-5:]) / 5, sum(closes[-20:]) / 20,
+            round(vol / (vol / 30 * 30), 2), -1, None, (100.15 - 100.0) / 100.0 * 100)
+        self.assertEqual(r["score"], pickpulse.average(items))
+        for k in ("vwap", "ma20", "ma_gap", "volume", "market"):
+            self.assertAlmostEqual(r[k], items[k][1], places=6, msg=k)
+        self.assertLess(r["fwd"], 0)
+
+    def test_spread_halves_and_changes(self):
+        def row(d, code, h, m, score, fwd, **kw):
+            return dict({"date": d, "code": code, "at": self.at(h, m), "score": score, "fwd": fwd,
+                         "vwap": score, "ma20": None, "ma_gap": score, "volume": score,
+                         "market": score}, **kw)
+        samples = [row("2026-10-20", "1", 9, 5, 8.0, 0.5), row("2026-10-20", "1", 9, 10, 3.0, -0.4),
+                   row("2026-10-21", "1", 9, 5, 7.0, 0.3), row("2026-10-21", "1", 9, 10, 2.0, 0.1),
+                   row("2026-10-21", "1", 9, 15, 5.0, 0.0)]
+        lo, hi, gap = pulsecheck.spread(samples, "score")
+        self.assertEqual(len(lo), 2, "≤3.5 才算低分")
+        self.assertEqual(len(hi), 2, "≥6.5 才算高分")
+        self.assertAlmostEqual(gap, 0.4 - (-0.15))
+        self.assertEqual(pulsecheck.spread(samples, "ma20"), ([], [], None), "整欄沒資料 → 不算")
+        self.assertEqual(pulsecheck.spread([row("2026-10-21", "1", 9, 5, 3.5, 1.0)], "score")[0][0]["score"],
+                         3.5, "剛好 3.5 算低分")
+        ch = pulsecheck.changes(samples)
+        self.assertEqual([len(ch[k]) for k in (pulsecheck.UP, pulsecheck.DOWN, pulsecheck.SAME)], [1, 2, 0],
+                         "換一天就重新開始，不跟前一天最後一根比")
+        text = "\n".join(pulsecheck.lines({"days": ["2026-10-20", "2026-10-21"], "samples": samples}))
+        self.assertIn("## 強弱分數能不能預測", text)
+        self.assertIn("2 天、2 個「檔×天」、5 個分數", text)
+        self.assertIn("| 平均（五項） | 2 | -0.15%（50% 漲） | 2 | +0.40%（100% 漲） | +0.55% | +0.90% | +0.20% |",
+                      text)
+        self.assertIn("| ② 20MA | 0 | — | 0 | — | — | — | — |", text)
+        self.assertIn("| 轉弱（名稱降一級以上） | 2 | -0.15%（50% 漲） |", text)
+        self.assertIn("前半、後半都是正的", text)
+        self.assertNotIn("**" + "首選", text)
+        self.assertIn("沒有資料", "\n".join(pulsecheck.lines({"days": [], "samples": []})))
+
+    def test_run_over_the_pool_and_whatif_shows_it(self):
+        bars = self.day()
+        pool_days = [("2026-10-21", [{"code": "1111", "bars": bars}, {"code": "2222", "bars": []}], {})]
+        got = pulsecheck.run(pool_days, {"2026-10-21": self.day(step=0.005)},
+                             {("2026-10-21", "1111"): self.seed()})
+        self.assertEqual(got["days"], ["2026-10-21"])
+        self.assertEqual({r["code"] for r in got["samples"]}, {"1111"})
+        self.assertTrue(all(r["date"] == "2026-10-21" for r in got["samples"]))
+        self.assertIsNotNone(got["samples"][0]["market"], "0050 照日期接上")
+        shown = "\n".join(whatif.summary_part(whatif.render({}, ["2026-10-21"], [], [], pulse=got)))
+        self.assertIn("## 強弱分數能不能預測", shown, "要在畫面上印出來的那一段裡")
+        self.assertNotIn("## 強弱分數", "\n".join(whatif.render({}, ["2026-10-21"], [], [])))
+        src = inspect.getsource(whatif.main)
+        self.assertIn("pulse = pulsecheck.run(pool_days, markets, prev_day_index(pool_days))", src)
 
 
 class TestManualVersion(unittest.TestCase):
