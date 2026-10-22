@@ -584,6 +584,13 @@ class Moi(unittest.TestCase):
         c = self.comps(road="中清路一段")
         self.assertEqual((c["scope"], c["n"]), ("全區", 5))
 
+    def test_moi_ssl_still_verifies_but_not_strict(self):
+        import ssl
+        ctx = moi.moi_ssl_context()
+        self.assertEqual(ctx.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(ctx.check_hostname)
+        self.assertFalse(ctx.verify_flags & getattr(ssl, "VERIFY_X509_STRICT", 0))
+
     def test_download_error_is_shown(self):
         def boom(code, s):
             raise OSError("CERTIFICATE_VERIFY_FAILED")

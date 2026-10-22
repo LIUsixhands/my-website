@@ -12,6 +12,7 @@ from __future__ import annotations
 import csv
 import io
 import re
+import ssl
 import statistics
 import time
 import unicodedata
@@ -57,6 +58,17 @@ def recent_seasons(n: int = 6, now: float | None = None) -> list[str]:
     return out
 
 
+def moi_ssl_context() -> ssl.SSLContext:
+    """照樣驗證憑證鏈與網域，只關掉 Python 3.13 起預設開啟的 X509 嚴格格式檢查。
+
+    內政部的憑證少了 Subject Key Identifier 欄位，嚴格模式會直接拒絕
+    （實機遇過：Windows Python 3.14「CERTIFICATE_VERIFY_FAILED ... Missing Subject Key Identifier」）。
+    """
+    ctx = ssl.create_default_context()
+    ctx.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
+    return ctx
+
+
 def download(city_code: str, season: str) -> str:
     """回傳 CSV 文字；該季還沒公布回空字串。過去的季別會快取。"""
     f = CACHE_DIR / f"{season}_{city_code}_A.csv"
@@ -65,7 +77,7 @@ def download(city_code: str, season: str) -> str:
     url = (f"https://plvr.land.moi.gov.tw/DownloadSeason?season={season}"
            f"&fileName={city_code}_lvr_land_A.csv")
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (xiaoke real-price client)"})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=60, context=moi_ssl_context()) as r:
         text = r.read().decode("utf-8-sig", "replace")
     if len(text) < 200 or text.lstrip().startswith("<"):    # 還沒公布的季別會回錯誤頁
         return ""
