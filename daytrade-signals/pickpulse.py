@@ -241,6 +241,16 @@ def market_change(broker, date: str | None = None) -> float | None:
     from broker import Broker
     date = date or datetime.now().strftime("%Y-%m-%d")
     bars = oc.day_bars_ohlcv(broker, Broker.MARKET_PROXY, date)
-    if not bars or not bars[0][1]:
+    if bars and bars[0][1]:
+        return round((bars[-1][4] - bars[0][1]) / bars[0][1] * 100, 2)
+    # 10-22 09:05「大盤：資料抓不到」：開盤剛 5 分鐘，券商的分鐘 K 常常還沒有。
+    # 改用 0050 的快照（開盤價、現價）。快照只有「現在」，問別天的不能用。
+    if date != datetime.now().strftime("%Y-%m-%d"):
         return None
-    return round((bars[-1][4] - bars[0][1]) / bars[0][1] * 100, 2)
+    try:
+        snap = broker.snapshots([broker.stock(Broker.MARKET_PROXY)])[0]
+        o, c = float(snap.open or 0), float(snap.close or 0)
+    except Exception as e:
+        log.warning("大盤代理快照抓不到：%s", e)
+        return None
+    return round((c - o) / o * 100, 2) if o and c else None

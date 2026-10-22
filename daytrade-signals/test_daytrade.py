@@ -6507,6 +6507,37 @@ class TestPickStrengthPulse(unittest.TestCase):
         with unittest.mock.patch.object(oc, "day_bars_ohlcv", return_value=[]):
             self.assertIsNone(pickpulse.market_change(object(), "2026-10-21"))
 
+    def test_market_falls_back_to_the_snapshot(self):
+        """10-22 09:05「大盤：資料抓不到」：分鐘 K 還沒有 → 用 0050 快照的開盤價、現價。"""
+        class Snap:
+            open, close = 100.0, 99.7
+
+        class Broker:
+            asked = []
+
+            def stock(self, code):
+                self.asked.append(code)
+                return code
+
+            def snapshots(self, contracts):
+                return [Snap()]
+        today = datetime.now().strftime("%Y-%m-%d")
+        b = Broker()
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", return_value=[]):
+            self.assertEqual(pickpulse.market_change(b, today), -0.3)
+            self.assertEqual(pickpulse.market_change(b), -0.3, "不給日期＝今天")
+            self.assertEqual(b.asked, ["0050", "0050"])
+            self.assertIsNone(pickpulse.market_change(b, "2026-10-21"), "快照只有現在，別天不能用")
+            Snap.open = 0
+            self.assertIsNone(pickpulse.market_change(b, today), "開盤價 0 → 不猜")
+            Snap.open, Snap.close = 100.0, None
+            self.assertIsNone(pickpulse.market_change(b, today))
+            b.snapshots = lambda c: (_ for _ in ()).throw(RuntimeError("503"))
+            self.assertIsNone(pickpulse.market_change(b, today), "抓壞了 → None，不讓監看當掉")
+        bars = [(self.at(9, 1), 100.0, 1, 1, 100.2, 1)]
+        with unittest.mock.patch.object(oc, "day_bars_ohlcv", return_value=bars):
+            self.assertEqual(pickpulse.market_change(object(), today), 0.2, "有分鐘 K 就不用快照")
+
     def test_the_watch_feeds_it(self):
         state, saved = {}, []
         pick = {"code": "1111", "name": "測試", "prev_close": 98.0, "amplitude_pct": 5.0,
