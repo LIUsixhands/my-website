@@ -6447,7 +6447,8 @@ class TestPickStrengthPulse(unittest.TestCase):
                          "13:10 之後不再打分")
         self.assertEqual(len(p.history), 17)
         self.assertEqual(p.history[0]["at"], "09:05")
-        self.assertEqual(set(p.history[0]) - {"at", "price", "score", "label"}, set(pickpulse.ITEMS))
+        self.assertEqual(set(p.history[0]) - {"at", "price", "score", "label", "forecast"},
+                         set(pickpulse.ITEMS))
 
     def test_the_30_minute_window(self):
         p = self._pulse()
@@ -6746,30 +6747,80 @@ class TestPulseScoreCheck(unittest.TestCase):
             self.assertEqual(pulsecheck.load_samples(Path(d) / "none.csv"), [])
 
             many = [row(f"2026-10-{12 + k % 3:02d}", str(k), 9, 5, 6.5 if k % 2 else 9.0, -0.4 if k % 4 else 0.2)
-                    for k in range(100)] + [row("2026-10-12", "x", 9, 5, 6.4, 5.0),
-                                            row("2026-10-12", "y", 9, 5, None, 5.0),
-                                            row("2026-10-12", "z", 9, 5, 9.0, None)]
-            st = pulsecheck.volume_stats(many)
-            self.assertEqual(st, {"days": 3, "n": 100, "avg": round((75 * -0.4 + 25 * 0.2) / 100, 2), "up": 25,
-                                  "min_score": 6.5}, "6.5 算高分、6.4 不算；沒分數、沒結果的不算")
-            self.assertIsNone(pulsecheck.volume_stats(many[1:]), "不到 100 筆 → 不顯示")
+                    for k in range(100)]
+            many += [row("2026-10-12", f"m{k}", 9, 5, 3.6 if k % 2 else 6.4, 0.1) for k in range(100)]
+            many += [row("2026-10-13", f"l{k}", 9, 5, 3.5 if k % 2 else 1.0, 0.5) for k in range(99)]
+            many += [row("2026-10-12", "y", 9, 5, None, 5.0), row("2026-10-12", "z", 9, 5, 9.0, None)]
+            st = pulsecheck.forecast_stats(many)
+            self.assertEqual(st["days"], 3)
+            self.assertEqual((st["horizon"], st["low"], st["high"]), (30, 3.5, 6.5))
+            self.assertEqual(st["cost"], round(config.round_trip_cost_pct(), 2))
+            self.assertEqual(st["groups"]["high"], {"desc": "④ 高（≥6.5）", "n": 100,
+                                                    "avg": round((75 * -0.4 + 25 * 0.2) / 100, 2), "up": 25},
+                             "6.5 算高；沒分數、沒結果的不算")
+            self.assertEqual(st["groups"]["mid"]["n"], 100, "3.6、6.4 算中")
+            self.assertNotIn("low", st["groups"], "低的只有 99 筆（3.5 算低）→ 那一組不預測")
+            self.assertIsNone(pulsecheck.forecast_stats(many[:50]), "三組都不夠 → None")
             pulsecheck.save_samples(many, path)
-            self.assertEqual(pulsecheck.volume_stats(None, path)["n"], 102, "None → 讀累積檔（前面存的那兩筆高分也算）")
+            self.assertEqual(pulsecheck.forecast_stats(None, path)["groups"]["high"]["n"], 102,
+                             "None → 讀累積檔（前面存的那兩筆高分也算）")
 
-        st = {"days": 9, "n": 1387, "avg": -0.36, "up": 30, "min_score": 6.5}
+        cost = 0.21
+        st = {"days": 9, "horizon": 30, "low": 3.5, "high": 6.5, "cost": cost,
+              "groups": {"high": {"desc": "④ 高（≥6.5）", "n": 1387, "avg": -0.36, "up": 30},
+                         "mid": {"desc": "④ 中（3.5～6.5）", "n": 4000, "avg": -0.10, "up": 34},
+                         "low": {"desc": "④ 低（≤3.5）", "n": 1297, "avg": 0.25, "up": 55}}}
+        self.assertEqual(pickpulse.forecast(st, 6.5)[0], "偏跌")
+        self.assertEqual(pickpulse.forecast(st, 6.4)[0], "中性", "-0.10% 沒超過成本 → 中性")
+        self.assertEqual(pickpulse.forecast(st, 3.5)[0], "偏漲")
+        self.assertEqual(pickpulse.forecast(dict(st, cost=0.25), 3.5)[0], "中性", "剛好等於成本不算")
+        self.assertIsNone(pickpulse.forecast(st, None))
+        self.assertIsNone(pickpulse.forecast(None, 8.0))
+        self.assertIsNone(pickpulse.forecast(dict(st, groups={}), 8.0), "那一組樣本不夠 → 不預測")
+
         p = pickpulse.Pulse(sig={"code": "1111", "name": "測試", "entry": 100.0, "stop": 97.0},
                             date="2026-10-23", stats=st)
         state = SimpleNamespace(last_price=100.5, day_high=101.0)
         hot = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, 1, None, 0.0)
         self.assertGreaterEqual(hot["volume"][1], 6.5)
-        msg = p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), "")
-        self.assertIn("📊 ④ 8 分：過去 9 天 ④ ≥ 6.5 的 1387 次，之後 30 分鐘平均 -0.36%（30% 漲）", msg)
-        self.assertLess(msg.index("📊"), msg.index("平均 7.0 分"))
-        cold = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, -1, None, 0.0)
-        self.assertNotIn("📊", p._message("start", state, cold, 5.0, "中性", None, self.at(9, 30), ""))
-        p.stats = None
-        self.assertNotIn("📊", p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), ""),
-                         "還沒有統計 → 不顯示")
+        msg = p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), "",
+                         pickpulse.forecast(st, hot["volume"][1]))
+        self.assertIn("開始：稍強（7.0 分）\n🔮 之後 30 分鐘：偏跌\n"
+                      "　過去 9 天 ④ 高（≥6.5）1387 次：平均 -0.36%、30% 漲\n────", msg,
+                      "預測放在最上面，強弱名稱下一行")
+        self.assertIn("平均 7.0 分：稍強", msg, "原本的強弱訊息保留")
+        self.assertNotIn("🔮", p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), ""),
+                         "沒有預測 → 不顯示")
+
+    def test_a_forecast_change_is_pushed_too(self):
+        """10-22 使用者：「強弱訊息想保留，可以加『之後幾分鐘：偏跌』」→ 強弱沒變、預測變了也推。"""
+        st = {"days": 9, "horizon": 30, "low": 3.5, "high": 6.5, "cost": 0.21,
+              "groups": {"high": {"desc": "④ 高（≥6.5）", "n": 1387, "avg": -0.36, "up": 30},
+                         "mid": {"desc": "④ 中（3.5～6.5）", "n": 4000, "avg": -0.10, "up": 34}}}
+        p = pickpulse.Pulse(market=lambda: 0.0, date="2026-10-23", stats=st)
+        p.start({"code": "1111", "name": "測試", "entry": 100.0, "stop": 97.0}, None, self.at(9, 0))
+
+        def bar(h, m, items_vol):
+            with unittest.mock.patch.object(pickpulse, "score_items", side_effect=lambda *a: {
+                    "vwap": ("v", 5.0), "ma20": ("m", 5.0), "ma_gap": ("g", 5.0), "volume": ("q", items_vol),
+                    "buy": ("b", None), "market": ("k", 5.0)}):
+                return p.on_bar(SimpleNamespace(last_price=100.0, total_volume=100, day_buy=0, day_sell=0,
+                                                vwap=100.0, day_high=100.0),
+                                (self.at(h, m), 100.0, 100.0, 100.0, False),
+                                self.at(h, m) + timedelta(seconds=3))
+        (first,) = bar(9, 5, 5.0)
+        self.assertIn("🔮 之後 30 分鐘：中性", first)
+        self.assertEqual(bar(9, 10, 5.4), [], "強弱、預測都沒變 → 不推")
+        self.assertEqual(bar(9, 10, 7.0), [], "預測變了，但離上一則不到 10 分鐘 → 先不推")
+        (chg,) = bar(9, 15, 7.0)
+        self.assertIn("🌅 1111 測試・首選預測變化｜09:15", chg)
+        self.assertIn("之後 30 分鐘：中性 → 偏跌", chg)
+        self.assertNotIn("🔮", chg, "標題已經講了預測，不重複")
+        self.assertIn("強弱：中性（5.4 分）", chg)
+        self.assertIn("過去 9 天 ④ 高（≥6.5）1387 次", chg)
+        self.assertEqual(p.history[-1]["forecast"], "偏跌", "每一次打分都存預測，之後拿來對答案")
+        self.assertEqual(bar(9, 30, 7.0), [], "預測沒變 → 不推")
+        self.assertEqual(bar(9, 40, 6.6), [], "④ 6.6 還是高那一組、強弱名稱也沒變 → 不推")
 
     def test_the_daily_update_and_the_wiring(self):
         bars = self.day()
@@ -6788,14 +6839,14 @@ class TestPulseScoreCheck(unittest.TestCase):
             self.assertEqual(len(pulsecheck.load_samples(path)), len(got["samples"]))
             self.assertIsNotNone(pulsecheck.load_samples(path)[0]["market"])
         src = inspect.getsource(signals.run)
-        self.assertIn("pulse_stats = pulsecheck.volume_stats(None)", src)
+        self.assertIn("pulse_stats = pulsecheck.forecast_stats(None)", src)
         self.assertIn("pulse_store=pickpulse.save_history, pulse_stats=pulse_stats)", src)
         self.assertIn("self.pulse = pickpulse.Pulse(market=market, store=pulse_store, stats=pulse_stats)",
                       inspect.getsource(premarket.PickWatch.__init__))
         rsrc = inspect.getsource(review.run)
         self.assertIn("pulsecheck.daily(broker)", rsrc)
         self.assertIn('pulsecheck.save_samples(pulse["samples"])', inspect.getsource(whatif.main))
-        for fn, call in ((signals.run, "volume_stats"), (review.run, "daily"), (whatif.main, "save_samples")):
+        for fn, call in ((signals.run, "forecast_stats"), (review.run, "daily"), (whatif.main, "save_samples")):
             tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
             tries = [n for n in ast.walk(tree) if isinstance(n, ast.Try) and n.handlers
                      and call in ast.unparse(ast.Module(body=n.body, type_ignores=[]))]

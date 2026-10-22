@@ -2104,10 +2104,11 @@ def run():
 
     # 10-20 均線版：首選另外記一份「5MA 往下穿過 20MA 才出」。均線接著前一天的 K 棒算。
     import pickpulse
-    # 10-22「邊用邊統計」：④ 漲又爆量之後怎麼走，用累積的樣本算（讀不到就不顯示那一行）。
+    # 10-22「邊用邊統計」：強弱訊息加「之後 30 分鐘：偏漲／偏跌／中性」，用累積的樣本算
+    # （讀不到就不顯示那一行）。
     try:
         import pulsecheck
-        pulse_stats = pulsecheck.volume_stats(None)
+        pulse_stats = pulsecheck.forecast_stats(None)
     except Exception as e:
         log.warning("強弱統計讀不到（不影響盯盤）：%s", e)
         pulse_stats = None

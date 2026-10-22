@@ -41,9 +41,10 @@ EXTRA_NAMES = {"ret30": "近 30 分鐘漲跌（短線反轉）", "from_high": "�
 SLOT_DAYS = 5                      # 同一時段看過去幾天
 SLOT_MIN_DAYS = 3                  # 至少要有幾天才算
 
-# 10-22 使用者：「邊用邊統計」。9 天裡唯一前後一致的是 ④ 量（反向）：漲又爆量之後 30 分鐘
-# 平均 −0.36%。盤中強弱訊息在 ④ 拿高分時加一行「過去類似情況之後怎麼走」，數字每天收盤後
-# 用累積的樣本重算（review.py 14:00 加今天的候選池；whatif.py 跑的時候整段重寫）。
+# 10-22 使用者：「邊用邊統計」→「強弱訊息保留，可以加『之後幾分鐘：偏跌』」。9 天裡唯一
+# 前後一致的是 ④ 量（反向）：④ 高分之後 30 分鐘平均 −0.36%。盤中每一則強弱訊息加
+# 「之後 30 分鐘：偏漲／偏跌／中性」（照目前 ④ 落在哪一組、那一組過去怎麼走），預測變了也推。
+# 數字每天收盤後用累積的樣本重算（review.py 14:00 加今天的候選池；whatif.py 跑的時候整段重寫）。
 SAMPLES_FILE = config.JOURNAL_DIR / "pulse-samples.csv"
 SAMPLE_FIELDS = ("date", "code", "at", *KEYS, *EXTRA, "fwd")
 STATS_MIN_N = 100                  # 樣本不到這麼多筆就不顯示
@@ -182,16 +183,23 @@ def load_samples(path=None) -> list[dict]:
     return out
 
 
-def volume_stats(samples, path=None) -> dict | None:
-    """④ 量拿高分（≥HIGH）之後 30 分鐘：{天數, 筆數, 平均 %, 上漲比例 %, 門檻}。
-    樣本不到 STATS_MIN_N 筆就 None（不顯示）。samples=None → 讀累積檔。"""
+def forecast_stats(samples, path=None) -> dict | None:
+    """盤中「之後 30 分鐘：偏漲／偏跌／中性」用的表：④ 分低、中、高三組，各自之後 30 分鐘的
+    平均與上漲比例。一組不到 STATS_MIN_N 筆就不放（那一組不預測）。samples=None → 讀累積檔。"""
     rows = load_samples(path) if samples is None else samples
-    hi = [r for r in rows if r.get("volume") is not None and r["volume"] >= HIGH
-          and r.get("fwd") is not None]
-    if len(hi) < STATS_MIN_N:
+    rows = [r for r in rows if r.get("volume") is not None and r.get("fwd") is not None]
+    groups = {}
+    for key, test, desc in (("low", lambda v: v <= LOW, f"④ 低（≤{LOW:g}）"),
+                            ("mid", lambda v: LOW < v < HIGH, f"④ 中（{LOW:g}～{HIGH:g}）"),
+                            ("high", lambda v: v >= HIGH, f"④ 高（≥{HIGH:g}）")):
+        g = [r for r in rows if test(r["volume"])]
+        if len(g) >= STATS_MIN_N:
+            groups[key] = {"desc": desc, "n": len(g), "avg": round(_avg(g), 2),
+                           "up": round(sum(1 for r in g if r["fwd"] > 0) / len(g) * 100)}
+    if not groups:
         return None
-    return {"days": len({r["date"] for r in rows}), "n": len(hi), "avg": round(_avg(hi), 2),
-            "up": round(sum(1 for r in hi if r["fwd"] > 0) / len(hi) * 100), "min_score": HIGH}
+    return {"days": len({r["date"] for r in rows}), "horizon": HORIZON_MIN, "low": LOW, "high": HIGH,
+            "cost": round(config.round_trip_cost_pct(), 2), "groups": groups}
 
 
 def daily(broker, date: str | None = None, path=None) -> dict | None:

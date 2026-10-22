@@ -88,6 +88,25 @@ def score_items(price, vwap, ma5, ma20, vol_ratio, direction, buy_pct, market_pc
     return out
 
 
+UP_WORD, DOWN_WORD, FLAT_WORD = "偏漲", "偏跌", "中性"
+
+
+def forecast(stats: dict | None, vol_score) -> tuple[str, dict] | None:
+    """(偏漲／偏跌／中性, 那一組的統計)。目前的 ④ 落在哪一組，那一組過去之後 30 分鐘平均
+    超過來回成本才算偏漲／偏跌。沒有統計、④ 沒分數、那一組樣本不夠 → None（不預測）。"""
+    if not stats or vol_score is None:
+        return None
+    key = "low" if vol_score <= stats["low"] else "high" if vol_score >= stats["high"] else "mid"
+    g = stats["groups"].get(key)
+    if not g:
+        return None
+    if g["avg"] > stats["cost"]:
+        return UP_WORD, g
+    if g["avg"] < -stats["cost"]:
+        return DOWN_WORD, g
+    return FLAT_WORD, g
+
+
 def average(items: dict) -> float | None:
     vals = [s for _t, s in items.values() if s is not None]
     return round(sum(vals) / len(vals), 1) if vals else None
@@ -104,7 +123,7 @@ class Pulse:
                  store=None, stats: dict | None = None):
         self.sig = sig
         self.market = market or (lambda: None)
-        self.stats = stats           # pulsecheck.volume_stats()：④ 高分之後 30 分鐘的統計
+        self.stats = stats           # pulsecheck.forecast_stats()：④ 低／中／高之後 30 分鐘的統計
         self.store = store           # store(date, code, history)：盤中才給（測試不寫檔）
         self.date = date or datetime.now().strftime("%Y-%m-%d")
         self.samples = []            # (時間, 價格, 總量, 外盤, 內盤)
@@ -152,8 +171,10 @@ class Pulse:
         if score is None:
             return []
         lv, name = level(score)
+        fc = forecast(self.stats, items["volume"][1])
+        verdict = fc[0] if fc else None
         self.history.append({"at": end.strftime("%H:%M"), "price": price, "score": score,
-                             "label": name, **{k: items[k][1] for k in ITEMS}})
+                             "label": name, "forecast": verdict, **{k: items[k][1] for k in ITEMS}})
         self._save()
         kind, before = None, self.pushed
         if before is None:
@@ -162,14 +183,17 @@ class Pulse:
             gap = (now - before["at"]).total_seconds() / 60
             if abs(lv - before["lv"]) >= STEP_TO_PUSH and gap >= MIN_GAP_MIN:
                 kind = "change"
+            elif verdict and before.get("verdict") and verdict != before["verdict"] \
+                    and gap >= MIN_GAP_MIN:
+                kind = "forecast"            # 10-22：強弱沒變、預測變了也推
             elif gap >= HEARTBEAT_MIN:
                 kind = "quiet"
         if kind is None:
             return []
-        self.pushed = {"at": now, "lv": lv, "score": score, "label": name}
-        return [self._message(kind, st, items, score, name, before, end, status)]
+        self.pushed = {"at": now, "lv": lv, "score": score, "label": name, "verdict": verdict}
+        return [self._message(kind, st, items, score, name, before, end, status, fc)]
 
-    def _message(self, kind, st, items, score, name, before, at, status) -> str:
+    def _message(self, kind, st, items, score, name, before, at, status, fc=None) -> str:
         sig = self.sig
         label = f"{sig['code']} {sig.get('name', '')}".split("・")[0].strip()
         price, entry, stop = float(st.last_price), float(sig["entry"]), float(sig["stop"])
@@ -179,9 +203,18 @@ class Pulse:
             arrow = "↑" if score > before["score"] else "↓"
             head = [f"🌅 {label}・首選強弱變化｜{at:%H:%M}",
                     f"{before['label']} → {name} {arrow}（{before['score']:.1f} → {score:.1f} 分）"]
+        elif kind == "forecast":
+            head = [f"🌅 {label}・首選預測變化｜{at:%H:%M}",
+                    f"之後 {self.stats['horizon']} 分鐘：{before['verdict']} → {fc[0]}",
+                    f"強弱：{name}（{score:.1f} 分）"]
         else:
             head = [f"🌅 {label}・首選強弱｜{at:%H:%M}",
                     f"目前：{name}（{score:.1f} 分），{HEARTBEAT_MIN} 分鐘沒有明顯變化"]
+        if fc:
+            s, (word, g) = self.stats, fc
+            if kind != "forecast":
+                head.append(f"🔮 之後 {s['horizon']} 分鐘：{word}")
+            head.append(f"　過去 {s['days']} 天 {g['desc']}{g['n']} 次：平均 {g['avg']:+.2f}%、{g['up']}% 漲")
         lines = head + ["────────────────",
                         f"現價 {price:.2f}｜進場 {entry:.2f}（{(price - entry) / entry * 100:+.2f}%）"]
         if st.day_high and price >= st.day_high:
@@ -192,12 +225,6 @@ class Pulse:
         for n, k in enumerate(ITEMS):
             text, s = items[k]
             lines.append(f"{'①②③④⑤⑥'[n]} {text}" + (f"　{round(s)} 分" if s is not None else ""))
-        vol = items["volume"][1]
-        if self.stats and vol is not None and vol >= self.stats["min_score"]:
-            s = self.stats
-            # 10-22 模擬：量只有 0.7 倍也會到 7 分（上漲就加分），寫「爆量」不對 —— 照實寫分數。
-            lines.append(f"📊 ④ {round(vol)} 分：過去 {s['days']} 天 ④ ≥ {s['min_score']:g} 的 {s['n']} 次，"
-                         f"之後 30 分鐘平均 {s['avg']:+.2f}%（{s['up']}% 漲）")
         lines += ["────────────────", f"平均 {score:.1f} 分：{name}（六項一樣重，未驗證）"]
         lines.append(f"停損 {stop:.2f}（還差 {(stop - price) / price * 100:+.1f}%）" if price > stop
                      else f"停損 {stop:.2f}（已經跌破）")
