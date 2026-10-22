@@ -11106,6 +11106,9 @@ class TestMarketHolidays(unittest.TestCase):
     def test_next_open_day_skips_the_long_weekend(self):
         self.assertEqual(market_calendar.next_open_day("2026-10-09"), "2026-10-12")
         self.assertEqual(market_calendar.next_open_day("2026-10-23"), "2026-10-27")
+        self.assertEqual(market_calendar.closed_reason("2026-10-23"), "颱風假（臨時休市）")
+        self.assertEqual(market_calendar.next_open_day("2026-10-22"), "2026-10-27",
+                         "10-22 晚使用者：「明天颱風假休市，下星期一也休市」")
         self.assertEqual(market_calendar.next_open_day("2026-02-11"), "2026-02-23")
         self.assertEqual(market_calendar.label("2026-10-12"), "10-12（一）")
 
