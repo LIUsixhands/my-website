@@ -428,7 +428,8 @@ PARSED = {"city": "", "district": "北屯區", "road": "崇德路三段", "commu
           "floor": "", "layout": "3房2廳2衛", "features": ["近學校"]}
 COPY = {"titles": ["北屯三房含車位", "崇德路三段生活圈", "屋齡5年電梯大樓"],
         "body": "三房兩廳兩衛，含車位。\n歡迎預約看屋。"}
-COMPS = {"seasons": ["115S2", "115S1"], "scope": "同路段", "age_band": "屋齡 0～13 年",
+COMPS = {"seasons": ["115S2", "115S1"], "scope": "同路段", "scope_key": "崇德路三段",
+         "age_band": "屋齡 0～13 年",
          "road": "崇德路三段", "type": "住宅大樓", "district": "北屯區", "n": 12,
          "median": 50.0, "p25": 46.0, "p75": 55.0, "car_median_wan": 230, "car_ping_median": 10.0,
          "latest": [{"date": "1150525", "addr": "臺中市北屯區崇德路三段1~30號", "floor": "十三層/十四層",
@@ -448,8 +449,8 @@ def fake_ask(parsed=PARSED, copy=COPY):
 def fake_comps(result=COMPS):
     calls = []
 
-    def comps(city, district, road, btype, age):
-        calls.append((city, district, road, btype, age))
+    def comps(city, district, road, btype, age, address="", elevator=False):
+        calls.append((city, district, road, btype, age, address, elevator))
         if isinstance(result, Exception):
             raise result
         return result
@@ -486,7 +487,8 @@ class ListingMode(Base):
         self.assertIn("A. 北屯三房含車位", out)
         self.assertIn("591 搜「幸福社區」", out)
         self.assertIn("車位估 230 萬", out)
-        self.assertEqual(comps.calls, [("臺中市", "北屯區", "崇德路三段", "住宅大樓", 5)])
+        self.assertEqual(comps.calls, [("臺中市", "北屯區", "崇德路三段", "住宅大樓", 5, "", False)])
+        self.assertNotIn("參考性低", out)
         self.assertEqual(self.t.read_log()[-1]["kind"], "listing")
 
     def test_strangers_and_chitchat_ignored(self):
@@ -556,6 +558,39 @@ class ListingMode(Base):
             chk = listing.price_check({**p, "price_wan": price}, COMPS)
             self.assertTrue(chk["verdict"].startswith(verdict), (price, chk))
 
+    def test_two_parking_spaces_and_same_building(self):
+        # 寶鴻大白實例：雙車、沒寫建物型態 → 要扣兩個車位、只比電梯大樓，同棟成交 2 筆要提醒
+        parsed = {**PARSED, "district": "西區", "road": "五權三街", "address": "五權三街55巷3號",
+                  "community": "寶鴻大白", "building_type": "", "price_wan": 3888, "total_ping": 86.61,
+                  "parking_count": 2, "age": 8, "floor": "7"}
+        same = {**COMPS, "scope": "同巷", "scope_key": "五權三街55巷", "type": "電梯大樓",
+                "age_band": "", "n": 2, "median": 49.6, "p25": 47.8, "p75": 51.5,
+                "car_median_wan": 200, "car_ping_median": 8.0}
+        comps = fake_comps(same)
+        self.bot(ask=fake_ask(parsed=parsed), comps=comps).handle(
+            self.msg("寶鴻大白 建坪86.61坪 開價3888萬", user="ADMIN", group="G1"))
+        out = self.replies[0]
+        self.assertEqual(comps.calls[0][5:], ("五權三街55巷3號", True))
+        self.assertIn("含 2 車位", out)
+        # (3888-400)/(86.61-16)=49.4
+        self.assertIn("扣車位單價：開 49.4 萬/坪（70.6 坪）", out)
+        self.assertIn("同巷 五權三街55巷・電梯大樓", out)
+        self.assertIn("車位價用附近成交推估 400 萬（2 個車位）", out)
+        self.assertIn("⚠️ 參考性低：同巷成交只有 2 筆", out)
+
+    def test_wide_spread_flagged(self):
+        wide = {**COMPS, "p25": 27.1, "p75": 43.9, "median": 40.0}
+        self.bot(comps=fake_comps(wide)).handle(self.msg(LISTING, user="ADMIN", group="G1"))
+        self.assertIn("成交單價差很大（27.1～43.9）", self.replies[0])
+
+    def test_needs_elevator(self):
+        base = {**PARSED, "building_type": "", "parking": False, "floor": ""}
+        self.assertFalse(listing.needs_elevator(base))
+        self.assertTrue(listing.needs_elevator({**base, "parking": True}))
+        self.assertTrue(listing.needs_elevator({**base, "floor": "7/12"}))
+        self.assertFalse(listing.needs_elevator({**base, "floor": "3/4"}))
+        self.assertFalse(listing.needs_elevator({**base, "building_type": "公寓", "parking": True}))
+
     def test_new_tenant_listing_type(self):
         new_tenant.create("house", "物件分析", root=self.root, kind="listing")
         cfg = engine.Tenant("house", root=self.root).config
@@ -585,6 +620,10 @@ class Moi(unittest.TestCase):
         row("文心路四段1號", 3000, 30),                   # 別條路
         row("崇德路三段2號", 500, 20, dist="北區"),       # 別區
         row("崇德段1地號", 500, 0, target="土地"),        # 純土地
+        row("五權三街55巷5號六樓", 2000, 40),               # 同巷 50
+        row("五權三街55巷5號八樓", 2200, 40),               # 同巷 55
+        row("五權三街261號三樓", 270, 13, btype="公寓(5樓含以下無電梯)"),   # 沒電梯，不比
+        row("五權三街358號八樓", 1900, 40),                # 同路段別棟
     ])
 
     def comps(self, **kw):
@@ -602,7 +641,7 @@ class Moi(unittest.TestCase):
 
     def test_falls_back_to_district(self):
         c = self.comps(road="中清路一段")
-        self.assertEqual((c["scope"], c["n"]), ("全區", 5))
+        self.assertEqual((c["scope"], c["n"]), ("全區", 8))
 
     def test_moi_ssl_still_verifies_but_not_strict(self):
         import ssl
@@ -616,6 +655,19 @@ class Moi(unittest.TestCase):
             raise OSError("CERTIFICATE_VERIFY_FAILED")
         with self.assertRaisesRegex(RuntimeError, "CERTIFICATE_VERIFY_FAILED"):
             moi.comps("臺中市", "北屯區", fetch=boom, now=1792540800)
+
+    def test_same_lane_beats_road_and_walkups_excluded(self):
+        c = moi.comps("臺中市", "北屯區", "五權三街", "", address="五權三街55巷3號", elevator=True,
+                      seasons=1, fetch=lambda code, s: self.CSV if s == "115S2" else "",
+                      now=1792540800)
+        self.assertEqual((c["scope"], c["scope_key"], c["n"], c["median"], c["type"]),
+                         ("同巷", "五權三街55巷", 2, 52.5, "電梯大樓"))
+
+    def test_addr_keys(self):
+        self.assertEqual(moi.addr_keys("五權三街55巷3號7樓"), ("五權三街55巷3號", "五權三街55巷"))
+        self.assertEqual(moi.addr_keys("臺中市西區五權三街55巷5號六樓"), ("五權三街55巷5號", "五權三街55巷"))
+        self.assertEqual(moi.addr_keys("崇德路3段95號五樓之1"), ("崇德路三段95號", ""))
+        self.assertNotEqual(moi.addr_keys("崇德路三段5號")[0], moi.addr_keys("崇德路三段55號")[0])
 
     def test_season_list(self):
         self.assertEqual(moi.recent_seasons(3, now=1792540800), ["115S4", "115S3", "115S2"])

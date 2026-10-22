@@ -33,6 +33,7 @@ CITY_CODES = {
 SPECIAL_DEAL = ["親友", "員工", "特殊關係", "瑕疵", "凶宅", "增建", "頂加", "毛胚", "急買急賣",
                 "債權債務", "法拍", "持分", "含租約", "地上權", "政府機關"]
 MIN_COMPS = 3                       # 同路段（或屋齡相近）少於這個數就放寬
+MIN_SAME = 2                        # 同棟／同巷：2 筆就比整條路準
 AGE_BAND = 8                        # 屋齡 ±8 年算相近
 
 
@@ -167,18 +168,40 @@ def to_deal(r: dict, car_est: dict[str, float] | None = None) -> dict | None:
         "car_wan": round(car_price / 10000),
         "car_ping": round(car_area / PING, 1),
         "car_est": est,
+        "cars": car_count(r) if has_car else 0,
         "unit": round(unit, 1),
     }
 
 
-def road_key(road: str) -> str:
-    """「崇德路三段 123 號」→「崇德路三段」；門牌是「臺中市北屯區崇德路三段1~30號」這種格式。"""
-    s = norm(road)
+def _strip_area(addr: str) -> str:
+    s = norm(addr)
     for city in CITY_CODES:                       # 去掉「臺中市北屯區」
         s = s.removeprefix(city)
-    s = re.sub(r"^.{1,3}?[區鄉鎮市](?!路|街)", "", s)
-    m = re.match(r"(.+?(?:路|街|大道)(?:[一二三四五六七八九十]+段)?)", s)
+    return re.sub(r"^.{1,3}?[區鄉鎮市](?!路|街)", "", s)
+
+
+ROAD_RE = r"(.+?(?:路|街|大道)(?:[一二三四五六七八九十]+段)?)"
+
+
+def road_key(road: str) -> str:
+    """「崇德路三段 123 號」→「崇德路三段」；門牌是「臺中市北屯區崇德路三段1~30號」這種格式。"""
+    s = _strip_area(road)
+    m = re.match(ROAD_RE, s)
     return m.group(1) if m else s
+
+
+def addr_keys(addr: str) -> tuple[str, str]:
+    """門牌 →（同棟鍵, 同巷鍵）。「五權三街55巷3號7樓」→（「五權三街55巷3號」,「五權三街55巷」）。
+    用整段相等比對，不用子字串：「5號」不能對到「55號」。沒有巷就沒有同巷鍵。"""
+    m = re.match(ROAD_RE + r"(\d+巷)?(\d+弄)?(\d+(?:之\d+)?號)?", _strip_area(addr))
+    if not m:
+        return "", ""
+    road, lane, alley, no = (g or "" for g in m.groups())
+    bldg = road + lane + alley + no if no else ""
+    return bldg, (road + lane + alley if lane else "")
+
+
+ELEVATOR = ("住宅大樓", "華廈")
 
 
 def type_key(btype: str) -> str:
@@ -196,16 +219,19 @@ def pct(xs: list[float], p: float) -> float:
 
 
 def comps(city: str, district: str, road: str = "", btype: str = "", age: float | None = None,
-          seasons: int = 4, fetch=download, now: float | None = None) -> dict:
-    """近 seasons 季同路段（不夠就同區）、同建物型態、屋齡相近的成交統計。
-    fetch 可換成假的做離線測試。"""
+          address: str = "", elevator: bool = False,
+          seasons: int = 4, same_seasons: int = 8, fetch=download, now: float | None = None) -> dict:
+    """成交統計，比較對象由近到遠：同棟 → 同巷 → 同路段＋屋齡相近 → 全區＋屋齡相近
+    → 同路段 → 全區。同棟／同巷成交少，往回看 same_seasons 季；其他看近 seasons 季。
+    btype 沒寫但 elevator=True 時只比電梯大樓／華廈。fetch 可換成假的做離線測試。"""
     city = norm(city)
     code = CITY_CODES.get(city)
     if not code:
         raise ValueError(f"不支援的縣市：{city}")
+    want = max(seasons, same_seasons if address else 0)
     used, rows, last_err = [], [], ""
-    for s in recent_seasons(seasons + 2, now):
-        if len(used) == seasons:
+    for s in recent_seasons(want + 2, now):
+        if len(used) == want:
             break
         try:
             text = fetch(code, s)
@@ -214,39 +240,59 @@ def comps(city: str, district: str, road: str = "", btype: str = "", age: float 
             continue
         if text:
             used.append(s)
-            rows += parse(text)
+            rows += [dict(r, _season=s) for r in parse(text)]
     if not used:
         raise RuntimeError("實價登錄抓不到資料：" + (last_err or "內政部網站可能在維護"))
 
-    dist, rk, tk = norm(district), road_key(road) if road else "", type_key(btype)
+    dist, tk = norm(district), type_key(btype)
+    rk = road_key(road or address) if (road or address) else ""
+    bk, lk = addr_keys(address) if address else ("", "")
     rows = [r for r in rows if not dist or r.get("鄉鎮市區") == dist]
     car_est = car_estimates(rows)
-    deals = [d for d in (to_deal(r, car_est) for r in rows) if d]
+    deals = []
+    for r in rows:
+        d = to_deal(r, car_est)
+        if d:
+            d["season"] = r["_season"]
+            deals.append(d)
     if tk:
         deals = [d for d in deals if d["type"].startswith(tk)]
-    # 由嚴到寬：同路段＋屋齡相近 → 同路段 → 全區＋屋齡相近 → 全區，取第一個夠 MIN_COMPS 筆的
-    on_road = [d for d in deals if rk and rk in norm(d["addr"])]
+    elif elevator:                               # 有車位或高樓層：不拿公寓、透天比
+        deals, tk = [d for d in deals if d["type"].startswith(ELEVATOR)], "電梯大樓"
+    for d in deals:
+        d["bk"], d["lk"] = addr_keys(d["addr"])
+    recent = set(used[:seasons])
+    wide = deals                                 # 同棟／同巷用（往回看較久）
+    deals = [d for d in deals if d["season"] in recent]
     near = (lambda ds: [d for d in ds if d["age"] is not None and abs(d["age"] - age) <= AGE_BAND]) \
         if age is not None else (lambda ds: [])
     band = f"屋齡 {max(age - AGE_BAND, 0):g}～{age + AGE_BAND:g} 年" if age is not None else ""
-    for cand, scope, age_band in ((near(on_road), "同路段", band), (on_road, "同路段", ""),
-                                  (near(deals), "全區", band), (deals, "全區", "")):
-        if len(cand) >= MIN_COMPS:
+    on_road = [d for d in deals if rk and rk in norm(d["addr"])]
+    tiers = (([d for d in wide if bk and d["bk"] == bk], "同棟", bk, "", MIN_SAME),
+             ([d for d in wide if lk and d["lk"] == lk], "同巷", lk, "", MIN_SAME),
+             (near(on_road), "同路段", rk, band, MIN_COMPS),
+             (near(deals), "全區", dist, band, MIN_COMPS),
+             (on_road, "同路段", rk, "", MIN_COMPS),
+             (deals, "全區", dist, "", 1))
+    for cand, scope, key, age_band, need in tiers:
+        if len(cand) >= need:
             deals = cand
             break
     else:
-        scope, age_band = "全區", ""
+        deals, scope, key, age_band = [], "全區", dist, ""
+    span = len(used) if scope in ("同棟", "同巷") else len(recent)
     units = [d["unit"] for d in deals]
     car_price = car_est.get("坡道平面") or car_est.get("")
-    car_pings = [d["car_ping"] for d in deals if d["car_ping"] > 0]
+    car_pings = [d["car_ping"] / d["cars"] for d in deals if d["car_ping"] > 0]
     deals.sort(key=lambda d: d["date"], reverse=True)
     return {
-        "seasons": used, "scope": scope, "age_band": age_band, "road": rk, "type": tk, "district": dist,
+        "seasons": used[:span], "scope": scope, "scope_key": key, "age_band": age_band,
+        "road": rk, "type": tk, "district": dist,
         "n": len(units),
         "median": round(statistics.median(units), 1) if units else None,
         "p25": pct(units, .25) if units else None,
         "p75": pct(units, .75) if units else None,
-        # 物件沒寫車位價時用來推估：跟成交扣車位用同一個數字（同區坡道平面中位價），前後一致
+        # 物件沒寫車位價時用來推估：跟成交扣車位用同一個數字（同區坡道平面中位價），前後一致。都是「一個車位」
         "car_median_wan": round(car_price / 10000) if car_price else None,
         "car_ping_median": round(statistics.median(car_pings), 1) if car_pings else None,
         "latest": deals[:3],

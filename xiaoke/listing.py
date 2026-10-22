@@ -36,12 +36,14 @@ FIELDS = {
     "city": "縣市，例：臺中市（沒寫就空字串）",
     "district": "行政區，例：北屯區（沒寫但從路名能確定才填，否則空字串）",
     "road": "路名含段，例：崇德路三段（沒寫就空字串）",
+    "address": "門牌到「號」為止，不含縣市區與樓層，例：五權三街55巷3號（沒寫就空字串）",
     "community": "社區／建案名（沒寫就空字串）",
     "building_type": "住宅大樓／華廈／公寓／透天厝／套房 其中之一，看不出來就空字串",
     "price_wan": "開價，單位萬，數字",
     "total_ping": "權狀總坪數，數字（含車位的話照寫）",
     "main_ping": "主建物坪數，數字，沒寫就 null",
     "parking": "有沒有車位，true／false",
+    "parking_count": "車位數量，數字（例：B1-34A、35 是 2 個；有車位但沒寫幾個就 1；沒車位 0）",
     "parking_ping": "車位坪數，數字，沒寫就 null",
     "parking_price_wan": "車位價格（萬），沒寫就 null",
     "age": "屋齡（年），數字，沒寫就 null",
@@ -92,9 +94,11 @@ def parse_listing(text: str, ask: Ask) -> dict:
     d = _json(ask(parse_prompt(text)))
     for k in ("price_wan", "total_ping", "main_ping", "parking_ping", "parking_price_wan", "age"):
         d[k] = _f(d.get(k))
-    for k in ("city", "district", "road", "community", "building_type", "floor", "layout"):
+    for k in ("city", "district", "road", "address", "community", "building_type", "floor", "layout"):
         d[k] = str(d.get(k) or "").strip()
     d["parking"] = d.get("parking") is True
+    cnt = _f(d.get("parking_count"))
+    d["parking_count"] = int(cnt) if cnt and d["parking"] else (1 if d["parking"] else 0)
     d["features"] = [str(x) for x in d.get("features") or [] if str(x).strip()][:8]
     return d
 
@@ -105,12 +109,14 @@ def price_check(p: dict, c: dict) -> dict:
     notes = []
     car_ping = car_wan = 0.0
     if p["parking"]:
-        car_ping = p["parking_ping"] or c.get("car_ping_median") or 0
-        car_wan = p["parking_price_wan"] or c.get("car_median_wan") or 0
+        n = p.get("parking_count") or 1           # 物件寫的車位坪數／價格當作全部車位的合計
+        car_ping = p["parking_ping"] or (c.get("car_ping_median") or 0) * n
+        car_wan = p["parking_price_wan"] or (c.get("car_median_wan") or 0) * n
+        each = f"（{n} 個車位）" if n > 1 else ""
         if not p["parking_ping"] and car_ping:
-            notes.append(f"車位坪數用附近成交推估 {car_ping:g} 坪")
+            notes.append(f"車位坪數用附近成交推估 {car_ping:g} 坪{each}")
         if not p["parking_price_wan"] and car_wan:
-            notes.append(f"車位價用附近成交推估 {car_wan:g} 萬")
+            notes.append(f"車位價用附近成交推估 {car_wan:g} 萬{each}")
     net = p["total_ping"] - car_ping
     if net < 5:
         return {"ok": False, "why": "坪數扣掉車位後太小，請確認權狀坪數"}
@@ -164,6 +170,27 @@ def write_copy(p: dict, raw: str, ask: Ask) -> dict:
 
 
 # ── 組回覆 ────────────────────────────────────────────
+SCOPE_LABEL = {"同棟": "同棟 {}", "同巷": "同巷 {}", "同路段": "{}", "全區": "{}全區"}
+
+
+def needs_elevator(p: dict) -> bool:
+    """沒寫建物型態時：有車位或 6 樓以上，就只跟電梯大樓／華廈比，不拿老公寓、透天拉低行情。"""
+    if p["building_type"]:
+        return False
+    m = re.match(r"\s*(\d+)", p["floor"] or "")
+    return p["parking"] or bool(m and int(m.group(1)) >= 6)
+
+
+def low_confidence(c: dict) -> str:
+    if c["scope"] in ("同棟", "同巷"):
+        return f"{c['scope']}成交只有 {c['n']} 筆" if c["n"] < moi.MIN_COMPS else ""
+    if c["n"] < moi.MIN_COMPS:
+        return f"只有 {c['n']} 筆成交"
+    if (c["p75"] - c["p25"]) / c["median"] > 0.3:
+        return f"成交單價差很大（{c['p25']}～{c['p75']}）"
+    return ""
+
+
 def _wan(n: float) -> str:
     return f"{n:,.0f}"
 
@@ -186,20 +213,21 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps) -> str:
     if p["age"]:
         spec.append(f"屋齡 {p['age']:g} 年")
     if p["parking"]:
-        spec.append("含車位")
+        spec.append(f"含 {p['parking_count']} 車位" if p["parking_count"] > 1 else "含車位")
     out = [f"🏠 物件分析｜{where}", "｜".join(spec), ""]
 
     out.append("📊 1. 開價 vs 實價登錄")
     try:
-        c = comps_fn(p["city"], p["district"], p["road"], p["building_type"], p["age"])
+        c = comps_fn(p["city"], p["district"], p["road"], p["building_type"], p["age"],
+                     address=p["address"], elevator=needs_elevator(p))
     except Exception as e:                       # 內政部網站維護、斷線
         c = {"n": 0, "error": str(e)}
-    if c.get("n", 0) < moi.MIN_COMPS:
+    if not c.get("n"):
         out.append(f"⚠️ 實價登錄抓不到夠多成交（{c.get('error') or '只有 %s 筆' % c.get('n', 0)}），"
                    "這件先人工判斷。")
     else:
         chk = price_check(p, c)
-        scope = "・".join(x for x in (c["road"] if c["scope"] == "同路段" else f"{c['district']}全區",
+        scope = "・".join(x for x in (SCOPE_LABEL[c["scope"]].format(c["scope_key"]),
                                       c["type"], c.get("age_band", "")) if x)
         if not chk["ok"]:
             out.append(f"⚠️ {chk['why']}")
@@ -212,6 +240,9 @@ def analyze(text: str, cfg: dict, ask: Ask, comps_fn=moi.comps) -> str:
                     f"建議刊登價：{_wan(chk['suggest'][0])}～{_wan(chk['suggest'][1])} 萬"]
             if chk["notes"]:
                 out.append("（" + "；".join(chk["notes"]) + "）")
+            warn = low_confidence(c)
+            if warn:
+                out.append(f"⚠️ 參考性低：{warn}，判斷僅供參考，建議再人工看一下。")
         if c["latest"]:
             out.append("最近成交：")
             for d in c["latest"]:
