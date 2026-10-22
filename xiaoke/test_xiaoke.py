@@ -737,6 +737,10 @@ class ListingMode(Base):
         self.assertIn("🟢 開價已經是最便宜的", out)
         self.bot().handle(self.msg("競品 1500 1450", user="ADMIN", group="G1"))
         self.assertIn("🔴", self.replies[2])
+        self.bot().handle(self.msg("競品 1,560萬", user="ADMIN", group="G1"))
+        self.assertIn("競品 1 筆：1,560 萬", self.replies[-1])
+        self.assertIn("🟡 建議刊登價 1,540～1,630 萬的下緣", self.replies[-1])
+        self.replies.pop()
         # 別的群組沒分析過，不能拿這個群組的物件比
         self.bot().handle(self.msg("競品 1500", user="ADMIN", group="G2"))
         self.assertIn("要先貼一件物件", self.replies[3])

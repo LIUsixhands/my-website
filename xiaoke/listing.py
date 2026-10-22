@@ -275,9 +275,10 @@ def compete(text: str, last: dict | None) -> str:
     allp = sorted(prices + [me])
     rank = allp.index(me) + 1
     cheapest = min(prices)
-    out = [f"🔍 591 競品比較｜{last['name']}",
-           f"競品 {len(prices)} 筆：最低 {_wan(cheapest)}、中位 {_wan(sorted(prices)[len(prices) // 2])}、"
-           f"最高 {_wan(max(prices))} 萬",
+    spread = (f"競品 1 筆：{_wan(cheapest)} 萬" if len(prices) == 1 else
+              f"競品 {len(prices)} 筆：最低 {_wan(cheapest)}、中位 {_wan(sorted(prices)[len(prices) // 2])}、"
+              f"最高 {_wan(max(prices))} 萬")
+    out = [f"🔍 591 競品比較｜{last['name']}", spread,
            f"這件開價 {_wan(me)} 萬：便宜到貴排第 {rank}/{len(allp)}"]
     if me <= cheapest:
         out.append("🟢 開價已經是最便宜的，可以刊。")
