@@ -6339,7 +6339,7 @@ class TestPickMovingAverageVersion(unittest.TestCase):
 class TestPickStrengthPulse(unittest.TestCase):
     """10-21 使用者：「盤前那一檔，9:00 推播後，我想繼續推播，直到 13 點 10 分」→「強弱續抱及出場，
     我自己判斷，但你要給我判斷指標」→ 六項各 1～10 分、平均分取名稱 →「可否依強弱程度給我訊號」
-    → 變兩級以上才推、60 分鐘補一則、13:10 總結。只給數字，不講該抱該賣。"""
+    → 變一級以上才推（10-22 從兩級改一級）、60 分鐘補一則、13:10 總結。只給數字，不講該抱該賣。"""
 
     D = datetime(2026, 10, 21)
     SIG = {"code": "1111", "name": "測試・盤前首選", "entry": 100.0, "stop": 97.0, "time": "09:00:02"}
@@ -6408,14 +6408,17 @@ class TestPickStrengthPulse(unittest.TestCase):
         self.assertNotIn("**", m)
         self.assertEqual(saved, [("2026-10-21", "1111", 1)])
         self.assertEqual(p.on_bar(self._st(price=100.4), (self.at(9, 10), 100.4, 100.2, 100.0, False),
-                                  self.at(9, 10, 3)), [], "只差一級 → 不推")
+                                  self.at(9, 10, 3)), [], "離上一則不到 10 分鐘 → 不推")
         one = self._pulse()
         one.on_bar(self._st(), (self.at(9, 5), 100.5, 100.2, 100.0, False), self.at(9, 5, 3))
         lv0 = one.pushed["lv"]
         got = one.on_bar(self._st(price=100.1), (self.at(9, 20), 100.1, 100.2, 100.0, False),
                          self.at(9, 20, 3))
         self.assertEqual(abs(pickpulse.level(one.history[-1]["score"])[0] - lv0), 1)
-        self.assertEqual(got, [], "過了 10 分鐘、但只差一級 → 還是不推")
+        self.assertEqual(len(got), 1, "10-22 使用者：一級報一次 —— 過了 10 分鐘、差一級就推")
+        self.assertIn("稍強 → 中性偏強 ↓", got[0])
+        self.assertEqual(one.on_bar(self._st(price=100.1), (self.at(9, 35), 100.1, 100.2, 100.0, False),
+                                    self.at(9, 35, 3)), [], "同一級 → 不推")
         weak = self._st(price=99.8, buy=400, sell=600)
         p.market = lambda: -0.2
         (c,) = p.on_bar(weak, (self.at(9, 15), 99.8, 99.9, 100.0, False), self.at(9, 15, 3))
@@ -6424,7 +6427,7 @@ class TestPickStrengthPulse(unittest.TestCase):
         back = self._st(price=100.6)
         p.market = lambda: 0.0
         self.assertEqual(p.on_bar(back, (self.at(9, 20), 100.6, 100.2, 100.0, False), self.at(9, 20, 3)), [],
-                         "變兩級以上，但離上一則不到 10 分鐘 → 先不推")
+                         "變了，但離上一則不到 10 分鐘 → 先不推")
         (u,) = p.on_bar(back, (self.at(9, 25), 100.6, 100.2, 100.0, False), self.at(9, 25, 3))
         self.assertIn("中性偏弱 → 稍強 ↑", u, "跟上一則推的比，不是跟上一根比")
         quiet = None
