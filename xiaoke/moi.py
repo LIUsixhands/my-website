@@ -255,14 +255,14 @@ def comps(city: str, district: str, road: str = "", btype: str = "", age: float 
         if d:
             d["season"] = r["_season"]
             deals.append(d)
-    if tk:
-        deals = [d for d in deals if d["type"].startswith(tk)]
-    elif elevator:                               # 有車位或高樓層：不拿公寓、透天比
-        deals, tk = [d for d in deals if d["type"].startswith(ELEVATOR)], "電梯大樓"
     for d in deals:
         d["bk"], d["lk"] = addr_keys(d["addr"])
+    wide = deals              # 同棟／同巷：往回看較久，也不篩建物型態（同一棟就是同型態，AI 猜錯型態會把本棟濾掉）
+    if tk in ELEVATOR or (not tk and elevator):  # 住宅大樓、華廈只差在 10 樓上下，都算電梯大樓
+        deals, tk = [d for d in deals if d["type"].startswith(ELEVATOR)], "電梯大樓"
+    elif tk:
+        deals = [d for d in deals if d["type"].startswith(tk)]
     recent = set(used[:seasons])
-    wide = deals                                 # 同棟／同巷用（往回看較久）
     deals = [d for d in deals if d["season"] in recent]
     near = (lambda ds: [d for d in ds if d["age"] is not None and abs(d["age"] - age) <= AGE_BAND]) \
         if age is not None else (lambda ds: [])

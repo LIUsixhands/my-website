@@ -90,12 +90,18 @@ def _f(v) -> float | None:
     return n if n > 0 else None
 
 
+ADDR_RE = re.compile(r"([^\s：:,，]+?(?:路|街|大道)(?:[一二三四五六七八九十]+段)?(?:\d+巷)?(?:\d+弄)?\d+(?:之\d+)?號)")
+
+
 def parse_listing(text: str, ask: Ask) -> dict:
     d = _json(ask(parse_prompt(text)))
     for k in ("price_wan", "total_ping", "main_ping", "parking_ping", "parking_price_wan", "age"):
         d[k] = _f(d.get(k))
     for k in ("city", "district", "road", "address", "community", "building_type", "floor", "layout"):
         d[k] = str(d.get(k) or "").strip()
+    if not d["address"]:                         # AI 漏抓門牌就自己從原文找，同棟比對靠它
+        m = ADDR_RE.search(moi.norm(text))
+        d["address"] = m.group(1) if m else ""
     d["parking"] = d.get("parking") is True
     cnt = _f(d.get("parking_count"))
     d["parking_count"] = int(cnt) if cnt and d["parking"] else (1 if d["parking"] else 0)

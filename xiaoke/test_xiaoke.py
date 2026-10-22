@@ -578,6 +578,13 @@ class ListingMode(Base):
         self.assertIn("車位價用附近成交推估 400 萬（2 個車位）", out)
         self.assertIn("⚠️ 參考性低：同巷成交只有 2 筆", out)
 
+    def test_address_from_text_when_ai_misses_it(self):
+        comps = fake_comps()
+        self.bot(ask=fake_ask(parsed={**PARSED, "address": ""}), comps=comps).handle(
+            self.msg("地址：台中市西區五權三街55巷3號7樓\n建坪：86坪\n開價：3888萬", user="ADMIN", group="G1"))
+        self.assertEqual(comps.calls[0][5], "臺中市西區五權三街55巷3號")
+        self.assertEqual(moi.addr_keys(comps.calls[0][5])[0], "五權三街55巷3號")
+
     def test_wide_spread_flagged(self):
         wide = {**COMPS, "p25": 27.1, "p75": 43.9, "median": 40.0}
         self.bot(comps=fake_comps(wide)).handle(self.msg(LISTING, user="ADMIN", group="G1"))
@@ -662,6 +669,14 @@ class Moi(unittest.TestCase):
                       now=1792540800)
         self.assertEqual((c["scope"], c["scope_key"], c["n"], c["median"], c["type"]),
                          ("同巷", "五權三街55巷", 2, 52.5, "電梯大樓"))
+
+    def test_same_building_ignores_wrong_type_guess(self):
+        # 本棟登記是華廈，AI 猜「住宅大樓」也要對到本棟
+        csv = self.CSV.replace("五權三街55巷5號六樓,1150510,八層,十五層,住宅大樓(11層含以上有電梯)",
+                               "五權三街55巷5號六樓,1150510,八層,十五層,華廈(10層含以下有電梯)")
+        c = moi.comps("臺中市", "北屯區", "五權三街", "住宅大樓", address="五權三街55巷5號",
+                      seasons=1, fetch=lambda code, s: csv if s == "115S2" else "", now=1792540800)
+        self.assertEqual((c["scope"], c["n"]), ("同棟", 2))
 
     def test_addr_keys(self):
         self.assertEqual(moi.addr_keys("五權三街55巷3號7樓"), ("五權三街55巷3號", "五權三街55巷"))
