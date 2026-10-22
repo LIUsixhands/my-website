@@ -459,6 +459,27 @@ BAOHONG = """🧀🅰️ 新接一般物件 🅰️🧀
 Doris -0956921766"""
 
 
+SHENGMEI = """新接一般委託｜AG1879796
+《北屯區｜勝美上境｜朝南大戶四房雙主臥》
+▪️台中市北屯區
+      文心路四段97號14樓之1
+▪️捷運G7站｜四房平車
+▪️售價3680萬
+▪️總建坪：88.067坪
+｜主建物：47.84坪
+｜附屬建物：7.18坪
+｜公設：25.913坪（不含車位坪數）
+｜車位：B3~224（7.135坪）
+｜土地坪數：6.877坪
+｜管理費：4701元/月
+｜建築完成日期：107年3月20日
+
+▪️特色
+｜G7捷運站步行150米
+｜鄰11期、14期、水湳經貿園區
+｜4房2廳3衛，3陽台"""
+
+
 def fake_ask(parsed=PARSED, copy=COPY):
     calls = []
 
@@ -638,6 +659,20 @@ class ListingMode(Base):
             raise clients.ApiError("HTTP 429 quota", 429)
         self.bot(ask=quota, comps=fake_comps()).handle(self.msg(BAOHONG, user="ADMIN", group="G1"))
         self.assertEqual(len(tries), 1, "額度用完不要再試")
+
+    def test_quick_parse_title_format(self):
+        q = listing.quick_parse(SHENGMEI)
+        self.assertEqual((q["district"], q["community"], q["address"], q["road"]),
+                         ("北屯區", "勝美上境", "文心路四段97號", "文心路四段"))
+        self.assertEqual((q["price_wan"], q["total_ping"], q["main_ping"]), (3680, 88.067, 47.84))
+        self.assertEqual((q["parking"], q["parking_count"], q["parking_ping"]), (True, 1, 7.135))
+        self.assertIn(q["age"], (8, 9))              # 107 年 3 月完工，取整數年
+        self.assertTrue(listing.is_structured(SHENGMEI, q))
+        self.assertEqual(listing.floor_of({"floor": ""}, SHENGMEI), 14)
+
+    def test_district_regex_ignores_symbols(self):
+        for raw, want in [("《北屯區｜勝美上境", "北屯區"), ("台中北屯區", "北屯區"), ("西區五權三街", "西區")]:
+            self.assertEqual(listing.DISTRICT_RE.search(raw).group(1), want, raw)
 
     def test_wide_spread_flagged(self):
         wide = {**COMPS, "p25": 27.1, "p75": 43.9, "median": 40.0}

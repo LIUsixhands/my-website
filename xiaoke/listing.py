@@ -108,23 +108,40 @@ def quick_parse(text: str) -> dict:
     area = t
     for w in list(moi.CITY_CODES) + ["社區", "學區", "園區", "重劃區"]:
         area = area.replace(w, " ")
-    car_line = _grab(r"車位[：:\s]*([^\n]*)", t)
+    car_line = _grab(r"車位\s*[：:]\s*([^\n]*)", t) or _grab(r"車位\s*([^\n]*)", t)   # 先找「車位：」那行
+    built = re.search(r"(?:建築完成|完工|完成日期)[^\d\n]*(\d{2,3})\s*[年/.-]\s*(\d{1,2})?", t)
     has_car = bool(re.search(r"車位|雙車|車庫", t)) and not re.match(r"\s*(無|沒有|0)", car_line)
     n_car = 2 if "雙車" in t else len([x for x in re.split(r"[、,，/及和]", car_line) if x.strip()]) or 1
     return {
         "city": next((c for c in moi.CITY_CODES if c in t), ""),
-        "district": _grab(r"([^\s區：:]{1,3}區)", area),
+        "district": _grab(DISTRICT_RE.pattern, area),
+        "community": title_community(t),
         "road": moi.road_key(addr) if addr else moi.norm(
             _grab(r"區\s*([^\s區]+?(?:路|街|大道)(?:[一二三四五六七八九十\d]+段)?)", t)),
         "address": addr,
         "price_wan": _f(_grab(r"(?:開價|售價|總價)[：:\s]*([\d,.]+)\s*萬", t) or _grab(r"([\d,.]+)\s*萬", t)),
         "total_ping": _f(_grab(r"(?:建坪|權狀|總坪數|坪數)[：:\s]*([\d.]+)", t) or _grab(r"([\d.]+)\s*坪", t)),
         "main_ping": _f(_grab(r"(?:主建物|室內)[：:\s]*([\d.]+)", t)),
-        "age": _f(_grab(r"屋齡[：:\s]*([\d.]+)", t)),
+        "age": _f(_grab(r"屋齡[：:\s]*([\d.]+)", t)) or (
+            round(moi.roc_age(f"{built.group(1)}{int(built.group(2) or 1):02d}01")) if built else None),
         "layout": _grab(r"格局[：:\s]*(\S+)", t),
         "parking": has_car,
         "parking_count": n_car if has_car else 0,
+        "parking_ping": _f(_grab(r"([\d.]+)\s*坪", car_line)) if has_car else None,
     }
+
+
+def title_community(t: str) -> str:
+    """《北屯區｜勝美上境｜朝南大戶四房雙主臥》→ 勝美上境：標題裡不是行政區、也不是房型描述的那一段。"""
+    m = re.search(r"[《【]([^》】]+)[》】]", t)
+    if not m:
+        return ""
+    for seg in re.split(r"[｜|/／]", m.group(1)):
+        seg = seg.strip()
+        if 2 <= len(seg) <= 8 and not DISTRICT_RE.fullmatch(seg) and \
+                not re.search(r"\d|房|坪|朝|戶|廳|衛|車|樓|捷運|景觀|裝潢|急售|降價|新接|委託", seg):
+            return seg
+    return ""
 
 
 def ai_reason(e: Exception) -> str:
@@ -141,7 +158,9 @@ def ai_reason(e: Exception) -> str:
 
 def is_structured(text: str, q: dict) -> bool:
     """公司格式的物件（「開價：」「建坪：」「地址：」逐行寫）規則就讀得完整，不必花一次 Gemini 額度。"""
-    labels = len(re.findall(r"(?:開價|售價|建坪|權狀|地址|屋齡|格局|車位)\s*[：:]", moi.norm(text)))
+    t = moi.norm(text)
+    labels = len(re.findall(r"(?:建坪|權狀|主建物|公設|地址|屋齡|格局|車位|建築完成)\s*[：:]", t)) + \
+        bool(re.search(r"(?:開價|售價|總價)\s*[：:]?\s*\d", t))
     return labels >= 3 and bool(q["price_wan"] and q["total_ping"] and q["district"])
 
 
@@ -387,7 +406,7 @@ def book_command(text: str, book: Book) -> str | None:
 
 # ── 行情查詢：不用開價，問某社區／路段最近成交 ─────────
 MARKET_HINT = re.compile(r"行情|成交")
-DISTRICT_RE = re.compile(r"([^\s區]{1,3}區)")
+DISTRICT_RE = re.compile(r"([\u4e00-\u9fff]{2}區|[東西南北中]區)")   # 北屯區、西區；不吃《》｜這類符號
 MARKET_NOISE = re.compile(r"請問|幫我|查一下|查|最近|有沒有|有|的|嗎|呢|成交|行情|價格|多少|[?？!！。，,]")
 
 
