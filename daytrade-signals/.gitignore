@@ -27,6 +27,9 @@ journal/watchlist-*.json
 journal/preopen-*.json
 # 首選強弱監看的打分紀錄（pickpulse.py）
 journal/pulse-*.json
+# 五檔掛單紀錄（bookrec.py）：一樣看得出你每天盯哪些股票。
+journal/book-*.json
+journal/book-*.tmp
 # whatif.py 的分鐘 K 快取：體積大，而且看得出你每天盯哪些股票。
 journal/kbars/
 

@@ -55,6 +55,7 @@ import followup
 import manual
 import pickpulse
 import pulsecheck
+import bookrec
 _NO_WAIT = unittest.mock.patch.object(premarket, "wait_until", lambda *a, **k: 0.0)
 
 
@@ -4380,7 +4381,8 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
     MUST_IGNORE = (".env", "state.json", "watchlist.json", "outcomes.csv",
                    "candidates.csv", "candidates_outcomes.csv", "journal/*.md",
                    "journal/watchlist-*.json", "journal/preopen-*.json", "picks.csv",
-                   "pick_followup.csv", "manual.csv", "logs/")
+                   "pick_followup.csv", "manual.csv", "logs/", "journal/book-*.json",
+                   "journal/book-*.tmp")
 
     def setUp(self):
         if not self.IGNORE.exists():
@@ -6739,6 +6741,84 @@ class TestPulseScoreCheck(unittest.TestCase):
         self.assertNotIn("## 強弱分數", "\n".join(whatif.render({}, ["2026-10-21"], [], [])))
         src = inspect.getsource(whatif.main)
         self.assertIn("pulse = pulsecheck.run(pool_days, markets, prev_day_index(pool_days))", src)
+
+
+class TestOrderBookRecorder(unittest.TestCase):
+    """10-22 使用者：「要，五檔掛單也開始記錄」—— 文獻上短線最有力的是委買委賣不平衡
+    （Cont, Kukanov & Stoikov 2014），分鐘 K 沒有，只能從今天開始自己記。只記錄。"""
+
+    D = datetime(2026, 10, 23)
+
+    def ba(self, code="1111", h=9, m=0, s=12, bid=(100.0, 99.9), bv=(5, 7), ask=(100.1, 100.2), av=(3, 4),
+           **kw):
+        return SimpleNamespace(code=code, datetime=self.D.replace(hour=h, minute=m, second=s),
+                               bid_price=list(bid), bid_volume=list(bv), ask_price=list(ask),
+                               ask_volume=list(av), simtrade=kw.get("simtrade", 0),
+                               intraday_odd=kw.get("odd", 0))
+
+    def test_ofi_is_the_cks_definition(self):
+        self.assertEqual(bookrec.ofi((100, 5, 101, 3), (100, 8, 101, 3)), 3, "買量變多 → +")
+        self.assertEqual(bookrec.ofi((100, 5, 101, 3), (100, 5, 101, 6)), -3, "賣量變多 → −")
+        self.assertEqual(bookrec.ofi((100, 5, 101, 3), (100.5, 2, 101, 3)), 2, "買價往上：新的買量全算")
+        self.assertEqual(bookrec.ofi((100, 5, 101, 3), (99.5, 9, 101, 3)), -5, "買價往下：舊的買量全扣")
+        self.assertEqual(bookrec.ofi((100, 5, 101, 3), (100, 5, 100.5, 4)), -4, "賣價往下：新的賣量全扣")
+        self.assertEqual(bookrec.ofi((100, 5, 101, 3), (100, 5, 101.5, 4)), 3, "賣價往上：舊的賣量全算")
+        self.assertEqual(bookrec.minute_label(self.D.replace(hour=9, minute=0, second=12)), "09:01")
+        self.assertEqual(bookrec.minute_label(self.D.replace(hour=9, minute=0, second=0)), "09:01",
+                         "跟分鐘 K 一樣，label 是結束時間")
+
+    def test_record_save_and_what_it_skips(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "j" / "book.json"
+            b = bookrec.BookRecorder(["1111", 2222], date="2026-10-23", path=path)
+            self.assertIsNone(b.save(), "還沒收到 → 不寫檔")
+            self.assertFalse(path.exists())
+            b.record(self.ba())
+            b.record(self.ba(s=40, bv=(9, 7)))
+            b.record(self.ba(m=1, s=5, av=(1, 4)))
+            b.record(self.ba(code="3333"))
+            b.record(self.ba(simtrade=1, bv=(99, 1)))
+            b.record(self.ba(odd=1, bv=(99, 1)))
+            b.record(self.ba(code="2222", bid=(0,), bv=(0,), ask=(50.0,), av=(10,)))
+            b.record(self.ba(code="2222", s=30, bid=(0,), bv=(0,), ask=(50.0,), av=(20,)))
+            got = b.payload()["codes"]
+            self.assertEqual(set(got), {"1111", "2222"}, "不在名單的不記")
+            first, second = got["1111"]
+            self.assertEqual(first["at"], "09:01")
+            self.assertEqual(first["n"], 2, "試撮、零股不算")
+            self.assertEqual(first["ofi"], 4.0, "同一分鐘第二筆：買量 5 → 9")
+            self.assertEqual(first["bid"], [[100.0, 9], [99.9, 7]], "存那一分鐘最後一刻的五檔")
+            self.assertEqual(second["at"], "09:02")
+            self.assertEqual(second["ofi"], -2.0, "換一分鐘重新累計，但跟上一筆接著比：買量 9 → 5（−4）、賣量 3 → 1（+2）")
+            self.assertEqual(got["2222"][0]["ofi"], 0.0, "沒有買單（跌停鎖死）不算 OFI")
+            self.assertEqual(got["2222"][0]["n"], 2)
+            b.record(self.ba(bid=[100.0 - k * 0.1 for k in range(7)], bv=[1] * 7, m=2))
+            self.assertEqual(len(b.payload()["codes"]["1111"][-1]["bid"]), 5, "只存五檔")
+            at = self.D.replace(hour=9, minute=5)
+            self.assertEqual(b.save_if_due(at), path)
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["date"], "2026-10-23")
+            self.assertEqual(saved["codes"]["1111"][0]["ofi"], 4.0)
+            self.assertFalse(path.with_suffix(".tmp").exists(), "先寫暫存檔再換名，寫一半當掉不會壞掉舊檔")
+            self.assertIsNone(b.save_if_due(at + timedelta(seconds=299)), "5 分鐘內不重寫")
+            self.assertEqual(b.save_if_due(at + timedelta(seconds=300)), path)
+        self.assertEqual(bookrec.path_for("2026-10-23").name, "book-20261023.json")
+
+    def test_signals_run_records_it_without_risking_the_watch(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn('book = bookrec.BookRecorder(list(states) + ([pick["code"]] if pick else []))', src)
+        self.assertIn("@broker.api.on_bidask_stk_v1()", src)
+        self.assertIn("quote_type=sj.constant.QuoteType.BidAsk", src)
+        tree = ast.parse(textwrap.dedent(src))
+        cb = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "on_bidask")
+        self.assertIsInstance(cb.body[0], ast.Try, "回呼整個包在 try 裡：記錄壞掉不可以影響盯盤")
+        reg = next(n for n in ast.walk(tree) if isinstance(n, ast.Try) and cb in n.body)
+        self.assertTrue(reg.handlers, "連設定回呼都包在 try 裡：shioaji 版本不支援也不會讓監看起不來")
+        loop = next(n for n in ast.walk(tree) if isinstance(n, ast.While))
+        calls = {n.func.id for n in ast.walk(loop) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+        self.assertIn("_save_book", calls, "盤中每 5 分鐘存一次，當掉也有紀錄")
+        fin = next(n for n in ast.walk(tree) if isinstance(n, ast.Try) and n.finalbody)
+        self.assertIn("_save_book(final=True)", ast.unparse(fin.finalbody[1]))
 
 
 class TestManualVersion(unittest.TestCase):

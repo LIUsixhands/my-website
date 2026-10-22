@@ -2141,6 +2141,28 @@ def run():
         except Exception as e:                  # 記錄壞掉不可以影響盯盤
             log.warning("開盤前試撮寫不進去（不影響盯盤）：%s", e)
 
+    # 10-22 五檔掛單：盯的那幾檔 + 首選，每分鐘存一筆，只記錄（bookrec.py）。
+    import bookrec
+    book = bookrec.BookRecorder(list(states) + ([pick["code"]] if pick else []))
+
+    def _save_book(final=False):
+        try:
+            path = book.save() if final else book.save_if_due()
+            if path and final:
+                log.info("五檔掛單寫入 %s", path)
+        except Exception as e:                  # 記錄壞掉不可以影響盯盤
+            log.warning("五檔掛單寫不進去（不影響盯盤）：%s", e)
+
+    try:                                        # 這版 shioaji 沒有五檔回呼也照常盯盤
+        @broker.api.on_bidask_stk_v1()
+        def on_bidask(exchange, bidask):
+            try:
+                book.record(bidask)
+            except Exception as e:
+                log.warning("五檔掛單記錄失敗（不影響盯盤）：%s", e)
+    except Exception as e:
+        log.warning("五檔回呼設定失敗（不影響盯盤）：%s", e)
+
     @broker.api.on_tick_stk_v1()
     def on_tick(exchange, tick):
         if getattr(tick, "simtrade", 0):
@@ -2202,6 +2224,15 @@ def run():
             quote_type=sj.constant.QuoteType.Tick,
             version=sj.constant.QuoteVersion.v1,
         )
+    for code in sorted(book.codes):
+        try:
+            broker.api.quote.subscribe(
+                broker.stock(code),
+                quote_type=sj.constant.QuoteType.BidAsk,
+                version=sj.constant.QuoteVersion.v1,
+            )
+        except Exception as e:                  # 五檔訂閱失敗不可以影響盯盤
+            log.warning("%s 五檔訂閱失敗（不影響盯盤）：%s", code, e)
     log.info("已訂閱 %d 檔，開始監看。Ctrl+C 結束。", len(states))
     # 「✅」只代表登入永豐、訂閱完成 —— 不代表收得到報價（10-09 休市日照樣 ✅）。
     # 有沒有行情 09:03 才知道，這裡講清楚。
@@ -2240,6 +2271,7 @@ def run():
         while datetime.now().time() < close_at:
             time.sleep(30)
             broker.ensure_session()
+            _save_book()
             # 表上沒有的休市日：09:03 還沒有任何成交 → 看 0050 今天有沒有 K 棒。
             # 試撮的備援寫入：開盤後一直沒有成交進來（休市、斷線）也要留下紀錄。
             if not pre.saved and datetime.now().time() >= MARKET_CHECK_AT:
@@ -2295,6 +2327,7 @@ def run():
         pass
     finally:
         gate.save()
+        _save_book(final=True)
         log.info("收盤。請執行 review.py 產出今日覆盤。")
 
 
