@@ -57,7 +57,10 @@ LISTING_HELP = """物件分析小幫手用法：
 行情 北屯區 崇德路三段
 行情 寶鴻大白
 
-教我認社區（1 對 1 傳）：
+讓整個群組都能用（管理員在群組裡打）：
+開放本群／關閉本群
+
+教我認社區（管理員 1 對 1 傳）：
 社區 寶鴻大白 = 西區 五權三街55巷3號
 「社區」看清單、「社區 刪 名稱」刪除
 貼過的物件有社區名＋地址，我會自動記住"""
@@ -210,10 +213,22 @@ class Bot:
         text = msg.get("text", "")
         if not in_group and self._try_pair(rt, user, text, LISTING_HELP):
             return
-        if user not in self.t.config.get("admins", []):
+        cfg = self.t.config
+        is_admin = user in cfg.get("admins", [])
+        groups = cfg.get("allowed_groups", [])
+        if in_group and is_admin and text.strip() in ("開放本群", "關閉本群"):
+            opening = text.strip() == "開放本群"
+            groups = [g for g in groups if g != target] + ([target] if opening else [])
+            self.t.update_config(allowed_groups=groups)
+            self.t.log(kind="group_open" if opening else "group_close", user=user, group=target)
+            self.reply(rt, target, "✅ 已開放：本群組的人不用配對，貼物件、查行情、競品都會回。\n要關掉請管理員打「關閉本群」"
+                       if opening else "🔒 已關閉：本群組只回配對過的管理員。")
+            return
+        # 管理員到哪都能用；開放過的群組裡，群組成員也能用。陌生人、沒開放的群組一律不回（省 Gemini 額度）
+        if not (is_admin or (in_group and target in groups)):
             return
         book = listing.Book(self.t.dir / "communities.json")
-        if not in_group:
+        if not in_group and is_admin:
             answer = listing.book_command(text, book)
             if answer:
                 self.reply(rt, target, answer)

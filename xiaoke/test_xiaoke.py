@@ -780,6 +780,30 @@ class ListingMode(Base):
         self.bot().handle(self.msg("競品 1500", user="ADMIN", group="G2"))
         self.assertIn("要先貼一件物件", self.replies[3])
 
+    def test_open_group_lets_members_use_it(self):
+        self.bot().handle(self.msg(LISTING, user="U_MEMBER", group="G1"))
+        self.assertEqual(self.replies, [], "還沒開放：成員不回")
+        self.bot().handle(self.msg("開放本群", user="U_MEMBER", group="G1"))
+        self.assertEqual(self.replies, [], "只有管理員能開放")
+        self.bot().handle(self.msg("開放本群", user="ADMIN", group="G1"))
+        self.assertIn("✅ 已開放", self.replies[-1])
+        self.assertEqual(self.t.config["allowed_groups"], ["G1"])
+        self.bot().handle(self.msg(LISTING, user="U_MEMBER", group="G1"))
+        self.assertIn("📊 1. 開價 vs 實價登錄", self.replies[-1])
+        self.bot().handle(self.msg("行情 北屯區 崇德路三段", user="U_MEMBER", group="G1"))
+        self.assertIn("📈 行情查詢", self.replies[-1])
+        n = len(self.replies)
+        self.bot().handle(self.msg(LISTING, user="U_MEMBER", group="G2"))      # 別的群組
+        self.bot().handle(self.msg(LISTING, user="U_MEMBER"))                  # 1 對 1
+        self.bot().handle(self.msg("社區 某某 = 西區 五權三街1號", user="U_MEMBER"))  # 成員不能教社區
+        self.assertEqual(len(self.replies), n)
+        self.bot().handle(self.msg("開放本群", user="ADMIN", group="G1"))       # 重複開放不重複記
+        self.assertEqual(self.t.config["allowed_groups"], ["G1"])
+        self.bot().handle(self.msg("關閉本群", user="ADMIN", group="G1"))
+        self.assertIn("🔒 已關閉", self.replies[-1])
+        self.bot().handle(self.msg(LISTING, user="U_MEMBER", group="G1"))
+        self.assertIn("🔒 已關閉", self.replies[-1], "關閉後成員又不回")
+
     def test_new_tenant_listing_type(self):
         new_tenant.create("house", "物件分析", root=self.root, kind="listing")
         cfg = engine.Tenant("house", root=self.root).config
