@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   Document, Packer, Paragraph, TextRun, ImageRun, Table, TableRow, TableCell, WidthType, ShadingType,
-  BorderStyle, AlignmentType, PageBreak, Footer, LevelFormat, PageNumber, TabStopType, VerticalAlign,
+  BorderStyle, AlignmentType, Footer, LevelFormat, PageNumber, TabStopType, VerticalAlign,
 } = require('docx');
 
 const HERE = __dirname;
@@ -110,11 +110,12 @@ function contact(b) {
 }
 
 const out = [];
-let first = true;
+let first = true, breakNext = false;
 for (const b of M.blocks) {
   switch (b.type) {
-    case 'pagebreak': out.push(new Paragraph({ children: [new PageBreak()] })); break;
-    case 'eyebrow': out.push(new Paragraph({ spacing: { before: first ? 200 : 0, after: 60 }, children: [run(b.text, { size: 15, color: C.gold, spacing: 60 })] })); break;
+    // 換頁掛在下一段的 pageBreakBefore：前一頁剛好排滿時，獨立的分頁段落會在 Word 多出一張空白頁
+    case 'pagebreak': breakNext = true; break;
+    case 'eyebrow': out.push(new Paragraph({ pageBreakBefore: breakNext, spacing: { before: first ? 200 : 0, after: 60 }, children: [run(b.text, { size: 15, color: C.gold, spacing: 60 })] })); break;
     case 'h1': out.push(new Paragraph({ spacing: { after: 160 }, border: { left: { style: BorderStyle.SINGLE, size: 36, color: C.gold, space: 8 } },
       children: [run(b.text, { size: 36, bold: true, color: C.navy })] })); break;
     case 'h2': out.push(new Paragraph({ spacing: { before: 200, after: 80 }, keepNext: true, children: [run(b.text, { size: 22, bold: true, color: C.navy })] })); break;
@@ -143,7 +144,10 @@ for (const b of M.blocks) {
     default: throw new Error('unknown block ' + b.type);
   }
   first = false;
+  if (b.type === 'eyebrow') breakNext = false;
 }
+// 文件以表格結尾時 Word 會補一個空段落；設成 1pt、零間距，避免它被擠到新的一頁
+out.push(new Paragraph({ spacing: { before: 0, after: 0, line: 20 }, children: [run('', { size: 2 })] }));
 
 const footer = new Footer({ children: [
   new Paragraph({ border: { top: { style: BorderStyle.SINGLE, size: 6, color: C.gold, space: 4 } },
