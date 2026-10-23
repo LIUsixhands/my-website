@@ -68,6 +68,20 @@ for lo, hi, nm in cuts:
     g = [x for x in rows if lo <= x['fl'] <= hi and x['yr'] >= 110]
     out['樓層帶_110後'].append(dict(帶=nm, n=len(g), 不含車中位=med([x['val'] for x in g]), 含車中位=med([x['gross'] for x in g])))
 
+# ---------- 社區租賃 ----------
+rent = []
+for x in P.load(str(HERE / '實登_臺灣大道二段419號_租賃.xls'))[1]:
+    u = unit_of(x['addr'])
+    whole = x['area'] >= 70 and not any(k in x['note'] for k in ('套房', '雅房', '分租', '部分範圍'))
+    rent.append(dict(日期=x['date'], 戶=TOWER.get(u, '?'), 樓層=x['fl'], 月租萬=x['tot'], 面積坪=x['area'], 車位=x['npark'],
+                     整戶=whole, 每坪元=round(x['tot'] * 10000 / x['area']), 備註=x['note'].replace('\n', ' ')[:30]))
+rent.sort(key=lambda r: r['日期'], reverse=True)
+rw = [r for r in rent if r['整戶']]
+r3 = [r for r in rw if int(r['日期'][:3]) >= 113]
+out['租賃'] = dict(筆數=len(rent), 明細=rent, 近三年整戶=r3, 整戶全期月租中位=med([r['月租萬'] for r in rw]),
+                 整戶全期每坪中位_元=round(st.median([r['每坪元'] for r in rw])) if rw else None,
+                 近三年整戶每坪中位_元=round(st.median([r['每坪元'] for r in r3])) if r3 else None)
+
 # ---------- 本戶 ----------
 PK = MV                                                     # 社區坡道平面每席中位（揭露 7 筆；110 後僅 3 筆，不單獨採用）
 L = dict(門牌='臺灣大道二段419號11樓之2', 棟='B', 樓層=11, 總樓層=12, 開價=3998, 總面積=98.37, 主建物=46.355, 附屬=5.197,

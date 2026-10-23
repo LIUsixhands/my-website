@@ -32,8 +32,8 @@ def wan(v): return '—' if v is None or pd.isna(v) else f'{v:,.0f}'
 
 # 室內／外觀照：助哥提供後放進資料夾即自動上版
 PHOTOS = [('室內_客餐廳.jpg', '客餐廳：亮面地磚、茶鏡隔屏與整面收納櫃，客廳大面落地窗。'),
-          ('室內_主臥.jpg', '主臥：兩面落地窗、雙層窗簾，採光充足。'),
-          ('景觀_臺灣大道.jpg', '窗景：面臺灣大道，視野開闊。'),
+          ('室內_主臥.jpg', '主臥：兩面落地窗、雙層窗簾，木地板。'),
+          ('景觀_臺灣大道.jpg', '臺灣大道街景（刊登照片）：主幹道林蔭、商辦大樓林立。'),
           ('車位_B2-40-41.jpg', '車位：B2 坡道平面 40、41 號，兩席相鄰。')]
 PHOTOS = [(f, c) for f, c in PHOTOS if (HERE / f).exists()]
 
@@ -132,6 +132,18 @@ pos_rows = (f'<tr class="hl"><td>本戶開價</td><td>B・11F・{L["總面積"]}
 for nm, why, up in anchors:
     pos_rows += f'<tr><td class="b">{nm}</td><td>{why}</td><td class="num">{up:.2f}</td><td class="num">{conv(up)/L["總面積"]:.2f}</td><td class="num">{wan(conv(up))}</td></tr>'
 
+# ---------- 租賃 ----------
+RENT = S['租賃']
+def rent_note(r):
+    t = '整戶' if r['整戶'] else '面積僅 47.6 坪，非整戶'
+    if '含管理費' in r['備註']: t += '・含管理費等'
+    if '共同承租' in r['備註']: t += '・2 人共同承租'
+    return t
+rent_rows = ''.join(f'<tr{" class=hl" if int(r["日期"][:3]) >= 113 else ""}><td>{r["日期"]}</td><td>{r["戶"]}・{r["樓層"]}F</td><td class="num">{r["面積坪"]:.2f}</td><td class="num">{r["車位"]}</td>'
+                    f'<td class="num b">{r["月租萬"]:.2f}</td><td class="num">{r["每坪元"]:,}</td><td>{rent_note(r)}</td></tr>' for r in RENT['明細'])
+R_LAST = RENT['近三年整戶'][0]
+YIELD = R_LAST['月租萬'] * 12 / ASK * 100
+
 # ---------- 房貸試算 ----------
 RATE, YEARS, LTV = 0.022, 30, 0.8
 loan = ASK * LTV
@@ -212,9 +224,9 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
 
 <!-- P1 封面 -->
 <div class="page" style="background:#102a33">
-  <div style="position:absolute;left:0;top:0;width:210mm;height:140mm;background:linear-gradient(160deg,#1F4E5F 0%,#102a33 70%)"></div>
-  <div style="position:absolute;right:14mm;top:22mm;width:110mm;opacity:.95;background:#fff;border-radius:3px;padding:3mm">{SITE}</div>
-  <div style="position:absolute;left:16mm;top:24mm;color:#E3B66A;font-size:8pt;letter-spacing:.5em;writing-mode:vertical-rl">PROPERTY SALES REPORT</div>
+  <img src="{img('室內_客餐廳.jpg')}" style="position:absolute;left:0;top:0;width:210mm;height:128mm;object-fit:cover">
+  <div style="position:absolute;left:0;top:92mm;width:210mm;height:36mm;background:linear-gradient(180deg,rgba(16,42,51,0),#102a33)"></div>
+  <div style="position:absolute;left:16mm;top:112mm;color:#E3B66A;font-size:8pt;letter-spacing:.5em">PROPERTY SALES REPORT</div>
   <div style="position:absolute;left:16mm;top:118mm;right:16mm;color:#fff">
     <div class="serif" style="font-size:11pt;color:#E3B66A;letter-spacing:.2em">臺中市西區 · 臺灣大道二段 · 廣三 SOGO／勤美生活圈</div>
     <div style="width:46mm;height:2px;background:#E3B66A;margin:5mm 0 4mm"></div>
@@ -411,7 +423,7 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
 <!-- P8 購屋試算 -->
 <div class="page"><div class="pad">
   <div class="eyebrow">07 · BUYER'S GUIDE</div>
-  <div class="ttl">購屋試算與看屋重點</div>
+  <div class="ttl">購屋試算與租金參考</div>
   <div class="kpi">
     <div><div class="v">{ASK:,}</div><div class="u">萬元</div><div class="l">以開價試算</div></div>
     <div><div class="v">{wan(down)}</div><div class="u">萬元</div><div class="l">自備款（兩成）</div></div>
@@ -419,18 +431,23 @@ ul {{ margin-left: 4.5mm; }} li {{ font-size: 8.4pt; line-height: 1.8; margin-bo
     <div><div class="v">{pay/10000:.1f}</div><div class="u">萬元／月</div><div class="l">本息攤還</div></div>
   </div>
   <div class="note">試算假設：貸款八成、年利率 {RATE*100:.1f}%、{YEARS} 年本息平均攤還，每月約 {pay:,.0f} 元。另需預留契稅、代書、仲介服務費。實際成數、利率與年限依銀行鑑價與個人條件核定。</div>
+  <h3 class="h">社區出租實登（101–115，共 {RENT["筆數"]} 筆）</h3>
+  <table class="tight">
+    <tr><th>日期</th><th>戶別</th><th>面積（坪）</th><th>車位</th><th>月租（萬）</th><th>元／坪／月</th><th>說明</th></tr>
+    {rent_rows}
+  </table>
+  <div class="cap">近三年僅 114/11 一筆整戶出租（10F 之1、{R_LAST["月租萬"]:.1f} 萬、不含車位），淡橘底。以本戶開價計，毛租金約 {YIELD:.1f}%（未扣管理費、稅費與空置），本社區以自住為主。</div>
   <h3 class="h">看屋重點</h3>
   <ul>
     <li><b>裝修內容：</b>請索取裝修項目與保固資料，確認哪些家具、家電隨屋點交。</li>
     <li><b>陽台外推／增建：</b>社區多筆成交備註陽台外推，請以現況與不動產說明書確認是否屬增建。</li>
     <li><b>車位：</b>坡道平面 B2-40、41 兩席，合計 {L["車位面積"]} 坪（含於權狀總坪數）；位置與使用以分管協議為準。</li>
     <li><b>管理費：</b>季繳 {L["管理費季"]:,} 元，可索取管委會收支與修繕紀錄。</li>
-    <li><b>屋齡 17 年：</b>RC 結構，可一併確認外牆、電梯、防水與管線的保養紀錄。</li>
     <li><b>臨臺灣大道：</b>主幹道車流與噪音因人而異，建議平日與假日、白天與晚上各看一次。</li>
   </ul>
   <div style="margin-top:5mm;position:relative;background:#fff;border:1px solid #dde4e9;padding:4mm 36mm 4mm 6mm;font-size:7.6pt;line-height:1.75;color:#4a5560">
     <div class="b" style="font-size:9.4pt;color:#163a47;margin-bottom:1.2mm">資料來源與免責聲明</div>
-    實價登錄：內政部不動產交易實價查詢服務網，臺灣大道二段419號買賣（101/01–115/10）；西區住宅大樓／華廈・屋齡10–20年・總面積80–110坪買賣（112/10–115/10）；查詢日 2026-10-23。社區與物件資料整理自網路刊登與售屋資料表。<br>
+    實價登錄：內政部不動產交易實價查詢服務網，臺灣大道二段419號買賣與租賃（101/01–115/10）；西區住宅大樓／華廈・屋齡10–20年・總面積80–110坪買賣（112/10–115/10）；查詢日 2026-10-23。社區與物件資料、照片整理自網路刊登與售屋資料表。<br>
     本報告書為不動產經紀業務之行銷參考資料，非不動產估價師出具之估價報告。行情統計與試算係依公開資料整理，不構成價格保證、投資建議或獲利承諾。實際面積、用途、產權及使用現況，以權狀、謄本、不動產說明書及買賣契約記載為準。
     <div style="position:absolute;right:7mm;top:50%;margin-top:-11mm;width:22mm;height:22mm;border:2.5px solid #b3261e;border-radius:50%;color:#b3261e;display:flex;align-items:center;justify-content:center;text-align:center;font-family:'Noto Serif CJK TC',serif;font-size:8pt;font-weight:700;line-height:1.3;transform:rotate(-12deg)">僅供<br>參考</div>
   </div>

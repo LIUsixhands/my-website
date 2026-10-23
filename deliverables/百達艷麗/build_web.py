@@ -41,6 +41,9 @@ cmp_rows = ''.join(f'<tr><td>{r["日期"]}</td><td>{r["社區"]}</td><td class="
                    f'<td class="num">{r["扣車位"]:.2f}</td><td class="num"><b>{r["不含車"]:.2f}{"" if r["車位價"] else "*"}</b></td><td class="num">{r["含車"]:.2f}</td></tr>'
                    for r in CMP['明細'] if r['同級距'])
 cd115 = df[(df['yr'] == 115)]['不含車單價']
+RT = S['租賃']
+rent = ''.join(f'<tr><td>{r["日期"]}</td><td>{r["戶"]}・{r["樓層"]}F</td><td class="num">{r["面積坪"]:.2f}</td><td class="num">{r["車位"]}</td>'
+               f'<td class="num"><b>{r["月租萬"]:.2f}</b></td><td class="num">{r["每坪元"]:,}</td><td>{"整戶" if r["整戶"] else "非整戶"}</td></tr>' for r in RT['明細'])
 end113 = df[(df['yr'] == 113) & df['產品'].str.startswith('端戶')]['不含車單價']
 
 site = '''<svg viewBox="0 0 360 190" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans TC" font-size="10">
@@ -143,6 +146,13 @@ html = f'''<!DOCTYPE html><html lang="zh-Hant"><head>
 </div></section>
 
 <section><div class="wrap">
+ <div class="sec-tag">RENT</div><h2 class="sec-title">出租行情</h2>
+ <p class="sec-lead">101–115 年租賃實登 {RT["筆數"]} 筆。近三年只有 114/11 一筆整戶出租：10F 之1、{RT["近三年整戶"][0]["月租萬"]:.1f} 萬／月（約 {RT["近三年整戶每坪中位_元"]} 元／坪），107–109 年整戶多在 5.5–6.0 萬。</p>
+ <div class="tblwrap"><table style="min-width:560px"><tr><th>日期</th><th>戶別</th><th class="num">面積（坪）</th><th class="num">車位</th><th class="num">月租（萬）</th><th class="num">元／坪／月</th><th>型態</th></tr>{rent}</table></div>
+ <p style="font-size:12.5px;color:var(--mute);margin-top:9px">面積依實登登記；以社區成交行情換算，毛租金約 2% 上下，以自住為主。</p>
+</div></section>
+
+<section style="background:#faf7ef"><div class="wrap">
  <div class="sec-tag">TWO SIDES</div><h2 class="sec-title">同一份數據，兩種用法</h2>
  <div class="cards">
   <div class="card" style="border-top:3px solid var(--t2)"><div class="sec-tag" style="color:var(--t2)">如果你是買方</div>
@@ -154,9 +164,9 @@ html = f'''<!DOCTYPE html><html lang="zh-Hant"><head>
  </div>
 </div></section>
 
-<section style="background:#faf7ef"><div class="wrap"><div class="cta">
+<section><div class="wrap"><div class="cta">
  <h2>想知道百達艷麗某一戶現在值多少？</h2>
- <p>我手上有 {S["有效筆數"]} 筆買賣的逐筆明細，和西區同坪數大樓的比較組。<br>告訴我戶別、樓層跟車位數，我算給你看。</p>
+ <p>我手上有 {S["有效筆數"]} 筆買賣、{RT["筆數"]} 筆租賃的逐筆明細，和西區同坪數大樓的比較組。<br>告訴我戶別、樓層跟車位數，我算給你看。</p>
  <a class="btn btn-primary" href="https://line.me/R/ti/p/@080akczk" target="_blank" rel="noopener">加 LINE 聊聊 →</a>
  <div style="margin-top:18px"><a class="btn btn-ghost" style="color:#e6dfcd;border-color:#4a6255" href="../qiqi-realestate.html">← 回台中行情首頁</a></div>
 </div></div></section>
@@ -166,7 +176,7 @@ html = f'''<!DOCTYPE html><html lang="zh-Hant"><head>
 <div><b>聯絡</b><div style="margin-top:6px"><a href="https://line.me/R/ti/p/@080akczk" target="_blank" rel="noopener">LINE 諮詢</a></div></div>
 </div>
 <div class="dis">
-資料來源：內政部不動產交易實價查詢服務網，臺灣大道二段419號買賣（101/01–115/10）；西區住宅大樓／華廈・屋齡10–20年・總面積80–110坪買賣（112/10–115/10）；撈取日 2026-10-23。
+資料來源：內政部不動產交易實價查詢服務網，臺灣大道二段419號買賣與租賃（101/01–115/10）；西區住宅大樓／華廈・屋齡10–20年・總面積80–110坪買賣（112/10–115/10）；撈取日 2026-10-23。
 單價一律用中位數，已扣除車位、排除特殊關係；樣本少的區間另有標註。<br>
 本頁為市場資訊整理與分析，僅供參考，<b style="font-size:12px">不構成價格保證、投資建議或要約</b>，亦非特定物件之銷售廣告。
 個案成交條件差異極大，實際價格應以現場查看與個案評估為準。過去成交不代表未來表現。<br>
