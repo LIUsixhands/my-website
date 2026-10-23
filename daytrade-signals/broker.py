@@ -204,6 +204,12 @@ class Broker:
     def kbars(self, code: str, start: str, end: str):
         return self.api.kbars(self.stock(code), start=start, end=end)
 
+    def volume_rank(self, date: str, count: int = 200):
+        """那一天的成交量排行（永豐 scanners）。pickcheck.py 重建過去的候選池用。"""
+        import shioaji as sj
+        return self.api.scanners(scanner_type=sj.constant.ScannerType.VolumeRank,
+                                 ascending=False, date=date, count=count)
+
     def opening_range(self, code: str, or_start: str, or_end: str, date: str | None = None):
         """用分鐘 K 補算開盤區間高低，回傳 (high, low)；補不到回傳 None。
 

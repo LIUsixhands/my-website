@@ -34,6 +34,8 @@ journal/book-*.json
 journal/book-*.tmp
 # whatif.py 的分鐘 K 快取：體積大，而且看得出你每天盯哪些股票。
 journal/kbars/
+# pickcheck.py 重建的過去候選池：一樣看得出盯哪些股票。
+journal/rebuilt/
 
 __pycache__/
 *.pyc

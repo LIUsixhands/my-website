@@ -54,6 +54,7 @@ import premarket
 import followup
 import manual
 import pickpulse
+import pickcheck
 import pulsecheck
 import bookrec
 _NO_WAIT = unittest.mock.patch.object(premarket, "wait_until", lambda *a, **k: 0.0)
@@ -4382,7 +4383,7 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
                    "candidates.csv", "candidates_outcomes.csv", "journal/*.md",
                    "journal/watchlist-*.json", "journal/preopen-*.json", "picks.csv",
                    "pick_followup.csv", "manual.csv", "logs/", "journal/book-*.json",
-                   "journal/book-*.tmp", "journal/pulse-samples.csv")
+                   "journal/book-*.tmp", "journal/pulse-samples.csv", "journal/rebuilt/")
 
     def setUp(self):
         if not self.IGNORE.exists():
@@ -6985,6 +6986,142 @@ class TestOrderBookRecorder(unittest.TestCase):
         self.assertIn("_save_book", calls, "盤中每 5 分鐘存一次，當掉也有紀錄")
         fin = next(n for n in ast.walk(tree) if isinstance(n, ast.Try) and n.finalbody)
         self.assertIn("_save_book(final=True)", ast.unparse(fin.finalbody[1]))
+
+
+class TestPickCheck(unittest.TestCase):
+    """10-23 使用者：「挑股怎麼挑」的驗證 →「往前 20 天好嗎」→「都要」。候選池全部照首選的規則
+    回推，看首選有沒有比其他候選好、哪一項分數有用；另外重建之前的候選池。"""
+
+    def bars(self, day, start=100.0, step=0.0, n=270):
+        d = datetime.fromisoformat(day).replace(hour=9, minute=1)
+        out, p = [], start
+        for i in range(n):
+            out.append((d + timedelta(minutes=i), p, p + 0.05, p - 0.05, p, 10.0))
+            p = round(p + step, 4)
+        return out
+
+    def row(self, code, vr, amp=4.0, rsi=60.0, prev=100.0):
+        return {"code": code, "name": f"N{code}", "prev_close": prev, "prev_high": prev + 1,
+                "prev_low": prev - 3, "volume_ratio": vr, "avg_amplitude_pct": amp, "daily_rsi": rsi}
+
+    def test_every_candidate_is_replayed_with_the_pick_rules(self):
+        payload = {"items": [self.row("1111", 3.0), self.row("2222", 1.0)],
+                   "not_watched": [self.row("3333", 2.0, prev=100.0)]}
+        bars = {"1111": self.bars("2026-10-21", step=0.02), "2222": self.bars("2026-10-21", step=-0.02),
+                "3333": self.bars("2026-10-21", start=110.0)}
+        hist = {"1111": [self.bars(f"2026-10-{d:02d}", start=95.0, step=0.1, n=5) for d in range(7, 21)]}
+        rows = pickcheck.day_rows("2026-10-21", payload, bars, hist, pickcheck.REAL)
+        self.assertEqual([r["code"] for r in rows], [s["code"] for s in premarket.score(
+            whatif.pool_rows(payload))], "名次照首選同一條公式")
+        first = rows[0]
+        self.assertEqual((first["code"], first["rank"], first["source"]), ("1111", 1, "存檔"))
+        self.assertEqual(first["gap"], 0.0)
+        self.assertAlmostEqual(first["trend"], (100.0 - 95.4) / 95.4 * 100, places=2,
+                               msg="昨收比前 10 天收盤（不是開盤）平均")
+        tr = whatif.pick_trade("2026-10-21", {"code": "1111", "name": "N1111", "prev_close": 100.0,
+                                              "amplitude_pct": 4.0, "features": {}}, bars["1111"])
+        self.assertEqual(first["net_r"], tr.net_r, "跟首選同一個回推")
+        self.assertEqual(first["risk_lot"], round((tr.entry - tr.stop) * 1000))
+        locked = next(r for r in rows if r["code"] == "3333")
+        self.assertIsNone(locked["net_r"], "開盤 110 ＝ 漲停，買不到")
+        self.assertEqual(locked["gap"], 10.0)
+        self.assertIsNone(next(r for r in rows if r["code"] == "2222")["trend"], "沒有前幾天 → None")
+        self.assertEqual(len(pickcheck.day_rows("2026-10-21", payload, {"1111": bars["1111"]}, {},
+                                                pickcheck.REAL)), 1, "沒有分鐘 K 的不算")
+
+    def test_rebuild_a_past_morning(self):
+        def item(code, close, hi, lo, vol, name="x"):
+            return SimpleNamespace(code=code, name=name, close=close, high=hi, low=lo, total_volume=vol)
+        prev = "2026-10-01"
+        items = [item("1111", 100.0, 104.0, 99.0, 9_000_000), item("2222", 50.0, 52.0, 49.0, 20_000_000),
+                 item("3333", 100.0, 101.0, 99.5, 30_000_000), item("00631L", 50.0, 55.0, 49.0, 9e7),
+                 item("4444", 100.0, 106.0, 99.0, 9_000_000), item("5555", 500.0, 530.0, 499.0, 9e6),
+                 item("6666", 100.0, 105.0, 99.0, 3_000_000)]
+
+        def daily(vols):
+            days = whatif.trading_days_before("2026-10-02", len(vols))
+            return {d: [(datetime.fromisoformat(d).replace(hour=9, minute=1), 100.0, 103.0, 99.0, 100.0, v)]
+                    for d, v in zip(days, vols)}
+        data = {"1111": daily([1000] * 20 + [9000]), "2222": daily([5000] * 20 + [20000]),
+                "4444": {}}
+        # 重建那一天（10-02）自己的 K 棒也在抓回來的資料裡 —— 不可以拿來算（偷看）
+        data["1111"]["2026-10-02"] = [(datetime(2026, 10, 2, 9, 1), 100.0, 130.0, 90.0, 120.0, 99999)]
+        asked = []
+
+        def days_of(code):
+            asked.append(code)
+            return data.get(code, {})
+        got = pickcheck.rebuild_day("2026-10-02", prev, items, days_of, lambda c: c != "4444")
+        codes = [r["code"] for r in got["items"] + got["not_watched"]]
+        self.assertEqual(codes, ["1111", "2222"],
+                         "股 → 張（9,000 張）；ETF、不可當沖、太貴、振幅不到 3%、量不到 5,000 張的不收")
+        r = got["items"][0]
+        self.assertEqual(r["volume_ratio"], 9.0, "昨天 9,000 張 ÷ 前 5 天平均 1,000 張")
+        self.assertEqual(r["avg_amplitude_pct"], 4.0, "(103 − 99) ÷ 100")
+        self.assertIsNotNone(r["daily_rsi"])
+        self.assertEqual(got["items"][1]["volume_ratio"], 4.0)
+        self.assertEqual((got["date"], got["rebuilt"]), ("2026-10-02", True))
+        self.assertEqual(got["pick"]["code"], premarket.choose(got["items"] + got["not_watched"])["code"])
+        self.assertNotIn("4444", asked, "不可當沖的不用抓")
+        self.assertIsNone(pickcheck.rebuild_day("2026-10-02", prev, [], days_of, lambda c: True))
+        lots = pickcheck.rebuild_day("2026-10-02", prev, [item("1111", 100.0, 104.0, 99.0, 9000)],
+                                     days_of, lambda c: True)
+        self.assertEqual(lots["items"][0]["prev_volume"], 9000, "本來就是張 → 不換")
+        late = {k: {d: b for d, b in v.items() if d < prev} for k, v in data.items()}
+        miss = pickcheck.rebuild_day("2026-10-02", prev, items[:1], lambda c: late.get(c, {}), lambda c: True)
+        self.assertEqual(miss["items"][0]["volume_ratio"], 1.0, "昨天沒有分鐘 K → 1.0（跟 screener 一樣）")
+        self.assertEqual(len(pickcheck.days_to_rebuild("2026-10-12", 20)), 20)
+        self.assertEqual(pickcheck.days_to_rebuild("2026-10-12", 2), ["2026-10-07", "2026-10-08"],
+                         "10-09 國慶補假、週末跳過")
+
+    def test_the_report(self):
+        def r(day, rank, net, src="存檔", **kw):
+            base = {"date": day, "code": str(rank), "rank": rank, "source": src, "net_r": net,
+                    "net_pct": None if net is None else net, "volume_ratio": rank, "amplitude": None,
+                    "rsi_gap": None, "close_pos": None, "total": rank, "gap": None, "trend": None,
+                    "risk_lot": None}
+            return dict(base, **kw)
+        rows = [r("2026-10-01", 1, 0.5, "重建"), r("2026-10-01", 2, 0.1, "重建"), r("2026-10-01", 5, -0.2, "重建"),
+                r("2026-10-21", 1, 0.3), r("2026-10-21", 3, -0.1), r("2026-10-21", 12, -0.4),
+                r("2026-10-21", 15, None)]
+        text = "\n".join(pickcheck.lines(rows))
+        self.assertIn("2 天（存檔 1 天、重建 1 天）、7 檔次", text)
+        self.assertIn("| 首選（第 1 名） | 2 | 0 | +0.40R（100% 勝） | +0.50R | +0.30R | +0.30R | +0.50R |", text)
+        self.assertIn("| 第 11～20 名 | 2 | 1 | -0.40R（0% 勝） | — | -0.40R | -0.40R | — |", text,
+                      "買不到的另外數，不算進平均")
+        self.assertIn("| 全部 | 7 | 1 |", text)
+        lo, hi, gap = pickcheck.thirds(rows, "total")
+        self.assertEqual([x["rank"] for x in lo], [1, 1])
+        self.assertEqual([x["rank"] for x in hi], [12])
+        self.assertAlmostEqual(gap, -0.4 - 0.4)
+        self.assertIn("| 公式總分（小＝排前面） | +0.40R（100% 勝） | -0.40R（0% 勝） | -0.80R |", text)
+        self.assertIn("| 近 5 日振幅 | — | — | — | — | — |", text, "沒資料的那一項不算")
+        self.assertIn("前半、後半都比較好", text)
+        self.assertIn("沒有資料", "\n".join(pickcheck.lines([])))
+
+    def test_main_puts_real_and_rebuilt_days_together(self):
+        real = ("2026-10-21", {"items": [self.row("1111", 3.0)], "not_watched": [self.row("2222", 1.0)]})
+        partial = ("2026-10-08", {"items": [self.row("9999", 3.0)]})
+        rebuilt = {"date": "2026-10-20", "rebuilt": True, "items": [self.row("3333", 2.0)], "not_watched": []}
+        pool = [("2026-10-20", [{"code": "3333", "bars": self.bars("2026-10-20")}], {}),
+                ("2026-10-21", [{"code": "1111", "bars": self.bars("2026-10-21", step=0.01)},
+                                {"code": "2222", "bars": self.bars("2026-10-21")}], {})]
+        with tempfile.TemporaryDirectory() as d:
+            report = Path(d) / "pickcheck.md"
+            with unittest.mock.patch.object(whatif, "archived_days", return_value=[partial, real]), \
+                    unittest.mock.patch.object(pickcheck, "load_rebuilt", return_value=rebuilt), \
+                    unittest.mock.patch.object(pickcheck, "REPORT", report), \
+                    unittest.mock.patch.object(whatif, "pool_days_for", return_value=(pool, [])) as pd, \
+                    contextlib.redirect_stdout(io.StringIO()):
+                pickcheck.main(["--rebuild", "1", "--until", "2026-10-22"])
+            asked = [x[0] for x in pd.call_args[0][0]]
+            self.assertEqual(asked, ["2026-10-20", "2026-10-21"],
+                             "只有一部分名單的存檔不算；重建的是第一天完整存檔之前的那一天")
+            text = report.read_text(encoding="utf-8")
+            self.assertIn("2 天（存檔 1 天、重建 1 天）、3 檔次", text)
+            with unittest.mock.patch.object(whatif, "archived_days", return_value=[]):
+                with self.assertRaises(SystemExit):
+                    pickcheck.main(["--until", "2026-10-22"])
 
 
 class TestManualVersion(unittest.TestCase):
