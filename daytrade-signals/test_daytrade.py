@@ -6789,17 +6789,16 @@ class TestPulseScoreCheck(unittest.TestCase):
         self.assertGreaterEqual(hot["volume"][1], 6.5)
         msg = p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), "",
                          pickpulse.forecast(st, hot["volume"][1]))
-        self.assertEqual(msg.splitlines()[:5], [
-            "🌅 1111 測試・首選｜09:30", "🔮 之後 30 分鐘：偏跌 ↓", "　過去類似 1387 次：平均 -0.36%、30% 漲",
-            "　剛漲一段又有量，過去之後常回落", "目前：稍強（7.0 分）"],
-            "10-24 使用者：「看到『偏強 → 強勢 ↑』會以為轉強」→ 預測放第一行，目前狀態放下面、不用箭頭")
+        self.assertEqual(msg.splitlines()[:3], [
+            "🌅 1111 測試・首選｜09:30", "🔮 偏跌 ↓", "目前：稍強（7.0 分）"],
+            "10-24 使用者：「看到『偏強 → 強勢 ↑』會以為轉強」→ 預測放第一行，目前狀態放下面、不用箭頭；"
+            "「之後30分鐘一定要寫嗎」→「最簡單那種」：不寫幾分鐘、過去幾次")
+        self.assertNotIn("過去類似", msg)
+        self.assertNotIn("分鐘", msg.splitlines()[1])
         cold = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, 0, None, 0.0)
-        quiet_msg = p._message("start", state, cold, 5.0, "中性", None, self.at(9, 30), "",
-                               ("中性", {"n": 9, "avg": -0.1, "up": 30}))
-        self.assertNotIn("剛漲一段", quiet_msg, "只有 ④ 高、偏跌才加那一句")
         up_msg = p._message("start", state, cold, 5.0, "中性", None, self.at(9, 30), "",
                             ("偏漲", {"n": 9, "avg": 0.4, "up": 60}))
-        self.assertIn("🔮 之後 30 分鐘：偏漲 ↑", up_msg)
+        self.assertIn("🔮 偏漲 ↑", up_msg)
         self.assertNotIn("🔮", p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), ""),
                          "沒有預測 → 不顯示")
 
@@ -6829,7 +6828,8 @@ class TestPulseScoreCheck(unittest.TestCase):
         hot = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, 1, None, 0.0)
         msg = p._message("start", state, hot, 3.0, "稍弱", None, self.at(9, 30), "",
                          pickpulse.forecast(st, hot["volume"][1], 3.0))
-        self.assertIn("　過去類似 280 次：平均 -0.40%、0% 漲（組合樣本不足，只看 ④）", msg)
+        self.assertIn("🔮 偏跌 ↓", msg)
+        self.assertNotIn("組合樣本不足", msg, "推播只留結論")
         src = inspect.getsource(pickpulse.Pulse.on_bar)
         self.assertIn('fc = forecast(self.stats, items["volume"][1], score)', src, "盤中用組合")
         text = "\n".join(pulsecheck.combo_lines(rows, {"2026-10-20"}, {"2026-10-21"}))
@@ -6852,14 +6852,13 @@ class TestPulseScoreCheck(unittest.TestCase):
                                 (self.at(h, m), 100.0, 100.0, 100.0, False),
                                 self.at(h, m) + timedelta(seconds=3))
         (first,) = bar(9, 5, 5.0)
-        self.assertTrue(first.splitlines()[1] == "🔮 之後 30 分鐘：中性", "中性不加箭頭")
+        self.assertTrue(first.splitlines()[1] == "🔮 中性", "中性不加箭頭")
         self.assertEqual(bar(9, 10, 5.4), [], "強弱、預測都沒變 → 不推")
         (chg,) = bar(9, 10, 7.0)
         self.assertIn("🌅 1111 測試・首選｜09:10", chg, "10-22 使用者：「預測改成 5 分鐘」→ 隔一根就推")
-        self.assertIn("🔮 之後 30 分鐘：中性 → 偏跌 ↓", chg, "10-24 使用者：偏跌後面加往下箭頭")
+        self.assertIn("🔮 中性 → 偏跌 ↓", chg, "10-24 使用者：偏跌後面加往下箭頭")
         self.assertEqual(chg.count("🔮"), 1, "預測只講一次")
         self.assertIn("目前：中性（5.4 分）", chg)
-        self.assertIn("過去類似 1387 次", chg)
         self.assertEqual(p.history[-1]["forecast"], "偏跌", "每一次打分都存預測，之後拿來對答案")
         self.assertEqual(bar(9, 30, 7.0), [], "預測沒變 → 不推")
         self.assertEqual(bar(9, 40, 6.6), [], "④ 6.6 還是高那一組、強弱名稱也沒變 → 不推")

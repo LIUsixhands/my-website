@@ -218,14 +218,11 @@ class Pulse:
         price, entry, stop = float(st.last_price), float(sig["entry"]), float(sig["stop"])
         lines = [f"🌅 {label}・首選｜{at:%H:%M}"]
         if fc:
-            word, g = fc
-            horizon = self.stats["horizon"]
-            lines.append(f"🔮 之後 {horizon} 分鐘：{before['verdict']} → {word}{ARROW[word]}"
-                         if kind == "forecast" else f"🔮 之後 {horizon} 分鐘：{word}{ARROW[word]}")
-            lines.append(f"　過去類似 {g['n']} 次：平均 {g['avg']:+.2f}%、{g['up']}% 漲" + g.get("note", ""))
-            vol = items["volume"][1]
-            if word == DOWN_WORD and vol is not None and vol >= self.stats["high"]:
-                lines.append("　剛漲一段又有量，過去之後常回落")
+            # 10-24 使用者：「之後30分鐘一定要寫嗎？」→「最簡單那種」：只留結論，不寫幾分鐘、
+            # 不寫過去幾次（統計照樣存在 pulse-*.json，收盤後的表也照舊）。
+            word = fc[0]
+            lines.append(f"🔮 {before['verdict']} → {word}{ARROW[word]}" if kind == "forecast"
+                         else f"🔮 {word}{ARROW[word]}")
         if kind == "change":
             lines.append(f"目前：{name}（{score:.1f} 分，原本{before['label']}）")
         elif kind == "quiet":
