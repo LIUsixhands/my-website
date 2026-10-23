@@ -6861,6 +6861,35 @@ class TestPulseScoreCheck(unittest.TestCase):
                      and call in ast.unparse(ast.Module(body=n.body, type_ignores=[]))]
             self.assertTrue(tries, f"{call} 包在 try 裡：統計壞掉不可以影響盯盤／日報／報表")
 
+    def test_strength_times_volume_table(self):
+        """10-23 使用者：強弱名稱那張表「可搭配這個嗎」→「要，表先讓我看一下」→「好」。"""
+        self.assertEqual([pulsecheck.band(v) for v in (None, 1.0, 3.5, 3.6, 6.4, 6.5, 9.0)],
+                         [None, "low", "low", "mid", "mid", "high", "high"])
+
+        def row(d, score, vol, fwd):
+            return {"date": d, "code": "1", "at": "09:05", "score": score, "volume": vol, "fwd": fwd}
+        samples = ([row("2026-10-20", 8.0, 7.0, -0.6)] * 60 + [row("2026-10-21", 8.0, 7.0, -0.4)] * 60
+                   + [row("2026-10-21", 5.0, 7.0, 0.0)] * 50
+                   + [row("2026-10-21", 5.0, 5.0, -0.1)] * 120 + [row("2026-10-20", 2.0, 2.0, 0.3)] * 110
+                   + [row("2026-10-20", 8.0, None, 9.0), row("2026-10-20", 8.0, 7.0, None)])
+        cells = pulsecheck.combos(samples)
+        self.assertEqual(len(cells), 9)
+        self.assertEqual(len(cells[("high", "high")]), 120, "沒有 ④、沒有結果的不算")
+        self.assertEqual(len(cells[("mid", "high")]), 50)
+        self.assertEqual(cells[("low", "high")], [])
+        text = "\n".join(pulsecheck.combo_lines(samples, {"2026-10-20"}, {"2026-10-21"}))
+        self.assertIn("| 稍強以上（≥6.5） | 高（≥6.5） | 偏跌 | 120 | -0.50%（0% 漲） | -0.60% | -0.40% |", text)
+        self.assertIn("| 中性附近（3.5～6.5） | 高（≥6.5） | 偏跌 | 50（樣本少） | +0.00%（0% 漲） | — | +0.00% |",
+                      text, "預測會顯示：照現在只看 ④ 的規則")
+        self.assertIn("| 中性附近（3.5～6.5） | 中 | 中性 | 120 | -0.10%（0% 漲） | — | -0.10% |", text)
+        self.assertIn("| 中性偏弱以下（≤3.5） | 低（≤3.5） | 偏漲 | 110 | +0.30%（100% 漲） | +0.30% | — |", text)
+        self.assertIn("| 中性偏弱以下（≤3.5） | 高（≥6.5） | 偏跌 | 0（樣本少） | — | — | — |", text)
+        self.assertIn("| （對照）只看 ④ 高 | — | 偏跌 | 170 | -0.35%（0% 漲） | -0.60% | -0.22% |", text)
+        self.assertIn("前半、後半同方向", text)
+        full = "\n".join(pulsecheck.lines({"days": ["2026-10-20", "2026-10-21"], "samples": samples}))
+        self.assertIn("強弱名稱 × ④ 量", full, "放進 whatif 那一段")
+        self.assertLess(full.index("名稱跟上一根比"), full.index("強弱名稱 × ④ 量"))
+
     def test_run_over_the_pool_and_whatif_shows_it(self):
         bars = self.day()
         pool_days = [("2026-10-21", [{"code": "1111", "bars": bars}, {"code": "2222", "bars": []}], {})]

@@ -275,6 +275,65 @@ def _fmt_gap(gap) -> str:
     return "—" if gap is None else f"{gap:+.2f}%"
 
 
+# 10-23 使用者：強弱名稱那張表「可搭配這個嗎」→「要，表先讓我看一下」→「好」。
+# 強弱（平均分）× ④ 量，各分三組、九格，看組合是不是比只看 ④ 更明顯。只是量，盤中還是只看 ④。
+SCORE_BANDS = (("high", f"稍強以上（≥{HIGH:g}）"), ("mid", f"中性附近（{LOW:g}～{HIGH:g}）"),
+               ("low", f"中性偏弱以下（≤{LOW:g}）"))
+VOL_BANDS = (("high", f"高（≥{HIGH:g}）"), ("mid", "中"), ("low", f"低（≤{LOW:g}）"))
+
+
+def band(v) -> str | None:
+    """分數落在哪一組：low（≤3.5）／mid／high（≥6.5）。沒分數 None。"""
+    if v is None:
+        return None
+    return "low" if v <= LOW else "high" if v >= HIGH else "mid"
+
+
+def combos(samples) -> dict:
+    """{(強弱那一組, ④ 那一組): [樣本]}。"""
+    out = {(a, b): [] for a, _ in SCORE_BANDS for b, _ in VOL_BANDS}
+    for r in samples:
+        key = (band(r.get("score")), band(r.get("volume")))
+        if key in out and r.get("fwd") is not None:
+            out[key].append(r)
+    return out
+
+
+def _half_avg(rows, days) -> str:
+    got = [r for r in rows if r["date"] in days]
+    return f"{_avg(got):+.2f}%" if got else "—"
+
+
+def combo_lines(samples, first: set, second: set) -> list[str]:
+    import pickpulse
+    stats = forecast_stats(samples)
+    out = ["", f"強弱名稱 × ④ 量（之後 {HORIZON_MIN} 分鐘；強弱是五項平均）：", "",
+           "| 強弱（平均分） | ④ 量 | 預測會顯示 | 筆數 | 之後 30 分鐘 | 前半 | 後半 |",
+           "|---|---|---|---|---|---|---|"]
+    cells = combos(samples)
+    for a, a_name in SCORE_BANDS:
+        for b, b_name in VOL_BANDS:
+            rows = cells[(a, b)]
+            vol = {"high": HIGH, "mid": (LOW + HIGH) / 2, "low": LOW}[b]
+            fc = pickpulse.forecast(stats, vol)
+            n = f"{len(rows)}" + ("（樣本少）" if len(rows) < STATS_MIN_N else "")
+            out.append(f"| {a_name} | {b_name} | {fc[0] if fc else '—'} | {n} | {_cell(rows)} | "
+                       f"{_half_avg(rows, first)} | {_half_avg(rows, second)} |")
+    hi = [r for r in samples if band(r.get("volume")) == "high" and r.get("fwd") is not None]
+    fc = pickpulse.forecast(stats, HIGH)
+    out.append(f"| （對照）只看 ④ 高 | — | {fc[0] if fc else '—'} | {len(hi)} | {_cell(hi)} | "
+               f"{_half_avg(hi, first)} | {_half_avg(hi, second)} |")
+    out += [
+        "",
+        "- **「預測會顯示」**：照現在盤中的規則（只看 ④），這一格會顯示什麼。",
+        "- **跟最後一列比**：某一格比「只看 ④ 高」明顯更好或更差、而且**前半、後半同方向**，"
+        "那個組合才有額外的用處；差不多的話，強弱名稱沒有幫上忙，維持只看 ④。",
+        f"- 一格不到 {STATS_MIN_N} 筆標「樣本少」，不能信。",
+        "- 這裡的強弱是五項平均（分鐘 K 沒有內外盤，少了 ⑤），盤中是六項，會有一點出入。",
+    ]
+    return out
+
+
 def lines(result: dict) -> list[str]:
     samples, days = result.get("samples") or [], result.get("days") or []
     out = [f"## 強弱分數能不能預測（候選池每一檔、每根 5 分 K 重算，看之後 {HORIZON_MIN} 分鐘）", ""]
@@ -307,6 +366,7 @@ def lines(result: dict) -> list[str]:
     out += ["", "| 名稱跟上一根比 | 筆數 | 之後 30 分鐘 |", "|---|---|---|"]
     for k in (UP, DOWN, SAME):
         out.append(f"| {k} | {len(ch[k])} | {_cell(ch[k])} |")
+    out += combo_lines(samples, first, second)
     out += [
         "",
         "- **怎麼看**：「高減低」是正的，代表分數高的那些之後比較會漲 —— 有一點預測力。"
