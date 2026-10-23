@@ -87,9 +87,9 @@ class RiskGate:
             # 停的是「發新訊號」，不是整支程式：已發出的照樣追蹤到出場。原本寫「收工」，
             # 10-12 第一天 09:05 額度用完就推這一則，之後出場通知照來 —— 兩則互相矛盾。
             head = f"📭 {reason}" if routine else f"🚨 今日停手\n原因：{reason}\n"
-            notify(f"{head}\n"
-                   "今天不會再發新的買入訊號。\n"
-                   "已經發出的會繼續追蹤，出場通知照常會來。")
+            notify_v10(f"{head}\n"
+                       "今天不會再發新的買入訊號。\n"
+                       "已經發出的會繼續追蹤，出場通知照常會來。")
 
     @staticmethod
     def _trailing_losses(rows: list[float]) -> int:
@@ -1281,7 +1281,7 @@ def warn_if_too_late(now: datetime | None = None) -> bool:
     now = now or datetime.now()
     if now.time() < _t(config.SIGNAL["entry_window_end"]):
         return False
-    notify(format_too_late(now))
+    notify_v10(format_too_late(now))
     return True
 
 
@@ -1786,6 +1786,19 @@ class LiveTracker:
         return msgs
 
 
+def notify_if(kind: str, text: str):
+    """config.PUSH[kind] 關掉的那一條線只寫 log、不推（10-23 使用者：「盤中三檔不用推播」）。
+    背後照樣跑、照樣記錄，日報照樣有。"""
+    if config.PUSH.get(kind, True):
+        notify(text)
+    else:
+        log.info("（%s 不推播）%s", kind, (text or "").splitlines()[0] if text else "")
+
+
+def notify_v10(text: str):
+    notify_if("v10", text)
+
+
 def notify(text: str):
     global _push_warned
     # 印出來的是終端機印得出的版本，送出去的是原文
@@ -1957,7 +1970,7 @@ def backfill_opening_ranges(broker: Broker, states: dict):
     if failed:
         msg += f"／失敗 {len(failed)} 檔（{'、'.join(failed)}）：這幾檔今天不會發訊號"
     log.warning(msg)
-    notify(msg)
+    notify_v10(msg)
 
 
 FAILURE_DETAIL_CHARS = 400
@@ -2089,7 +2102,7 @@ def run():
         if not msg:
             return False
         tracker.track(sig)
-        notify(msg)
+        notify_v10(msg)
         return True
 
     # 08:45 盤前首選（10-13）：自己一個追蹤器、結果寫在 state["pick"]，
@@ -2123,7 +2136,7 @@ def run():
     if pick and pick["code"] not in states:
         pick_st = SymbolState(pick["code"], float(pick["prev_close"]), pick.get("name", ""))
 
-    desk = EntryDesk(emit=_emit, blocked=record_candidate, say=notify,
+    desk = EntryDesk(emit=_emit, blocked=record_candidate, say=notify_v10,
                      watched=len(states), sent=len(gate.state.get("signals", [])),
                      reprice=lambda sig, now: reprice_at_send(
                          sig, states.get(str(sig["code"])), now),
@@ -2207,7 +2220,7 @@ def run():
             # 不在今天名單裡、但昨天留倉的那幾檔：只看停損目標，不算訊號。
             if tick.code in carried_codes:
                 for done in tracker.on_price(tick.code, float(tick.close)):
-                    notify(done)
+                    notify_v10(done)
             return
         st.update(tick)
         if tick.code == pick_watch.code:
@@ -2216,7 +2229,7 @@ def run():
         # 先看已發出的訊號有沒有走完，再看要不要發新的
         for done in tracker.on_price(st.code, st.last_price, vwap=st.vwap,
                                      total_volume=st.total_volume):
-            notify(done)
+            notify_v10(done)
         # ignore_symbol_cap：連「這檔今天發過了」的那種也要算出來並記錄，
         # 否則「被洗掉後能不能重新進場」這一題永遠沒有資料可以回答。
         sig = evaluate(st, ignore_symbol_cap=True)
@@ -2264,7 +2277,7 @@ def run():
            + (f"\n{premarket.LABEL}：{pick['code']} {pick.get('name', '')}".rstrip()
               + f"（{premarket.ENTRY_AT:%H:%M} 開盤價進場，分開記錄）" if pick else ""))
     if carried or carry_notes:
-        notify(format_carry_start(carried, carry_notes))
+        notify_v10(format_carry_start(carried, carry_notes))
     nxt_year = str(datetime.now().year + 1)
     if datetime.now().month == 12 and not market_calendar.year_is_known(nxt_year + "-01-01"):
         notify(f"⚠️ {nxt_year} 年的休市表還沒填（market_calendar.py）。"
@@ -2312,7 +2325,7 @@ def run():
             # 「時間到」提醒（有設才發）。這裡**不平倉**，只提醒並記下價位。
             if exit_at is not None and datetime.now().time() >= exit_at:
                 for msg in tracker.time_exit():
-                    notify(msg)
+                    notify_v10(msg)
             for msg in pick_watch.on_clock():
                 notify(msg)
             now_t = datetime.now().time()
@@ -2324,14 +2337,16 @@ def run():
                         gate.state["manual"] = {"orders": orders,
                                                 "at": datetime.now().strftime("%H:%M:%S")}
                         gate.save()
-                    notify(manual.format_orders(orders, datetime.now()))
+                    notify_if("manual", manual.format_orders(orders, datetime.now()))
                 except Exception as e:          # 手動版壞掉不可以影響盯盤
                     log.warning("手動版掛單清單失敗（不影響盯盤）：%s", e)
             # 13:25 還沒走完停損或目標的，一律平倉並告知結果。
             # 與 outcome.py 的收盤回推用同一個時間，兩邊才比得起來。
             if not flattened and datetime.now().time() >= outcome.FLATTEN_AT:
                 flattened = True
-                for msg in tracker.flatten() + pick_watch.flatten():
+                for msg in tracker.flatten():
+                    notify_v10(msg)
+                for msg in pick_watch.flatten():         # 首選照常推
                     notify(msg)
             # 主動輪詢風控。只在訊號觸發時才檢查的話，虧損上限的「停手」通知
             # 會等到下一個訊號才發 —— 而那可能是收盤前，早就來不及了。

@@ -48,6 +48,8 @@ import market_calendar
 # 跑測試時，不先釘住的話，選股／監看／日報的測試會全部提早結束。
 # 休市本身的行為在 TestMarketHolidays 裡用指定日期測。
 _MARKET_OPEN = unittest.mock.patch.object(market_calendar, "closed_today", lambda: None)
+# 10-23 使用者把 v10、手動版的推播關了（config.PUSH）。測推播內容的那幾組，照「開著」測。
+_PUSH_ON = unittest.mock.patch.dict(config.PUSH, {"v10": True, "manual": True})
 # 選股推首選前會等到 08:45。測試剛好在 08:00–08:45 跑的話會真的睡上幾分鐘 ——
 # 等待本身在 TestPremarketPick 裡用注入的時鐘測。
 import premarket
@@ -610,6 +612,7 @@ class TestEvaluate(unittest.TestCase):
         self.assertIsNone(evaluate(st, now=self.IN_WINDOW))
 
 
+@_PUSH_ON
 class TestRiskGate(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -4997,6 +5000,7 @@ class TestBothExitsAreKept(unittest.TestCase):
         self.assertAlmostEqual(back[0].r_0930, 0.67, places=2)
 
 
+@_PUSH_ON
 class TestTheLateStartWarningIsActuallyWired(unittest.TestCase):
     """變異測試抓到的：`format_too_late` 有測試，但「run() 真的會推它」沒有。
 
@@ -7270,6 +7274,56 @@ class TestShadowPick(unittest.TestCase):
         self.assertTrue(any(isinstance(n, ast.Try) and "shadow.section" in ast.unparse(
             ast.Module(body=n.body, type_ignores=[])) for n in ast.walk(tree)), "壞掉不可以讓日報產不出來")
         self.assertIn('lines += ["", "## 影子首選（分開記錄）", ""]', src)
+
+
+class TestPushSwitches(unittest.TestCase):
+    """10-23 使用者：「盤中三檔不用推播」→ v10 突破訊號、手動版掛單清單「兩個都關」→
+    「會影響盤前那一檔的推播嗎」→ 不會。背後照樣跑、照樣記錄，只是不推。"""
+
+    def test_the_switches(self):
+        self.assertEqual(config.PUSH, {"v10": False, "manual": False})
+        sent = []
+        with unittest.mock.patch.object(signals, "notify", sent.append), \
+                self.assertLogs("signals", "INFO") as logs:
+            signals.notify_v10("✅ 1111 突破\n第二行")
+            signals.notify_if("manual", "🧾 掛單清單")
+            with unittest.mock.patch.dict(config.PUSH, {"v10": True}):
+                signals.notify_v10("開著就推")
+        self.assertEqual(sent, ["開著就推"])
+        self.assertTrue(any("（v10 不推播）✅ 1111 突破" in l for l in logs.output), "不推也要留 log")
+        self.assertTrue(any("（manual 不推播）🧾 掛單清單" in l for l in logs.output))
+        sent.clear()
+        with unittest.mock.patch.object(signals, "notify", sent.append):
+            signals.notify_if("沒有這個開關", "照推")
+        self.assertEqual(sent, ["照推"], "沒設的一律照推")
+
+    def test_the_risk_gate_is_quiet_too(self):
+        with tempfile.TemporaryDirectory() as d, \
+                unittest.mock.patch.object(config, "STATE_FILE", Path(d) / "state.json"):
+            gate = RiskGate(FakeBroker(pnl_rows=[]))
+            sent = []
+            with unittest.mock.patch.object(signals, "notify", sent.append):
+                gate._close("今天的 3 個訊號額度用完了", routine=True)
+            self.assertEqual(sent, [], "📭 額度用完也是 v10 那一條線")
+            self.assertTrue(gate.state["closed"], "閘門照樣關")
+
+    def test_run_routes_each_line(self):
+        src = inspect.getsource(signals.run)
+        self.assertIn("say=notify_v10", src)
+        self.assertIn('notify_if("manual", manual.format_orders(', src)
+        self.assertIn("""                for msg in tracker.flatten():
+                    notify_v10(msg)
+                for msg in pick_watch.flatten():         # 首選照常推
+                    notify(msg)""", src)
+        tree = ast.parse(textwrap.dedent(src))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.For) and "pick_watch" in ast.unparse(node.iter):
+                self.assertIn("notify(msg)", ast.unparse(node), "盤前首選不受影響")
+                self.assertNotIn("notify_v10", ast.unparse(node))
+            if isinstance(node, ast.For) and ast.unparse(node.iter).startswith("tracker."):
+                self.assertIn("notify_v10(", ast.unparse(node), ast.unparse(node.iter))
+        self.assertIn("notify(f\"✅ 今日監看", src, "✅ 今日監看照推（知道程式活著）")
+        self.assertIn("notify(format_no_quotes())", src)
 
 
 class TestManualVersion(unittest.TestCase):
@@ -11023,6 +11077,7 @@ class TestV10TheCloseReplay(unittest.TestCase):
         self.assertNotIn("先出一半", text)
 
 
+@_PUSH_ON
 class TestTheStopMessageDoesNotSayTheProgramStopped(unittest.TestCase):
     """10-12 第一天：09:05 三個訊號額度用完，推「🚨 今日停手…收工」，之後出場
     通知照來 —— 停的是「發新訊號」，不是整支程式。"""
