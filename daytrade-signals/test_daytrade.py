@@ -7111,6 +7111,37 @@ class TestPickCheck(unittest.TestCase):
         self.assertIn("前半、後半都比較好", text)
         self.assertIn("沒有資料", "\n".join(pickcheck.lines([])))
 
+    def test_what_if_the_formula_were_different(self):
+        """10-23 使用者：「要，做比較表」—— 昨收位置反過來、只留有證據的，過去會選到哪一檔。"""
+        payload = {"items": [self.row("1111", 3.0, rsi=60.0), self.row("2222", 1.0, rsi=61.0)],
+                   "not_watched": [self.row("3333", 2.0, rsi=59.0)]}
+        payload["items"][0]["prev_high"], payload["items"][0]["prev_low"] = 100.0, 90.0    # 收在最高
+        payload["items"][1]["prev_high"], payload["items"][1]["prev_low"] = 110.0, 100.0   # 收在最低
+        payload["not_watched"][0]["prev_high"], payload["not_watched"][0]["prev_low"] = 105.0, 95.0
+        bars = {c: self.bars("2026-10-21", step=st) for c, st in (("1111", -0.01), ("2222", 0.02), ("3333", 0.0))}
+        rows = pickcheck.day_rows("2026-10-21", payload, bars, {}, pickcheck.REAL)
+        a = pickcheck.pick_by(rows, pickcheck.FORMULAS[0][1])
+        self.assertEqual(a["code"], premarket.score(whatif.pool_rows(payload))[0]["code"],
+                         "A 跟盤前首選選到同一檔")
+        self.assertEqual(a["code"], "1111")
+        self.assertEqual(pickcheck.pick_by(rows, pickcheck.FORMULAS[2][1])["code"], "2222",
+                         "C：收在最低的那一檔（RSI 也不差）")
+        self.assertIsNone(pickcheck.pick_by([], pickcheck.FORMULAS[0][1]))
+        tie = [dict(rows[0], code="x", rank=2, volume_ratio=1.0, close_pos=50.0, rsi_gap=1.0),
+               dict(rows[0], code="y", rank=1, volume_ratio=1.0, close_pos=50.0, rsi_gap=1.0)]
+        self.assertEqual(pickcheck.pick_by(tie, pickcheck.FORMULAS[2][1])["code"], "y", "平手看原本的名次")
+        other = [dict(r, date="2026-10-20", source=pickcheck.REBUILT) for r in rows]
+        text = "\n".join(pickcheck.lines(rows + other))
+        b = next(r for r in rows if r["code"] == "2222")
+        self.assertIn(f"| C. 只留昨收位置（收低）＋RSI | 2 | 0 | {b['net_r']:+.2f}R（100% 勝） |", text)
+        self.assertIn("| A. 現在的公式 | 2 | 0 |", text)
+        c_line = next(l for l in text.splitlines() if l.startswith("| C. 只留"))
+        self.assertTrue(c_line.endswith("| 0/2 天 |"), c_line)
+        a_line = next(l for l in text.splitlines() if l.startswith("| A. 現在的公式"))
+        self.assertTrue(a_line.endswith("| 2/2 天 |"), a_line)
+        self.assertIn("| （對照）全部候選平均 |", text)
+        self.assertIn("前半、後半、存檔日、重建日都比 A 好", text)
+
     def test_main_puts_real_and_rebuilt_days_together(self):
         real = ("2026-10-21", {"items": [self.row("1111", 3.0)], "not_watched": [self.row("2222", 1.0)]})
         partial = ("2026-10-08", {"items": [self.row("9999", 3.0)]})

@@ -218,6 +218,62 @@ def _gap(g) -> str:
     return "—" if g is None else f"{g:+.2f}R"
 
 
+# 10-23 使用者：「要，做比較表」。29 天裡最穩定的是「昨收位置」方向反了（收在低點附近的隔天比較好，
+# −0.28R，兩半一致）。先看「如果過去用別的公式選首選」會怎樣，再決定要不要改。只比事先定好的三種，
+# 免得一次比很多種、挑到剛好好看的那一種。(欄位, 越大越好?)
+FORMULAS = (
+    ("A. 現在的公式", (("volume_ratio", True), ("amplitude", True), ("rsi_gap", False), ("close_pos", True))),
+    ("B. 昨收位置反過來", (("volume_ratio", True), ("amplitude", True), ("rsi_gap", False),
+                       ("close_pos", False))),
+    ("C. 只留昨收位置（收低）＋RSI", (("rsi_gap", False), ("close_pos", False))),
+)
+
+
+def pick_by(day_rows_: list[dict], factors) -> dict | None:
+    """同一天的候選裡，照 factors 各自排名、名次加總最小的那一檔（跟 premarket.score 同一個算法：
+    缺資料的那一項排最後；平手看量比、再看原本的名次）。"""
+    if not day_rows_:
+        return None
+    ranks = {key: premarket._ranks([r.get(key) for r in day_rows_], higher)
+             for key, higher in factors}
+    totals = [sum(ranks[key][i] for key, _ in factors) for i in range(len(day_rows_))]
+    best = min(range(len(day_rows_)),
+               key=lambda i: (totals[i], -(day_rows_[i].get("volume_ratio") or 0), day_rows_[i]["rank"]))
+    return day_rows_[best]
+
+
+def formula_lines(rows: list[dict], first: set, second: set) -> list[str]:
+    by_day: dict = {}
+    for r in rows:
+        by_day.setdefault(r["date"], []).append(r)
+    chosen = {name: [pick_by(by_day[d], f) for d in sorted(by_day)] for name, f in FORMULAS}
+    base = chosen[FORMULAS[0][0]]
+    out = ["", "換公式會怎樣：過去每一天，如果用這個公式選首選（同樣開盤價買、同一套出場）。", "",
+           "| 公式 | 天數 | 買不到 | 平均R（勝率） | 前半 | 後半 | 只看存檔日 | 只看重建日 | 跟 A 選同一檔 |",
+           "|---|---|---|---|---|---|---|---|---|"]
+    for name, _f in FORMULAS:
+        got = [r for r in chosen[name] if r]
+        same = sum(1 for a, b in zip(chosen[name], base) if a and b and a["code"] == b["code"])
+        out.append(f"| {name} | {len(got)} | {sum(1 for r in got if r['net_r'] is None)} | {_stats(got)} | "
+                   f"{_avg_r([r for r in got if r['date'] in first])} | "
+                   f"{_avg_r([r for r in got if r['date'] in second])} | "
+                   f"{_avg_r([r for r in got if r['source'] == REAL])} | "
+                   f"{_avg_r([r for r in got if r['source'] == REBUILT])} | {same}/{len(got)} 天 |")
+    out.append(f"| （對照）全部候選平均 | — | — | {_stats(rows)} | "
+               f"{_avg_r([r for r in rows if r['date'] in first])} | "
+               f"{_avg_r([r for r in rows if r['date'] in second])} | "
+               f"{_avg_r([r for r in rows if r['source'] == REAL])} | "
+               f"{_avg_r([r for r in rows if r['source'] == REBUILT])} | — |")
+    out += [
+        "",
+        "- **B 或 C 要在前半、後半、存檔日、重建日都比 A 好**，才考慮改盤前首選的公式；只贏其中一兩格不算。",
+        "- 一天只選一檔，29 天就只有 29 筆 —— 差 0.1R 以內很可能只是運氣。",
+        "- 「昨收位置反過來」是看了這份資料才想到的，B、C 在同一份資料上比當然佔便宜；"
+        "改了之後，要用之後的日子再驗一次。",
+    ]
+    return out
+
+
 def lines(rows: list[dict]) -> list[str]:
     out = ["## 挑股驗證：盤前首選的公式有沒有用", ""]
     if not rows:
@@ -253,6 +309,7 @@ def lines(rows: list[dict]) -> list[str]:
         g1 = thirds([r for r in rows if r["date"] in first], key)[2]
         g2 = thirds([r for r in rows if r["date"] in second], key)[2]
         out.append(f"| {name} | {_stats(lo)} | {_stats(hi)} | {_gap(gap)} | {_gap(g1)} | {_gap(g2)} |")
+    out += formula_lines(rows, first, second)
     out += [
         "",
         "- **首選有沒有用**：第 1 名要比第 2～3 名、其他候選好，而且**前半、後半都比較好**才算數。"
