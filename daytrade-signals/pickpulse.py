@@ -92,13 +92,24 @@ def score_items(price, vwap, ma5, ma20, vol_ratio, direction, buy_pct, market_pc
 UP_WORD, DOWN_WORD, FLAT_WORD = "偏漲", "偏跌", "中性"
 
 
-def forecast(stats: dict | None, vol_score) -> tuple[str, dict] | None:
+def forecast(stats: dict | None, vol_score, score=None) -> tuple[str, dict] | None:
     """(偏漲／偏跌／中性, 那一組的統計)。目前的 ④ 落在哪一組，那一組過去之後 30 分鐘平均
-    超過來回成本才算偏漲／偏跌。沒有統計、④ 沒分數、那一組樣本不夠 → None（不預測）。"""
+    超過來回成本才算偏漲／偏跌。沒有統計、④ 沒分數、那一組樣本不夠 → None（不預測）。
+    10-24「改用組合預測」：④ 高的時候再看強弱平均分（稍強以上／中性附近／中性偏弱以下），
+    用那一格的統計；那一格樣本不夠 → 退回只看 ④，標「組合樣本不足」。"""
     if not stats or vol_score is None:
         return None
-    key = "low" if vol_score <= stats["low"] else "high" if vol_score >= stats["high"] else "mid"
+
+    def band(v):
+        return "low" if v <= stats["low"] else "high" if v >= stats["high"] else "mid"
+    key = band(vol_score)
     g = stats["groups"].get(key)
+    if key == "high" and score is not None:
+        cell = (stats.get("combos") or {}).get(band(score))
+        if cell:
+            g = cell
+        elif g:
+            g = dict(g, note="（組合樣本不足，只看 ④）")
     if not g:
         return None
     if g["avg"] > stats["cost"]:
@@ -172,7 +183,7 @@ class Pulse:
         if score is None:
             return []
         lv, name = level(score)
-        fc = forecast(self.stats, items["volume"][1])
+        fc = forecast(self.stats, items["volume"][1], score)
         verdict = fc[0] if fc else None
         self.history.append({"at": end.strftime("%H:%M"), "price": price, "score": score,
                              "label": name, "forecast": verdict, **{k: items[k][1] for k in ITEMS}})
@@ -218,7 +229,8 @@ class Pulse:
             s, (word, g) = self.stats, fc
             if kind != "forecast":
                 head.append(f"🔮 之後 {s['horizon']} 分鐘：{word}")
-            head.append(f"　過去 {s['days']} 天 {g['desc']}{g['n']} 次：平均 {g['avg']:+.2f}%、{g['up']}% 漲")
+            head.append(f"　過去 {s['days']} 天 {g['desc']}{g['n']} 次：平均 {g['avg']:+.2f}%、{g['up']}% 漲"
+                        + g.get("note", ""))
         lines = head + ["────────────────",
                         f"現價 {price:.2f}｜進場 {entry:.2f}（{(price - entry) / entry * 100:+.2f}%）"]
         if st.day_high and price >= st.day_high:

@@ -6798,6 +6798,38 @@ class TestPulseScoreCheck(unittest.TestCase):
         self.assertNotIn("🔮", p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), ""),
                          "沒有預測 → 不顯示")
 
+    def test_the_combined_forecast(self):
+        """10-24 使用者：「好，改用組合預測」—— ④ 高的時候再看強弱，用那一格的統計。"""
+        def row(d, score, vol, fwd):
+            return {"date": d, "code": "1", "at": "09:05", "score": score, "volume": vol, "fwd": fwd}
+        rows = ([row("2026-10-20", 8.0, 7.0, -0.43)] * 120 + [row("2026-10-21", 5.0, 7.0, -0.14)] * 110
+                + [row("2026-10-21", 2.0, 7.0, -0.9)] * 50 + [row("2026-10-21", 5.0, 5.0, -0.1)] * 100)
+        st = pulsecheck.forecast_stats(rows)
+        self.assertEqual(set(st["combos"]), {"high", "mid"}, "中性偏弱以下＋④ 高只有 50 筆 → 不放")
+        self.assertEqual(st["combos"]["high"], {"desc": "「稍強以上＋④ 高」", "n": 120, "avg": -0.43, "up": 0})
+        self.assertEqual(st["groups"]["high"]["n"], 280)
+        word, g = pickpulse.forecast(st, 7.0, 8.0)
+        self.assertEqual((word, g["desc"]), ("偏跌", "「稍強以上＋④ 高」"))
+        word, g = pickpulse.forecast(st, 7.0, 5.0)
+        self.assertEqual((word, g["n"]), ("中性", 110), "中性附近＋④ 高 −0.14% 沒超過成本 → 中性（只看 ④ 會說偏跌）")
+        word, g = pickpulse.forecast(st, 7.0, 2.0)
+        self.assertEqual(g["note"], "（組合樣本不足，只看 ④）")
+        self.assertEqual((word, g["n"]), ("偏跌", 280))
+        self.assertEqual(pickpulse.forecast(st, 7.0)[1]["n"], 280, "沒給強弱 → 只看 ④")
+        self.assertEqual(pickpulse.forecast(st, 5.0, 8.0)[1]["n"], 100, "④ 中、④ 低不用組合")
+        self.assertEqual(pickpulse.forecast(dict(st, combos=None), 7.0, 8.0)[1]["n"], 280, "舊的統計沒有 combos")
+        p = pickpulse.Pulse(sig={"code": "1111", "name": "測試", "entry": 100.0, "stop": 97.0},
+                            date="2026-10-27", stats=st)
+        state = SimpleNamespace(last_price=100.5, day_high=101.0)
+        hot = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, 1, None, 0.0)
+        msg = p._message("start", state, hot, 3.0, "稍弱", None, self.at(9, 30), "",
+                         pickpulse.forecast(st, hot["volume"][1], 3.0))
+        self.assertIn("　過去 2 天 ④ 高（≥6.5）280 次：平均 -0.40%、0% 漲（組合樣本不足，只看 ④）", msg)
+        src = inspect.getsource(pickpulse.Pulse.on_bar)
+        self.assertIn('fc = forecast(self.stats, items["volume"][1], score)', src, "盤中用組合")
+        text = "\n".join(pulsecheck.combo_lines(rows, {"2026-10-20"}, {"2026-10-21"}))
+        self.assertIn("| 中性附近（3.5～6.5） | 高（≥6.5） | 中性 | 110 |", text, "表上的「預測會顯示」也照組合")
+
     def test_a_forecast_change_is_pushed_too(self):
         """10-22 使用者：「強弱訊息想保留，可以加『之後幾分鐘：偏跌』」→ 強弱沒變、預測變了也推。"""
         st = {"days": 9, "horizon": 30, "low": 3.5, "high": 6.5, "cost": 0.21,

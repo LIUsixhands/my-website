@@ -183,6 +183,9 @@ def load_samples(path=None) -> list[dict]:
     return out
 
 
+COMBO_NAMES = {"high": "稍強以上", "mid": "中性附近", "low": "中性偏弱以下"}
+
+
 def forecast_stats(samples, path=None) -> dict | None:
     """盤中「之後 30 分鐘：偏漲／偏跌／中性」用的表：④ 分低、中、高三組，各自之後 30 分鐘的
     平均與上漲比例。一組不到 STATS_MIN_N 筆就不放（那一組不預測）。samples=None → 讀累積檔。"""
@@ -198,8 +201,16 @@ def forecast_stats(samples, path=None) -> dict | None:
                            "up": round(sum(1 for r in g if r["fwd"] > 0) / len(g) * 100)}
     if not groups:
         return None
+    # 10-24 使用者：「好，改用組合預測」（九格表：稍強以上＋④ 高 −0.43%、中性附近＋④ 高 −0.14%，
+    # 兩半都一致；只看 ④ 高是 −0.36%）。只用在 ④ 高那一排；一格不到 STATS_MIN_N 筆就不放（退回只看 ④）。
+    combos = {}
+    for a, name in COMBO_NAMES.items():
+        g = [r for r in rows if band(r["volume"]) == "high" and band(r.get("score")) == a]
+        if len(g) >= STATS_MIN_N:
+            combos[a] = {"desc": f"「{name}＋④ 高」", "n": len(g), "avg": round(_avg(g), 2),
+                         "up": round(sum(1 for r in g if r["fwd"] > 0) / len(g) * 100)}
     return {"days": len({r["date"] for r in rows}), "horizon": HORIZON_MIN, "low": LOW, "high": HIGH,
-            "cost": round(config.round_trip_cost_pct(), 2), "groups": groups}
+            "cost": round(config.round_trip_cost_pct(), 2), "groups": groups, "combos": combos}
 
 
 def daily(broker, date: str | None = None, path=None) -> dict | None:
@@ -315,7 +326,7 @@ def combo_lines(samples, first: set, second: set) -> list[str]:
         for b, b_name in VOL_BANDS:
             rows = cells[(a, b)]
             vol = {"high": HIGH, "mid": (LOW + HIGH) / 2, "low": LOW}[b]
-            fc = pickpulse.forecast(stats, vol)
+            fc = pickpulse.forecast(stats, vol, {"high": HIGH, "mid": (LOW + HIGH) / 2, "low": LOW}[a])
             n = f"{len(rows)}" + ("（樣本少）" if len(rows) < STATS_MIN_N else "")
             out.append(f"| {a_name} | {b_name} | {fc[0] if fc else '—'} | {n} | {_cell(rows)} | "
                        f"{_half_avg(rows, first)} | {_half_avg(rows, second)} |")
@@ -325,7 +336,7 @@ def combo_lines(samples, first: set, second: set) -> list[str]:
                f"{_half_avg(hi, first)} | {_half_avg(hi, second)} |")
     out += [
         "",
-        "- **「預測會顯示」**：照現在盤中的規則（只看 ④），這一格會顯示什麼。",
+        "- **「預測會顯示」**：照現在盤中的規則（10-24 起 ④ 高那一排用組合，其他只看 ④），這一格會顯示什麼。",
         "- **跟最後一列比**：某一格比「只看 ④ 高」明顯更好或更差、而且**前半、後半同方向**，"
         "那個組合才有額外的用處；差不多的話，強弱名稱沒有幫上忙，維持只看 ④。",
         f"- 一格不到 {STATS_MIN_N} 筆標「樣本少」，不能信。",
