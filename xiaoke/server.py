@@ -29,6 +29,8 @@ from pathlib import Path
 
 import clients
 import engine
+import listing
+import moi
 from engine import Tenant
 
 BASE_DIR = Path(__file__).parent
@@ -39,6 +41,29 @@ PORT = int(os.environ.get("XIAOKE_PORT", "8788"))
 log = logging.getLogger("xiaoke")
 
 HANDOFF_MSG = "收到！這個問題我幫你轉給專人，會盡快回覆你 🙏"
+LISTING_HELP = """物件分析小幫手用法：
+在群組或這裡直接貼物件，我會回：
+1. 開價 vs 實價登錄（扣車位單價、建議刊登價）
+2. 591 競品怎麼查
+3. 591 標題＋內文
+
+至少要有：行政區、權狀坪數、開價。例：
+北屯區 崇德路三段 XX社區 35坪 屋齡5年 3房2廳 含車位 開價1580萬
+（有寫「地址：…號」會找同棟成交，最準）
+
+看完 591 回「競品 3880 3680 3500」（各家開價，單位萬），我幫你排名次
+
+查行情（不用開價）：
+行情 北屯區 崇德路三段
+行情 寶鴻大白
+
+讓整個群組都能用（管理員在群組裡打）：
+開放本群／關閉本群
+
+教我認社區（管理員 1 對 1 傳）：
+社區 寶鴻大白 = 西區 五權三街55巷3號
+「社區」看清單、「社區 刪 名稱」刪除
+貼過的物件有社區名＋地址，我會自動記住"""
 
 
 def setup_logging() -> None:
@@ -59,9 +84,11 @@ def setup_logging() -> None:
 class Bot:
     """一個租戶的 LINE 動作。測試時把 reply/push 換成假的。"""
 
-    def __init__(self, t: Tenant, drafter=clients.gemini_draft, reply=None, push=None):
+    def __init__(self, t: Tenant, drafter=clients.gemini_draft, reply=None, push=None,
+                 ask=clients.gemini_json, comps=moi.comps):
         self.t = t
         self.drafter = drafter
+        self.ask, self.comps = ask, comps           # 物件分析模式用
         self._reply = reply or (lambda rt, text: clients.line_reply(self.token, rt, text))
         self._push = push or (lambda to, text: clients.line_push(self.token, to, text))
 
@@ -116,6 +143,10 @@ class Bot:
         msg = ev.get("message", {})
         mtype = msg.get("type")
 
+        if cfg.get("type") == "listing":
+            self._handle_listing(rt, target, user, msg, in_group)
+            return
+
         # 管理員（只認 1 對 1）：訊息一律是指令，不當客戶問題
         if not in_group and user in cfg.get("admins", []):
             if mtype == "text":
@@ -135,15 +166,7 @@ class Bot:
 
         text = msg.get("text", "")
 
-        # 配對碼：成為管理員，並立刻換一組新碼（舊碼外流也無法再用）
-        code = str(cfg.get("pairing_code", ""))
-        if not in_group and code and text.strip() == code:
-            admins = cfg.get("admins", []) + [user]
-            new_code = engine.new_pairing_code()
-            self.t.update_config(admins=admins, pairing_code=new_code)
-            self.t.log(kind="paired", user=user)
-            self.reply(rt, user, "✅ 配對成功，你是這個帳號的客服管理員了。\n"
-                                 f"要再加一位管理員，請他傳新配對碼：{new_code}\n\n" + engine.HELP)
+        if not in_group and self._try_pair(rt, user, text, engine.HELP):
             return
 
         if in_group and not engine.looks_like_question(text):
@@ -168,6 +191,74 @@ class Bot:
         self._handoff(rt, target, user, text, d.reason, in_group,
                       draft=d.reply if "banned" in d.flags else "",
                       warn=d.action == "block")
+
+    def _try_pair(self, rt: str, user: str, text: str, help_text: str) -> bool:
+        """配對碼：成為管理員，並立刻換一組新碼（舊碼外流也無法再用）。"""
+        code = str(self.t.config.get("pairing_code", ""))
+        if not code or text.strip() != code:
+            return False
+        admins = self.t.config.get("admins", []) + [user]
+        new_code = engine.new_pairing_code()
+        self.t.update_config(admins=admins, pairing_code=new_code)
+        self.t.log(kind="paired", user=user)
+        self.reply(rt, user, "✅ 配對成功，你是這個帳號的管理員了。\n"
+                             f"要再加一位管理員，請他傳新配對碼：{new_code}\n\n" + help_text)
+        return True
+
+    def _handle_listing(self, rt, target, user, msg, in_group) -> None:
+        """物件分析模式：只替配對過的人做事，其他人（群組裡的別人、陌生人）一律不回，
+        免得 Gemini 額度被別人用掉。"""
+        if msg.get("type") != "text":
+            return
+        text = msg.get("text", "")
+        if not in_group and self._try_pair(rt, user, text, LISTING_HELP):
+            return
+        cfg = self.t.config
+        is_admin = user in cfg.get("admins", [])
+        groups = cfg.get("allowed_groups", [])
+        if in_group and is_admin and text.strip() in ("開放本群", "關閉本群"):
+            opening = text.strip() == "開放本群"
+            groups = [g for g in groups if g != target] + ([target] if opening else [])
+            self.t.update_config(allowed_groups=groups)
+            self.t.log(kind="group_open" if opening else "group_close", user=user, group=target)
+            self.reply(rt, target, "✅ 已開放：本群組的人不用配對，貼物件、查行情、競品都會回。\n要關掉請管理員打「關閉本群」"
+                       if opening else "🔒 已關閉：本群組只回配對過的管理員。")
+            return
+        # 管理員到哪都能用；開放過的群組裡，群組成員也能用。陌生人、沒開放的群組一律不回（省 Gemini 額度）
+        if not (is_admin or (in_group and target in groups)):
+            return
+        book = listing.Book(self.t.dir / "communities.json")
+        if not in_group and is_admin:
+            answer = listing.book_command(text, book)
+            if answer:
+                self.reply(rt, target, answer)
+                return
+        last_file = self.t.dir / "last_listing.json"
+        try:
+            last_all = json.loads(last_file.read_text(encoding="utf-8")) if last_file.exists() else {}
+        except ValueError:
+            last_all = {}
+        state: dict = {}
+        if listing.looks_like_compete(text):    # 每個群組記自己最後分析的那件
+            kind, run = "compete", lambda: listing.compete(text, last_all.get(target))
+        elif listing.looks_like_listing(text):
+            kind, run = "listing", lambda: listing.analyze(text, self.t.config, self.ask,
+                                                           self.comps, book, state)
+        elif listing.looks_like_market(text):
+            kind, run = "market", lambda: listing.market(text, self.t.config, self.comps, book)
+        else:
+            if not in_group:                     # 群組閒聊不插話；1 對 1 教怎麼用
+                self.reply(rt, target, LISTING_HELP)
+            return
+        try:
+            answer = run()
+        except Exception as e:                   # Gemini 金鑰／額度問題：要讓人知道，不能沒聲音
+            log.exception("[%s] 物件分析失敗", self.t.code)
+            answer = f"⚠️ 這件分析失敗，等一下再貼一次。（{str(e)[:120]}）"
+        if state:
+            engine.atomic_write_json(last_file, {**last_all, target: state})
+        self.reply(rt, target, answer)
+        self.t.log(kind=kind, user=user, group=in_group, text=text[:500], reply=answer)
 
     def _handoff(self, rt, target, user, text, reason, in_group, draft="", warn=False,
                  log_it=False):
