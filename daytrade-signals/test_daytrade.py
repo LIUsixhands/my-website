@@ -7063,7 +7063,13 @@ class TestPickCheck(unittest.TestCase):
         self.assertEqual((got["date"], got["rebuilt"]), ("2026-10-02", True))
         self.assertEqual(got["pick"]["code"], premarket.choose(got["items"] + got["not_watched"])["code"])
         self.assertNotIn("4444", asked, "不可當沖的不用抓")
-        self.assertIsNone(pickcheck.rebuild_day("2026-10-02", prev, [], days_of, lambda c: True))
+        with self.assertLogs("pickcheck", "WARNING") as logs:
+            self.assertIsNone(pickcheck.rebuild_day("2026-10-02", prev, [], days_of, lambda c: True))
+            self.assertIsNone(pickcheck.rebuild_day("2026-10-02", prev, items[:1], days_of, lambda c: False))
+        self.assertIn("排行 0 檔、四碼可當沖 0 檔、過量價門檻 0 檔（排行是空的）", logs.output[0],
+                      "10-23 第一次跑 20 天全部失敗：要說出卡在哪一關")
+        self.assertIn("排行 1 檔、四碼可當沖 0 檔", logs.output[1])
+        self.assertIn("第一筆：code=1111、name=x、close=100.0", logs.output[1], "印出永豐實際給了什麼")
         lots = pickcheck.rebuild_day("2026-10-02", prev, [item("1111", 100.0, 104.0, 99.0, 9000)],
                                      days_of, lambda c: True)
         self.assertEqual(lots["items"][0]["prev_volume"], 9000, "本來就是張 → 不換")

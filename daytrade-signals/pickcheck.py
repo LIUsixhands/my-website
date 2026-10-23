@@ -98,16 +98,25 @@ def _lots(items) -> float:
     return 1000.0 if vols and max(vols) > 5_000_000 else 1.0
 
 
+def describe(item) -> str:
+    """排行的一筆印出來看（欄位對不上時才知道永豐給了什麼）。"""
+    keys = ("code", "name", "date", "close", "high", "low", "total_volume", "volume")
+    got = {k: getattr(item, k, None) for k in keys}
+    return "、".join(f"{k}={v}" for k, v in got.items() if v is not None) or repr(item)[:200]
+
+
 def rebuild_day(day: str, prev: str, items, days_of, tradable) -> dict | None:
     """重建 day 那天早上的候選池（跟 screener 同樣的門檻、排序）。
     items = prev 那天的成交量排行；days_of(代號) → {日期: 1 分 K}；tradable(代號) → 可不可當沖。"""
     cfg = config.SCREEN
+    items = list(items or [])
     unit = _lots(items)
-    rows = []
+    rows, ok_code = [], 0
     for it in items:
         code = str(getattr(it, "code", ""))
         if not code.isdigit() or len(code) != 4 or not tradable(code):
             continue
+        ok_code += 1
         snap = SimpleNamespace(code=code, close=getattr(it, "close", 0), high=getattr(it, "high", 0),
                                low=getattr(it, "low", 0),
                                total_volume=int(float(getattr(it, "total_volume", 0) or 0) / unit))
@@ -116,6 +125,10 @@ def rebuild_day(day: str, prev: str, items, days_of, tradable) -> dict | None:
             row["name"] = str(getattr(it, "name", "") or "")
             rows.append(row)
     if not rows:
+        # 10-23 第一次跑 20 天全部重建不出來 —— 說清楚卡在哪一關，不要只說「跳過」。
+        log.warning("%s 重建不出候選池：%s 的排行 %d 檔、四碼可當沖 %d 檔、過量價門檻 0 檔%s",
+                    day, prev, len(items), ok_code,
+                    f"（第一筆：{describe(items[0])}）" if items else "（排行是空的）")
         return None
     rows.sort(key=lambda r: r["amplitude_pct"], reverse=True)
     probe, rest = rows[: cfg["max_kbar_queries"]], rows[cfg["max_kbar_queries"]:]
@@ -319,7 +332,6 @@ def main(argv=None):
                     continue
                 payload = rebuild_day(day, prev, items, days_of, tradable)
                 if payload is None:
-                    log.warning("%s 重建不出候選池，跳過", day)
                     continue
                 save_rebuilt(payload)
             payloads.append((day, payload, REBUILT))
