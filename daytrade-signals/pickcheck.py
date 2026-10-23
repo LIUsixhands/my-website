@@ -109,7 +109,8 @@ def rebuild_day(day: str, prev: str, items, days_of, tradable) -> dict | None:
     """重建 day 那天早上的候選池（跟 screener 同樣的門檻、排序）。
     items = prev 那天的成交量排行；days_of(代號) → {日期: 1 分 K}；tradable(代號) → 可不可當沖。"""
     cfg = config.SCREEN
-    items = list(items or [])
+    # 量大的排前面（排行方向萬一又反了，至少看得出來：第一筆會是量最大的那一檔）
+    items = sorted(items or [], key=lambda i: float(getattr(i, "total_volume", 0) or 0), reverse=True)
     unit = _lots(items)
     rows, ok_code = [], 0
     for it in items:

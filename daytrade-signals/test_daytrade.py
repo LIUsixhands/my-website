@@ -7070,6 +7070,12 @@ class TestPickCheck(unittest.TestCase):
                       "10-23 第一次跑 20 天全部失敗：要說出卡在哪一關")
         self.assertIn("排行 1 檔、四碼可當沖 0 檔", logs.output[1])
         self.assertIn("第一筆：code=1111、name=x、close=100.0", logs.output[1], "印出永豐實際給了什麼")
+        with self.assertLogs("pickcheck", "WARNING") as logs:
+            pickcheck.rebuild_day("2026-10-02", prev, [item("1259", 65.5, 65.5, 65.5, 1),
+                                                      item("1599", 22.8, 22.8, 22.8, 3)], days_of, lambda c: True)
+        self.assertIn("第一筆：code=1599", logs.output[0], "量大的排前面印出來")
+        src = inspect.getsource(broker_mod.Broker.volume_rank)
+        self.assertIn("ascending=True", src, "10-23：永豐的 ascending=True 才是由大到小")
         lots = pickcheck.rebuild_day("2026-10-02", prev, [item("1111", 100.0, 104.0, 99.0, 9000)],
                                      days_of, lambda c: True)
         self.assertEqual(lots["items"][0]["prev_volume"], 9000, "本來就是張 → 不換")
