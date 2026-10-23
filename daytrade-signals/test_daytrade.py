@@ -6972,6 +6972,30 @@ class TestOrderBookRecorder(unittest.TestCase):
             self.assertEqual(b.save_if_due(at + timedelta(seconds=300)), path)
         self.assertEqual(bookrec.path_for("2026-10-23").name, "book-20261023.json")
 
+    def test_big_orders(self):
+        """10-23 使用者：「當沖有需要參考主力的問題嗎」→ 盤中大單「好」。"""
+        def tk(code="1111", s=5, price=100.0, lots=10, kind=1, **kw):
+            return SimpleNamespace(code=code, datetime=self.D.replace(hour=9, minute=1, second=s), close=price,
+                                   volume=lots, tick_type=kind, simtrade=kw.get("simtrade", 0),
+                                   intraday_odd=kw.get("odd", 0))
+        b = bookrec.BookRecorder(["1111"], date="2026-10-23")
+        for t in (tk(lots=10), tk(lots=30), tk(lots=30, kind=2), tk(lots=29, kind=2, price=103.0),
+                  tk(lots=50, kind=0), tk(lots=99, simtrade=1), tk(lots=99, odd=1), tk(code="2222", lots=99),
+                  tk(lots=0)):
+            b.record_tick(t)
+        b.record(self.ba(h=9, m=1, s=20))
+        (row,) = b.payload()["codes"]["1111"]
+        self.assertEqual(row["at"], "09:02", "跟分鐘 K、五檔同一個 label")
+        self.assertEqual((row["buy"], row["sell"]), (40, 59), "判不出方向、試撮、零股、別檔的不算")
+        self.assertEqual((row["big_buy"], row["big_sell"]), (30, 30),
+                         "一筆 ≥ 300 萬才算大單：30 張×100 元＝300 萬算；29 張×103 元＝298.7 萬不算")
+        self.assertEqual(row["n"], 1, "五檔那一筆照樣記在同一分鐘")
+        self.assertIn("bid", row)
+        src = inspect.getsource(signals.run)
+        tree = ast.parse(textwrap.dedent(src))
+        self.assertTrue(any(isinstance(n, ast.Try) and n.handlers and "book.record_tick(tick)" in ast.unparse(
+            ast.Module(body=n.body, type_ignores=[])) for n in ast.walk(tree)), "記錄壞掉不可以影響盯盤")
+
     def test_signals_run_records_it_without_risking_the_watch(self):
         src = inspect.getsource(signals.run)
         self.assertIn('book = bookrec.BookRecorder(list(states) + ([pick["code"]] if pick else []))', src)

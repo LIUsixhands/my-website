@@ -9,6 +9,7 @@
   - 那一分鐘最後一刻的五檔（價、量）
   - 那一分鐘累計的 OFI（最佳一檔的買賣壓力變化，CKS 的定義）
   - 那一分鐘收到幾筆掛單更新
+  - 10-23 加：那一分鐘的外盤／內盤張數，和其中「大單」（一筆 ≥ 300 萬元）的外盤／內盤張數
 收盤後（以及盤中每 5 分鐘）寫 journal/book-YYYYMMDD.json。
 """
 import json
@@ -22,6 +23,9 @@ log = logging.getLogger("bookrec")
 
 LEVELS = 5
 SAVE_EVERY_SEC = 300
+# 10-23 使用者：「當沖有需要參考主力的問題嗎」→ 盤中大單：「好」。一筆成交金額到這麼多算大單
+# （台股常見的說法是 100 張或幾百萬；用金額，高價股、低價股才比得起來）。
+BIG_AMOUNT = 3_000_000
 
 
 def path_for(date: str):
@@ -71,7 +75,7 @@ class BookRecorder:
         ask = _levels(bidask.ask_price, bidask.ask_volume)
         at = minute_label(bidask.datetime)
         with self.lock:
-            row = self.rows.setdefault(code, {}).setdefault(at, {"ofi": 0.0, "n": 0})
+            row = self._row(code, at)
             row["bid"], row["ask"] = bid, ask
             row["n"] += 1
             if bid and ask and bid[0][0] > 0 and ask[0][0] > 0:
@@ -79,6 +83,28 @@ class BookRecorder:
                 if code in self.best:
                     row["ofi"] += ofi(self.best[code], now)
                 self.best[code] = now
+
+    def _row(self, code: str, at: str) -> dict:
+        return self.rows.setdefault(code, {}).setdefault(
+            at, {"ofi": 0.0, "n": 0, "buy": 0, "sell": 0, "big_buy": 0, "big_sell": 0})
+
+    def record_tick(self, tick) -> None:
+        """一筆成交：外盤（tick_type 1）／內盤（2）張數，一筆金額 ≥ BIG_AMOUNT 的另外算大單。
+        判不出方向的（0）、試撮、零股、不在名單的不記。"""
+        code = str(getattr(tick, "code", ""))
+        if code not in self.codes or getattr(tick, "simtrade", 0) or getattr(tick, "intraday_odd", 0):
+            return
+        lots = int(getattr(tick, "volume", 0) or 0)
+        kind = int(getattr(tick, "tick_type", 0) or 0)
+        if lots <= 0 or kind not in (1, 2):
+            return
+        side = "buy" if kind == 1 else "sell"
+        big = float(getattr(tick, "close", 0) or 0) * lots * 1000 >= BIG_AMOUNT
+        with self.lock:
+            row = self._row(code, minute_label(tick.datetime))
+            row[side] += lots
+            if big:
+                row["big_" + side] += lots
 
     def payload(self) -> dict:
         with self.lock:

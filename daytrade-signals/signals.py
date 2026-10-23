@@ -2191,6 +2191,10 @@ def run():
                 st.record_simtrade(tick)
             return
         quotes["n"] += 1            # 真的成交（不是試撮）—— 09:03 的開盤確認看這個
+        try:                        # 10-23 盤中大單（只記錄，bookrec.py）
+            book.record_tick(tick)
+        except Exception as e:
+            log.warning("大單記錄失敗（不影響盯盤）：%s", e)
         if not pre.saved:
             _save_preopen()
         st = states.get(tick.code)
