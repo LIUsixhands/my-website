@@ -55,6 +55,7 @@ import followup
 import manual
 import pickpulse
 import pickcheck
+import shadow
 import pulsecheck
 import bookrec
 _NO_WAIT = unittest.mock.patch.object(premarket, "wait_until", lambda *a, **k: 0.0)
@@ -4382,7 +4383,7 @@ class TestPersonalDataStaysOffGitHub(unittest.TestCase):
     MUST_IGNORE = (".env", "state.json", "watchlist.json", "outcomes.csv",
                    "candidates.csv", "candidates_outcomes.csv", "journal/*.md",
                    "journal/watchlist-*.json", "journal/preopen-*.json", "picks.csv",
-                   "pick_followup.csv", "manual.csv", "logs/", "journal/book-*.json",
+                   "pick_followup.csv", "manual.csv", "shadow.csv", "logs/", "journal/book-*.json",
                    "journal/book-*.tmp", "journal/pulse-samples.csv", "journal/rebuilt/")
 
     def setUp(self):
@@ -7165,6 +7166,86 @@ class TestPickCheck(unittest.TestCase):
             with unittest.mock.patch.object(whatif, "archived_days", return_value=[]):
                 with self.assertRaises(SystemExit):
                     pickcheck.main(["--until", "2026-10-22"])
+
+
+class TestShadowPick(unittest.TestCase):
+    """10-23 使用者：「好，加影子首選」—— 正式首選照舊用 A；B（昨收位置反過來）、C（只留昨收位置
+    ＋RSI）每天背後也選一檔，同一個算法回推，日報比較，不推播。"""
+
+    def row(self, code, vr, hi, lo, rsi=60.0, prev=100.0):
+        return {"code": code, "name": f"名{code}", "prev_close": prev, "prev_high": hi, "prev_low": lo,
+                "volume_ratio": vr, "avg_amplitude_pct": 4.0, "daily_rsi": rsi}
+
+    def pool(self):
+        return [self.row("1111", 3.0, 100.0, 90.0), self.row("2222", 1.0, 110.0, 100.0, rsi=61.0),
+                self.row("3333", 2.0, 105.0, 95.0, rsi=70.0)]
+
+    def bars(self, step=0.0, start=100.0):
+        d = datetime(2026, 10, 27, 9, 1)
+        return [(d + timedelta(minutes=i), start + step * i, start + step * i + 0.05,
+                 start + step * i - 0.05, start + step * i, 10.0) for i in range(270)]
+
+    def test_formulas_and_shadow_picks(self):
+        pool = self.pool()
+        self.assertEqual([x["code"] for x in premarket.score(pool)],
+                         [x["code"] for x in premarket.score(pool, premarket.FORMULAS[0][2])],
+                         "A 就是原本的公式，正式首選不變")
+        self.assertEqual([c for c, _n, _f in premarket.FORMULAS], ["A", "B", "C"])
+        self.assertEqual(premarket.choose(pool)["code"], "1111")
+        sh = premarket.shadow_picks(pool, watched=["1111"])
+        self.assertEqual(set(sh), {"B", "C"})
+        self.assertEqual(sh["C"]["code"], "2222", "C：收在最低、RSI 接近 60")
+        self.assertEqual(sh["B"]["code"], premarket.choose(pool, factors=premarket.FORMULAS[1][2])["code"])
+        self.assertEqual(premarket.shadow_picks([]), {"B": None, "C": None})
+        src = inspect.getsource(screener.run)
+        self.assertIn('"shadow": premarket.shadow_picks(watchlist + dropped,', src)
+        self.assertEqual([f[0] for f in pickcheck.FORMULAS],
+                         ["A. 現在的公式", "B. 昨收位置反過來", "C. 只留昨收位置（收低）＋RSI"],
+                         "比較表跟影子首選用同一份公式")
+
+    def test_resolve_report_and_review(self):
+        wl = {"date": "2026-10-27", "items": self.pool()[:2], "not_watched": self.pool()[2:]}
+        wl["pick"] = premarket.choose(self.pool(), watched=["1111", "2222"])
+        stored = dict(wl, shadow={"B": dict(wl["pick"], code="3333", name="名3333"), "C": None})
+        self.assertEqual(shadow.picks_for(stored)["B"]["code"], "3333", "存檔有 shadow 就用存的")
+        self.assertEqual(shadow.picks_for(wl)["C"]["code"], "2222", "舊的名單沒有 shadow → 重算")
+        bars = {"1111": self.bars(step=-0.01), "2222": self.bars(step=0.02), "3333": self.bars(start=110.0)}
+        rows = shadow.resolve(dict(wl, shadow={"B": premarket.choose(self.pool(), factors=premarket.FORMULAS[1][2]),
+                                               "C": dict(wl["pick"], code="3333", name="名3333",
+                                                         prev_close=100.0)}),
+                              "2026-10-27", lambda c: bars.get(c) or [])
+        by = {r["formula"]: r for r in rows}
+        self.assertEqual(by["A"]["code"], "1111")
+        self.assertEqual(by["A"]["same_as_a"], 1)
+        tr = whatif.pick_trade("2026-10-27", wl["pick"], bars["1111"])
+        self.assertEqual(by["A"]["net_r"], tr.net_r, "A 也用同一個算法回推")
+        self.assertEqual(by["C"]["result"], shadow.LOCKED, "開盤 110＝漲停，買不到")
+        self.assertEqual(by["C"]["same_as_a"], 0)
+        none = shadow.resolve(wl, "2026-10-27", lambda c: [])
+        self.assertEqual({r["result"] for r in none}, {shadow.NO_BARS})
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "shadow.csv"
+            shadow.append(rows, path)
+            shadow.append([dict(rows[0], date="2026-10-28")], path)
+            shadow.append(rows[:1], path)
+            got = shadow.load(path)
+            self.assertEqual([(r["date"], r["formula"]) for r in got], [("2026-10-27", "A"), ("2026-10-28", "A")],
+                             "同一天重跑蓋掉那一天")
+            lines = shadow.report_lines(rows, got)
+        self.assertIn("🌑 影子首選（不推播，只比較）", lines)
+        self.assertIn(f"A 1111 名11　{tr.net_r:+.2f}R", lines)
+        self.assertIn("C 3333 名33　漲停買不到", lines)
+        self.assertIn(f"A 2 筆　平均 {tr.net_r:+.2f}R", lines)
+        for l in lines[2:2 + len(rows)]:
+            self.assertLessEqual(len(l), 20, l)
+        self.assertEqual(shadow.report_lines([], []), [])
+        with unittest.mock.patch.object(config, "WATCHLIST_FILE", Path("/nonexistent/watchlist.json")):
+            self.assertEqual(shadow.section(None, "2026-10-27"), [])
+        src = inspect.getsource(review.run)
+        tree = ast.parse(textwrap.dedent(src))
+        self.assertTrue(any(isinstance(n, ast.Try) and "shadow.section" in ast.unparse(
+            ast.Module(body=n.body, type_ignores=[])) for n in ast.walk(tree)), "壞掉不可以讓日報產不出來")
+        self.assertIn('lines += ["", "## 影子首選（分開記錄）", ""]', src)
 
 
 class TestManualVersion(unittest.TestCase):
@@ -10025,7 +10106,7 @@ class TestPremarketPick(unittest.TestCase):
     def test_review_writes_the_pick_section(self):
         src = inspect.getsource(review.run)
         self.assertIn("pick_section(broker, state)", src)
-        self.assertIn("push_summary(signals, outcomes, carried_out, pick_lines + manual_lines)", src)
+        self.assertIn("push_summary(signals, outcomes, carried_out, pick_lines + manual_lines + shadow_lines)", src)
 
     def test_picks_csv_is_not_committed(self):
         self.assertIn("picks.csv", (Path(__file__).parent / ".gitignore").read_text(encoding="utf-8"))

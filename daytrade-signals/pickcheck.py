@@ -221,12 +221,7 @@ def _gap(g) -> str:
 # 10-23 使用者：「要，做比較表」。29 天裡最穩定的是「昨收位置」方向反了（收在低點附近的隔天比較好，
 # −0.28R，兩半一致）。先看「如果過去用別的公式選首選」會怎樣，再決定要不要改。只比事先定好的三種，
 # 免得一次比很多種、挑到剛好好看的那一種。(欄位, 越大越好?)
-FORMULAS = (
-    ("A. 現在的公式", (("volume_ratio", True), ("amplitude", True), ("rsi_gap", False), ("close_pos", True))),
-    ("B. 昨收位置反過來", (("volume_ratio", True), ("amplitude", True), ("rsi_gap", False),
-                       ("close_pos", False))),
-    ("C. 只留昨收位置（收低）＋RSI", (("rsi_gap", False), ("close_pos", False))),
-)
+FORMULAS = tuple((f"{code}. {name}", factors) for code, name, factors in premarket.FORMULAS)
 
 
 def pick_by(day_rows_: list[dict], factors) -> dict | None:

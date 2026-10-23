@@ -655,6 +655,13 @@ def run(args) -> None:
             log.warning("候選回推失敗（不影響日報）：%s", e)
     pick_lines = pick_section(broker, state)
     manual_lines = manual_section(broker, state)
+    # 10-23 影子首選（B、C 公式）：跟正式首選用同一個算法比，不推播個別訊號，只進日報。
+    try:
+        import shadow
+        shadow_lines = shadow.section(broker, datetime.now().strftime("%Y-%m-%d"))
+    except Exception as e:
+        log.warning("影子首選回推失敗（不影響日報）：%s", e)
+        shadow_lines = []
     if broker is not None:
         # 首選之後 5 天怎麼走（只記錄，不進日報）。壞掉不可以讓日報產不出來。
         try:
@@ -675,11 +682,14 @@ def run(args) -> None:
     if manual_lines:
         lines += ["", "## 手動版（分開記錄）", ""] + [l for l in manual_lines
                                                 if not l.startswith("────")]
+    if shadow_lines:
+        lines += ["", "## 影子首選（分開記錄）", ""] + [l for l in shadow_lines
+                                                  if not l.startswith("────")]
     path = write_journal(lines)
     print("\n".join(lines))
     print(f"\n→ 已寫入 {path}")
     if not args.no_push:
-        push_summary(signals, outcomes, carried_out, pick_lines + manual_lines)
+        push_summary(signals, outcomes, carried_out, pick_lines + manual_lines + shadow_lines)
 
 
 def main(argv=None):

@@ -487,6 +487,9 @@ def run(args) -> None:
         # 跟 v10 的突破訊號分開記錄，不影響上面盯哪幾檔。
         "pick": premarket.choose(watchlist + dropped,
                                  watched=[r["code"] for r in watchlist]),
+        # 10-23 影子首選（B、C 公式）：只記錄、不推播，收盤後跟正式首選比（shadow.py）。
+        "shadow": premarket.shadow_picks(watchlist + dropped,
+                                         watched=[r["code"] for r in watchlist]),
     }
     config.WATCHLIST_FILE.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"

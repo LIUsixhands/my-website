@@ -57,6 +57,18 @@ FACTORS = (
 _HIGHER_BETTER = {"volume_ratio": True, "amplitude": True,
                   "rsi_gap": False, "close_pos": True}
 
+# 10-23 影子首選：pickcheck.py 29 天（存檔 9 + 重建 20）裡最穩定的是「昨收位置」方向反了
+# （收在低點附近的，隔天開盤買比較好，−0.28R，兩半一致）。使用者：「好，加影子首選」——
+# 正式首選照舊用 A；B、C 每天背後也選一檔、同一套規則記成績、不推播，11-09 再比。
+# (代號, 名稱, ((欄位, 越大越好?), ...))
+FORMULAS = (
+    ("A", "現在的公式", tuple((key, _HIGHER_BETTER[key]) for _n, key in FACTORS)),
+    ("B", "昨收位置反過來", (("volume_ratio", True), ("amplitude", True), ("rsi_gap", False),
+                       ("close_pos", False))),
+    ("C", "只留昨收位置（收低）＋RSI", (("rsi_gap", False), ("close_pos", False))),
+)
+SHADOWS = ("B", "C")
+
 
 def _num(v):
     try:
@@ -95,14 +107,14 @@ def _ranks(values: list, higher_better: bool) -> list[int]:
     return out
 
 
-def score(pool: list[dict]) -> list[dict]:
-    """候選池每一檔的四項名次與總分，照總分排好（第一個就是首選）。"""
+def score(pool: list[dict], factors=None) -> list[dict]:
+    """候選池每一檔的名次與總分，照總分排好（第一個就是首選）。factors 預設＝現在的公式（A）。"""
+    factors = factors or FORMULAS[0][2]
     feats = [features(r) for r in pool]
-    ranks = {key: _ranks([f[key] for f in feats], _HIGHER_BETTER[key])
-             for _, key in FACTORS}
+    ranks = {key: _ranks([f[key] for f in feats], higher) for key, higher in factors}
     scored = []
     for i, (row, f) in enumerate(zip(pool, feats)):
-        r = {key: ranks[key][i] for _, key in FACTORS}
+        r = {key: ranks[key][i] for key, _h in factors}
         scored.append({"code": str(row["code"]), "name": row.get("name", ""),
                        "pool_rank": i + 1, "row": row, "features": f, "ranks": r,
                        "total": sum(r.values())})
@@ -111,12 +123,12 @@ def score(pool: list[dict]) -> list[dict]:
     return scored
 
 
-def choose(pool: list[dict], watched=()) -> dict | None:
+def choose(pool: list[dict], watched=(), factors=None) -> dict | None:
     """寫進 watchlist.json 的 pick 欄位。候選池是空的就沒有首選。
-    watched = 盤中 v10 也在盯的那幾檔代號（只是記下來，不影響選誰）。"""
+    watched = 盤中 v10 也在盯的那幾檔代號（只是記下來，不影響選誰）。factors 預設＝A。"""
     if not pool:
         return None
-    ranked = score(pool)
+    ranked = score(pool, factors)
     top = ranked[0]
     row = top["row"]
     return {
@@ -134,6 +146,12 @@ def choose(pool: list[dict], watched=()) -> dict | None:
         "runners_up": [{"code": s["code"], "name": s["name"], "total": s["total"]}
                        for s in ranked[1:3]],
     }
+
+
+def shadow_picks(pool: list[dict], watched=()) -> dict:
+    """{"B": 首選, "C": 首選}：影子首選，只記錄、不推播。"""
+    formulas = {code: factors for code, _name, factors in FORMULAS}
+    return {code: choose(pool, watched, formulas[code]) for code in SHADOWS}
 
 
 def _f(v, fmt):
