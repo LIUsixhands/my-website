@@ -90,6 +90,8 @@ def score_items(price, vwap, ma5, ma20, vol_ratio, direction, buy_pct, market_pc
 
 
 UP_WORD, DOWN_WORD, FLAT_WORD = "偏漲", "偏跌", "中性"
+# 10-24 使用者：「🔮 之後 30 分鐘：偏跌 —— 後面加往下箭頭」。中性不加。
+ARROW = {UP_WORD: " ↑", DOWN_WORD: " ↓", FLAT_WORD: ""}
 
 
 def forecast(stats: dict | None, vol_score, score=None) -> tuple[str, dict] | None:
@@ -218,8 +220,8 @@ class Pulse:
         if fc:
             word, g = fc
             horizon = self.stats["horizon"]
-            lines.append(f"🔮 之後 {horizon} 分鐘：{before['verdict']} → {word}" if kind == "forecast"
-                         else f"🔮 之後 {horizon} 分鐘：{word}")
+            lines.append(f"🔮 之後 {horizon} 分鐘：{before['verdict']} → {word}{ARROW[word]}"
+                         if kind == "forecast" else f"🔮 之後 {horizon} 分鐘：{word}{ARROW[word]}")
             lines.append(f"　過去類似 {g['n']} 次：平均 {g['avg']:+.2f}%、{g['up']}% 漲" + g.get("note", ""))
             vol = items["volume"][1]
             if word == DOWN_WORD and vol is not None and vol >= self.stats["high"]:
