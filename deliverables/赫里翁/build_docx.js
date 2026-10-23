@@ -76,7 +76,7 @@ function kpiTable(items) {
     W.push(w);
   });
   W[W.length - 1] += CW - W.reduce((a, c) => a + c, 0);
-  return new Table({ width: { size: CW, type: WidthType.DXA }, columnWidths: W, rows: [new TableRow({ children: cells })], borders: NOBORDER });
+  return new Table({ width: { size: CW, type: WidthType.DXA }, columnWidths: W, rows: [new TableRow({ cantSplit: true, children: cells })], borders: NOBORDER });
 }
 
 function specTable(rows) {
@@ -88,11 +88,12 @@ function specTable(rows) {
       cell([new Paragraph({ children: [run(v, { size: 18 })] })], W[1], { borders: b })] })) });
 }
 
-function images2(b) {
-  const half = Math.floor(CW / 2);
-  return new Table({ width: { size: CW, type: WidthType.DXA }, columnWidths: [half, CW - half], borders: NOBORDER,
+function images2(b) {   // 一列 n 張（2 或 3），欄寬均分
+  const n = b.items.length, cw = Math.floor(CW / n);
+  const W = b.items.map((_, i) => (i === n - 1 ? CW - cw * (n - 1) : cw));
+  return new Table({ width: { size: CW, type: WidthType.DXA }, columnWidths: W, borders: NOBORDER,
     rows: [new TableRow({ cantSplit: true, children: b.items.map(([p, cap], i) => cell([
-      new Paragraph({ alignment: AlignmentType.CENTER, children: [imgRun(p, b.w || 8.6, b.px[i])] }), caption(cap)], i ? CW - half : half, { borders: NOBORDER, vAlign: VerticalAlign.TOP })) })] });
+      new Paragraph({ alignment: AlignmentType.CENTER, children: [imgRun(p, b.w || 8.6, b.px[i])] }), caption(cap)], W[i], { borders: NOBORDER, vAlign: VerticalAlign.TOP })) })] });
 }
 
 function contact(b) {
@@ -114,8 +115,9 @@ let first = true;
 for (const b of M.blocks) {
   switch (b.type) {
     case 'pagebreak': out.push(new Paragraph({ children: [new PageBreak()] })); break;
-    case 'eyebrow': out.push(new Paragraph({ spacing: { before: first ? 200 : 0, after: 60 }, children: [run(b.text, { size: 15, color: C.gold, spacing: 60 })] })); break;
-    case 'h1': out.push(new Paragraph({ spacing: { after: 160 }, border: { left: { style: BorderStyle.SINGLE, size: 36, color: C.gold, space: 8 } },
+    case 'spacer': out.push(new Paragraph({ spacing: { before: 240 }, keepNext: true, children: [] })); break;
+    case 'eyebrow': out.push(new Paragraph({ spacing: { before: first ? 200 : 0, after: 60 }, keepNext: true, children: [run(b.text, { size: 15, color: C.gold, spacing: 60 })] })); break;
+    case 'h1': out.push(new Paragraph({ spacing: { after: 160 }, keepNext: true, border: { left: { style: BorderStyle.SINGLE, size: 36, color: C.gold, space: 8 } },
       children: [run(b.text, { size: 36, bold: true, color: C.navy })] })); break;
     case 'h2': out.push(new Paragraph({ spacing: { before: 200, after: 80 }, keepNext: true, children: [run(b.text, { size: 22, bold: true, color: C.navy })] })); break;
     case 'title': out.push(new Paragraph({ spacing: { before: 60 }, children: [run(b.text, { size: 72, bold: true, color: C.navy })] })); break;
@@ -132,9 +134,16 @@ for (const b of M.blocks) {
     case 'kpi': out.push(kpiTable(b.items), new Paragraph({ spacing: { after: 80 }, children: [] })); break;
     case 'spec': out.push(specTable(b.rows)); break;
     case 'table': out.push(dataTable(b)); break;
-    case 'image': out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 80 }, children: [imgRun(b.path, b.width, b.px)] }));
+    case 'image': out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 80 }, keepNext: !!b.caption, children: [imgRun(b.path, b.width, b.px)] }));
       if (b.caption) out.push(caption(b.caption)); break;
-    case 'images2': out.push(images2(b)); break;
+    case 'images2': {
+      // b.lead＝前面幾個段落（章名、說明）要跟第一列照片綁在同一頁：包進外框表格的同一列，避免標題孤懸在頁尾
+      if (!b.lead) { out.push(images2(b)); break; }
+      const head = out.splice(out.length - b.lead, b.lead);
+      out.push(new Table({ width: { size: CW, type: WidthType.DXA }, columnWidths: [CW], borders: NOBORDER,
+        rows: [new TableRow({ cantSplit: true, children: [cell([...head, images2(b), new Paragraph({ children: [] })], CW, { borders: NOBORDER, pad: 0 })] })] }));
+      break;
+    }
     case 'feats': b.items.forEach(([t, d], i) => {
       out.push(new Paragraph({ spacing: { before: 120 }, keepNext: true, children: [run(String(i + 1).padStart(2, '0') + '　', { size: 28, bold: true, color: C.gold }), run(t, { size: 22, bold: true, color: C.navy })] }));
       out.push(new Paragraph({ spacing: { after: 60, line: 300 }, indent: { left: 640 }, children: [run(d, { size: 19 })] }));
@@ -158,7 +167,7 @@ const doc = new Document({
   styles: { default: { document: { run: { font: FONT, size: 19 } } } },
   numbering: { config: [{ reference: 'bul', levels: [{ level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT,
     style: { paragraph: { indent: { left: 360, hanging: 260 } } } }] }] },
-  sections: [{ properties: { page: { size: { width: PAGE_W, height: 16838 }, margin: { top: 850, bottom: 1000, left: MARGIN, right: MARGIN, footer: 400 } } },
+  sections: [{ properties: { page: { size: { width: PAGE_W, height: 16838 }, margin: { top: 620, bottom: 900, left: MARGIN, right: MARGIN, footer: 300 } } },
     footers: { default: footer }, children: out }],
 });
 Packer.toBuffer(doc).then((buf) => { fs.writeFileSync(OUT, buf); console.log('DOCX →', OUT); });

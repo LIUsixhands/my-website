@@ -3,7 +3,7 @@
   {
    "type": "image",
    "path": "/home/user/my-website/deliverables/赫里翁/外觀_雙塔.jpg",
-   "width": 13.5,
+   "width": 11.0,
    "px": [
     1042,
     677
@@ -58,7 +58,7 @@
    "small": true
   },
   {
-   "type": "pagebreak"
+   "type": "spacer"
   },
   {
    "type": "eyebrow",
@@ -197,6 +197,98 @@
    ]
   },
   {
+   "type": "spacer"
+  },
+  {
+   "type": "eyebrow",
+   "text": "02 · INTERIOR"
+  },
+  {
+   "type": "h1",
+   "text": "實景照片"
+  },
+  {
+   "type": "p",
+   "text": "本戶現況照片，裝潢、家具與家電依實際點交為準。",
+   "muted": true
+  },
+  {
+   "type": "images2",
+   "items": [
+    [
+     "/home/user/my-website/deliverables/赫里翁/室內_客廳.jpg",
+     "客廳：水晶燈、線板天花與間接照明，整面書櫃與展示櫃。"
+    ],
+    [
+     "/home/user/my-website/deliverables/赫里翁/室內_餐廳.jpg",
+     "餐廳：圓桌區連開放式廚房中島，牆面整排收納櫃。"
+    ],
+    [
+     "/home/user/my-website/deliverables/赫里翁/室內_廚房.jpg",
+     "廚房：一字型廚具、洗碗機與電器櫃，門外為工作陽台。"
+    ]
+   ],
+   "w": 5.6,
+   "lead": 4,
+   "px": [
+    [
+     787,
+     595
+    ],
+    [
+     782,
+     595
+    ],
+    [
+     797,
+     595
+    ]
+   ]
+  },
+  {
+   "type": "images2",
+   "items": [
+    [
+     "/home/user/my-website/deliverables/赫里翁/室內_主臥.jpg",
+     "主臥：繃布床頭牆、窗邊臥榻收納，木地板。"
+    ],
+    [
+     "/home/user/my-website/deliverables/赫里翁/室內_主衛浴.jpg",
+     "主衛浴：乾濕分離、淋浴間加浴缸，浴缸旁開窗、暖風機。"
+    ],
+    [
+     "/home/user/my-website/deliverables/赫里翁/外觀_雙塔.jpg",
+     "社區外觀：雙塔新古典石材立面，拱門門廳。"
+    ]
+   ],
+   "w": 5.6,
+   "px": [
+    [
+     792,
+     592
+    ],
+    [
+     787,
+     512
+    ],
+    [
+     1042,
+     677
+    ]
+   ]
+  },
+  {
+   "type": "spacer"
+  },
+  {
+   "type": "eyebrow",
+   "text": "03 · FLOOR PLAN"
+  },
+  {
+   "type": "h1",
+   "text": "格局與六大賣點"
+  },
+  {
    "type": "h2",
    "text": "棟別配置"
   },
@@ -215,20 +307,9 @@
    "text": "基地臨青海路二段、弘孝路與西屯路二段 249-9 巷，分 A、B 兩棟，每棟一層 3 戶、2 部電梯。本戶為 B2（188號之6），位在 B 棟角落的端戶，兩面採光；主臥外有八角窗陽台。"
   },
   {
-   "type": "pagebreak"
-  },
-  {
-   "type": "eyebrow",
-   "text": "02 · FLOOR PLAN"
-  },
-  {
-   "type": "h1",
-   "text": "格局與六大賣點"
-  },
-  {
    "type": "image",
    "path": "/home/user/my-website/deliverables/赫里翁/格局圖.png",
-   "width": 15.0,
+   "width": 10.5,
    "caption": "※ 室內裝修平面配置圖（設計參考用），實際格局與尺寸以現場丈量及合約圖說為準。",
    "px": [
     716,
@@ -269,95 +350,7 @@
    "text": "室內可用 56.63 坪。主建物 49.362 坪＋陽台 5.227＋雨遮 2.042 坪；權狀 89.46 坪中車位佔 6.055 坪，扣掉車位後的公設約 26.8 坪。"
   },
   {
-   "type": "pagebreak"
-  },
-  {
-   "type": "eyebrow",
-   "text": "03 · INTERIOR"
-  },
-  {
-   "type": "h1",
-   "text": "實景照片"
-  },
-  {
-   "type": "p",
-   "text": "本戶現況照片，裝潢、家具與家電依實際點交為準。",
-   "muted": true
-  },
-  {
-   "type": "images2",
-   "items": [
-    [
-     "/home/user/my-website/deliverables/赫里翁/室內_客廳.jpg",
-     "客廳：水晶燈、線板天花與間接照明，整面書櫃與展示櫃。"
-    ],
-    [
-     "/home/user/my-website/deliverables/赫里翁/室內_餐廳.jpg",
-     "餐廳：圓桌區連開放式廚房中島，牆面整排收納櫃。"
-    ]
-   ],
-   "w": 8.3,
-   "px": [
-    [
-     787,
-     595
-    ],
-    [
-     782,
-     595
-    ]
-   ]
-  },
-  {
-   "type": "images2",
-   "items": [
-    [
-     "/home/user/my-website/deliverables/赫里翁/室內_廚房.jpg",
-     "廚房：一字型廚具、洗碗機與電器櫃，門外為工作陽台。"
-    ],
-    [
-     "/home/user/my-website/deliverables/赫里翁/室內_主臥.jpg",
-     "主臥：繃布床頭牆、窗邊臥榻收納，木地板。"
-    ]
-   ],
-   "w": 8.3,
-   "px": [
-    [
-     797,
-     595
-    ],
-    [
-     792,
-     592
-    ]
-   ]
-  },
-  {
-   "type": "images2",
-   "items": [
-    [
-     "/home/user/my-website/deliverables/赫里翁/室內_主衛浴.jpg",
-     "主衛浴：乾濕分離、淋浴間加浴缸，浴缸旁開窗、暖風機。"
-    ],
-    [
-     "/home/user/my-website/deliverables/赫里翁/外觀_雙塔.jpg",
-     "社區外觀：雙塔新古典石材立面，拱門門廳。"
-    ]
-   ],
-   "w": 8.3,
-   "px": [
-    [
-     787,
-     512
-    ],
-    [
-     1042,
-     677
-    ]
-   ]
-  },
-  {
-   "type": "pagebreak"
+   "type": "spacer"
   },
   {
    "type": "eyebrow",
@@ -530,7 +523,7 @@
    "text": "25 層的社區，110 年後 18–25 樓成交中位 34.3，比 2–17 樓高約 11%。本戶 20 樓，屬高樓層帶（不分戶型；高樓層樣本 6 筆）。"
   },
   {
-   "type": "pagebreak"
+   "type": "spacer"
   },
   {
    "type": "eyebrow",
@@ -923,7 +916,7 @@
    "small": true
   },
   {
-   "type": "pagebreak"
+   "type": "spacer"
   },
   {
    "type": "eyebrow",
@@ -1141,7 +1134,7 @@
    ]
   },
   {
-   "type": "pagebreak"
+   "type": "spacer"
   },
   {
    "type": "eyebrow",
@@ -1283,7 +1276,7 @@
    "text": "社區近三年僅 8 筆成交、同型近三年 4 筆，行情帶寬較寬。以上換算依實登推估，不是估價師的估價，實際成交以雙方議價為準。"
   },
   {
-   "type": "pagebreak"
+   "type": "spacer"
   },
   {
    "type": "eyebrow",
