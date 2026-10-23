@@ -336,6 +336,8 @@ def combo_lines(samples, first: set, second: set) -> list[str]:
 
 def lines(result: dict) -> list[str]:
     samples, days = result.get("samples") or [], result.get("days") or []
+    # 沒有之後 30 分鐘結果的不算（累積檔讀回來可能有空格）。
+    samples = [r for r in samples if r.get("fwd") is not None]
     out = [f"## 強弱分數能不能預測（候選池每一檔、每根 5 分 K 重算，看之後 {HORIZON_MIN} 分鐘）", ""]
     if not samples:
         return out + ["沒有資料（候選池沒有分鐘 K）。", ""]
