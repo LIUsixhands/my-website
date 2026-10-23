@@ -209,39 +209,30 @@ class Pulse:
         return [self._message(kind, st, items, score, name, before, end, status, fc)]
 
     def _message(self, kind, st, items, score, name, before, at, status, fc=None) -> str:
+        """10-24 使用者：「推播訊息可以簡單一點嗎？『偏強 → 強勢 ↑』『🔮 偏跌』看到會以為轉強」→
+        預測放第一行；目前狀態放下面、不用箭頭；六項分數不推（每一次打分照樣存在 pulse-*.json）。"""
         sig = self.sig
         label = f"{sig['code']} {sig.get('name', '')}".split("・")[0].strip()
         price, entry, stop = float(st.last_price), float(sig["entry"]), float(sig["stop"])
-        if kind == "start":
-            head = [f"🌅 {label}・首選強弱｜{at:%H:%M}", f"開始：{name}（{score:.1f} 分）"]
-        elif kind == "change":
-            arrow = "↑" if score > before["score"] else "↓"
-            head = [f"🌅 {label}・首選強弱變化｜{at:%H:%M}",
-                    f"{before['label']} → {name} {arrow}（{before['score']:.1f} → {score:.1f} 分）"]
-        elif kind == "forecast":
-            head = [f"🌅 {label}・首選預測變化｜{at:%H:%M}",
-                    f"之後 {self.stats['horizon']} 分鐘：{before['verdict']} → {fc[0]}",
-                    f"強弱：{name}（{score:.1f} 分）"]
-        else:
-            head = [f"🌅 {label}・首選強弱｜{at:%H:%M}",
-                    f"目前：{name}（{score:.1f} 分），{HEARTBEAT_MIN} 分鐘沒有明顯變化"]
+        lines = [f"🌅 {label}・首選｜{at:%H:%M}"]
         if fc:
-            s, (word, g) = self.stats, fc
-            if kind != "forecast":
-                head.append(f"🔮 之後 {s['horizon']} 分鐘：{word}")
-            head.append(f"　過去 {s['days']} 天 {g['desc']}{g['n']} 次：平均 {g['avg']:+.2f}%、{g['up']}% 漲"
-                        + g.get("note", ""))
-        lines = head + ["────────────────",
-                        f"現價 {price:.2f}｜進場 {entry:.2f}（{(price - entry) / entry * 100:+.2f}%）"]
-        if st.day_high and price >= st.day_high:
-            lines.append(f"現價就是今天最高（{st.day_high:.2f}）")
-        elif st.day_high:
-            lines.append(f"今天最高 {st.day_high:.2f}，已回落 {(price - st.day_high) / st.day_high * 100:+.1f}%")
-        lines.append("────────────────")
-        for n, k in enumerate(ITEMS):
-            text, s = items[k]
-            lines.append(f"{'①②③④⑤⑥'[n]} {text}" + (f"　{round(s)} 分" if s is not None else ""))
-        lines += ["────────────────", f"平均 {score:.1f} 分：{name}（六項一樣重，未驗證）"]
+            word, g = fc
+            horizon = self.stats["horizon"]
+            lines.append(f"🔮 之後 {horizon} 分鐘：{before['verdict']} → {word}" if kind == "forecast"
+                         else f"🔮 之後 {horizon} 分鐘：{word}")
+            lines.append(f"　過去類似 {g['n']} 次：平均 {g['avg']:+.2f}%、{g['up']}% 漲" + g.get("note", ""))
+            vol = items["volume"][1]
+            if word == DOWN_WORD and vol is not None and vol >= self.stats["high"]:
+                lines.append("　剛漲一段又有量，過去之後常回落")
+        if kind == "change":
+            lines.append(f"目前：{name}（{score:.1f} 分，原本{before['label']}）")
+        elif kind == "quiet":
+            lines.append(f"目前：{name}（{score:.1f} 分），{HEARTBEAT_MIN} 分鐘沒有明顯變化")
+        else:
+            lines.append(f"目前：{name}（{score:.1f} 分）")
+        high = st.day_high or price
+        lines.append(f"現價 {price:.2f}（{(price - entry) / entry * 100:+.2f}%）"
+                     + ("｜今天最高" if price >= high else f"｜最高 {high:.2f}"))
         lines.append(f"停損 {stop:.2f}（還差 {(stop - price) / price * 100:+.1f}%）" if price > stop
                      else f"停損 {stop:.2f}（已經跌破）")
         if status:

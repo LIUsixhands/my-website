@@ -6406,13 +6406,10 @@ class TestPickStrengthPulse(unittest.TestCase):
         p = self._pulse(store=lambda d, c, h: saved.append((d, c, len(h))))
         status = "首選本身：持有中｜均線版：持有中"
         (m,) = p.on_bar(self._st(), (self.at(9, 5), 100.5, 100.2, 100.0, False), self.at(9, 5, 3), status)
-        self.assertIn("🌅 1111 測試・首選強弱｜09:05", m)
-        self.assertIn("開始：稍強（7.0 分）", m)
-        self.assertIn("現價 100.50｜進場 100.00（+0.50%）", m)
-        self.assertIn("今天最高 101.00，已回落 -0.5%", m)
-        self.assertIn("① 均價線 100.00：高 0.5%　8 分", m)
-        self.assertIn("平均 7.0 分：稍強（六項一樣重，未驗證）", m)
-        self.assertIn("停損 97.00（還差 -3.5%）", m)
+        self.assertEqual(m, "🌅 1111 測試・首選｜09:05\n目前：稍強（7.0 分）\n現價 100.50（+0.50%）｜最高 101.00\n"
+                            "停損 97.00（還差 -3.5%）\n" + status,
+                         "10-24 使用者：「推播訊息可以簡單一點嗎」—— 六項分數不推")
+        self.assertNotIn("↑", m)
         self.assertTrue(m.endswith(status))
         self.assertNotIn("**", m)
         self.assertEqual(saved, [("2026-10-21", "1111", 1)])
@@ -6425,20 +6422,20 @@ class TestPickStrengthPulse(unittest.TestCase):
                          self.at(9, 20, 3))
         self.assertEqual(abs(pickpulse.level(one.history[-1]["score"])[0] - lv0), 1)
         self.assertEqual(len(got), 1, "10-22 使用者：一級報一次 —— 過了 10 分鐘、差一級就推")
-        self.assertIn("稍強 → 中性偏強 ↓", got[0])
+        self.assertIn("目前：中性偏強（6.3 分，原本稍強）", got[0])
         self.assertEqual(one.on_bar(self._st(price=100.1), (self.at(9, 35), 100.1, 100.2, 100.0, False),
                                     self.at(9, 35, 3)), [], "同一級 → 不推")
         weak = self._st(price=99.8, buy=400, sell=600)
         p.market = lambda: -0.2
         (c,) = p.on_bar(weak, (self.at(9, 15), 99.8, 99.9, 100.0, False), self.at(9, 15, 3))
-        self.assertIn("🌅 1111 測試・首選強弱變化｜09:15", c)
-        self.assertIn("稍強 → 中性偏弱 ↓（7.0 → 3.6 分）", c)
+        self.assertIn("🌅 1111 測試・首選｜09:15", c)
+        self.assertIn("目前：中性偏弱（3.6 分，原本稍強）", c)
         back = self._st(price=100.6)
         p.market = lambda: 0.0
         self.assertEqual(p.on_bar(back, (self.at(9, 20), 100.6, 100.2, 100.0, False), self.at(9, 20, 3)), [],
                          "變了，但離上一則不到 10 分鐘 → 先不推")
         (u,) = p.on_bar(back, (self.at(9, 25), 100.6, 100.2, 100.0, False), self.at(9, 25, 3))
-        self.assertIn("中性偏弱 → 稍強 ↑", u, "跟上一則推的比，不是跟上一根比")
+        self.assertIn("原本中性偏弱", u, "跟上一則推的比，不是跟上一根比")
         quiet = None
         for k in range(1, 13):
             t = self.at(9, 25, 3) + timedelta(minutes=5 * k)
@@ -6476,7 +6473,8 @@ class TestPickStrengthPulse(unittest.TestCase):
         bad.market = lambda: (_ for _ in ()).throw(RuntimeError("kbars"))
         with self.assertLogs("pickpulse", level="WARNING"):
             (m,) = bad.on_bar(self._st(), (self.at(9, 5), 100.5, 100.2, 100.0, False), self.at(9, 5, 3))
-        self.assertIn("⑥ 大盤：資料抓不到", m)
+        self.assertIsNone(bad.history[-1]["market"], "大盤抓不到 → 那一項不算")
+        self.assertIn("目前：", m)
         broken = self._pulse(store=lambda *a: (_ for _ in ()).throw(OSError("disk")))
         with self.assertLogs("pickpulse", level="WARNING"):
             self.assertEqual(len(broken.on_bar(self._st(), (self.at(9, 5), 100.5, 100.2, 100.0, False),
@@ -6490,7 +6488,7 @@ class TestPickStrengthPulse(unittest.TestCase):
         self.assertIn("停損 97.00（已經跌破）", m)
         top = self._pulse()
         (m,) = top.on_bar(self._st(price=101.0), (self.at(9, 5), 101.0, 100.2, 100.0, False), self.at(9, 5, 3))
-        self.assertIn("現價就是今天最高（101.00）", m)
+        self.assertIn("現價 101.00（+1.00%）｜今天最高", m)
         self.assertNotIn("已回落", m)
 
     def test_the_1310_summary(self):
@@ -6559,7 +6557,7 @@ class TestPickStrengthPulse(unittest.TestCase):
                                 pulse_store=lambda d, c, h: saved.append(len(h)))
         w.on_tick(self._st(100.0), now=self.at(9, 0, 2))
         msgs = w.on_tick(self._st(100.5), now=self.at(9, 5, 3))
-        pulse = [m for m in msgs if "首選強弱" in m]
+        pulse = [m for m in msgs if "・首選｜" in m]
         self.assertEqual(len(pulse), 1)
         self.assertTrue(pulse[0].endswith("首選本身：持有中｜均線版：持有中"))
         self.assertEqual(saved, [1])
@@ -6791,10 +6789,14 @@ class TestPulseScoreCheck(unittest.TestCase):
         self.assertGreaterEqual(hot["volume"][1], 6.5)
         msg = p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), "",
                          pickpulse.forecast(st, hot["volume"][1]))
-        self.assertIn("開始：稍強（7.0 分）\n🔮 之後 30 分鐘：偏跌\n"
-                      "　過去 9 天 ④ 高（≥6.5）1387 次：平均 -0.36%、30% 漲\n────", msg,
-                      "預測放在最上面，強弱名稱下一行")
-        self.assertIn("平均 7.0 分：稍強", msg, "原本的強弱訊息保留")
+        self.assertEqual(msg.splitlines()[:5], [
+            "🌅 1111 測試・首選｜09:30", "🔮 之後 30 分鐘：偏跌", "　過去類似 1387 次：平均 -0.36%、30% 漲",
+            "　剛漲一段又有量，過去之後常回落", "目前：稍強（7.0 分）"],
+            "10-24 使用者：「看到『偏強 → 強勢 ↑』會以為轉強」→ 預測放第一行，目前狀態放下面、不用箭頭")
+        cold = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, 0, None, 0.0)
+        quiet_msg = p._message("start", state, cold, 5.0, "中性", None, self.at(9, 30), "",
+                               ("中性", {"n": 9, "avg": -0.1, "up": 30}))
+        self.assertNotIn("剛漲一段", quiet_msg, "只有 ④ 高、偏跌才加那一句")
         self.assertNotIn("🔮", p._message("start", state, hot, 7.0, "稍強", None, self.at(9, 30), ""),
                          "沒有預測 → 不顯示")
 
@@ -6824,7 +6826,7 @@ class TestPulseScoreCheck(unittest.TestCase):
         hot = pickpulse.score_items(100.5, 100.0, 100.2, 100.0, 1.0, 1, None, 0.0)
         msg = p._message("start", state, hot, 3.0, "稍弱", None, self.at(9, 30), "",
                          pickpulse.forecast(st, hot["volume"][1], 3.0))
-        self.assertIn("　過去 2 天 ④ 高（≥6.5）280 次：平均 -0.40%、0% 漲（組合樣本不足，只看 ④）", msg)
+        self.assertIn("　過去類似 280 次：平均 -0.40%、0% 漲（組合樣本不足，只看 ④）", msg)
         src = inspect.getsource(pickpulse.Pulse.on_bar)
         self.assertIn('fc = forecast(self.stats, items["volume"][1], score)', src, "盤中用組合")
         text = "\n".join(pulsecheck.combo_lines(rows, {"2026-10-20"}, {"2026-10-21"}))
@@ -6850,11 +6852,11 @@ class TestPulseScoreCheck(unittest.TestCase):
         self.assertIn("🔮 之後 30 分鐘：中性", first)
         self.assertEqual(bar(9, 10, 5.4), [], "強弱、預測都沒變 → 不推")
         (chg,) = bar(9, 10, 7.0)
-        self.assertIn("🌅 1111 測試・首選預測變化｜09:10", chg, "10-22 使用者：「預測改成 5 分鐘」→ 隔一根就推")
-        self.assertIn("之後 30 分鐘：中性 → 偏跌", chg)
-        self.assertNotIn("🔮", chg, "標題已經講了預測，不重複")
-        self.assertIn("強弱：中性（5.4 分）", chg)
-        self.assertIn("過去 9 天 ④ 高（≥6.5）1387 次", chg)
+        self.assertIn("🌅 1111 測試・首選｜09:10", chg, "10-22 使用者：「預測改成 5 分鐘」→ 隔一根就推")
+        self.assertIn("🔮 之後 30 分鐘：中性 → 偏跌", chg)
+        self.assertEqual(chg.count("🔮"), 1, "預測只講一次")
+        self.assertIn("目前：中性（5.4 分）", chg)
+        self.assertIn("過去類似 1387 次", chg)
         self.assertEqual(p.history[-1]["forecast"], "偏跌", "每一次打分都存預測，之後拿來對答案")
         self.assertEqual(bar(9, 30, 7.0), [], "預測沒變 → 不推")
         self.assertEqual(bar(9, 40, 6.6), [], "④ 6.6 還是高那一組、強弱名稱也沒變 → 不推")
