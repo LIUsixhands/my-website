@@ -91,6 +91,32 @@ for y, d in CY.items():
     pos_rows += (f'<tr><td>七期同齡透天 {y if y < 115 else "115*"} 年中位（{d["n"]} 筆）</td><td class="num">{d["建坪單價中位"]:.1f}</td><td class="num">{d["土地單價中位"]:.1f}</td>'
                  f'<td>本戶相差 建坪 {pct(L["總價除總坪"], d["建坪單價中位"]):+.0f}%／土地 {pct(L["土地單價"], d["土地單價中位"]):+.0f}%</td></tr>')
 
+# ---------- 合理價位區間圖 ----------
+EST, RG = S['估值'], S['合理區間']
+W3, H3, L3, R3, T3 = 560, 34 + 26 * len(EST), 210, 24, 26
+VMIN, VMAX = 3000, 4300
+def X3(v): return L3 + (v - VMIN) * (W3 - L3 - R3) / (VMAX - VMIN)
+s3 = svg_open(W3, H3 + 22)
+s3.append(f'<rect x="{X3(RG["下緣"]):.1f}" y="{T3-8}" width="{X3(RG["上緣"])-X3(RG["下緣"]):.1f}" height="{H3-T3+4}" fill="#C8963E" fill-opacity=".16"/>'
+          f'<text x="{(X3(RG["下緣"])+X3(RG["上緣"]))/2:.1f}" y="{T3-12}" text-anchor="middle" fill="#8a6a2c" font-size="9" font-weight="700">合理區間 {RG["下緣"]:,}–{RG["上緣"]:,} 萬</text>')
+for v in range(VMIN, VMAX + 1, 200):
+    s3.append(f'<line x1="{X3(v):.1f}" x2="{X3(v):.1f}" y1="{T3-8}" y2="{H3-4}" stroke="#e3e8ec"/><text x="{X3(v):.1f}" y="{H3+10}" text-anchor="middle" fill="#7b8794" font-size="8.6">{v:,}</text>')
+for i, e in enumerate(EST):
+    y = T3 + 6 + i * 26
+    lab = {'土地單價法': '土地單價', '同社區還原': '同社區還原', '近似個案': '近似個案', '建坪單價法': '建坪單價'}[e['法']]
+    sub = e['參考'].split('（')[0].replace('七期同齡透天 ', '').replace('本社區 108/11 成交 2,680 萬 × ', '')[:16]
+    s3.append(f'<text x="{L3-8}" y="{y-1}" text-anchor="end" fill="{"#1e2a33" if e["核心"] else "#9aa7b2"}" font-size="9" font-weight="700">{lab}</text>'
+              f'<text x="{L3-8}" y="{y+10}" text-anchor="end" fill="#7b8794" font-size="7.6">{sub}</text>')
+    s3.append(f'<line x1="{L3}" x2="{W3-R3}" y1="{y+3}" y2="{y+3}" stroke="#eef1f3"/>'
+              f'<circle cx="{X3(e["換算總價"]):.1f}" cy="{y+3}" r="5" fill="{"#1F4E5F" if e["核心"] else "#fff"}" stroke="{"#fff" if e["核心"] else "#9aa7b2"}" stroke-width="1.5"/>'
+              f'<text x="{X3(e["換算總價"])+9:.1f}" y="{y+6}" fill="{"#1F4E5F" if e["核心"] else "#9aa7b2"}" font-size="8.6" font-weight="700">{e["換算總價"]:,}</text>')
+s3.append(f'<line x1="{X3(ASK):.1f}" x2="{X3(ASK):.1f}" y1="{T3-8}" y2="{H3-4}" stroke="#C0392B" stroke-width="1.4" stroke-dasharray="4 3"/>'
+          f'<text x="{X3(ASK):.1f}" y="{H3+20}" text-anchor="middle" fill="#C0392B" font-size="9" font-weight="700">開價 {ASK:,}</text></svg>')
+chart_range = ''.join(s3)
+def est_basis(e):
+    return f'{e["單價"]:.1f} 萬 × {e["基數"]} {e["單位"]}' if '單價' in e else f'{e["基值"]:,} 萬 × {e["倍數"]:.3f}'
+est_rows = ''.join(f'<tr{"" if e["核心"] else " style=color:#8a96a0"}><td>{e["法"]}</td><td>{e["參考"]}</td><td class="num">{est_basis(e)}</td><td class="num b">{e["換算總價"]:,}</td><td>{"列入區間" if e["核心"] else "僅參考"}</td></tr>' for e in EST)
+
 # ---------- 房貸 ----------
 RATE, YEARS, LTV = 0.022, 30, 0.8
 loan = ASK * LTV; r_m = RATE / 12
@@ -122,6 +148,7 @@ html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
         七期重劃區內、惠文國小／惠文高中學區的社區型透天，門前綠園道，地下室有坡道平面車位。<br>
         土地 <b>{L["土地"]} 坪</b>，比七期同齡透天常見的 {min(LAND_MED):.0f}–{max(LAND_MED):.0f} 坪多出約 {LAND_GAP:.0f} 坪。<br>
         開價換算 {P_LAND} <b>{L["土地單價"]:.1f} 萬</b>，七期同齡透天 112–115 年逐年中位在 {min(d["土地單價中位"] for d in CY.values()):.0f}–{max(d["土地單價中位"] for d in CY.values()):.0f} 之間。<br>
+        依實登行情換算，合理價位區間約 <b>{S["合理區間"]["下緣"]:,}–{S["合理區間"]["上緣"]:,} 萬</b>（中間值約 {S["合理區間"]["中間"]:,} 萬）。<br>
         <span style="color:#E3B66A">開價 {wan(ASK)} 萬，{P_ALL} {L["總價除總坪"]:.1f} 萬／坪。</span>
       </div>
     </div>
@@ -253,9 +280,31 @@ html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
   <div class="cap">單位：萬元、坪、萬元／坪。資料：內政部實價登錄，查詢 2026-10-24。</div>
 </div>{foot(6)}</div>
 
-<!-- P7 價格分析＋購屋試算 -->
+<!-- P7 合理價位 -->
 <div class="page"><div class="pad">
-  <div class="eyebrow">06 · PRICE &amp; BUYER'S GUIDE</div>
+  <div class="eyebrow">06 · FAIR PRICE</div>
+  <div class="ttl">合理價位：依實登行情換算</div>
+  <div class="sub">用三種方法把實價登錄行情換算成本戶總價：土地單價法、同社區成交還原、最接近的近似個案。列入區間的五個數字取中間一半（四分位）並取整到 50 萬，作為合理價位區間。</div>
+  <div class="kpi">
+    <div><div class="v">{RG["下緣"]:,}–{RG["上緣"]:,}</div><div class="u">萬元</div><div class="l">依實登推估合理區間</div></div>
+    <div><div class="v">{RG["中間"]:,}</div><div class="u">萬元</div><div class="l">區間中間值</div></div>
+    <div><div class="v">{wan(ASK)}</div><div class="u">萬元</div><div class="l">開價（高於區間上緣 {RG["開價高於上緣"]:.1f}%）</div></div>
+  </div>
+  {chart_range}
+  <div class="cap">實心點列入區間；空心點為偏高或偏低參考，不列入。金色帶為合理區間，紅線為開價。單位：萬元。</div>
+  <table class="tight" style="margin-top:3mm"><tr><th>方法</th><th>依據</th><th>算式</th><th>換算總價（萬）</th><th>採用</th></tr>{est_rows}</table>
+  <h3 class="h">區間內往上或往下看什麼</h3>
+  <ul>
+    <li><b>往上：</b>面綠園道、邊間六房皆開窗、B1 坡道平面車位 1 席（南屯透天社區實登每席 150–200 萬）、門前可再停一部車、土地比同類多約 {LAND_GAP:.0f} 坪。</li>
+    <li><b>往下：</b>屋齡約 {L["屋齡"]:.0f} 年，屋頂防水、外牆與管線若需整修，費用應一併估算；建坪 {L["建坪"]} 坪比同類中位（約 81 坪）小。</li>
+    <li><b>為什麼不用建坪單價為主：</b>本戶建坪精簡、土地大，用建坪單價換算只有 {next(e["換算總價"] for e in EST if e["法"] == "建坪單價法"):,} 萬，會低估土地價值；透天以土地為主要比較基準。</li>
+  </ul>
+  <div class="warn" style="margin-top:3mm">本區間依內政部實價登錄公開資料推估，未實地鑑估屋況，非不動產估價師出具之估價，不構成價格保證。七期同齡透天每年成交約 13–16 筆，行情帶寬較寬；實際成交以買賣雙方議價為準。</div>
+</div>{foot(7)}</div>
+
+<!-- P8 價格分析＋購屋試算 -->
+<div class="page"><div class="pad">
+  <div class="eyebrow">07 · PRICE &amp; BUYER'S GUIDE</div>
   <div class="ttl">價格分析與購屋試算</div>
   <div class="kpi">
     <div><div class="v">{L["土地單價"]:.1f}</div><div class="u">萬／土地坪</div><div class="l">開價 {P_LAND}</div></div>
@@ -294,7 +343,7 @@ html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
     <div class="qr" style="width:22mm"><img src="{img('QR_LINE.png')}"><div>加 LINE</div></div>
     <div class="qr" style="width:22mm"><img src="{img('QR_網站.png')}"><div>看網站</div></div>
   </div>
-</div>{foot(7)}</div>
+</div>{foot(8)}</div>
 
 </body></html>'''
 
