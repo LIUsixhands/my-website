@@ -19,7 +19,7 @@ import sys
 import urllib.parse
 from datetime import date
 
-SITE = "https://sixhands-studio.netlify.app/"
+SITE = "https://sixhands.tw/"
 SITEMAP = "sitemap.xml"
 
 # 不掃描的目錄
