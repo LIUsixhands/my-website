@@ -1,0 +1,50 @@
+name: 當沖訊號系統測試
+
+# 訊號條件、風控閘門、檔位進位算錯不會讓程式崩掉 ——
+# 它會安靜地給出一個看起來很專業的錯誤決策。所以這些邏輯要有測試守著。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'daytrade-signals/**'
+      - '.github/workflows/daytrade-signals-test.yml'
+  pull_request:
+    paths:
+      - 'daytrade-signals/**'
+      - '.github/workflows/daytrade-signals-test.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 測試與 dry run 都只用標準庫，不裝 shioaji：
+      # 它是專有套件，而且 CI 沒有金鑰也連不上。
+      # runner 是 UTC，但使用者在台灣。分鐘 K 的時間戳解讀錯 8 小時這種 bug
+      # 只在非 UTC 的機器上才會發生 —— 實機抓到過一次，之後一律兩種時區都跑。
+      - name: 離線測試（UTC）
+        working-directory: daytrade-signals
+        env:
+          TZ: UTC
+        run: python3 test_daytrade.py
+
+      - name: 離線測試（Asia/Taipei — 使用者的實際時區）
+        working-directory: daytrade-signals
+        env:
+          TZ: Asia/Taipei
+        run: python3 test_daytrade.py
+
+      - name: 管線 dry run（Asia/Taipei）
+        working-directory: daytrade-signals
+        env:
+          TZ: Asia/Taipei
+        run: python3 dryrun.py

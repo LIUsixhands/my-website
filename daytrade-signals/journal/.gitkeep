@@ -1,0 +1,1 @@
+# 讓 journal/ 目錄進版控，但裡面的日誌不進（見 .gitignore）。
