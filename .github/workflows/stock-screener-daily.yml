@@ -1,0 +1,141 @@
+name: 台股短線候選每日篩選
+
+# 台股 13:30 收盤，證交所盤後資料約 14:30 更新、櫃買中心約 15:00。
+# 07:40 UTC = 15:40 台北時間，留足緩衝。
+# 注意：GitHub 排程尖峰時可能延遲數十分鐘，晚跑沒關係，早跑會抓不到資料。
+on:
+  schedule:
+    - cron: "40 7 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "資料日期 YYYY-MM-DD（留空為今天）"
+        required: false
+        type: string
+      top:
+        description: "輸出檔數"
+        required: false
+        default: "10"
+        type: string
+
+permissions:
+  contents: write
+
+# 避免手動觸發與排程同時跑造成 commit 衝突
+concurrency:
+  group: stock-screener-daily
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 快取每個交易日的行情，日常執行只需補當天一筆
+      - name: 還原行情快取
+        uses: actions/cache@v4
+        with:
+          path: stock-screener/.cache
+          key: twse-cache-${{ github.run_id }}
+          restore-keys: |
+            twse-cache-
+
+      - name: 執行離線測試
+        working-directory: stock-screener
+        run: python3 test_screener.py
+
+      - name: 執行篩選
+        id: screen
+        working-directory: stock-screener
+        env:
+          RUN_DATE: ${{ inputs.date }}
+          TOP_N: ${{ inputs.top || '10' }}
+        run: |
+          set +e
+          ARGS="--top ${TOP_N} --quiet --out latest.md --html latest.html"
+          if [ -n "${RUN_DATE}" ]; then ARGS="${ARGS} --date ${RUN_DATE}"; fi
+
+          python3 screener.py ${ARGS}
+          CODE=$?
+          echo "exit_code=${CODE}" >> "$GITHUB_OUTPUT"
+
+          case "${CODE}" in
+            0)
+              echo "has_report=true" >> "$GITHUB_OUTPUT"
+              ;;
+            1)
+              echo "::warning::未取得盤後資料，判定為國定假日休市或資料尚未更新，本次不產報表。"
+              echo "has_report=false" >> "$GITHUB_OUTPUT"
+              ;;
+            2)
+              echo "::warning::有取得資料，但在目前價格與流動性條件下沒有個股通過篩選。"
+              echo "has_report=false" >> "$GITHUB_OUTPUT"
+              ;;
+            3)
+              # 連線失敗跟假日不同，這是需要修的故障，不能靜靜地過去
+              echo "::error::無法連線交易所取得資料。若連續多日出現，很可能是交易所擋掉 GitHub runner 的 IP，請見 stock-screener/README.md 疑難排解。"
+              exit 1
+              ;;
+            *)
+              echo "::error::篩選器異常結束，exit code ${CODE}"
+              exit "${CODE}"
+              ;;
+          esac
+
+      # 報表以「資料日期」歸檔，而不是執行日期 —
+      # 太早觸發時程式會退回前一個交易日，這裡要跟著它的判斷走
+      - name: 歸檔報表
+        if: steps.screen.outputs.has_report == 'true'
+        id: archive
+        working-directory: stock-screener
+        run: |
+          set -euo pipefail
+          DATA_DATE=$(grep -m1 -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' latest.md)
+          echo "data_date=${DATA_DATE}" >> "$GITHUB_OUTPUT"
+
+          mkdir -p reports
+          cp latest.md  "reports/${DATA_DATE}.md"
+          cp latest.html "reports/${DATA_DATE}.html"
+          mv latest.md  reports/latest.md
+          mv latest.html reports/latest.html
+
+      - name: 寫入執行摘要
+        if: steps.screen.outputs.has_report == 'true'
+        run: cat stock-screener/reports/latest.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit 報表
+        if: steps.screen.outputs.has_report == 'true'
+        env:
+          DATA_DATE: ${{ steps.archive.outputs.data_date }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add stock-screener/reports
+          if git diff --cached --quiet; then
+            echo "報表內容無變化（可能是重跑同一個交易日），略過 commit"
+            exit 0
+          fi
+
+          git commit -m "chore: 台股短線候選報表 ${DATA_DATE}"
+
+          # 排程執行期間可能有人推了新 commit，先 rebase 再推
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "推送成功"
+              exit 0
+            fi
+            echo "推送失敗，第 ${attempt} 次重試前先 rebase"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            sleep $((attempt * 3))
+          done
+          echo "::error::重試 3 次後仍無法推送報表"
+          exit 1

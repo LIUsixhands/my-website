@@ -1,0 +1,7 @@
+.cache/
+__pycache__/
+*.pyc
+
+# 執行中的暫存輸出，正式報表歸檔在 reports/
+/latest.md
+/latest.html
