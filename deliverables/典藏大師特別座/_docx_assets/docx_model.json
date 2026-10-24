@@ -2,11 +2,11 @@
  "blocks": [
   {
    "type": "image",
-   "path": "/home/user/my-website/deliverables/典藏大師/位置圖.png",
+   "path": "/home/user/my-website/deliverables/典藏大師特別座/外觀.jpg",
    "width": 16.5,
    "px": [
-    750,
-    327
+    667,
+    497
    ]
   },
   {
@@ -20,7 +20,7 @@
   },
   {
    "type": "title",
-   "text": "典藏大師"
+   "text": "典藏大師特別座"
   },
   {
    "type": "subtitle",
@@ -47,8 +47,8 @@
   {
    "type": "contact",
    "qr": [
-    "/home/user/my-website/deliverables/典藏大師/QR_LINE.png",
-    "/home/user/my-website/deliverables/典藏大師/QR_網站.png"
+    "/home/user/my-website/deliverables/典藏大師特別座/QR_LINE.png",
+    "/home/user/my-website/deliverables/典藏大師特別座/QR_網站.png"
    ],
    "title": "預約帶看"
   },
@@ -156,7 +156,7 @@
    "rows": [
     [
      "社區",
-     "典藏大師（實登社區簡稱「大師特別座」），透天社區、有管理組織"
+     "典藏大師特別座（實登社區簡稱「大師特別座」），透天社區、有管理組織"
     ],
     [
      "地下室",
@@ -208,7 +208,7 @@
   },
   {
    "type": "image",
-   "path": "/home/user/my-website/deliverables/典藏大師/位置圖.png",
+   "path": "/home/user/my-website/deliverables/典藏大師特別座/位置圖.png",
    "width": 16.5,
    "caption": "房屋圖示為本戶位置（大通街與綠園道轉角）。地圖取自刊登資訊，北方朝上。",
    "px": [
@@ -247,7 +247,7 @@
   },
   {
    "type": "note",
-   "text": "社區型透天：典藏大師為有管理組織的透天社區，共用地下室停車；管理費月繳 4,066 元，可向管委會索取收支與地下室維護紀錄。"
+   "text": "社區型透天：典藏大師特別座為有管理組織的透天社區，共用地下室停車；管理費月繳 4,066 元，可向管委會索取收支與地下室維護紀錄。"
   },
   {
    "type": "spacer"
@@ -484,7 +484,7 @@
   },
   {
    "type": "image",
-   "path": "/home/user/my-website/deliverables/典藏大師/_docx_assets/svg0.png",
+   "path": "/home/user/my-website/deliverables/典藏大師特別座/_docx_assets/svg0.png",
    "width": 17.0,
    "caption": "七期重劃區（南屯部分）透天有效成交，每年中位數；115* 為 115 年 1–8 月成交。橘點為本社區 108/11 成交，紅線為本戶開價。",
    "px": [
@@ -598,7 +598,7 @@
   },
   {
    "type": "image",
-   "path": "/home/user/my-website/deliverables/典藏大師/_docx_assets/svg1.png",
+   "path": "/home/user/my-website/deliverables/典藏大師特別座/_docx_assets/svg1.png",
    "width": 17.0,
    "caption": "橫軸為總價÷土地坪，縱軸為總價÷建物總坪（車位一起算）；每點一筆 112–115 年成交。紅點為本戶開價。",
    "px": [
@@ -1281,8 +1281,8 @@
   {
    "type": "contact",
    "qr": [
-    "/home/user/my-website/deliverables/典藏大師/QR_LINE.png",
-    "/home/user/my-website/deliverables/典藏大師/QR_網站.png"
+    "/home/user/my-website/deliverables/典藏大師特別座/QR_LINE.png",
+    "/home/user/my-website/deliverables/典藏大師特別座/QR_網站.png"
    ],
    "title": "預約帶看・行情諮詢"
   }

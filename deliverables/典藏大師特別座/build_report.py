@@ -1,12 +1,12 @@
-"""典藏大師 銷售報告書（給買方）：讀 summary.json → 產 HTML → Playwright 輸出 PDF。
+"""典藏大師特別座 銷售報告書（給買方）：讀 summary.json → 產 HTML → Playwright 輸出 PDF。
 口徑：透天比「總價÷建物總面積」與「總價÷土地面積」；本戶另列「房屋單價（已扣車位）」（B1 車位以 150 萬估）。
 所有統計逐年呈現、不跨年合併（助哥 2026-10-24）。對外報告不放建議成交價，試算以開價計。"""
 import base64, json
 from pathlib import Path
 
 HERE = Path(__file__).parent
-OUT_HTML = HERE / '典藏大師_銷售報告書.html'
-OUT_PDF = HERE / '典藏大師_銷售報告書.pdf'
+OUT_HTML = HERE / '典藏大師特別座_銷售報告書.html'
+OUT_PDF = HERE / '典藏大師特別座_銷售報告書.pdf'
 S = json.load(open(HERE / 'summary.json'))
 L = S['本戶']
 ASK = L['開價']
@@ -99,21 +99,21 @@ pay = loan * 10000 * r_m / (1 - (1 + r_m) ** (-YEARS * 12)); down = ASK - loan
 DISC = '永慶不動產 七期河南市政店 / 百富國際開發有限公司 / 中市地價二字第1070032073號'
 PHONE, LINE_ID, WEB = '0925-313-570', '@080akczk', 'sixhands.tw'
 CONTACT = f'助哥 <span style="white-space:nowrap">{PHONE}</span>　｜　LINE {LINE_ID}　｜　{WEB}'
-def foot(n): return f'<div class="foot"><div>{DISC}<br><span class="ct">{CONTACT}</span></div><span>典藏大師 銷售報告書　{n}</span></div>'
+def foot(n): return f'<div class="foot"><div>{DISC}<br><span class="ct">{CONTACT}</span></div><span>典藏大師特別座 銷售報告書　{n}</span></div>'
 LAND_GAP = L['土地'] - min(LAND_MED)
 Z108, Z115 = Z7[108]['土地單價中位'], Z7[115]['土地單價中位']
 
-html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>典藏大師 銷售報告書</title><style>{CSS}</style></head><body>
+html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>典藏大師特別座 銷售報告書</title><style>{CSS}</style></head><body>
 
 <!-- P1 封面 -->
 <div class="page" style="background:#102a33">
-  <img src="{img('位置圖.png')}" style="position:absolute;left:0;top:0;width:210mm;height:112mm;object-fit:cover;object-position:center 45%;opacity:.92">
+  <img src="{img('外觀.jpg')}" style="position:absolute;left:0;top:0;width:210mm;height:112mm;object-fit:cover;object-position:center 55%">
   <div style="position:absolute;left:0;top:78mm;width:210mm;height:34mm;background:linear-gradient(180deg,rgba(16,42,51,0),#102a33)"></div>
   <div style="position:absolute;left:16mm;top:104mm;color:#E3B66A;font-size:8pt;letter-spacing:.5em">PROPERTY SALES REPORT</div>
   <div style="position:absolute;left:16mm;top:110mm;right:16mm;color:#fff">
     <div class="serif" style="font-size:11pt;color:#E3B66A;letter-spacing:.2em">臺中市南屯區 · 大通街85號 · 七期惠文學區</div>
     <div style="width:46mm;height:2px;background:#E3B66A;margin:5mm 0 4mm"></div>
-    <h1 style="font-size:40pt;line-height:1.2">典藏大師</h1>
+    <h1 style="font-size:40pt;line-height:1.2">典藏大師特別座</h1>
     <div class="serif" style="font-size:15pt;margin-top:2mm">買方銷售報告書 · 鄰綠園道透天邊間 · 六房 · B1 車位</div>
     <div style="font-size:8.8pt;color:#b9cad3;margin-top:4mm;line-height:1.9">臺中市南屯區大通街85號・地上 4 層透天・{L["朝向"]}向<br>開價 {wan(ASK)} 萬　·　建坪 {L["建坪"]} 坪（含車位 {L["車位面積"]} 坪）　·　土地 {L["土地"]} 坪　·　{L["格局"]}</div>
     <div style="margin-top:7mm;border-top:1px solid #3b5b66;padding-top:5mm">
@@ -168,7 +168,7 @@ html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
     <div>
       <h3 class="h">社區與學區</h3>
       <table class="spec">
-        <tr><td>社區</td><td>典藏大師（實登社區簡稱「大師特別座」），透天社區、有管理組織</td></tr>
+        <tr><td>社區</td><td>典藏大師特別座（實登社區簡稱「大師特別座」），透天社區、有管理組織</td></tr>
         <tr><td>地下室</td><td>社區共用地下室，坡道進出、平面車位</td></tr>
         <tr><td>小學</td><td>{L["小學"]}</td></tr>
         <tr><td>國中</td><td>{L["國中"]}</td></tr>
@@ -203,7 +203,7 @@ html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
       <div class="feat"><div class="no">06</div><div><h3>生活圈完整</h3><p>北邊緊鄰公益路二段；刊登資料載明鄰近 IKEA、文心森林公園、捷運綠線水安宮站。</p></div></div>
     </div>
   </div>
-  <div class="note" style="margin-top:2mm"><b>社區型透天：</b>典藏大師為有管理組織的透天社區，共用地下室停車；管理費月繳 {L["管理費月"]:,} 元，可向管委會索取收支與地下室維護紀錄。</div>
+  <div class="note" style="margin-top:2mm"><b>社區型透天：</b>典藏大師特別座為有管理組織的透天社區，共用地下室停車；管理費月繳 {L["管理費月"]:,} 元，可向管委會索取收支與地下室維護紀錄。</div>
 </div>{foot(3)}</div>
 
 <!-- P4 本社區與同街廓成交 -->

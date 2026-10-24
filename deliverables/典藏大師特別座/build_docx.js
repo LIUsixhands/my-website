@@ -1,4 +1,4 @@
-// 典藏大師 銷售報告書 Word 版排版：讀 _docx_assets/docx_model.json（build_docx_model.py 產出）→ 典藏大師_銷售報告書.docx
+// 典藏大師特別座 銷售報告書 Word 版排版：讀 _docx_assets/docx_model.json（build_docx_model.py 產出）→ 典藏大師特別座_銷售報告書.docx
 // 文字、表格為 Word 原生可編輯；社區成交圖、樓層配置圖為 PNG。
 const fs = require('fs');
 const path = require('path');
@@ -9,7 +9,7 @@ const {
 
 const HERE = __dirname;
 const M = JSON.parse(fs.readFileSync(path.join(HERE, '_docx_assets', 'docx_model.json'), 'utf8'));
-const OUT = path.join(HERE, '典藏大師_銷售報告書.docx');
+const OUT = path.join(HERE, '典藏大師特別座_銷售報告書.docx');
 
 const FONT = 'Microsoft JhengHei';
 const C = { navy: '163A47', teal: '1F4E5F', gold: 'C8963E', mute: '5D6B76', text: '1E2A33', hl: 'FBEEE0', alt: 'EEF3F6',
@@ -157,13 +157,13 @@ for (const b of M.blocks) {
 const footer = new Footer({ children: [
   new Paragraph({ border: { top: { style: BorderStyle.SINGLE, size: 6, color: C.gold, space: 4 } },
     tabStops: [{ type: TabStopType.RIGHT, position: CW }],
-    children: [run(M.footer_disc, { size: 13, color: C.mute }), run('\t典藏大師 銷售報告書　', { size: 13, color: C.mute }),
+    children: [run(M.footer_disc, { size: 13, color: C.mute }), run('\t典藏大師特別座 銷售報告書　', { size: 13, color: C.mute }),
       new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: 13, color: C.mute })] }),
   new Paragraph({ children: [run(M.footer_contact, { size: 14, bold: true, color: C.navy })] }),
 ] });
 
 const doc = new Document({
-  creator: 'Sixhands Studio', title: '典藏大師 銷售報告書',
+  creator: 'Sixhands Studio', title: '典藏大師特別座 銷售報告書',
   styles: { default: { document: { run: { font: FONT, size: 19 } } } },
   numbering: { config: [{ reference: 'bul', levels: [{ level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT,
     style: { paragraph: { indent: { left: 360, hanging: 260 } } } }] }] },
