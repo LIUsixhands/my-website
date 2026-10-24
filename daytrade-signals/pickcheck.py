@@ -8,6 +8,7 @@
   1. 首選（第 1 名）有沒有比第 2～3 名、其他候選好
   2. 四項分數（量比、振幅、RSI、昨收位置）各自高的 1/3 vs 低的 1/3，哪一項真的有用
   3. 三項沒用在公式裡的（開盤跳空、昨收比 10 日均線、一張的風險）有沒有用
+  4. 10-24 加：影片的兩個條件（收盤突破前高、月線往上）符合的有沒有比較好
 
     python pickcheck.py                 用 journal/ 裡有存的候選池（約 10-12 起）
     python pickcheck.py --rebuild 20    另外重建之前 20 個交易日的候選池再一起算
@@ -44,6 +45,14 @@ FACTORS = (("volume_ratio", "量比"), ("amplitude", "近 5 日振幅"),
            ("total", "公式總分（小＝排前面）"), ("gap", "開盤跳空 %（公式沒用）"),
            ("trend", f"昨收比 {TREND_DAYS} 日均線 %（公式沒用）"),
            ("risk_lot", "一張的停損風險（公式沒用）"))
+# 10-24 使用者看了一支影片：長紅 K 要「收盤突破前高、月線往上」才算真的突破 →「好，先加進挑股驗證」
+# 「說不定以後還可以作為留倉波段參考」。影片講的是日線波段；這裡先只看照首選規則當天進出有沒有比較好。
+HIGH_DAYS = 20                  # 「前高」＝昨天之前 20 個交易日的最高價（上影線也算）
+MA_DAYS, MA_SLOPE_DAYS = 20, 5  # 「月線往上」＝昨天的 20 日均線比 5 個交易日前的高
+DAILY_LOOKBACK = MA_DAYS + MA_SLOPE_DAYS
+CONDITIONS = (("breakout", f"收盤突破前高（前 {HIGH_DAYS} 天最高）"),
+              ("ma_up", f"月線往上（{MA_DAYS} 日均線比 {MA_SLOPE_DAYS} 天前高）"),
+              ("both", "兩個都符合"))
 
 
 # ── 每一天：候選池全部照首選的規則回推 ─────────────────────────────
@@ -63,8 +72,33 @@ def trend_pct(history, prev_close: float) -> float | None:
     return round((prev_close - ma) / ma * 100, 2)
 
 
-def day_rows(day: str, payload: dict, bars_of: dict, hist: dict, source: str) -> list[dict]:
-    """那一天候選池每一檔一列：名次、分數、照首選規則的結果。買不到（開盤漲停）的 result=None。"""
+def breakout(days, prev_close: float) -> bool | None:
+    """昨收有沒有高過前 HIGH_DAYS 個交易日（不含昨天）的最高價。days＝日 K（開高低收量），舊到新、含昨天。"""
+    if len(days) < HIGH_DAYS + 1 or not prev_close:
+        return None
+    return prev_close > max(d[1] for d in days[-HIGH_DAYS - 1:-1])
+
+
+def ma_rising(days) -> bool | None:
+    """昨天的 MA_DAYS 日均線有沒有比 MA_SLOPE_DAYS 個交易日前的高。"""
+    closes = [d[3] for d in days]
+    if len(closes) < MA_DAYS + MA_SLOPE_DAYS:
+        return None
+    now = sum(closes[-MA_DAYS:]) / MA_DAYS
+    before = sum(closes[-MA_DAYS - MA_SLOPE_DAYS:-MA_SLOPE_DAYS]) / MA_DAYS
+    return now > before
+
+
+def both(a, b) -> bool | None:
+    if a is False or b is False:
+        return False
+    return None if a is None or b is None else True
+
+
+def day_rows(day: str, payload: dict, bars_of: dict, hist: dict, source: str,
+             daily_of=None) -> list[dict]:
+    """那一天候選池每一檔一列：名次、分數、照首選規則的結果。買不到（開盤漲停）的 result=None。
+    daily_of(代號) → 那天以前 DAILY_LOOKBACK 個交易日的日 K（算影片的兩個條件；沒給就 None）。"""
     pool = whatif.pool_rows(payload)
     out = []
     for n, s in enumerate(premarket.score(pool), 1):
@@ -78,6 +112,8 @@ def day_rows(day: str, payload: dict, bars_of: dict, hist: dict, source: str) ->
                 "features": s["features"]}
         tr = whatif.pick_trade(day, pick, bars)
         f = s["features"]
+        days = daily_of(code) if daily_of else []
+        up, high = ma_rising(days), breakout(days, prev_close)
         out.append({
             "date": day, "code": code, "name": s["name"], "rank": n, "source": source,
             "volume_ratio": f["volume_ratio"], "amplitude": f["amplitude"], "rsi_gap": f["rsi_gap"],
@@ -85,10 +121,39 @@ def day_rows(day: str, payload: dict, bars_of: dict, hist: dict, source: str) ->
             "gap": round((bars[0][1] - prev_close) / prev_close * 100, 2) if prev_close else None,
             "trend": trend_pct(hist.get(code) or [], prev_close),
             "risk_lot": round((tr.entry - tr.stop) * 1000) if tr else None,
+            "breakout": high, "ma_up": up, "both": both(high, up),
             "net_r": tr.net_r if tr else None, "net_pct": tr.net_pct if tr else None,
             "result": tr.result if tr else None,
         })
     return out
+
+
+def daily_bars(payloads, fetch_range, lookback: int = DAILY_LOOKBACK) -> dict:
+    """{(日期, 代號): 那一天的日 K（開高低收量）}：每一天候選池每一檔、往前 lookback 個交易日。
+    跟 whatif.pool_days_for 同一個分鐘 K 快取、一檔一次抓一整段；抓到就縮成日 K，不整段留在記憶體。"""
+    need: dict[str, set] = {}
+    for d, payload in payloads:
+        for r in whatif.pool_rows(payload):
+            need.setdefault(str(r["code"]), set()).update(whatif.trading_days_before(d, lookback))
+    out = {}
+    for code, dates in sorted(need.items()):
+        got = {d: whatif.load_cached(d, code) for d in dates}
+        if any(v is None for v in got.values()):
+            fetched = fetch_range(code, min(dates), max(dates)) or {}
+            for d in dates:
+                if got[d] is None:
+                    got[d] = fetched.get(d) or []
+                    whatif.save_cached(d, code, got[d])
+        for d, b in got.items():
+            day = daily_ohlcv(b)
+            if day:
+                out[(d, code)] = day
+    return out
+
+
+def history_of(daily: dict, code: str, day: str, lookback: int = DAILY_LOOKBACK) -> list:
+    """day 以前 lookback 個交易日的日 K（舊到新）；缺的那幾天跳過。"""
+    return [daily[(h, code)] for h in whatif.trading_days_before(day, lookback) if (h, code) in daily]
 
 
 # ── 重建過去的候選池 ─────────────────────────────────────────────
@@ -269,6 +334,60 @@ def formula_lines(rows: list[dict], first: set, second: set) -> list[str]:
     return out
 
 
+def _diff(yes, no) -> float | None:
+    yes = [r["net_r"] for r in yes if r.get("net_r") is not None]
+    no = [r["net_r"] for r in no if r.get("net_r") is not None]
+    return sum(yes) / len(yes) - sum(no) / len(no) if yes and no else None
+
+
+def condition_lines(rows: list[dict], first: set, second: set) -> list[str]:
+    """10-24：影片的兩個條件。同一套當天進出，符合的 vs 不符合的；再看「A 只從兩個都符合的裡面挑」。"""
+    parts = (("前半", lambda r: r["date"] in first), ("後半", lambda r: r["date"] in second),
+             ("存檔日", lambda r: r["source"] == REAL), ("重建日", lambda r: r["source"] == REBUILT))
+    out = ["", "影片的兩個條件：長紅要「收盤突破前高、月線往上」才算真的突破（10-24 加）。"
+           "同樣照首選的規則當天進出，比符合的跟不符合的。", "",
+           "| 條件 | 符合 | 不符合 | 符合減不符合 | 前半 | 後半 | 只看存檔日 | 只看重建日 |",
+           "|---|---|---|---|---|---|---|---|"]
+    picks = [r for r in rows if r["rank"] == 1]
+    for group, label, conds in ((rows, "", CONDITIONS), (picks, "首選（第 1 名）：", CONDITIONS[2:])):
+        for key, name in conds:
+            yes = [r for r in group if r.get(key) is True]
+            no = [r for r in group if r.get(key) is False]
+            cells = [_gap(_diff([r for r in yes if keep(r)], [r for r in no if keep(r)])) for _n, keep in parts]
+            out.append(f"| {label}{name} | {len(yes)} 檔次 {_stats(yes)} | {len(no)} 檔次 {_stats(no)} | "
+                       f"{_gap(_diff(yes, no))} | " + " | ".join(cells) + " |")
+    unknown = sum(1 for r in rows if r.get("both") is None)
+    if unknown:
+        out += ["", f"日 K 不到 {DAILY_LOOKBACK} 天、判斷不了的 {unknown} 檔次不算。"]
+
+    by_day: dict = {}
+    for r in rows:
+        by_day.setdefault(r["date"], []).append(r)
+    a_factors = FORMULAS[0][1]
+    base = [pick_by(by_day[d], a_factors) for d in sorted(by_day)]
+    only = []
+    for d in sorted(by_day):
+        ok = [r for r in by_day[d] if r.get("both")]
+        only.append(pick_by(ok, a_factors) if ok else pick_by(by_day[d], a_factors))
+    out += ["", "如果首選只從「兩個都符合」的候選裡挑（那天一檔都沒有就照 A）：", "",
+            "| 挑法 | 天數 | 買不到 | 平均R（勝率） | 前半 | 後半 | 只看存檔日 | 只看重建日 | 跟 A 選同一檔 |",
+            "|---|---|---|---|---|---|---|---|---|"]
+    for name, chosen in ((FORMULAS[0][0], base), ("A＋只挑兩個都符合", only)):
+        got = [r for r in chosen if r]
+        same = sum(1 for a, b in zip(chosen, base) if a and b and a["code"] == b["code"])
+        out.append(f"| {name} | {len(got)} | {sum(1 for r in got if r['net_r'] is None)} | {_stats(got)} | "
+                   + " | ".join(_avg_r([r for r in got if keep(r)]) for _n, keep in parts)
+                   + f" | {same}/{len(got)} 天 |")
+    out += [
+        "",
+        "- **符合減不符合**要是正的，而且前半、後半、存檔日、重建日都是正的，才算這兩個條件對當沖有用。",
+        "- 這兩個條件是看了影片才加的，不是看這份資料想出來的；但天數少、首選一天一檔，差一點點還是可能只是運氣。",
+        "- 影片講的是日線波段（抱好幾天）。這裡只看當天；要當留倉波段的參考，要另外看之後幾天"
+        "（首選之後 5 天記在 pick_followup.csv）。",
+    ]
+    return out
+
+
 def lines(rows: list[dict]) -> list[str]:
     out = ["## 挑股驗證：盤前首選的公式有沒有用", ""]
     if not rows:
@@ -305,6 +424,7 @@ def lines(rows: list[dict]) -> list[str]:
         g2 = thirds([r for r in rows if r["date"] in second], key)[2]
         out.append(f"| {name} | {_stats(lo)} | {_stats(hi)} | {_gap(gap)} | {_gap(g1)} | {_gap(g2)} |")
     out += formula_lines(rows, first, second)
+    out += condition_lines(rows, first, second)
     out += [
         "",
         "- **首選有沒有用**：第 1 名要比第 2～3 名、其他候選好，而且**前半、後半都比較好**才算數。"
@@ -393,9 +513,12 @@ def main(argv=None):
     pool_days, _missing = whatif.pool_days_for([(d, p) for d, p, _s in payloads], fetch_range)
     source = {d: s for d, _p, s in payloads}
     by_day = {d: p for d, p, _s in payloads}
+    print(f"抓每一檔前 {DAILY_LOOKBACK} 個交易日的日 K（突破前高、月線往上；第一次要抓一陣子）……")
+    daily = daily_bars([(d, p) for d, p, _s in payloads], fetch_range)
     rows = []
     for d, stocks, hist in pool_days:
-        rows += day_rows(d, by_day[d], {s["code"]: s["bars"] for s in stocks}, hist, source[d])
+        rows += day_rows(d, by_day[d], {s["code"]: s["bars"] for s in stocks}, hist, source[d],
+                         lambda code, d=d: history_of(daily, code, d))
     text = lines(rows)
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text("\n".join(text), encoding="utf-8")

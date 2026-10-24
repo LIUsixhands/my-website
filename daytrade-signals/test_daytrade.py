@@ -7207,6 +7207,73 @@ class TestPickCheck(unittest.TestCase):
         self.assertIn("| （對照）全部候選平均 |", text)
         self.assertIn("前半、後半、存檔日、重建日都比 A 好", text)
 
+    def test_the_two_conditions_from_the_video(self):
+        """10-24 使用者看了影片：長紅要「收盤突破前高、月線往上」才算真的突破 →「好，先加進挑股驗證」。"""
+        def day(c, hi=None):
+            return (c, c + 1 if hi is None else hi, c - 1, c, 10.0)
+        rising = [day(80.0 + i) for i in range(25)]                    # 收 80 → 104，最高 105
+        self.assertTrue(pickcheck.ma_rising(rising))
+        self.assertFalse(pickcheck.ma_rising(rising[::-1]))
+        self.assertIsNone(pickcheck.ma_rising(rising[1:]), "不到 25 天 → None")
+        self.assertFalse(pickcheck.ma_rising([day(100.0)] * 25), "持平不算往上")
+        self.assertTrue(pickcheck.breakout(rising, 104.5), "昨收 104.5 > 前 20 天最高 104（不含昨天的 105）")
+        self.assertFalse(pickcheck.breakout(rising, 103.9))
+        shadow = rising[:-5] + [day(99.0, hi=110.0)] + rising[-4:]
+        self.assertFalse(pickcheck.breakout(shadow, 105.5), "上影線的高點也算前高")
+        self.assertIsNone(pickcheck.breakout(rising[-20:], 105.5), "不到 21 天 → None")
+        self.assertIsNone(pickcheck.breakout(rising, 0))
+        self.assertEqual([pickcheck.both(*x) for x in ((True, True), (True, False), (None, False), (True, None))],
+                         [True, False, False, None])
+
+        payload = {"items": [self.row("1111", 3.0, prev=105.5), self.row("2222", 1.0, prev=105.5)],
+                   "not_watched": [self.row("3333", 2.0, prev=105.5)]}
+        bars = {"1111": self.bars("2026-10-21", start=105.5, step=-0.02),
+                "2222": self.bars("2026-10-21", start=105.5, step=0.02),
+                "3333": self.bars("2026-10-21", start=105.5)}
+        hists = {"1111": rising[::-1], "2222": rising, "3333": rising[1:]}
+        rows = pickcheck.day_rows("2026-10-21", payload, bars, {}, pickcheck.REAL, hists.get)
+        got = {r["code"]: (r["breakout"], r["ma_up"], r["both"]) for r in rows}
+        self.assertEqual(got, {"1111": (True, False, False), "2222": (True, True, True),
+                               "3333": (True, None, None)})
+        self.assertIsNone(pickcheck.day_rows("2026-10-21", payload, bars, {}, pickcheck.REAL)[0]["both"],
+                          "沒給日 K → None")
+        a = next(r for r in rows if r["rank"] == 1)
+        self.assertEqual(a["code"], "1111", "A 選 1111（月線往下）")
+        b = next(r for r in rows if r["code"] == "2222")
+        text = "\n".join(pickcheck.lines(rows))
+        self.assertIn(f"| 兩個都符合 | 1 檔次 {pickcheck._stats([b])} | 1 檔次 {pickcheck._stats([a])} | "
+                      f"{b['net_r'] - a['net_r']:+.2f}R |", text)
+        self.assertIn("| 首選（第 1 名）：兩個都符合 | 0 檔次 — | 1 檔次", text)
+        self.assertIn("判斷不了的 1 檔次不算", text)
+        only = next(l for l in text.splitlines() if l.startswith("| A＋只挑兩個都符合"))
+        self.assertIn(f"| {b['net_r']:+.2f}R（", only, "只挑兩個都符合 → 選到 2222")
+        self.assertTrue(only.endswith("| 0/1 天 |"), only)
+        none_ok = [dict(r, both=False) for r in rows]
+        only = next(l for l in "\n".join(pickcheck.lines(none_ok)).splitlines()
+                    if l.startswith("| A＋只挑兩個都符合"))
+        self.assertTrue(only.endswith("| 1/1 天 |"), "那天一檔都沒有 → 照 A")
+
+    def test_daily_bars_use_the_cache_and_shrink_to_one_bar_a_day(self):
+        payloads = [("2026-10-21", {"items": [self.row("1111", 3.0)]})]
+        hist_days = whatif.trading_days_before("2026-10-21", 3)
+        cached = {(hist_days[0], "1111"): self.bars(hist_days[0], start=50.0, n=3)}
+        fetched = {d: self.bars(d, start=60.0, n=3) for d in hist_days[1:]}
+        calls = []
+        with unittest.mock.patch.object(whatif, "load_cached", lambda d, c: cached.get((d, c))), \
+                unittest.mock.patch.object(whatif, "save_cached", lambda *a: None):
+            daily = pickcheck.daily_bars(payloads, lambda *a: calls.append(a) or fetched, lookback=3)
+        self.assertEqual(calls, [("1111", hist_days[0], hist_days[-1])], "一檔一次抓一整段")
+        self.assertEqual(daily[(hist_days[0], "1111")], (50.0, 50.05, 49.95, 50.0, 30.0), "快取有的不重抓")
+        self.assertEqual(len(daily), 3)
+        self.assertEqual(pickcheck.history_of(daily, "1111", "2026-10-21", 3),
+                         [daily[(d, "1111")] for d in hist_days])
+        cached.update({(d, "1111"): b for d, b in fetched.items()})
+        with unittest.mock.patch.object(whatif, "load_cached", lambda d, c: cached.get((d, c))):
+            pickcheck.daily_bars(payloads, lambda *a: calls.append(a) or {}, lookback=3)
+        self.assertEqual(len(calls), 1, "全部都有快取 → 不抓")
+        del daily[(hist_days[1], "1111")]
+        self.assertEqual(len(pickcheck.history_of(daily, "1111", "2026-10-21", 3)), 2, "缺的那天跳過")
+
     def test_main_puts_real_and_rebuilt_days_together(self):
         real = ("2026-10-21", {"items": [self.row("1111", 3.0)], "not_watched": [self.row("2222", 1.0)]})
         partial = ("2026-10-08", {"items": [self.row("9999", 3.0)]})
@@ -7220,13 +7287,20 @@ class TestPickCheck(unittest.TestCase):
                     unittest.mock.patch.object(pickcheck, "load_rebuilt", return_value=rebuilt), \
                     unittest.mock.patch.object(pickcheck, "REPORT", report), \
                     unittest.mock.patch.object(whatif, "pool_days_for", return_value=(pool, [])) as pd, \
+                    unittest.mock.patch.object(pickcheck, "daily_bars", return_value={"x": 1}) as db, \
+                    unittest.mock.patch.object(pickcheck, "history_of", return_value=[]) as ho, \
                     contextlib.redirect_stdout(io.StringIO()):
                 pickcheck.main(["--rebuild", "1", "--until", "2026-10-22"])
             asked = [x[0] for x in pd.call_args[0][0]]
             self.assertEqual(asked, ["2026-10-20", "2026-10-21"],
                              "只有一部分名單的存檔不算；重建的是第一天完整存檔之前的那一天")
+            self.assertEqual([x[0] for x in db.call_args[0][0]], asked, "日 K 跟候選池同一批日子")
+            self.assertEqual(sorted(c[0] for c in ho.call_args_list),
+                             [({"x": 1}, "1111", "2026-10-21"), ({"x": 1}, "2222", "2026-10-21"),
+                              ({"x": 1}, "3333", "2026-10-20")], "每一檔用自己那一天以前的日 K")
             text = report.read_text(encoding="utf-8")
             self.assertIn("2 天（存檔 1 天、重建 1 天）、3 檔次", text)
+            self.assertIn("影片的兩個條件", text)
             with unittest.mock.patch.object(whatif, "archived_days", return_value=[]):
                 with self.assertRaises(SystemExit):
                     pickcheck.main(["--until", "2026-10-22"])
