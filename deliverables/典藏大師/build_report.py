@@ -111,11 +111,11 @@ html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
   <div style="position:absolute;left:0;top:78mm;width:210mm;height:34mm;background:linear-gradient(180deg,rgba(16,42,51,0),#102a33)"></div>
   <div style="position:absolute;left:16mm;top:104mm;color:#E3B66A;font-size:8pt;letter-spacing:.5em">PROPERTY SALES REPORT</div>
   <div style="position:absolute;left:16mm;top:110mm;right:16mm;color:#fff">
-    <div class="serif" style="font-size:11pt;color:#E3B66A;letter-spacing:.2em">臺中市南屯區 · 大通街 · 七期惠文學區</div>
+    <div class="serif" style="font-size:11pt;color:#E3B66A;letter-spacing:.2em">臺中市南屯區 · 大通街85號 · 七期惠文學區</div>
     <div style="width:46mm;height:2px;background:#E3B66A;margin:5mm 0 4mm"></div>
     <h1 style="font-size:40pt;line-height:1.2">典藏大師</h1>
     <div class="serif" style="font-size:15pt;margin-top:2mm">買方銷售報告書 · 鄰綠園道透天邊間 · 六房 · B1 車位</div>
-    <div style="font-size:8.8pt;color:#b9cad3;margin-top:4mm;line-height:1.9">臺中市南屯區大通街・地上 4 層透天・{L["朝向"]}向<br>開價 {wan(ASK)} 萬　·　建坪 {L["建坪"]} 坪（含車位 {L["車位面積"]} 坪）　·　土地 {L["土地"]} 坪　·　{L["格局"]}</div>
+    <div style="font-size:8.8pt;color:#b9cad3;margin-top:4mm;line-height:1.9">臺中市南屯區大通街85號・地上 4 層透天・{L["朝向"]}向<br>開價 {wan(ASK)} 萬　·　建坪 {L["建坪"]} 坪（含車位 {L["車位面積"]} 坪）　·　土地 {L["土地"]} 坪　·　{L["格局"]}</div>
     <div style="margin-top:7mm;border-top:1px solid #3b5b66;padding-top:5mm">
       <div style="font-size:7.6pt;color:#E3B66A;letter-spacing:.3em">核心數字</div>
       <div style="font-size:9.3pt;line-height:1.9;margin-top:2mm">
@@ -153,7 +153,7 @@ html = f'''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><titl
     <div>
       <h3 class="h">本戶資料</h3>
       <table class="spec">
-        <tr><td>地址</td><td>臺中市南屯區大通街</td></tr>
+        <tr><td>地址</td><td>臺中市南屯區大通街85號</td></tr>
         <tr><td>型態</td><td>透天・地上 4 層・邊間・{L["朝向"]}向</td></tr>
         <tr><td>格局</td><td>{L["格局"]}，六房皆開窗（刊登資料）</td></tr>
         <tr><td>土地</td><td>{L["土地"]} 坪（惠義段・都市計畫住宅區）</td></tr>
