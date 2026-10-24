@@ -23,7 +23,7 @@ for f in sorted(glob.glob(U+'南屯透天_實登原始_*.xls')):
         rows.append(dict(file=f.split('/')[-1],addr=r['地段位置或門牌'],comm=r['社區簡稱'],date=r['交易日期'],
           total=a(r['總價(萬元)']),barea=a(r['總面積(坪)']),larea=L['a'].sum(),age=r['屋齡'],floors=r['樓別/樓高'],
           use=r['主要用途'],target=r['交易標的'],cnt=r['交易筆棟數'],note=str(r['備註']) if pd.notna(r['備註']) else '',
-          sec=secs.mode().iloc[0] if len(secs) else '',zone_land=L['使用分區或編定'].iloc[0],
+          sec=secs.mode().iloc[0] if len(secs) else '',buse='、'.join(B['主要用途'].dropna().astype(str)) if B is not None else '',layout=str(r['建物現況格局']) if pd.notna(r['建物現況格局']) else '',zone_land=L['使用分區或編定'].iloc[0],
           partial=(L['備註'].fillna('').str.contains('持分').any() or (B is not None and B['持分'].fillna('').str.contains('持分').any()))))
 df=pd.DataFrame(rows)
 df['year']=df.date.str[:3].astype(int)
@@ -33,6 +33,7 @@ df['road']=df.addr.str.replace('南屯區','').str.extract(r'^(.+?(?:路|街|大
 print(len(df), df.groupby('year').size().to_dict())
 
 # ---- 分區與排除 ----
+import re
 df['age_missing']=df.age.isna(); df['age']=df.age.fillna(0)
 df['road2']=df.addr.str.replace('南屯區','').str.extract(r'^(.+?(?:路|街|大道|巷)(?:[一二三四五六]段)?)')[0].fillna('')
 def zone(r):
@@ -50,7 +51,7 @@ def zone(r):
         return '其他' if rd in('五權西路二段','向上路三段') else '單元二重劃區'
     if s in('永新段','永春段'): return '單元三重劃區'
     if s=='三塊厝段':
-        if rd in('永春東七路','三厝街','三和街'): return '單元三重劃區'
+        if rd in('永春東七路','三厝街','三和街','大墩十二街'): return '單元三重劃區'
         if rd=='永春東六路': return '單元四重劃區'
         if rd.startswith('黎明'): return '黎明生活圈'
         return '其他'
@@ -68,10 +69,13 @@ def excl(r):
     if any(k in r.note for k in ('親友','員工','共有人','特殊關係')): return '特殊關係'
     if r.partial: return '持分移轉'
     if '租約' in r.note: return '含租約'
-    if '工業' in str(r.zone_land) or r.use=='工業用': return '工業區/工業用'
-    if '農業' in str(r.zone_land): return '農業區'
+    zl=str(r.zone_land)
+    if '工業' in zl or zl.endswith('：工') or r.use=='工業用' or re.search(r'廠房|工廠|作業場',r.buse): return '工廠/工業區'
+    if '農業' in zl or zl.endswith('：農'): return '農業區'
+    if '住' not in r.buse and ('房' not in r.layout or r.floors=='全/一層'): return '非住宅(店面/辦公/加油站)'
     if not (25<=r.barea<=200): return '建坪非25-200'
     if r.larea<=0: return '無地坪'
+    if r.larea>150: return '地坪>150坪(土地交易)'
     if pd.isna(r.age): return '屋齡缺'
     return ''
 df['excl']=df.apply(excl,axis=1)
@@ -82,16 +86,16 @@ df['ageband']=pd.cut(df.age,bins,labels=labs)
 print(df.zone.value_counts().to_string()); print(df.excl.value_counts().to_string())
 v=df[df.excl=='']
 print(pd.crosstab(v.zone,v.year,margins=True).to_string())
-print(v[v.zone=='其他'].groupby(['sec','road2']).size().sort_values(ascending=False).head(30).to_string())
+print(df[df.zone=='其他'].groupby(['sec','road2']).size().sort_values(ascending=False).head(40).to_string())
 
 # ---- 統計 ----
 import json
 v=df[df.excl==''].copy()
 Z=['五期重劃區','七期重劃區','八期重劃區','13期重劃區','單元二重劃區','單元三重劃區','單元四重劃區','單元五重劃區','楓樹生活圈','黎明生活圈','嶺東科大生活圈']
-Y=[112,113,114,115]; A=['0~5年','6~10年','11~20年','21~30年','31~40年','41年以上']
+Y=sorted(v.year.unique().tolist()); A=['0~5年','6~10年','11~20年','21~30年','31~40年','41年以上']
 def agg(g):
     return dict(n=int(len(g)),bp=round(float(g.bp.median()),1) if len(g) else None,lp=round(float(g.lp.median()),1) if len(g) else None,
-                tp=round(float(g.total.median())) if len(g) else None)
+                tp=round(float(g.total.median())) if len(g) else None, sum=round(float(g.total.sum())))
 out={}
 for z in ['南屯全區']+Z:
     g=v if z=='南屯全區' else v[v.zone==z]
@@ -102,3 +106,13 @@ for z,d in out.items():
     print(z,d['total'],'|',' '.join(f"{y}:{d['year'][y]['n']}/{d['year'][y]['bp']}/{d['year'][y]['lp']}" for y in Y))
     print('   ',' '.join(f"{a}:{d['age'][a]['n']}/{d['age'][a]['bp']}/{d['age'][a]['lp']}" for a in A))
 print(df.excl.value_counts().to_dict())
+
+# ---- 輸出 ----
+import sys
+if len(sys.argv)>1:
+    od=sys.argv[1]
+    o=v.copy(); o['date']=o.date.str.replace('/','-')
+    o=o[['zone','year','date','ageband','age','road2','sec','total','barea','larea','bp','lp']].rename(columns={'road2':'road','sec':'section','total':'total_wan','barea':'build_ping','larea':'land_ping','bp':'build_price','lp':'land_price'})
+    for c in ['build_ping','land_ping','build_price','land_price']: o[c]=o[c].round(2)
+    o.sort_values(['zone','date']).to_csv(od+'/nantun_townhouse_108_115.csv',index=False)
+    json.dump(out,open(od+'/stats.json','w'),ensure_ascii=False)
