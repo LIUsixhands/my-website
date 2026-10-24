@@ -1,0 +1,43 @@
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Noto Sans CJK TC", sans-serif; color: #1e2a33; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #ddd; }
+.page { width: 210mm; height: 297mm; position: relative; overflow: hidden; page-break-after: always; background: #F7F9FA; margin: 0 auto; }
+.page:last-child { page-break-after: auto; }
+h1, h2, h3, .serif { font-family: "Noto Serif CJK TC", serif; }
+.pad { padding: 14mm 14mm 0 14mm; }
+.eyebrow { font-size: 7.6pt; letter-spacing: .45em; color: #C8963E; margin-bottom: 2mm; }
+.ttl { font-family: "Noto Serif CJK TC", serif; font-size: 18pt; color: #163a47; font-weight: 700; border-left: 5px solid #C8963E; padding-left: 9px; margin-bottom: 3mm; }
+.sub { font-size: 8.6pt; color: #5d6b76; margin-bottom: 4.5mm; line-height: 1.7; }
+h3.h { font-size: 11pt; color: #163a47; margin: 4mm 0 2mm; }
+table { width: 100%; border-collapse: collapse; font-size: 8.2pt; }
+th { background: #1F4E5F; color: #fff; padding: 4px 5px; text-align: left; font-weight: 500; font-size: 7.8pt; }
+td { padding: 4px 5px; border-bottom: 1px solid #e1e7eb; vertical-align: top; }
+tr:nth-child(even) td { background: #eef3f6; }
+tr.hl td { background: #fbeee0 !important; }
+.tight td, .tight th { padding: 2.6px 4px; font-size: 7.3pt; }
+.xs td, .xs th { padding: 1.8px 4px; font-size: 6.9pt; }
+.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.b { font-weight: 700; }
+.foot { position: absolute; bottom: 0; left: 0; right: 0; height: 11mm; background: #163a47; color: #b9cad3; font-size: 6.4pt; line-height: 1.6; display: flex; align-items: center; justify-content: space-between; padding: 0 14mm; }
+.foot .ct { color: #F0D9A4; font-weight: 700; letter-spacing: .03em; }
+.qr { background: #fff; padding: 1.6mm; border-radius: 2px; text-align: center; }
+.qr img { display: block; width: 100%; }
+.qr div { font-size: 6.6pt; color: #163a47; margin-top: .8mm; font-weight: 700; }
+.kpi { display: flex; gap: 3mm; margin-bottom: 4.5mm; }
+.kpi > div { flex: 1; background: #fff; border: 1px solid #dde4e9; border-top: 3px solid #C8963E; padding: 3mm 1.5mm; text-align: center; }
+.kpi .v { font-family: "Noto Serif CJK TC", serif; font-size: 17pt; color: #163a47; font-weight: 700; line-height: 1.1; }
+.kpi .u { font-size: 7.4pt; color: #C8963E; }
+.kpi .l { font-size: 7pt; color: #5d6b76; margin-top: 1.3mm; }
+.note { background: #fbf3e2; border-left: 4px solid #C8963E; padding: 3mm 4mm; font-size: 8.2pt; line-height: 1.75; }
+.warn { background: #fbeceb; border-left: 4px solid #C0392B; padding: 3mm 4mm; font-size: 8.2pt; line-height: 1.75; }
+.feat { display: flex; gap: 3mm; margin-bottom: 3.4mm; }
+.feat .no { font-family: "Noto Serif CJK TC", serif; font-size: 20pt; color: #C8963E; line-height: 1; min-width: 10mm; }
+.feat h3 { font-size: 10.4pt; color: #163a47; margin-bottom: .8mm; }
+.feat p { font-size: 8.3pt; line-height: 1.7; color: #33414c; }
+ul { margin-left: 4.5mm; } li { font-size: 8.4pt; line-height: 1.8; margin-bottom: .5mm; }
+.photo { background: #e3eaef; padding: 1.8mm; border-radius: 2px; }
+.photo img { display: block; width: 100%; object-fit: cover; }
+.cap { font-size: 7pt; color: #7b8794; margin-top: 1.2mm; }
+.spec td:first-child { color: #8a6a2c; width: 22mm; white-space: nowrap; }
+.spec td { background: transparent !important; padding: 3px 4px; font-size: 8.2pt; }
+.two { display: flex; gap: 5mm; } .two > div { flex: 1; min-width: 0; }
